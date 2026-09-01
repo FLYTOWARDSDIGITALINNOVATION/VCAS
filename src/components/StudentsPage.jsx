@@ -27,9 +27,9 @@ export default function StudentsPage() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [deleteModalStudent, setDeleteModalStudent] = useState(null);
 
-  // Disable background page scrolling when modal or wizard is active
+  // Disable background page scrolling ONLY when popup overlay modals are active
   React.useEffect(() => {
-    if (editingStudent || deleteModalStudent || showAddWizard || selectedStudentProfile) {
+    if (editingStudent || deleteModalStudent) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
@@ -37,7 +37,7 @@ export default function StudentsPage() {
     return () => {
       document.body.style.overflow = 'unset';
     };
-  }, [editingStudent, deleteModalStudent, showAddWizard, selectedStudentProfile]);
+  }, [editingStudent, deleteModalStudent]);
 
   // Initial 7 students matching exact Figma screenshot data
   const [students, setStudents] = useState([
@@ -312,83 +312,80 @@ Report Date  : ${new Date().toLocaleString()}
 
       {/* FILTER & SEARCH BAR CONTAINER */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           
           {/* Search Input */}
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative flex-1 min-w-[220px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input 
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by name or ID..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none transition-all h-10"
             />
           </div>
 
-          {/* Department Dropdown Filter */}
-          <select
-            value={selectedDept}
-            onChange={(e) => setSelectedDept(e.target.value)}
-            className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
-          >
-            <option value="All Departments">All Departments</option>
-            <option value="Computer Science">Computer Science</option>
-            <option value="Electronics">Electronics</option>
-            <option value="MBA">MBA</option>
-            <option value="Mechanical">Mechanical</option>
-            <option value="Civil">Civil</option>
-          </select>
+          {/* Filters Group */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Department Dropdown Filter */}
+            <select
+              value={selectedDept}
+              onChange={(e) => setSelectedDept(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10"
+            >
+              <option value="All Departments">All Departments</option>
+              <option value="Computer Science">Computer Science</option>
+              <option value="Electronics">Electronics</option>
+              <option value="MBA">MBA</option>
+              <option value="Mechanical">Mechanical</option>
+              <option value="Civil">Civil</option>
+            </select>
 
-          {/* Courses Filter */}
-          <select className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer">
-            <option value="All Courses">All Courses</option>
-            <option value="B.Tech">B.Tech</option>
-            <option value="MBA">MBA</option>
-            <option value="MCA">MCA</option>
-          </select>
+            {/* Courses Filter */}
+            <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10">
+              <option value="All Courses">All Courses</option>
+              <option value="B.Tech">B.Tech</option>
+              <option value="MBA">MBA</option>
+              <option value="MCA">MCA</option>
+            </select>
 
-          {/* Semesters Filter */}
-          <select className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer">
-            <option value="All Semesters">All Semesters</option>
-            <option value="1st Sem">1st Sem</option>
-            <option value="2nd Sem">2nd Sem</option>
-            <option value="4th Sem">4th Sem</option>
-            <option value="6th Sem">6th Sem</option>
-            <option value="8th Sem">8th Sem</option>
-          </select>
+            {/* Semesters Filter */}
+            <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10">
+              <option value="All Semesters">All Semesters</option>
+              <option value="1st Sem">1st Sem</option>
+              <option value="2nd Sem">2nd Sem</option>
+              <option value="4th Sem">4th Sem</option>
+              <option value="6th Sem">6th Sem</option>
+              <option value="8th Sem">8th Sem</option>
+            </select>
 
-          {/* Fee Statuses Filter */}
-          <select 
-            value={selectedFeeStatus}
-            onChange={(e) => setSelectedFeeStatus(e.target.value)}
-            className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
-          >
-            <option value="All Statuses">All Statuses</option>
-            <option value="Paid">Paid</option>
-            <option value="Pending">Pending</option>
-            <option value="Partial">Partial</option>
-            <option value="Overdue">Overdue</option>
-          </select>
-
-          {/* More Filters button */}
-          <button className="px-3.5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
-            More Filters
-          </button>
+            {/* Fee Statuses Filter */}
+            <select 
+              value={selectedFeeStatus}
+              onChange={(e) => setSelectedFeeStatus(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10"
+            >
+              <option value="All Statuses">All Statuses</option>
+              <option value="Paid">Paid</option>
+              <option value="Pending">Pending</option>
+              <option value="Partial">Partial</option>
+              <option value="Overdue">Overdue</option>
+            </select>
+          </div>
 
         </div>
       </div>
 
       {/* STUDENTS TABLE CARD */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[900px]">
             
             {/* Table Header */}
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                <th className="py-3.5 px-4 w-10">
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                <th className="py-3.5 px-4 w-10 text-center">
                   <input 
                     type="checkbox"
                     checked={selectedRows.length === filteredStudents.length && filteredStudents.length > 0}
@@ -402,17 +399,17 @@ Report Date  : ${new Date().toLocaleString()}
                 <th className="py-3.5 px-4">COURSE</th>
                 <th className="py-3.5 px-4">PHONE</th>
                 <th className="py-3.5 px-4">ATTENDANCE</th>
-                <th className="py-3.5 px-4">FEES</th>
-                <th className="py-3.5 px-4">STATUS</th>
+                <th className="py-3.5 px-4 text-center">FEES</th>
+                <th className="py-3.5 px-4 text-center">STATUS</th>
                 <th className="py-3.5 px-4 text-right">ACTIONS</th>
               </tr>
             </thead>
 
             {/* Table Body */}
-            <tbody className="divide-y divide-slate-100 text-xs">
+            <tbody className="divide-y divide-slate-100 text-xs font-medium">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="py-12 text-center text-slate-400">
+                  <td colSpan="10" className="py-12 text-center text-slate-400 font-normal">
                     No students match your filter criteria.
                   </td>
                 </tr>
@@ -423,7 +420,7 @@ Report Date  : ${new Date().toLocaleString()}
                     <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
                       
                       {/* Checkbox */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 text-center">
                         <input 
                           type="checkbox"
                           checked={isChecked}
@@ -435,20 +432,20 @@ Report Date  : ${new Date().toLocaleString()}
                       {/* Student Info */}
                       <td className="py-3.5 px-4 cursor-pointer" onClick={() => setSelectedStudentProfile(student)}>
                         <div className="flex items-center gap-3 group">
-                          <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                          <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
                             {student.name.charAt(0)}
                           </div>
                           <div>
                             <p className="font-bold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">{student.name}</p>
-                            <p className="text-[11px] text-slate-400">{student.sem}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{student.sem}</p>
                           </div>
                         </div>
                       </td>
 
                       {/* ID / ADM NO */}
                       <td className="py-3.5 px-4 cursor-pointer" onClick={() => setSelectedStudentProfile(student)}>
-                        <p className="font-semibold text-slate-800">{student.id}</p>
-                        <p className="text-[11px] text-slate-400 font-mono">{student.admNo}</p>
+                        <p className="font-bold text-slate-800">{student.id}</p>
+                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">{student.admNo}</p>
                       </td>
 
                       {/* Department */}
@@ -457,7 +454,7 @@ Report Date  : ${new Date().toLocaleString()}
                       </td>
 
                       {/* Course */}
-                      <td className="py-3.5 px-4 text-slate-600">
+                      <td className="py-3.5 px-4 text-slate-600 font-semibold">
                         {student.course}
                       </td>
 
@@ -468,8 +465,8 @@ Report Date  : ${new Date().toLocaleString()}
 
                       {/* Attendance */}
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="flex items-center gap-2 min-w-[110px]">
+                          <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden shrink-0">
                             <div 
                               className={`h-full rounded-full ${
                                 student.attendance >= 80 ? 'bg-emerald-500' :
@@ -488,15 +485,15 @@ Report Date  : ${new Date().toLocaleString()}
                       </td>
 
                       {/* Fee Status Badge */}
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${getFeeBadgeClass(student.feeStatus)}`}>
+                      <td className="py-3.5 px-4 text-center">
+                        <span className={`inline-flex items-center justify-center min-w-[72px] px-2.5 py-1 rounded-full text-[11px] font-bold ${getFeeBadgeClass(student.feeStatus)}`}>
                           {student.feeStatus}
                         </span>
                       </td>
 
                       {/* Status Badge */}
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                      <td className="py-3.5 px-4 text-center">
+                        <span className={`inline-flex items-center justify-center min-w-[72px] px-2.5 py-1 rounded-full text-[11px] font-bold ${
                           student.status === 'Active' 
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
                             : 'bg-slate-100 text-slate-500 border border-slate-200'
@@ -548,17 +545,17 @@ Report Date  : ${new Date().toLocaleString()}
         </div>
 
         {/* Table Footer / Pagination */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>Showing {filteredStudents.length} of {students.length} students</span>
+        <div className="px-6 py-3.5 bg-slate-50/50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <span className="font-medium">Showing {filteredStudents.length} of {students.length} students</span>
           
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {['1', '2', '3', '...', '12'].map((page, i) => (
               <button 
                 key={i}
-                className={`w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center transition-all ${
+                className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
                   page === '1' 
-                    ? 'bg-blue-600 text-white shadow-sm' 
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-blue-600 text-white shadow-xs' 
+                    : 'text-slate-600 hover:bg-slate-200/70'
                 }`}
               >
                 {page}

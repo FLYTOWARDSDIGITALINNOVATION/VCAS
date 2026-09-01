@@ -27,6 +27,7 @@ import {
   DollarSign, 
   FileText, 
   ChevronRight,
+  ChevronDown,
   TrendingUp,
   TrendingDown,
   AlertTriangle,
@@ -40,12 +41,31 @@ import AttendanceManagement from './AttendanceManagement';
 import ExaminationManagement from './ExaminationManagement';
 import TimetableManagement from './TimetableManagement';
 import AssignmentManagement from './AssignmentManagement';
+import FeeManagement from './FeeManagement';
 
 export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const [activePortal, setActivePortal] = useState(user?.role || 'Admin');
-  const [activeNav, setActiveNav] = useState('Dashboard');
+  
+  // Restore active page and fee tab from sessionStorage on refresh
+  const [activeNav, setActiveNav] = useState(() => {
+    return sessionStorage.getItem('vcas_activeNav') || 'Dashboard';
+  });
+  const [selectedFeeType, setSelectedFeeType] = useState(() => {
+    return sessionStorage.getItem('vcas_selectedFeeType') || 'All';
+  });
+
+  const [feesDropdownOpen, setFeesDropdownOpen] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Save activeNav & selectedFeeType to sessionStorage
+  React.useEffect(() => {
+    sessionStorage.setItem('vcas_activeNav', activeNav);
+  }, [activeNav]);
+
+  React.useEffect(() => {
+    sessionStorage.setItem('vcas_selectedFeeType', selectedFeeType);
+  }, [selectedFeeType]);
 
   // Disable background page scrolling when logout modal is open
   React.useEffect(() => {
@@ -93,15 +113,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     {
       title: 'FINANCE',
       items: [
-        { name: 'Fees', icon: IndianRupee }
-      ]
-    },
-    {
-      title: 'CAMPUS',
-      items: [
-        { name: 'Library', icon: Library },
-        { name: 'Hostel', icon: Home },
-        { name: 'Transport', icon: Bus }
+        { 
+          name: 'Fees', 
+          icon: IndianRupee,
+          subItems: ['Exam Fees', 'Tuition Fees', 'Transport Fees']
+        }
       ]
     },
     {
@@ -129,20 +145,20 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   // 8 Metric cards exact as Figma
   const metricCards = [
-    { title: 'TOTAL STUDENTS', value: '1,248', change: '+12% vs last month', isUp: true, icon: GraduationCap, bg: 'bg-blue-500', textColor: 'text-blue-600' },
+    { title: 'TOTAL STUDENTS', value: '1,248', change: '+12% vs last month', isUp: true, icon: GraduationCap, bg: 'bg-blue-500', textColor: 'text-blue-600', navTarget: 'Students' },
     { title: 'TOTAL STAFF', value: '84', change: '+3% vs last month', isUp: true, icon: Users, bg: 'bg-emerald-500', textColor: 'text-emerald-600', navTarget: 'Staff' },
     { title: 'DEPARTMENTS', value: '6', change: '0% vs last month', isUp: true, icon: Building2, bg: 'bg-purple-500', textColor: 'text-purple-600', navTarget: 'Departments' },
     { title: 'TOTAL COURSES', value: '24', change: '+2 vs last month', isUp: true, icon: BookOpen, bg: 'bg-indigo-500', textColor: 'text-indigo-600', navTarget: 'Courses & Subjects' },
     { title: 'TODAY\'S ATTENDANCE', value: '89.2%', change: '+1.4% vs last month', isUp: true, icon: CheckSquare, bg: 'bg-teal-500', textColor: 'text-teal-600', navTarget: 'Attendance' },
-    { title: 'PENDING FEES', value: '₹4.8L', change: '-8% vs last month', isUp: false, icon: IndianRupee, bg: 'bg-amber-500', textColor: 'text-amber-600' },
+    { title: 'PENDING FEES', value: '₹4.8L', change: '-8% vs last month', isUp: false, icon: IndianRupee, bg: 'bg-amber-500', textColor: 'text-amber-600', navTarget: 'Fees' },
     { title: 'LEAVE REQUESTS', value: '7', change: '+3 vs last month', isUp: true, icon: Calendar, bg: 'bg-orange-500', textColor: 'text-orange-600', navTarget: 'Attendance' },
     { title: 'UPCOMING EXAMS', value: '3', change: 'this week vs last month', isUp: true, icon: FileSpreadsheet, bg: 'bg-rose-500', textColor: 'text-rose-600', navTarget: 'Examinations' }
   ];
 
   // Recent activity entries
   const recentActivities = [
-    { title: 'New student registered', detail: 'Aditya Kapoor – CS Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus },
-    { title: 'Fee payment received', detail: '₹45,000 – Priya Mehta', time: '22 min ago', bg: 'bg-emerald-100 text-emerald-600', icon: DollarSign },
+    { title: 'New student registered', detail: 'Aditya Kapoor – CS Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus, navTarget: 'Students' },
+    { title: 'Fee payment received', detail: '₹45,000 – Priya Mehta', time: '22 min ago', bg: 'bg-emerald-100 text-emerald-600', icon: DollarSign, navTarget: 'Fees' },
     { title: 'Staff member added', detail: 'Dr. Neeraj Gupta – ECE', time: '1 hr ago', bg: 'bg-purple-100 text-purple-600', icon: Users, navTarget: 'Staff' },
     { title: 'Leave request submitted', detail: 'Prof. Ramesh Kumar', time: '2 hr ago', bg: 'bg-amber-100 text-amber-600', icon: Calendar, navTarget: 'Attendance' },
     { title: 'Exam created', detail: 'Mid-Semester – CS 4th Sem', time: '3 hr ago', bg: 'bg-rose-100 text-rose-600', icon: FileText, navTarget: 'Examinations' },
@@ -151,10 +167,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   // Quick actions grid
   const quickActions = [
-    { label: 'Add Student', icon: UserPlus, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700' },
+    { label: 'Add Student', icon: UserPlus, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Students' },
     { label: 'Staff Directory', icon: Users, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Staff' },
     { label: 'Mark Attendance', icon: CheckSquare, bg: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700', navTarget: 'Attendance' },
-    { label: 'Collect Fee', icon: DollarSign, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700' },
+    { label: 'Collect Fee', icon: DollarSign, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Fees' },
     { label: 'Post Notice', icon: Bell, bg: 'bg-purple-50 hover:bg-purple-100 text-purple-700' },
     { label: 'View Reports', icon: BarChart3, bg: 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700' }
   ];
@@ -162,21 +178,21 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const SidebarContent = () => (
     <div className="flex flex-col justify-between h-full">
       <div>
-        {/* Logo / Title Header */}
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        {/* Sticky Logo / Title Header */}
+        <div className="sticky top-0 z-20 bg-white border-b border-slate-100 p-5 sm:p-6 flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xl shadow-md">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xl shadow-md shrink-0">
               🏛️
             </div>
             <div>
-              <h1 className="font-extrabold text-slate-900 text-base leading-tight">Vidyapeeth</h1>
-              <p className="text-[11px] text-slate-500 font-medium">Management System</p>
+              <h1 className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight">Vivekananda College</h1>
+              <p className="text-[10px] text-slate-700 font-semibold leading-tight mt-0.5">of Arts and Science, Vellalankulam</p>
             </div>
           </div>
           {/* Close button on mobile */}
           <button 
             onClick={() => setMobileMenuOpen(false)}
-            className="lg:hidden p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
+            className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
           >
             <X className="w-5 h-5" />
           </button>
@@ -186,24 +202,77 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         <nav className="p-4 space-y-6">
           {navSections.map((section, idx) => (
             <div key={idx}>
-              <h3 className="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <h3 className="px-3 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-2">
                 {section.title}
               </h3>
               <div className="space-y-0.5">
                 {section.items.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeNav === item.name;
+
+                  if (item.subItems) {
+                    return (
+                      <div key={item.name} className="space-y-1">
+                        <button
+                          onClick={() => {
+                            handleNavClick(item.name);
+                            setSelectedFeeType('All');
+                            setFeesDropdownOpen(!feesDropdownOpen);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-700 font-extrabold'
+                              : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Icon className={`w-4 h-4 ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
+                            <span>{item.name}</span>
+                          </div>
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${feesDropdownOpen ? 'rotate-180 text-blue-700' : 'text-slate-700'}`} />
+                        </button>
+
+                        {/* Collapsible Dropdown Menu */}
+                        {feesDropdownOpen && (
+                          <div className="ml-5 space-y-0.5 border-l-2 border-slate-200 pl-2">
+                            {item.subItems.map((subName) => {
+                              const isSubActive = activeNav === 'Fees' && selectedFeeType === subName;
+                              return (
+                                <button
+                                  key={subName}
+                                  onClick={() => {
+                                    setActiveNav('Fees');
+                                    setSelectedFeeType(subName);
+                                    setMobileMenuOpen(false);
+                                  }}
+                                  className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 ${
+                                    isSubActive
+                                      ? 'bg-blue-100 text-blue-800 font-extrabold'
+                                      : 'text-slate-800 hover:bg-slate-100 hover:text-slate-950'
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${isSubActive ? 'bg-blue-700' : 'bg-slate-600'}`}></span>
+                                  <span>{subName}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
                   return (
                     <button
                       key={item.name}
                       onClick={() => handleNavClick(item.name)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
                         isActive
-                          ? 'bg-blue-50 text-blue-600 font-bold'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                          ? 'bg-blue-50 text-blue-700 font-extrabold'
+                          : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
                       }`}
                     >
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
                       <span>{item.name}</span>
                     </button>
                   );
@@ -221,9 +290,9 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
             setMobileMenuOpen(false);
             setShowLogoutModal(true);
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 transition-all"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-900 hover:text-rose-600 hover:bg-rose-50 transition-all"
         >
-          <LogOut className="w-4 h-4 text-slate-400 group-hover:text-red-600" />
+          <LogOut className="w-4 h-4 text-slate-700 group-hover:text-rose-600" />
           <span>Logout</span>
         </button>
       </div>
@@ -279,42 +348,15 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
           {/* Right Header Items */}
           <div className="flex items-center gap-3 sm:gap-6">
-            
-            {/* Demo Portal Switcher */}
-            <div className="hidden md:flex items-center gap-2">
-              <span className="text-[11px] text-slate-400 font-medium">Switch portal</span>
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
-                {['Admin', 'Faculty', 'Student'].map((portal) => (
-                  <button
-                    key={portal}
-                    onClick={() => handlePortalSwitch(portal)}
-                    className={`px-3 py-1 rounded-lg font-semibold text-xs transition-all ${
-                      activePortal === portal
-                        ? 'bg-white text-blue-600 shadow-xs font-bold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {portal}
-                  </button>
-                ))}
+
+            {/* User Avatar */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs border border-slate-300 shadow-xs">
+                A
               </div>
-            </div>
-
-            {/* Notification & User Avatar */}
-            <div className="flex items-center gap-3 sm:gap-4 sm:pl-4 sm:border-l border-slate-200">
-              <button className="relative p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
-              </button>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs border border-slate-300 shadow-xs">
-                  A
-                </div>
-                <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-slate-900 leading-tight">Admin User</p>
-                  <p className="text-[10px] font-medium text-slate-500">Admin</p>
-                </div>
+              <div className="text-left hidden sm:block">
+                <p className="text-xs font-bold text-slate-900 leading-tight">Admin User</p>
+                <p className="text-[10px] font-medium text-slate-500">Admin</p>
               </div>
             </div>
 
@@ -323,40 +365,44 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
         {/* CONDITIONALLY RENDER CONTENT BASED ON ACTIVE NAV */}
         {activeNav === 'Students' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <StudentsPage />
           </main>
         ) : activeNav === 'Staff' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <StaffManagement />
           </main>
         ) : activeNav === 'Departments' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <DepartmentManagement />
           </main>
         ) : activeNav === 'Courses & Subjects' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <CourseSubjectManagement />
           </main>
         ) : activeNav === 'Attendance' || activeNav === 'Leave Management' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <AttendanceManagement />
           </main>
         ) : activeNav === 'Examinations' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <ExaminationManagement />
           </main>
         ) : activeNav === 'Timetable' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <TimetableManagement />
           </main>
         ) : activeNav === 'Assignments' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <AssignmentManagement />
+          </main>
+        ) : activeNav === 'Fees' ? (
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
+            <FeeManagement defaultFeeType={selectedFeeType} />
           </main>
         ) : (
           /* DEFAULT DASHBOARD VIEW */
-          <main className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             
             {/* Dashboard Title Header */}
             <div>
