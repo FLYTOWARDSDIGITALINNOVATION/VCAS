@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import StudentsPage from './StudentsPage';
 import { 
   LayoutDashboard, 
   GraduationCap, 
@@ -45,6 +46,18 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const [activeNav, setActiveNav] = useState('Dashboard');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Disable background page scrolling when logout modal is open
+  React.useEffect(() => {
+    if (showLogoutModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showLogoutModal]);
 
   const handlePortalSwitch = (portal) => {
     setActivePortal(portal);
@@ -243,6 +256,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         
         {/* TOP HEADER BAR */}
         <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
+        <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           
           <div className="flex items-center gap-3 flex-1 max-w-md mr-4">
             {/* Mobile Hamburger Toggle */}
@@ -349,6 +363,19 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                 Welcome back, Admin. Here's what's happening today.
               </p>
             </div>
+        {/* DASHBOARD / STUDENTS BODY */}
+        <main className="p-8 space-y-8 max-w-7xl mx-auto w-full">
+          {activeNav === 'Students' ? (
+            <StudentsPage />
+          ) : (
+            <>
+              {/* Dashboard Title Header */}
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Welcome back, Admin. Here's what's happening today.
+                </p>
+              </div>
 
             {/* 8 METRIC CARDS GRID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
@@ -638,11 +665,15 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           </main>
         )}
 
+            </>
+          )}
+
+        </main>
       </div>
 
       {/* Logout Confirmation Warning Modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn">
           <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 transform transition-all">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200">
