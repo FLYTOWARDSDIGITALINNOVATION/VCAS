@@ -256,8 +256,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         
         {/* TOP HEADER BAR */}
         <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
-        <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-          
           <div className="flex items-center gap-3 flex-1 max-w-md mr-4">
             {/* Mobile Hamburger Toggle */}
             <button
@@ -324,7 +322,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         </header>
 
         {/* CONDITIONALLY RENDER CONTENT BASED ON ACTIVE NAV */}
-        {activeNav === 'Staff' ? (
+        {activeNav === 'Students' ? (
+          <main className="flex-1">
+            <StudentsPage />
+          </main>
+        ) : activeNav === 'Staff' ? (
           <main className="flex-1">
             <StaffManagement />
           </main>
@@ -363,19 +365,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                 Welcome back, Admin. Here's what's happening today.
               </p>
             </div>
-        {/* DASHBOARD / STUDENTS BODY */}
-        <main className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-          {activeNav === 'Students' ? (
-            <StudentsPage />
-          ) : (
-            <>
-              {/* Dashboard Title Header */}
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-                <p className="text-xs text-slate-500 mt-1">
-                  Welcome back, Admin. Here's what's happening today.
-                </p>
-              </div>
 
             {/* 8 METRIC CARDS GRID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
@@ -664,11 +653,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
           </main>
         )}
-
-            </>
-          )}
-
-        </main>
       </div>
 
       {/* Logout Confirmation Warning Modal */}
