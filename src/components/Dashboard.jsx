@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import StudentsPage from './StudentsPage';
 import { 
   LayoutDashboard, 
   GraduationCap, 
@@ -35,6 +36,18 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const [activePortal, setActivePortal] = useState(user?.role || 'Admin');
   const [activeNav, setActiveNav] = useState('Dashboard');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Disable background page scrolling when logout modal is open
+  React.useEffect(() => {
+    if (showLogoutModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showLogoutModal]);
 
   const handlePortalSwitch = (portal) => {
     setActivePortal(portal);
@@ -196,7 +209,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         
         {/* TOP HEADER BAR */}
-        <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+        <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           
           {/* Search bar */}
           <div className="relative w-96">
@@ -255,16 +268,19 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           </div>
         </header>
 
-        {/* DASHBOARD BODY */}
+        {/* DASHBOARD / STUDENTS BODY */}
         <main className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-          
-          {/* Dashboard Title Header */}
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Welcome back, Admin. Here's what's happening today.
-            </p>
-          </div>
+          {activeNav === 'Students' ? (
+            <StudentsPage />
+          ) : (
+            <>
+              {/* Dashboard Title Header */}
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Welcome back, Admin. Here's what's happening today.
+                </p>
+              </div>
 
           {/* 8 METRIC CARDS GRID */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -536,12 +552,15 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
           </div>
 
+            </>
+          )}
+
         </main>
       </div>
 
       {/* Logout Confirmation Warning Modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn">
           <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 transform transition-all">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200">
