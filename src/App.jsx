@@ -28,7 +28,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white">
+    <div className="h-full w-full overflow-hidden bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white">
       {viewMode === 'dashboard' ? (
         <Dashboard 
           user={currentUser} 
@@ -36,7 +36,7 @@ export default function App() {
           onSwitchPortal={handleSwitchPortal} 
         />
       ) : (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 bg-[#070f1e]">
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 bg-[#070f1e] overflow-y-auto">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-extrabold text-white">Vidyapeeth Portal Login</h1>
             <p className="text-xs text-slate-400 mt-1">Sign in to access your administrative dashboard</p>

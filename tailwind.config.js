@@ -19,6 +19,10 @@ export default {
       },
       keyframes: {
         fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        scaleUp: {
           '0%': { opacity: '0', transform: 'scale(0.96)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
         },
@@ -29,6 +33,7 @@ export default {
       },
       animation: {
         fadeIn: 'fadeIn 0.15s ease-out forwards',
+        scaleUp: 'scaleUp 0.15s ease-out forwards',
         slideRight: 'slideRight 0.2s ease-out forwards',
       }
     },

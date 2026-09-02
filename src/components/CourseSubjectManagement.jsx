@@ -31,8 +31,10 @@ import {
   SlidersHorizontal,
   RotateCcw,
   ArrowRight,
-  BookCopy
+  BookCopy,
+  Save
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 const INITIAL_PROGRAMS = [
   {
@@ -727,6 +729,29 @@ export default function CourseSubjectManagement() {
 
   const [deletingSubject, setDeletingSubject] = useState(null);
   const [deletingProgram, setDeletingProgram] = useState(null);
+
+  // Lock background scroll when any modal is open
+  React.useEffect(() => {
+    const isAnyModalOpen = Boolean(
+      viewingSubject || viewingProgram || isAddSubjectOpen || isAddProgramOpen ||
+      editingSubject || editingProgram || deletingSubject || deletingProgram
+    );
+    const scrollContainer = document.getElementById('main-content-scroll-container');
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      if (scrollContainer) scrollContainer.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    };
+  }, [
+    viewingSubject, viewingProgram, isAddSubjectOpen, isAddProgramOpen,
+    editingSubject, editingProgram, deletingSubject, deletingProgram
+  ]);
 
   // Reallocate Faculty Modal
   const [reallocatingSubject, setReallocatingSubject] = useState(null);
@@ -1963,8 +1988,8 @@ export default function CourseSubjectManagement() {
       {/* 9. MODAL: VIEW SUBJECT SYLLABUS & UNITS                                   */}
       {/* ========================================================================= */}
       {viewingSubject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(viewingSubject)} onClose={() => setViewingSubject(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
             {/* Header */}
             <div className="flex items-start justify-between border-b border-slate-100 pb-4 gap-3">
@@ -2088,31 +2113,42 @@ export default function CourseSubjectManagement() {
             </div>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* 10. MODAL: ADD / EDIT SUBJECT                                             */}
       {/* ========================================================================= */}
       {(isAddSubjectOpen || editingSubject) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <ModalPortal 
+          isOpen={Boolean(isAddSubjectOpen || editingSubject)} 
+          onClose={() => {
+            setIsAddSubjectOpen(false);
+            setEditingSubject(null);
+          }}
+        >
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-900 leading-tight">
-                  {editingSubject ? 'Edit Subject' : 'Add New Subject'}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {editingSubject ? `Update details for ${editingSubject.code}` : 'Register a new subject in the curriculum catalog'}
-                </p>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                  {editingSubject ? <Pencil className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">
+                    {editingSubject ? 'Edit Subject Details' : 'Register New Curriculum Subject'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {editingSubject ? `Update curriculum syllabus and faculty for ${editingSubject.code}` : 'Add course details, syllabus modules, credits, and instructor'}
+                  </p>
+                </div>
               </div>
               <button 
                 onClick={() => {
                   setIsAddSubjectOpen(false);
                   setEditingSubject(null);
                 }}
-                className="p-2 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 rounded-xl transition-all"
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2122,8 +2158,8 @@ export default function CourseSubjectManagement() {
               
               {/* Subject Name */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Subject Name <span className="text-rose-500">*</span>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Subject Name *
                 </label>
                 <input
                   type="text"
@@ -2131,17 +2167,17 @@ export default function CourseSubjectManagement() {
                   onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })}
                   placeholder="e.g. Artificial Intelligence & Machine Learning"
                   className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none transition-all ${
-                    formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
+                    formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
                   }`}
                 />
                 {formErrors.name && <p className="text-[11px] text-rose-500 mt-1">{formErrors.name}</p>}
               </div>
 
               {/* Code & Department */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Subject Code <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Subject Code *
                   </label>
                   <input
                     type="text"
@@ -2149,18 +2185,18 @@ export default function CourseSubjectManagement() {
                     onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })}
                     placeholder="CS502"
                     className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs sm:text-sm font-mono font-bold focus:bg-white focus:outline-none uppercase transition-all ${
-                      formErrors.code ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
+                      formErrors.code ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
                     }`}
                   />
                   {formErrors.code && <p className="text-[11px] text-rose-500 mt-1">{formErrors.code}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Department</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
                   <select
                     value={subjectForm.department}
                     onChange={(e) => handleSubjectDeptChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
                       <option key={d} value={d}>{d}</option>
@@ -2172,11 +2208,11 @@ export default function CourseSubjectManagement() {
               {/* Year, Semester & Credits */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Year</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Year</label>
                   <select
                     value={subjectForm.year}
                     onChange={(e) => handleSubjectYearChange(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     <option value={1}>1st Year</option>
                     <option value={2}>2nd Year</option>
@@ -2186,11 +2222,11 @@ export default function CourseSubjectManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Semester</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Semester</label>
                   <select
                     value={subjectForm.sem}
                     onChange={(e) => setSubjectForm({ ...subjectForm, sem: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     {SEMESTERS.filter(s => s !== 'All Semesters').map(s => (
                       <option key={s} value={s}>{s}</option>
@@ -2199,11 +2235,11 @@ export default function CourseSubjectManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Credits</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Credits</label>
                   <select
                     value={subjectForm.credits}
                     onChange={(e) => setSubjectForm({ ...subjectForm, credits: Number(e.target.value) })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-blue-600 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-purple-600 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     <option value={1}>1 Credit</option>
                     <option value={2}>2 Credits</option>
@@ -2216,13 +2252,13 @@ export default function CourseSubjectManagement() {
               </div>
 
               {/* Type, LTP & Faculty */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Subject Type</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Type</label>
                   <select
                     value={subjectForm.type}
                     onChange={(e) => setSubjectForm({ ...subjectForm, type: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     <option value="Core Theory">Core Theory</option>
                     <option value="Practical / Lab">Practical / Lab</option>
@@ -2233,32 +2269,32 @@ export default function CourseSubjectManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">L-T-P Structure</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">L-T-P Structure</label>
                   <input
                     type="text"
                     value={subjectForm.ltp}
                     onChange={(e) => setSubjectForm({ ...subjectForm, ltp: e.target.value })}
                     placeholder="e.g. 3-1-0"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none font-mono"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none font-mono"
                   />
                 </div>
               </div>
 
               {/* Faculty & Prerequisite */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-bold text-slate-700">
-                      Faculty In-Charge <span className="text-rose-500">*</span>
+                      Faculty In-Charge *
                     </label>
-                    <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-bold">
+                    <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md font-bold">
                       HOD: {DEPARTMENT_HEADS[subjectForm.department] || 'Dr. Sunita Rao'}
                     </span>
                   </div>
                   <select
                     value={subjectForm.faculty}
                     onChange={(e) => setSubjectForm({ ...subjectForm, faculty: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     {DEPARTMENT_FACULTY_MEMBERS[subjectForm.department]?.map((fac) => (
                       <option key={fac.name} value={fac.name}>
@@ -2273,46 +2309,46 @@ export default function CourseSubjectManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Prerequisite Course</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Prerequisite Course</label>
                   <input
                     type="text"
                     value={subjectForm.prerequisite}
                     onChange={(e) => setSubjectForm({ ...subjectForm, prerequisite: e.target.value })}
                     placeholder="e.g. CS101 or None"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
                   />
                 </div>
               </div>
 
               {/* Textbooks */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Recommended Textbooks & References</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Recommended Textbooks & References</label>
                 <input
                   type="text"
                   value={subjectForm.textbooks}
                   onChange={(e) => setSubjectForm({ ...subjectForm, textbooks: e.target.value })}
                   placeholder="e.g. AI: A Modern Approach by Russell & Norvig"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
                 />
               </div>
 
               {/* Modal Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => {
                     setIsAddSubjectOpen(false);
                     setEditingSubject(null);
                   }}
-                  className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+                  className="px-5 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs shadow-blue-500/20 transition-all flex items-center gap-2"
+                  className="px-6 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
                 >
-                  <Check className="w-4 h-4" />
+                  <Save className="w-4 h-4" />
                   <span>{editingSubject ? 'Update Subject' : 'Save Subject'}</span>
                 </button>
               </div>
@@ -2320,253 +2356,235 @@ export default function CourseSubjectManagement() {
             </form>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* 11. MODAL: ADD / EDIT DEGREE PROGRAM                                      */}
       {/* ========================================================================= */}
       {(isAddProgramOpen || editingProgram) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <ModalPortal 
+          isOpen={Boolean(isAddProgramOpen || editingProgram)} 
+          onClose={() => {
+            setIsAddProgramOpen(false);
+            setEditingProgram(null);
+          }}
+        >
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-900 leading-tight">
-                  {editingProgram ? 'Edit Degree Program' : 'Add Degree Program'}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Configure academic curriculum degree structure and regulations
-                </p>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                  {editingProgram ? <Pencil className="w-5 h-5" /> : <GraduationCap className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">
+                    {editingProgram ? 'Edit Degree Program' : 'Add New Degree Program'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Configure academic curriculum degree structure, duration, and credit rules
+                  </p>
+                </div>
               </div>
               <button 
                 onClick={() => {
                   setIsAddProgramOpen(false);
                   setEditingProgram(null);
                 }}
-                className="p-2 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 rounded-xl transition-all"
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveProgram} className="space-y-4">
-              
+              {/* Program Name */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Program Name <span className="text-rose-500">*</span>
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Program Name *</label>
                 <input
                   type="text"
-                  value={programForm.name}
-                  onChange={(e) => setProgramForm({ ...programForm, name: e.target.value })}
-                  placeholder="e.g. B.Tech in Artificial Intelligence & Data Science"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none transition-all ${
-                    formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
-                  }`}
+                  required
+                  value={programFormData.name}
+                  onChange={(e) => setProgramFormData({ ...programFormData, name: e.target.value })}
+                  placeholder="e.g. B.Tech Computer Science & Engineering"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                 />
-                {formErrors.name && <p className="text-[11px] text-rose-500 mt-1">{formErrors.name}</p>}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Code + Department */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Program Code <span className="text-rose-500">*</span>
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Program Code *</label>
                   <input
                     type="text"
-                    value={programForm.code}
-                    onChange={(e) => setProgramForm({ ...programForm, code: e.target.value })}
-                    placeholder="BTECH-AIDS"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs sm:text-sm font-mono font-bold focus:bg-white focus:outline-none uppercase transition-all ${
-                      formErrors.code ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
-                    }`}
+                    required
+                    value={programFormData.code}
+                    onChange={(e) => setProgramFormData({ ...programFormData, code: e.target.value.toUpperCase() })}
+                    placeholder="e.g. BTECH-CSE"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold font-mono focus:bg-white focus:border-purple-500 focus:outline-none uppercase transition-all"
                   />
-                  {formErrors.code && <p className="text-[11px] text-rose-500 mt-1">{formErrors.code}</p>}
                 </div>
-
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Degree Level</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Department *</label>
                   <select
-                    value={programForm.degreeLevel}
-                    onChange={(e) => setProgramForm({ ...programForm, degreeLevel: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
-                  >
-                    <option value="Undergraduate (UG)">Undergraduate (UG)</option>
-                    <option value="Postgraduate (PG)">Postgraduate (PG)</option>
-                    <option value="Diploma / Certificate">Diploma / Certificate</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Department</label>
-                  <select
-                    value={programForm.department}
-                    onChange={(e) => setProgramForm({ ...programForm, department: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    value={programFormData.department}
+                    onChange={(e) => setProgramFormData({ ...programFormData, department: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Academic Regulation</label>
-                  <input
-                    type="text"
-                    value={programForm.regulation}
-                    onChange={(e) => setProgramForm({ ...programForm, regulation: e.target.value })}
-                    placeholder="e.g. Regulation 2024 (R24)"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Degree Level + Duration */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Lead Coordinator</label>
-                  <input
-                    type="text"
-                    value={programForm.coordinator}
-                    onChange={(e) => setProgramForm({ ...programForm, coordinator: e.target.value })}
-                    placeholder="e.g. Dr. Sunita Rao"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Coordinator Email</label>
-                  <input
-                    type="email"
-                    value={programForm.coordinatorEmail}
-                    onChange={(e) => setProgramForm({ ...programForm, coordinatorEmail: e.target.value })}
-                    placeholder="coordinator@vcas.edu"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Duration</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Degree Level</label>
                   <select
-                    value={programForm.durationYears}
-                    onChange={(e) => setProgramForm({ ...programForm, durationYears: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    value={programFormData.level}
+                    onChange={(e) => setProgramFormData({ ...programFormData, level: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
-                    <option value={2}>2 Years (4 Semesters)</option>
-                    <option value={3}>3 Years (6 Semesters)</option>
-                    <option value={4}>4 Years (8 Semesters)</option>
+                    <option value="Undergraduate (UG)">Undergraduate (UG)</option>
+                    <option value="Postgraduate (PG)">Postgraduate (PG)</option>
+                    <option value="Diploma">Diploma</option>
                   </select>
                 </div>
-
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Graduation Credits</label>
-                  <input
-                    type="number"
-                    value={programForm.totalCredits}
-                    onChange={(e) => setProgramForm({ ...programForm, totalCredits: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
-                  />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Total Duration</label>
+                  <select
+                    value={programFormData.durationYears}
+                    onChange={(e) => {
+                      const years = parseInt(e.target.value);
+                      setProgramFormData({ 
+                        ...programFormData, 
+                        durationYears: years,
+                        totalSemesters: years * 2
+                      });
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value={2}>2 Years (4 Semesters - MBA/MCA)</option>
+                    <option value={3}>3 Years (6 Semesters - BCA/B.Sc)</option>
+                    <option value={4}>4 Years (8 Semesters - B.Tech/B.E)</option>
+                  </select>
                 </div>
               </div>
 
+              {/* Total Credits Required */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Program Overview</label>
-                <textarea
-                  rows={2}
-                  value={programForm.description}
-                  onChange={(e) => setProgramForm({ ...programForm, description: e.target.value })}
-                  placeholder="Overview of syllabus, career pathways, and specializations..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
+                <label className="block text-xs font-bold text-slate-700 mb-1">Total Credits for Degree Award *</label>
+                <input
+                  type="number"
+                  min="60"
+                  max="240"
+                  value={programFormData.totalCredits}
+                  onChange={(e) => setProgramFormData({ ...programFormData, totalCredits: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                 />
               </div>
 
-              {/* Modal Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              {/* Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => {
                     setIsAddProgramOpen(false);
                     setEditingProgram(null);
                   }}
-                  className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs shadow-blue-500/20 transition-all flex items-center gap-2"
+                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>{editingProgram ? 'Update Program' : 'Save Program'}</span>
+                  <Save className="w-4 h-4" />
+                  <span>{editingProgram ? 'Update Program' : 'Save Degree Program'}</span>
                 </button>
               </div>
-
             </form>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* 12. MODAL: REALLOCATE FACULTY                                             */}
       {/* ========================================================================= */}
       {reallocatingSubject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5">
+        <ModalPortal 
+          isOpen={Boolean(reallocatingSubject)} 
+          onClose={() => setReallocatingSubject(null)}
+        >
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-900">Reassign Course Faculty</h3>
-              <button onClick={() => setReallocatingSubject(null)} className="p-1 text-slate-400 hover:text-slate-600">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">Reassign Course Faculty</h3>
+                  <p className="text-[11px] text-slate-500">Update instructor assignment for this course</p>
+                </div>
+              </div>
+              <button onClick={() => setReallocatingSubject(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-3.5 bg-blue-50 rounded-xl border border-blue-100 text-xs">
-              <p className="font-bold text-blue-900">{reallocatingSubject.code}: {reallocatingSubject.name}</p>
-              <p className="text-blue-700 mt-0.5">Department: {reallocatingSubject.department} • {reallocatingSubject.credits} Credits</p>
+            <div className="p-3.5 bg-purple-50/70 rounded-2xl border border-purple-100 text-xs">
+              <p className="font-extrabold text-purple-950">{reallocatingSubject.code}: {reallocatingSubject.name}</p>
+              <p className="text-purple-700 mt-0.5 font-medium">Department: {reallocatingSubject.department} • {reallocatingSubject.credits} Credits</p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">Select New Faculty In-Charge</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Select New Faculty In-Charge *</label>
               <input
                 type="text"
                 value={newFacultyName}
                 onChange={(e) => setNewFacultyName(e.target.value)}
                 placeholder="e.g. Prof. Ramesh Kumar"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
               />
             </div>
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setReallocatingSubject(null)}
-                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveReallocation}
-                className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all"
+                className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
               >
-                Save Allocation
+                <Save className="w-4 h-4" />
+                <span>Save Allocation</span>
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* 13. MODAL: DELETE CONFIRMATION                                            */}
       {/* ========================================================================= */}
       {(deletingSubject || deletingProgram) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5">
+        <ModalPortal 
+          isOpen={Boolean(deletingSubject || deletingProgram)} 
+          onClose={() => {
+            setDeletingSubject(null);
+            setDeletingProgram(null);
+          }}
+        >
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
                 <AlertTriangle className="w-6 h-6" />
@@ -2606,7 +2624,7 @@ export default function CourseSubjectManagement() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>

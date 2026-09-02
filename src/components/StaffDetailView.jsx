@@ -40,6 +40,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
     : 'M.Tech in Mechanical Engineering, B.E.');
 
   const experience = staff.experience || '8 Years Teaching Experience (5 Years at Vidyapeeth)';
+  const employmentType = staff.employmentType || 'Permanent / Full-Time';
   const bloodGroup = staff.bloodGroup || 'O+';
   const dob = staff.dob || '1984-05-18';
   const address = staff.address || '42, Faculty Quarters, Vidyapeeth Campus, Chennai - 600025';
@@ -303,7 +304,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Employment Type</span>
-                  <span className="font-semibold text-slate-800">Permanent / Full-Time</span>
+                  <span className="font-semibold text-slate-800">{employmentType}</span>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Joining Date</span>

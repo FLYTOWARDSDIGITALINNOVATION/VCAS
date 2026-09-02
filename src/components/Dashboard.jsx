@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import StudentsPage from './StudentsPage';
+import ModalPortal from './ModalPortal';
 import { 
   LayoutDashboard, 
   GraduationCap, 
@@ -40,6 +41,13 @@ import AttendanceManagement from './AttendanceManagement';
 import ExaminationManagement from './ExaminationManagement';
 import TimetableManagement from './TimetableManagement';
 import AssignmentManagement from './AssignmentManagement';
+import NoticesManagement from './NoticesManagement';
+import EventsManagement from './EventsManagement';
+import ReportsManagement from './ReportsManagement';
+import UsersRolesManagement from './UsersRolesManagement';
+import SettingsManagement from './SettingsManagement';
+import FeesManagement from './FeesManagement';
+import CampusFacilitiesManagement from './CampusFacilitiesManagement';
 
 export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const [activePortal, setActivePortal] = useState(user?.role || 'Admin');
@@ -129,7 +137,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   // 8 Metric cards exact as Figma
   const metricCards = [
-    { title: 'TOTAL STUDENTS', value: '1,248', change: '+12% vs last month', isUp: true, icon: GraduationCap, bg: 'bg-blue-500', textColor: 'text-blue-600' },
+    { title: 'TOTAL STUDENTS', value: '1,248', change: '+12% vs last month', isUp: true, icon: GraduationCap, bg: 'bg-blue-500', textColor: 'text-blue-600', navTarget: 'Students' },
     { title: 'TOTAL STAFF', value: '84', change: '+3% vs last month', isUp: true, icon: Users, bg: 'bg-emerald-500', textColor: 'text-emerald-600', navTarget: 'Staff' },
     { title: 'DEPARTMENTS', value: '6', change: '0% vs last month', isUp: true, icon: Building2, bg: 'bg-purple-500', textColor: 'text-purple-600', navTarget: 'Departments' },
     { title: 'TOTAL COURSES', value: '24', change: '+2 vs last month', isUp: true, icon: BookOpen, bg: 'bg-indigo-500', textColor: 'text-indigo-600', navTarget: 'Courses & Subjects' },
@@ -141,7 +149,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   // Recent activity entries
   const recentActivities = [
-    { title: 'New student registered', detail: 'Aditya Kapoor – CS Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus },
+    { title: 'New student registered', detail: 'Aditya Kapoor – CS Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus, navTarget: 'Students' },
     { title: 'Fee payment received', detail: '₹45,000 – Priya Mehta', time: '22 min ago', bg: 'bg-emerald-100 text-emerald-600', icon: DollarSign },
     { title: 'Staff member added', detail: 'Dr. Neeraj Gupta – ECE', time: '1 hr ago', bg: 'bg-purple-100 text-purple-600', icon: Users, navTarget: 'Staff' },
     { title: 'Leave request submitted', detail: 'Prof. Ramesh Kumar', time: '2 hr ago', bg: 'bg-amber-100 text-amber-600', icon: Calendar, navTarget: 'Attendance' },
@@ -151,7 +159,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   // Quick actions grid
   const quickActions = [
-    { label: 'Add Student', icon: UserPlus, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700' },
+    { label: 'Add Student', icon: UserPlus, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Students' },
     { label: 'Staff Directory', icon: Users, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Staff' },
     { label: 'Mark Attendance', icon: CheckSquare, bg: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700', navTarget: 'Attendance' },
     { label: 'Collect Fee', icon: DollarSign, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700' },
@@ -231,16 +239,16 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans">
+    <div className="h-screen w-screen overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
       
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col shrink-0 sticky top-0 h-screen overflow-y-auto">
+      <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col shrink-0 h-full overflow-y-auto">
         <SidebarContent />
       </aside>
 
       {/* MOBILE SIDEBAR DRAWER & BACKDROP */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-[110] lg:hidden">
           <div 
             className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
@@ -252,11 +260,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       )}
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div id="main-content-scroll-container" className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
         
         {/* TOP HEADER BAR */}
-        <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
-        <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
           
           <div className="flex items-center gap-3 flex-1 max-w-md mr-4">
             {/* Mobile Hamburger Toggle */}
@@ -324,7 +331,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         </header>
 
         {/* CONDITIONALLY RENDER CONTENT BASED ON ACTIVE NAV */}
-        {activeNav === 'Staff' ? (
+        {activeNav === 'Students' ? (
+          <main className="flex-1">
+            <StudentsPage />
+          </main>
+        ) : activeNav === 'Staff' ? (
           <main className="flex-1">
             <StaffManagement />
           </main>
@@ -352,6 +363,42 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           <main className="flex-1">
             <AssignmentManagement />
           </main>
+        ) : activeNav === 'Notices' ? (
+          <main className="flex-1">
+            <NoticesManagement />
+          </main>
+        ) : activeNav === 'Events' ? (
+          <main className="flex-1">
+            <EventsManagement />
+          </main>
+        ) : activeNav === 'Reports' ? (
+          <main className="flex-1">
+            <ReportsManagement />
+          </main>
+        ) : activeNav === 'Users & Roles' ? (
+          <main className="flex-1">
+            <UsersRolesManagement />
+          </main>
+        ) : activeNav === 'Settings' ? (
+          <main className="flex-1">
+            <SettingsManagement />
+          </main>
+        ) : activeNav === 'Fees' ? (
+          <main className="flex-1">
+            <FeesManagement />
+          </main>
+        ) : activeNav === 'Library' ? (
+          <main className="flex-1">
+            <CampusFacilitiesManagement initialTab="library" />
+          </main>
+        ) : activeNav === 'Hostel' ? (
+          <main className="flex-1">
+            <CampusFacilitiesManagement initialTab="hostel" />
+          </main>
+        ) : activeNav === 'Transport' ? (
+          <main className="flex-1">
+            <CampusFacilitiesManagement initialTab="transport" />
+          </main>
         ) : (
           /* DEFAULT DASHBOARD VIEW */
           <main className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
@@ -363,19 +410,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                 Welcome back, Admin. Here's what's happening today.
               </p>
             </div>
-        {/* DASHBOARD / STUDENTS BODY */}
-        <main className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-          {activeNav === 'Students' ? (
-            <StudentsPage />
-          ) : (
-            <>
-              {/* Dashboard Title Header */}
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-                <p className="text-xs text-slate-500 mt-1">
-                  Welcome back, Admin. Here's what's happening today.
-                </p>
-              </div>
 
             {/* 8 METRIC CARDS GRID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
@@ -664,17 +698,12 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
           </main>
         )}
-
-            </>
-          )}
-
-        </main>
       </div>
 
       {/* Logout Confirmation Warning Modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 transform transition-all">
+        <ModalPortal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}>
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200">
                 <AlertTriangle className="w-6 h-6" />
@@ -709,7 +738,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>

@@ -39,6 +39,7 @@ import {
   ShieldCheck,
   Zap
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 const DEPARTMENTS = [
   'All Departments',
@@ -587,6 +588,23 @@ export default function AttendanceManagement() {
   const [warningModalStudent, setWarningModalStudent] = useState(null);
   const [isApplyLeaveOpen, setIsApplyLeaveOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Lock background scroll when any modal is open
+  React.useEffect(() => {
+    const isAnyModalOpen = Boolean(viewingStudentProfile || warningModalStudent || isApplyLeaveOpen);
+    const scrollContainer = document.getElementById('main-content-scroll-container');
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      if (scrollContainer) scrollContainer.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    };
+  }, [viewingStudentProfile, warningModalStudent, isApplyLeaveOpen]);
 
   // Leave Form state
   const [leaveForm, setLeaveForm] = useState({
@@ -1720,39 +1738,39 @@ export default function AttendanceManagement() {
       {/* MODAL: VIEW STUDENT ATTENDANCE PROFILE                                    */}
       {/* ========================================================================= */}
       {viewingStudentProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(viewingStudentProfile)} onClose={() => setViewingStudentProfile(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-base shadow-sm">
-                  {viewingStudentProfile.name.charAt(0)}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                  <UserCheck className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-extrabold text-slate-900 leading-tight">
                     {viewingStudentProfile.name}
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <p className="text-[11px] text-slate-500 font-medium">
                     Roll: <strong className="text-slate-800">{viewingStudentProfile.rollNo}</strong> • {viewingStudentProfile.department}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setViewingStudentProfile(null)} className="p-1.5 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-xl">
+              <button onClick={() => setViewingStudentProfile(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between">
+            <div className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-xs">
               <div>
-                <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider block">Semester Overall</span>
+                <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider block">Semester Overall Attendance</span>
                 <p className="text-2xl font-black text-emerald-400">{viewingStudentProfile.attendancePercent}%</p>
-                <p className="text-xs text-slate-300 mt-0.5">{viewingStudentProfile.attendedClasses} / {viewingStudentProfile.totalClasses} Lectures</p>
+                <p className="text-xs text-slate-300 mt-0.5">{viewingStudentProfile.attendedClasses} / {viewingStudentProfile.totalClasses} Lectures Attended</p>
               </div>
 
-              <span className={`px-2.5 py-1 text-xs font-bold rounded-xl ${
+              <span className={`px-3 py-1.5 text-xs font-bold rounded-xl ${
                 viewingStudentProfile.attendancePercent < 75 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
               }`}>
-                {viewingStudentProfile.attendancePercent < 75 ? 'Shortage Risk' : 'Eligible for Exams'}
+                {viewingStudentProfile.attendancePercent < 75 ? '⚠️ Shortage Risk' : '✓ Eligible for Exams'}
               </span>
             </div>
 
@@ -1762,7 +1780,7 @@ export default function AttendanceManagement() {
                 {viewingStudentProfile.subjectWise?.map((sub, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs flex items-center justify-between">
                     <div>
-                      <span className="font-bold text-blue-600 mr-2">{sub.code}:</span>
+                      <span className="font-bold text-purple-600 mr-2">{sub.code}:</span>
                       <span className="font-bold text-slate-900">{sub.name}</span>
                     </div>
                     <span className={`font-black text-xs ${
@@ -1776,64 +1794,69 @@ export default function AttendanceManagement() {
             </div>
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-0.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block">Parent Contact</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Guardian / Parent Contact</span>
               <p className="font-bold text-slate-800">{viewingStudentProfile.parentName} • 📞 {viewingStudentProfile.parentPhone}</p>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-slate-100">
+            <div className="flex justify-end pt-3 border-t border-slate-100">
               <button
                 onClick={() => setViewingStudentProfile(null)}
-                className="px-5 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs"
+                className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
               >
-                Close
+                Close Profile
               </button>
             </div>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* MODAL: SEND SHORTAGE NOTICE                                               */}
       {/* ========================================================================= */}
       {warningModalStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5" />
+        <ModalPortal isOpen={Boolean(warningModalStudent)} onClose={() => setWarningModalStudent(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">Send Shortage Notice</h3>
+                  <p className="text-[11px] text-slate-500">Official SMS & Email alert to parent</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Send Shortage Notice</h3>
-                <p className="text-xs text-slate-500">Official SMS & Email alert to parent</p>
-              </div>
+              <button onClick={() => setWarningModalStudent(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="p-3 bg-rose-50 rounded-xl border border-rose-100 text-xs space-y-1 text-rose-900">
+            <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-100 text-xs space-y-1 text-rose-900">
               <p><strong>Student:</strong> {warningModalStudent.name} ({warningModalStudent.rollNo})</p>
-              <p><strong>Attendance:</strong> {warningModalStudent.attendancePercent}% (Minimum 75% required)</p>
+              <p><strong>Attendance:</strong> <span className="font-extrabold text-rose-600">{warningModalStudent.attendancePercent}%</span> (Minimum 75% required)</p>
               <p><strong>Parent:</strong> {warningModalStudent.parentName} ({warningModalStudent.parentPhone})</p>
             </div>
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setWarningModalStudent(null)}
-                className="flex-1 py-2.5 px-4 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs"
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSendWarning}
-                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center justify-center gap-1.5"
+                className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-2"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>Send Notice</span>
+                <Send className="w-4 h-4" />
+                <span>Dispatch Notice</span>
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>
