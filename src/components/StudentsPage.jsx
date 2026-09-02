@@ -33,7 +33,6 @@ export default function StudentsPage() {
     const isAnyModalOpen = Boolean(editingStudent || deleteModalStudent || showAddWizard || selectedStudentProfile);
     const scrollContainer = document.getElementById('main-content-scroll-container');
     if (isAnyModalOpen) {
-    if (editingStudent || deleteModalStudent) {
       document.body.style.overflow = 'hidden';
       if (scrollContainer) scrollContainer.style.overflow = 'hidden';
     } else {
@@ -44,7 +43,7 @@ export default function StudentsPage() {
       document.body.style.overflow = 'unset';
       if (scrollContainer) scrollContainer.style.overflow = 'auto';
     };
-  }, [editingStudent, deleteModalStudent]);
+  }, [editingStudent, deleteModalStudent, showAddWizard, selectedStudentProfile]);
 
   // Initial 7 students matching exact Figma screenshot data
   const [students, setStudents] = useState([

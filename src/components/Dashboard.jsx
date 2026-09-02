@@ -129,6 +129,14 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       ]
     },
     {
+      title: 'CAMPUS',
+      items: [
+        { name: 'Library', icon: Library },
+        { name: 'Hostel', icon: Home },
+        { name: 'Transport', icon: Bus }
+      ]
+    },
+    {
       title: 'HR',
       items: [
         { name: 'Leave Management', icon: UserCheck }
@@ -166,7 +174,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   // Recent activity entries
   const recentActivities = [
     { title: 'New student registered', detail: 'Aditya Kapoor – CS Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus, navTarget: 'Students' },
-    { title: 'Fee payment received', detail: '₹45,000 – Priya Mehta', time: '22 min ago', bg: 'bg-emerald-100 text-emerald-600', icon: DollarSign },
     { title: 'Fee payment received', detail: '₹45,000 – Priya Mehta', time: '22 min ago', bg: 'bg-emerald-100 text-emerald-600', icon: DollarSign, navTarget: 'Fees' },
     { title: 'Staff member added', detail: 'Dr. Neeraj Gupta – ECE', time: '1 hr ago', bg: 'bg-purple-100 text-purple-600', icon: Users, navTarget: 'Staff' },
     { title: 'Leave request submitted', detail: 'Prof. Ramesh Kumar', time: '2 hr ago', bg: 'bg-amber-100 text-amber-600', icon: Calendar, navTarget: 'Attendance' },
@@ -333,8 +340,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       <div id="main-content-scroll-container" className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
         
         {/* TOP HEADER BAR */}
-        <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
-          
         <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
           <div className="flex items-center gap-3 flex-1 max-w-md mr-4">
             {/* Mobile Hamburger Toggle */}
@@ -377,11 +382,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         {/* CONDITIONALLY RENDER CONTENT BASED ON ACTIVE NAV */}
         {activeNav === 'Students' ? (
           <main className="flex-1">
-            <StudentsPage />
-          </main>
-        ) : activeNav === 'Staff' ? (
-          <main className="flex-1">
-          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <StudentsPage />
           </main>
         ) : activeNav === 'Staff' ? (
@@ -433,8 +433,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
             <SettingsManagement />
           </main>
         ) : activeNav === 'Fees' ? (
-          <main className="flex-1">
-            <FeesManagement />
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
+            <FeeManagement defaultFeeType={selectedFeeType} />
           </main>
         ) : activeNav === 'Library' ? (
           <main className="flex-1">
@@ -447,9 +447,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         ) : activeNav === 'Transport' ? (
           <main className="flex-1">
             <CampusFacilitiesManagement initialTab="transport" />
-        ) : activeNav === 'Fees' ? (
-          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            <FeeManagement defaultFeeType={selectedFeeType} />
           </main>
         ) : (
           /* DEFAULT DASHBOARD VIEW */
