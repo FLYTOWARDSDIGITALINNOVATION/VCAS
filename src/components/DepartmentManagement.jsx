@@ -17,9 +17,11 @@ import {
   Sparkles,
   ChevronRight,
   ArrowLeft,
-  Calendar,
-  Filter
+  Calendar, 
+  Filter,
+  Save
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 function formatHodEmail(name) {
   if (!name) return 'hod@college.edu';
@@ -238,6 +240,23 @@ export default function DepartmentManagement() {
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [deletingDept, setDeletingDept] = useState(null);
+
+  // Lock background scroll when any modal is open
+  React.useEffect(() => {
+    const isAnyModalOpen = Boolean(viewingDept || editingDept || isAddModalOpen || deletingDept);
+    const scrollContainer = document.getElementById('main-content-scroll-container');
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      if (scrollContainer) scrollContainer.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    };
+  }, [viewingDept, editingDept, isAddModalOpen, deletingDept]);
 
   // Form state for basic fields
   const [formData, setFormData] = useState({
@@ -628,17 +647,22 @@ export default function DepartmentManagement() {
       {/* 4. MODAL: ADD DEPARTMENT */}
       {/* ========================================================================= */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-900 leading-tight">Add New Department</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Register a new academic department branch</p>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">Add New Department</h3>
+                  <p className="text-[11px] text-slate-500">Register an academic department branch and configure head of department</p>
+                </div>
               </div>
               <button 
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -646,49 +670,49 @@ export default function DepartmentManagement() {
 
             <form onSubmit={handleSaveAdd} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Department Name <span className="text-rose-500">*</span>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Department Name *
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Artificial Intelligence & Data Science"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50/80 border rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none transition-all ${
-                    formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all ${
+                    formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
                   }`}
                 />
                 {formErrors.name && <p className="text-[11px] text-rose-500 mt-1">{formErrors.name}</p>}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Department Code <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Department Code *
                   </label>
                   <input
                     type="text"
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     placeholder="e.g. AI-DS"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50/80 border rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none uppercase transition-all ${
-                      formErrors.code ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
+                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold font-mono text-slate-800 focus:bg-white focus:outline-none uppercase transition-all ${
+                      formErrors.code ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
                     }`}
                   />
                   {formErrors.code && <p className="text-[11px] text-rose-500 mt-1">{formErrors.code}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Head of Department (HOD) <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Head of Department (HOD) *
                   </label>
                   <input
                     type="text"
                     value={formData.hod}
                     onChange={(e) => setFormData({ ...formData, hod: e.target.value })}
                     placeholder="e.g. Dr. Rajesh Sharma"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50/80 border rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none transition-all ${
-                      formErrors.hod ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
+                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all ${
+                      formErrors.hod ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
                     }`}
                   />
                   {formErrors.hod && <p className="text-[11px] text-rose-500 mt-1">{formErrors.hod}</p>}
@@ -696,13 +720,13 @@ export default function DepartmentManagement() {
               </div>
 
               {/* Program Duration (Years & Semesters) */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Duration</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Duration</label>
                   <select
                     value={formData.totalYears}
                     onChange={(e) => setFormData({ ...formData, totalYears: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     <option value={2}>2 Years (4 Sems - MBA/PG)</option>
                     <option value={3}>3 Years (6 Sems - BCA/B.Sc)</option>
@@ -710,39 +734,39 @@ export default function DepartmentManagement() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Faculty</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Faculty Count</label>
                   <input
                     type="number"
                     value={formData.facultyCount}
                     onChange={(e) => setFormData({ ...formData, facultyCount: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Students</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Students Enrolled</label>
                   <input
                     type="number"
                     value={formData.studentCount}
                     onChange={(e) => setFormData({ ...formData, studentCount: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
                   />
                 </div>
               </div>
 
               {/* Modal Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+                  className="px-5 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs shadow-blue-500/20 transition-all flex items-center gap-2"
+                  className="px-6 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
                 >
-                  <Check className="w-4 h-4" />
+                  <Save className="w-4 h-4" />
                   <span>Save Department</span>
                 </button>
               </div>
@@ -750,25 +774,32 @@ export default function DepartmentManagement() {
             </form>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* 5. MODAL: EDIT DEPARTMENT WITH YEAR & SEMESTER CURRICULUM EDITOR          */}
       {/* ========================================================================= */}
       {editingDept && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(editingDept)} onClose={() => setEditingDept(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
             {/* Modal Title */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-900 leading-tight">Edit Department</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Update {editingDept.name} info, year-wise syllabus, and labs</p>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">
+                    Edit Department & Curriculum Details
+                  </h3>
+                  <p className="text-[11px] text-slate-500">Update {editingDept.name} curriculum, labs, and faculty allocation</p>
+                </div>
               </div>
               <button 
                 onClick={() => setEditingDept(null)}
-                className="p-2 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 rounded-xl transition-all"
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -776,331 +807,307 @@ export default function DepartmentManagement() {
 
             <form onSubmit={handleSaveEdit} className="space-y-6">
               
-              {/* SECTION 1: General Info */}
-              <div className="space-y-4">
-                <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider block">
-                  1. GENERAL INFORMATION
-                </span>
-
-                {/* Department Name */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Department Name <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className={`w-full px-4 py-2.5 bg-slate-50/80 border rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none transition-all ${
-                      formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
-                    }`}
-                  />
-                  {formErrors.name && <p className="text-[11px] text-rose-500 mt-1">{formErrors.name}</p>}
-                </div>
-
-                {/* Department Code & Head of Department (HOD) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* SECTION A: Department General Information */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-purple-600" /> General Information
+                </h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Department Code <span className="text-rose-500">*</span>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Department Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all ${
+                        formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
+                      }`}
+                    />
+                    {formErrors.name && <p className="text-[11px] text-rose-500 mt-1">{formErrors.name}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Department Code *
                     </label>
                     <input
                       type="text"
                       value={formData.code}
                       onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                      className={`w-full px-4 py-2.5 bg-slate-50/80 border rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none uppercase transition-all ${
-                        formErrors.code ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
+                      className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold font-mono text-slate-800 focus:bg-white focus:outline-none uppercase transition-all ${
+                        formErrors.code ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
                       }`}
                     />
                     {formErrors.code && <p className="text-[11px] text-rose-500 mt-1">{formErrors.code}</p>}
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Head of Department (HOD) <span className="text-rose-500">*</span>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Head of Department (HOD) *
                     </label>
                     <input
                       type="text"
                       value={formData.hod}
                       onChange={(e) => setFormData({ ...formData, hod: e.target.value })}
-                      className={`w-full px-4 py-2.5 bg-slate-50/80 border rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none transition-all ${
-                        formErrors.hod ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
+                      className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all ${
+                        formErrors.hod ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
                       }`}
                     />
                     {formErrors.hod && <p className="text-[11px] text-rose-500 mt-1">{formErrors.hod}</p>}
                   </div>
-                </div>
 
-                {/* Program Duration, Faculty & Students */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Academic Duration</label>
-                    <select
-                      value={formData.totalYears}
-                      onChange={(e) => setFormData({ ...formData, totalYears: Number(e.target.value) })}
-                      className="w-full px-4 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value={2}>2 Years (4 Semesters)</option>
-                      <option value={3}>3 Years (6 Semesters)</option>
-                      <option value={4}>4 Years (8 Semesters)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Faculty Count</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Faculty Count</label>
                     <input
                       type="number"
                       value={formData.facultyCount}
                       onChange={(e) => setFormData({ ...formData, facultyCount: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Students Enrolled</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Students Enrolled</label>
                     <input
                       type="number"
                       value={formData.studentCount}
                       onChange={(e) => setFormData({ ...formData, studentCount: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* SECTION 2: Year & Semester Curriculum Editor */}
-              <div className="space-y-4 pt-4 border-t border-slate-100">
+              {/* SECTION B: CURRICULUM, SUBJECTS & LABS BY YEAR AND SEMESTER */}
+              <div className="space-y-4 pt-3 border-t border-slate-100">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-purple-600" /> Curriculum & Labs by Year / Sem
+                  </h4>
+                  
+                  {/* Select Year to Edit */}
                   <div className="flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                      2. YEAR & SEMESTER CURRICULUM ({editCoursesList.length} Subjects)
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleAddCourse(editFilterYear === 'ALL' ? 1 : editFilterYear, `Sem ${(editFilterYear === 'ALL' ? 1 : editFilterYear) * 2 - 1}`)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl text-xs font-bold transition-all border border-blue-200 shadow-2xs"
+                    <span className="text-xs text-slate-500 font-medium">Select Year:</span>
+                    <select
+                      value={activeEditYear}
+                      onChange={(e) => setActiveEditYear(Number(e.target.value))}
+                      className="px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-xl text-xs font-bold text-purple-700 focus:outline-none cursor-pointer"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Subject</span>
-                    </button>
+                      {Array.from({ length: Number(formData.totalYears) || 4 }, (_, i) => i + 1).map(yr => (
+                        <option key={yr} value={yr}>Year {yr} (Sem {yr * 2 - 1} & Sem {yr * 2})</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                {/* Filter in Editor by Year */}
-                <div className="flex items-center gap-2 bg-slate-100/70 p-1.5 rounded-xl text-xs overflow-x-auto">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase px-2">Filter Year:</span>
-                  <button
-                    type="button"
-                    onClick={() => setEditFilterYear('ALL')}
-                    className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                      editFilterYear === 'ALL' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    All Years ({editCoursesList.length})
-                  </button>
-                  {[...Array(formData.totalYears || 4)].map((_, i) => {
-                    const y = i + 1;
-                    const countInYear = editCoursesList.filter(c => c.year === y).length;
-                    return (
-                      <button
-                        key={y}
-                        type="button"
-                        onClick={() => setEditFilterYear(y)}
-                        className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                          editFilterYear === y ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Year {y} ({countInYear})
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* Sub-Editor for the Active Year */}
+                {(() => {
+                  const yrData = editCurriculum.find(c => c.year === activeEditYear) || {
+                    year: activeEditYear,
+                    sem1Name: `Sem ${activeEditYear * 2 - 1}`,
+                    sem2Name: `Sem ${activeEditYear * 2}`,
+                    sem1Subjects: [],
+                    sem2Subjects: [],
+                    sem1Labs: [],
+                    sem2Labs: []
+                  };
 
-                {/* Course list grid */}
-                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                  {editCoursesList
-                    .filter(c => editFilterYear === 'ALL' || c.year === Number(editFilterYear))
-                    .map((course, idx) => {
-                      const realIndex = editCoursesList.indexOf(course);
-                      return (
-                        <div 
-                          key={realIndex}
-                          className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center"
-                        >
-                          {/* Subject Name */}
-                          <div className="sm:col-span-4">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Subject Name</label>
-                            <input
-                              type="text"
-                              value={course.name}
-                              onChange={(e) => handleUpdateCourseField(realIndex, 'name', e.target.value)}
-                              placeholder="e.g. Python Programming"
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:outline-none"
-                            />
-                          </div>
+                  return (
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-extrabold text-purple-900 uppercase tracking-wider">
+                          Year {activeEditYear} Courses & Labs
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          {yrData.sem1Name} and {yrData.sem2Name}
+                        </span>
+                      </div>
 
-                          {/* Code */}
-                          <div className="sm:col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Code</label>
-                            <input
-                              type="text"
-                              value={course.code}
-                              onChange={(e) => handleUpdateCourseField(realIndex, 'code', e.target.value)}
-                              placeholder="CS101"
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
-                            />
-                          </div>
+                      {/* Semester 1 Box */}
+                      <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">{yrData.sem1Name} Subjects:</span>
+                          <button
+                            type="button"
+                            onClick={() => handleAddSubjectToEditCurriculum(activeEditYear, 1)}
+                            className="px-2.5 py-1 text-[11px] font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg flex items-center gap-1 transition-all"
+                          >
+                            <Plus className="w-3 h-3" /> Add Course
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {yrData.sem1Subjects.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">No courses added for this semester.</p>
+                          ) : (
+                            yrData.sem1Subjects.map((sub, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={sub}
+                                  onChange={(e) => handleUpdateSubjectInEditCurriculum(activeEditYear, 1, idx, e.target.value)}
+                                  placeholder="e.g. Data Structures & Algorithms (4 Credits)"
+                                  className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSubjectFromEditCurriculum(activeEditYear, 1, idx)}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                  title="Remove course"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
 
-                          {/* Academic Year */}
-                          <div className="sm:col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Year</label>
-                            <select
-                              value={course.year || 1}
-                              onChange={(e) => {
-                                const yr = Number(e.target.value);
-                                handleUpdateCourseField(realIndex, 'year', yr);
-                                handleUpdateCourseField(realIndex, 'sem', `Sem ${yr * 2 - 1}`);
-                              }}
-                              className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:border-blue-500 focus:outline-none"
-                            >
-                              {[...Array(formData.totalYears || 4)].map((_, i) => (
-                                <option key={i + 1} value={i + 1}>Year {i + 1}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Semester */}
-                          <div className="sm:col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Semester</label>
-                            <select
-                              value={course.sem || 'Sem 1'}
-                              onChange={(e) => handleUpdateCourseField(realIndex, 'sem', e.target.value)}
-                              className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:border-blue-500 focus:outline-none"
-                            >
-                              {[...Array((formData.totalYears || 4) * 2)].map((_, i) => (
-                                <option key={i + 1} value={`Sem ${i + 1}`}>Sem {i + 1}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Credits */}
-                          <div className="sm:col-span-1">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Credits</label>
-                            <select
-                              value={course.credits}
-                              onChange={(e) => handleUpdateCourseField(realIndex, 'credits', Number(e.target.value))}
-                              className="w-full px-1.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-blue-600 focus:border-blue-500 focus:outline-none"
-                            >
-                              <option value={1}>1</option>
-                              <option value={2}>2</option>
-                              <option value={3}>3</option>
-                              <option value={4}>4</option>
-                              <option value={5}>5</option>
-                              <option value={6}>6</option>
-                            </select>
-                          </div>
-
-                          {/* Delete */}
-                          <div className="sm:col-span-1 flex items-end justify-center pt-2 sm:pt-4">
+                        {/* Labs for Sem 1 */}
+                        <div className="pt-2 border-t border-slate-100 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-700">{yrData.sem1Name} Practical Labs:</span>
                             <button
                               type="button"
-                              onClick={() => handleRemoveCourse(realIndex)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                              title="Remove subject"
+                              onClick={() => handleAddLabToEditCurriculum(activeEditYear, 1)}
+                              className="px-2 py-0.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md flex items-center gap-1 transition-all"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Plus className="w-3 h-3" /> Add Lab
                             </button>
                           </div>
+                          {yrData.sem1Labs && yrData.sem1Labs.map((lab, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={lab}
+                                onChange={(e) => handleUpdateLabInEditCurriculum(activeEditYear, 1, idx, e.target.value)}
+                                placeholder="e.g. Data Structures Lab (2 Credits)"
+                                className="flex-1 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:border-indigo-500 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveLabFromEditCurriculum(activeEditYear, 1, idx)}
+                                className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })}
-                </div>
-              </div>
+                      </div>
 
-              {/* SECTION 3: Laboratories & Facilities */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-purple-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                    3. DEPARTMENT LABORATORIES & FACILITIES ({editLabsList.length})
-                  </span>
-                </div>
+                      {/* Semester 2 Box */}
+                      <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">{yrData.sem2Name} Subjects:</span>
+                          <button
+                            type="button"
+                            onClick={() => handleAddSubjectToEditCurriculum(activeEditYear, 2)}
+                            className="px-2.5 py-1 text-[11px] font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg flex items-center gap-1 transition-all"
+                          >
+                            <Plus className="w-3 h-3" /> Add Course
+                          </button>
+                        </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {editLabsList.map((lab, idx) => (
-                    <span 
-                      key={idx}
-                      className="px-3 py-1.5 bg-slate-100 text-slate-800 text-xs font-semibold rounded-xl flex items-center gap-2 border border-slate-200"
-                    >
-                      <span>🔬 {lab}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveLab(lab)}
-                        className="text-slate-400 hover:text-rose-600 font-bold ml-1"
-                        title="Remove lab"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
+                        <div className="space-y-2">
+                          {yrData.sem2Subjects.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">No courses added for this semester.</p>
+                          ) : (
+                            yrData.sem2Subjects.map((sub, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={sub}
+                                  onChange={(e) => handleUpdateSubjectInEditCurriculum(activeEditYear, 2, idx, e.target.value)}
+                                  placeholder="e.g. Database Management Systems (4 Credits)"
+                                  className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSubjectFromEditCurriculum(activeEditYear, 2, idx)}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                  title="Remove course"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
 
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="text"
-                    value={newLabInput}
-                    onChange={(e) => setNewLabInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddLab();
-                      }
-                    }}
-                    placeholder="Enter lab name... e.g. High Performance Computing Lab"
-                    className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-blue-500 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddLab}
-                    className="px-4 py-2 bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white rounded-xl text-xs font-bold transition-all border border-purple-200 shrink-0"
-                  >
-                    + Add Lab
-                  </button>
-                </div>
+                        {/* Labs for Sem 2 */}
+                        <div className="pt-2 border-t border-slate-100 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-700">{yrData.sem2Name} Practical Labs:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleAddLabToEditCurriculum(activeEditYear, 2)}
+                              className="px-2 py-0.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md flex items-center gap-1 transition-all"
+                            >
+                              <Plus className="w-3 h-3" /> Add Lab
+                            </button>
+                          </div>
+                          {yrData.sem2Labs && yrData.sem2Labs.map((lab, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={lab}
+                                onChange={(e) => handleUpdateLabInEditCurriculum(activeEditYear, 2, idx, e.target.value)}
+                                placeholder="e.g. Database Management Lab (2 Credits)"
+                                className="flex-1 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:border-indigo-500 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveLabFromEditCurriculum(activeEditYear, 2, idx)}
+                                className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                    </div>
+                  );
+                })()}
+
               </div>
 
               {/* Modal Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-5 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingDept(null)}
-                  className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+                  className="px-5 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs shadow-blue-500/20 transition-all flex items-center gap-2"
+                  className="px-6 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>Update Changes</span>
+                  <Save className="w-4 h-4" />
+                  <span>Update Department & Curriculum</span>
                 </button>
               </div>
 
             </form>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* 6. MODAL: VIEW DEPARTMENT DETAILS WITH YEAR & SEMESTER FILTERING           */}
       {/* ========================================================================= */}
       {viewingDept && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(viewingDept)} onClose={() => setViewingDept(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
             {/* Header: Badge + Department Name + Subtitle on Left, Close X on Right (NO Edit button) */}
             <div className="flex items-start justify-between border-b border-slate-100 pb-4 gap-3">
@@ -1121,28 +1128,29 @@ export default function DepartmentManagement() {
               {/* Top Right: Only Close X Button */}
               <button 
                 onClick={() => setViewingDept(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 rounded-xl transition-all shrink-0"
+                className="p-1.5 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 rounded-xl transition-all"
+                title="Close Modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* DEPARTMENT LEADERSHIP */}
-            <div className="bg-blue-50/50 p-4 sm:p-5 rounded-2xl border border-blue-100/90 space-y-2">
-              <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
-                DEPARTMENT LEADERSHIP
-              </span>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-base font-extrabold text-slate-900">{viewingDept.hod}</h4>
-                  <p className="text-xs text-slate-500 font-medium">Head of Department (HOD)</p>
+            {/* Department Head (HOD) Banner */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-sm">
+                  {viewingDept.hod.split(' ').map(n => n[0]).join('').substring(0, 2)}
                 </div>
-                {viewingDept.hodEmail && (
-                  <span className="text-xs text-blue-600 font-medium sm:text-right">
-                    {viewingDept.hodEmail}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    DEPARTMENT LEADERSHIP
                   </span>
-                )}
+                  <p className="text-sm font-bold text-slate-900">{viewingDept.hod}</p>
+                </div>
               </div>
+              <span className="px-3 py-1 bg-white text-slate-600 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hidden sm:inline-block">
+                {formatHodEmail(viewingDept.hod)}
+              </span>
             </div>
 
             {/* YEAR & SEMESTER CURRICULUM SECTION */}
@@ -1293,15 +1301,15 @@ export default function DepartmentManagement() {
             </div>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* 7. MODAL: DELETE CONFIRMATION */}
       {/* ========================================================================= */}
       {deletingDept && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5">
+        <ModalPortal isOpen={Boolean(deletingDept)} onClose={() => setDeletingDept(null)}>
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
                 <AlertTriangle className="w-6 h-6" />
@@ -1336,7 +1344,7 @@ export default function DepartmentManagement() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>

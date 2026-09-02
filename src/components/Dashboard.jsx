@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import StudentsPage from './StudentsPage';
+import ModalPortal from './ModalPortal';
 import { 
   LayoutDashboard, 
   GraduationCap, 
@@ -41,6 +42,13 @@ import AttendanceManagement from './AttendanceManagement';
 import ExaminationManagement from './ExaminationManagement';
 import TimetableManagement from './TimetableManagement';
 import AssignmentManagement from './AssignmentManagement';
+import NoticesManagement from './NoticesManagement';
+import EventsManagement from './EventsManagement';
+import ReportsManagement from './ReportsManagement';
+import UsersRolesManagement from './UsersRolesManagement';
+import SettingsManagement from './SettingsManagement';
+import FeesManagement from './FeesManagement';
+import CampusFacilitiesManagement from './CampusFacilitiesManagement';
 import FeeManagement from './FeeManagement';
 
 export default function Dashboard({ user, onLogout, onSwitchPortal }) {
@@ -158,6 +166,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   // Recent activity entries
   const recentActivities = [
     { title: 'New student registered', detail: 'Aditya Kapoor – CS Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus, navTarget: 'Students' },
+    { title: 'Fee payment received', detail: '₹45,000 – Priya Mehta', time: '22 min ago', bg: 'bg-emerald-100 text-emerald-600', icon: DollarSign },
     { title: 'Fee payment received', detail: '₹45,000 – Priya Mehta', time: '22 min ago', bg: 'bg-emerald-100 text-emerald-600', icon: DollarSign, navTarget: 'Fees' },
     { title: 'Staff member added', detail: 'Dr. Neeraj Gupta – ECE', time: '1 hr ago', bg: 'bg-purple-100 text-purple-600', icon: Users, navTarget: 'Staff' },
     { title: 'Leave request submitted', detail: 'Prof. Ramesh Kumar', time: '2 hr ago', bg: 'bg-amber-100 text-amber-600', icon: Calendar, navTarget: 'Attendance' },
@@ -300,16 +309,16 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans">
+    <div className="h-screen w-screen overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
       
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col shrink-0 sticky top-0 h-screen overflow-y-auto">
+      <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col shrink-0 h-full overflow-y-auto">
         <SidebarContent />
       </aside>
 
       {/* MOBILE SIDEBAR DRAWER & BACKDROP */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-[110] lg:hidden">
           <div 
             className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
@@ -321,9 +330,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       )}
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div id="main-content-scroll-container" className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
         
         {/* TOP HEADER BAR */}
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
+          
         <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
           <div className="flex items-center gap-3 flex-1 max-w-md mr-4">
             {/* Mobile Hamburger Toggle */}
@@ -365,6 +376,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
         {/* CONDITIONALLY RENDER CONTENT BASED ON ACTIVE NAV */}
         {activeNav === 'Students' ? (
+          <main className="flex-1">
+            <StudentsPage />
+          </main>
+        ) : activeNav === 'Staff' ? (
+          <main className="flex-1">
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <StudentsPage />
           </main>
@@ -396,6 +412,41 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <AssignmentManagement />
           </main>
+        ) : activeNav === 'Notices' ? (
+          <main className="flex-1">
+            <NoticesManagement />
+          </main>
+        ) : activeNav === 'Events' ? (
+          <main className="flex-1">
+            <EventsManagement />
+          </main>
+        ) : activeNav === 'Reports' ? (
+          <main className="flex-1">
+            <ReportsManagement />
+          </main>
+        ) : activeNav === 'Users & Roles' ? (
+          <main className="flex-1">
+            <UsersRolesManagement />
+          </main>
+        ) : activeNav === 'Settings' ? (
+          <main className="flex-1">
+            <SettingsManagement />
+          </main>
+        ) : activeNav === 'Fees' ? (
+          <main className="flex-1">
+            <FeesManagement />
+          </main>
+        ) : activeNav === 'Library' ? (
+          <main className="flex-1">
+            <CampusFacilitiesManagement initialTab="library" />
+          </main>
+        ) : activeNav === 'Hostel' ? (
+          <main className="flex-1">
+            <CampusFacilitiesManagement initialTab="hostel" />
+          </main>
+        ) : activeNav === 'Transport' ? (
+          <main className="flex-1">
+            <CampusFacilitiesManagement initialTab="transport" />
         ) : activeNav === 'Fees' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <FeeManagement defaultFeeType={selectedFeeType} />
@@ -703,8 +754,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
       {/* Logout Confirmation Warning Modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 transform transition-all">
+        <ModalPortal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}>
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200">
                 <AlertTriangle className="w-6 h-6" />
@@ -739,7 +790,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>

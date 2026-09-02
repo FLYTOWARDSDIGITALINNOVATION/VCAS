@@ -16,6 +16,7 @@ import {
   ArrowUpDown,
   AlertTriangle
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 export default function StudentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -29,13 +30,19 @@ export default function StudentsPage() {
 
   // Disable background page scrolling ONLY when popup overlay modals are active
   React.useEffect(() => {
+    const isAnyModalOpen = Boolean(editingStudent || deleteModalStudent || showAddWizard || selectedStudentProfile);
+    const scrollContainer = document.getElementById('main-content-scroll-container');
+    if (isAnyModalOpen) {
     if (editingStudent || deleteModalStudent) {
       document.body.style.overflow = 'hidden';
+      if (scrollContainer) scrollContainer.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
     }
     return () => {
       document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
     };
   }, [editingStudent, deleteModalStudent]);
 
@@ -568,8 +575,8 @@ Report Date  : ${new Date().toLocaleString()}
 
       {/* EDIT STUDENT MODAL (ALL FIELDS EDITABLE) */}
       {editingStudent && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 my-8 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(editingStudent)} onClose={() => setEditingStudent(null)}>
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 my-auto max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Edit Student Profile</h3>
@@ -742,13 +749,13 @@ Report Date  : ${new Date().toLocaleString()}
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* DELETE CONFIRMATION MODAL */}
       {deleteModalStudent && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5">
+        <ModalPortal isOpen={Boolean(deleteModalStudent)} onClose={() => setDeleteModalStudent(null)}>
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
                 <Trash2 className="w-6 h-6" />
@@ -782,7 +789,7 @@ Report Date  : ${new Date().toLocaleString()}
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>

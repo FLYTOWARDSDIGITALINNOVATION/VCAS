@@ -11,7 +11,8 @@
     margin: 0 !important;
     padding: 0 !important;
     width: 100%;
-    min-height: 100vh;
+    height: 100%;
+    overflow: hidden;
     background-color: #f8fafc !important;
     @apply bg-slate-50 text-slate-900 font-sans antialiased selection:bg-blue-500 selection:text-white;
   }

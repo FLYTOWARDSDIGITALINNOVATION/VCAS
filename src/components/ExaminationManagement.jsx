@@ -32,8 +32,10 @@ import {
   TrendingUp,
   Sparkles,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Save
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 const DEPARTMENTS = [
   'All Departments',
@@ -425,6 +427,23 @@ export default function ExaminationManagement() {
   const [viewingGradeCardStudent, setViewingGradeCardStudent] = useState(null);
   const [isMarksLocked, setIsMarksLocked] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Lock background scroll when any modal is open
+  React.useEffect(() => {
+    const isAnyModalOpen = Boolean(isAddScheduleOpen || viewingHallTicketStudent || viewingGradeCardStudent);
+    const scrollContainer = document.getElementById('main-content-scroll-container');
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      if (scrollContainer) scrollContainer.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    };
+  }, [isAddScheduleOpen, viewingHallTicketStudent, viewingGradeCardStudent]);
 
   // Schedule Form State
   const [scheduleForm, setScheduleForm] = useState({
@@ -1200,15 +1219,20 @@ export default function ExaminationManagement() {
       {/* 9. MODAL: ADD EXAM SCHEDULE                                               */}
       {/* ========================================================================= */}
       {isAddScheduleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={isAddScheduleOpen} onClose={() => setIsAddScheduleOpen(false)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-900">Add Exam Schedule</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Create a new timetable entry for university examinations</p>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">Add Exam Schedule Entry</h3>
+                  <p className="text-[11px] text-slate-500">Create a new timetable slot for university examinations</p>
+                </div>
               </div>
-              <button onClick={() => setIsAddScheduleOpen(false)} className="p-2 text-slate-400 hover:text-slate-700 rounded-xl">
+              <button onClick={() => setIsAddScheduleOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1216,36 +1240,36 @@ export default function ExaminationManagement() {
             <form onSubmit={handleSaveSchedule} className="space-y-4">
               
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Subject Name</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name *</label>
                 <input
                   type="text"
                   value={scheduleForm.name}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, name: e.target.value })}
                   placeholder="e.g. Distributed Cloud Computing"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-rose-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Subject Code</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
                   <input
                     type="text"
                     value={scheduleForm.code}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, code: e.target.value })}
                     placeholder="CS501"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-rose-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Department</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Department *</label>
                   <select
                     value={scheduleForm.department}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, department: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-rose-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
                       <option key={d} value={d}>{d}</option>
@@ -1254,23 +1278,24 @@ export default function ExaminationManagement() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Exam Date</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Date *</label>
                   <input
                     type="date"
                     value={scheduleForm.date}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-rose-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Session Hour</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Session Timing *</label>
                   <select
                     value={scheduleForm.session}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, session: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-rose-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     <option value="FN (09:30 AM - 12:30 PM)">FN (09:30 AM - 12:30 PM)</option>
                     <option value="AN (01:30 PM - 04:30 PM)">AN (01:30 PM - 04:30 PM)</option>
@@ -1278,57 +1303,57 @@ export default function ExaminationManagement() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Exam Hall</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Hall</label>
                   <input
                     type="text"
                     value={scheduleForm.hall}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, hall: e.target.value })}
                     placeholder="Hall 101 (Ramanujan Block)"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-rose-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">QP Code</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">QP Code</label>
                   <input
                     type="text"
                     value={scheduleForm.qpCode}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, qpCode: e.target.value })}
                     placeholder="QP-7108-CS"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-rose-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsAddScheduleOpen(false)}
-                  className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-xs"
+                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
                 >
-                  Save Schedule
+                  <Save className="w-4 h-4" />
+                  <span>Save Schedule Entry</span>
                 </button>
               </div>
 
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
-
       {/* ========================================================================= */}
       {/* 10. MODAL: OFFICIAL PRINTABLE HALL TICKET                                 */}
       {/* ========================================================================= */}
       {viewingHallTicketStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(viewingHallTicketStudent)} onClose={() => setViewingHallTicketStudent(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
@@ -1426,15 +1451,15 @@ export default function ExaminationManagement() {
             </div>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ========================================================================= */}
       {/* 11. MODAL: OFFICIAL GRADE CARD / MARKSHEET                                */}
       {/* ========================================================================= */}
       {viewingGradeCardStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={Boolean(viewingGradeCardStudent)} onClose={() => setViewingGradeCardStudent(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
@@ -1525,7 +1550,7 @@ export default function ExaminationManagement() {
             </div>
 
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>
