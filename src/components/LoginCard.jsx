@@ -8,8 +8,10 @@ import {
   EyeOff, 
   ArrowRight,
   Building2,
-  Users
+  Users,
+  Check
 } from 'lucide-react';
+import { STAFF_REGISTRY } from './staff/staffData';
 
 export default function LoginCard({ onLoginSuccess }) {
   const [activeRole, setActiveRole] = useState('Admin');
@@ -21,14 +23,20 @@ export default function LoginCard({ onLoginSuccess }) {
   const [errorMsg, setErrorMsg] = useState('');
 
   const roles = [
-    { id: 'Admin', label: 'Admin', icon: Building2, defaultEmail: 'admin@vcas.edu' },
-    { id: 'Staff', label: 'Staff', icon: Users, defaultEmail: 'staff@vcas.edu' }
+    { id: 'Admin', label: 'Admin', icon: Building2, defaultEmail: 'admin@vcas.edu', defaultPassword: '••••••••••••' },
+    { id: 'Staff', label: 'Staff', icon: Users, defaultEmail: STAFF_REGISTRY[0].email, defaultPassword: 'vcas@2026' }
   ];
 
   const handleRoleSelect = (role) => {
     setActiveRole(role.id);
     setEmail(role.defaultEmail);
+    setPassword(role.defaultPassword);
     setErrorMsg('');
+  };
+
+  const handleSelectDemoStaff = (staff) => {
+    setEmail(staff.email);
+    setPassword(staff.password);
   };
 
   const handleSubmit = (e) => {
@@ -40,15 +48,34 @@ export default function LoginCard({ onLoginSuccess }) {
     setIsLoading(true);
     setErrorMsg('');
     
-    // Simulate login delay
     setTimeout(() => {
       setIsLoading(false);
-      onLoginSuccess({
-        role: activeRole,
-        email: email,
-        name: activeRole === 'Admin' ? 'Dr. Arunkumar S' : 'Meenakshi N (Staff)'
-      });
-    }, 900);
+      if (activeRole === 'Staff') {
+        const foundStaff = STAFF_REGISTRY.find(
+          s => s.email.toLowerCase() === email.trim().toLowerCase()
+        );
+        if (foundStaff) {
+          onLoginSuccess({
+            ...foundStaff,
+            role: 'Staff'
+          });
+        } else {
+          // Fallback if typed custom staff email
+          onLoginSuccess({
+            ...STAFF_REGISTRY[0],
+            role: 'Staff',
+            name: email.split('@')[0],
+            email: email
+          });
+        }
+      } else {
+        onLoginSuccess({
+          role: 'Admin',
+          email: email,
+          name: 'Dr. Arunkumar S (Principal)'
+        });
+      }
+    }, 600);
   };
 
   return (
@@ -102,6 +129,42 @@ export default function LoginCard({ onLoginSuccess }) {
           })}
         </div>
       </div>
+
+      {/* Demo Staff Quick Select (when Staff is active) */}
+      {activeRole === 'Staff' && (
+        <div className="mb-4 p-3 bg-blue-50/70 rounded-2xl border border-blue-100">
+          <label className="block text-[10px] font-extrabold uppercase tracking-wider text-blue-800 mb-1.5">
+            Select Staff Profile (Quick Test):
+          </label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {STAFF_REGISTRY.map(staff => {
+              const isSelected = email.toLowerCase() === staff.email.toLowerCase();
+              return (
+                <button
+                  key={staff.staffId}
+                  type="button"
+                  onClick={() => handleSelectDemoStaff(staff)}
+                  className={`p-2 rounded-xl text-left border transition-all ${
+                    isSelected
+                      ? 'bg-white border-blue-500 shadow-xs ring-1 ring-blue-500'
+                      : 'bg-white/60 border-slate-200/80 hover:bg-white'
+                  }`}
+                >
+                  <p className="text-[11px] font-extrabold text-slate-900 truncate">
+                    {staff.name.replace('Dr. ', '').replace('Prof. ', '')}
+                  </p>
+                  <p className="text-[9px] text-blue-600 font-bold truncate">
+                    {staff.department}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1.5 text-center">
+            Default Password: <span className="font-mono font-bold text-slate-700">vcas@2026</span>
+          </p>
+        </div>
+      )}
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-3.5">

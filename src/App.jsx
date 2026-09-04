@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LoginCard from './components/LoginCard';
 import Dashboard from './components/Dashboard';
+import StaffDashboard from './components/staff/StaffDashboard';
 
 export default function App() {
   // Restore user and login state from sessionStorage on page refresh
@@ -56,6 +57,7 @@ export default function App() {
     sessionStorage.removeItem('vcas_user');
     sessionStorage.removeItem('vcas_activeNav');
     sessionStorage.removeItem('vcas_selectedFeeType');
+    sessionStorage.removeItem('vcas_staff_nav');
     setViewMode('login');
   };
 
@@ -70,11 +72,18 @@ export default function App() {
   return (
     <div className="h-full w-full overflow-hidden bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white">
       {viewMode === 'dashboard' ? (
-        <Dashboard 
-          user={currentUser} 
-          onLogout={handleLogout} 
-          onSwitchPortal={handleSwitchPortal} 
-        />
+        currentUser?.role === 'Staff' ? (
+          <StaffDashboard 
+            staffUser={currentUser} 
+            onLogout={handleLogout} 
+          />
+        ) : (
+          <Dashboard 
+            user={currentUser} 
+            onLogout={handleLogout} 
+            onSwitchPortal={handleSwitchPortal} 
+          />
+        )
       ) : (
         <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-[#070f1e] overflow-y-auto">
           <div className="text-center mb-4 sm:mb-5">
