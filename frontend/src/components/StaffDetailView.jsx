@@ -29,6 +29,45 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'classes', 'timetable', 'leaves'
   const [selectedMonth, setSelectedMonth] = useState('August 2026');
   const [markedToday, setMarkedToday] = useState(false);
+  const [staffLeaves, setStaffLeaves] = useState([]);
+  const [staffLeaveSummary, setStaffLeaveSummary] = useState({ totalQuota: 15, approvedDays: 0, pendingCount: 0, remainingDays: 15 });
+
+  const staffId = staff.id || staff.staffId;
+
+  const fetchStaffLeaves = () => {
+    if (!staffId) return;
+    fetch(`http://localhost:5000/api/leave/staff/${staffId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          setStaffLeaves(d.leaves || []);
+          if (d.summary) setStaffLeaveSummary(d.summary);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchStaffLeaves();
+  }, [staffId]);
+
+  const handleAdminLeaveAction = async (leaveId, status) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/leave/${leaveId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, approvedBy: 'Admin (Principal / HoD)' })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        fetchStaffLeaves();
+      } else {
+        alert(data.message || 'Failed to update leave.');
+      }
+    } catch (e) {
+      alert('Unable to connect to server.');
+    }
+  };
 
   // Real staff profile fields filled by staff or admin
   const qualification = staff.qualification || 'Pending staff first-time setup';
@@ -412,13 +451,13 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
             </div>
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Leaves Taken</span>
-              <p className="text-2xl font-black text-amber-600">{leaveCount} Day</p>
-              <p className="text-xs text-slate-500 font-medium mt-1">Casual Leave Approved</p>
+              <p className="text-2xl font-black text-amber-600">{staffLeaveSummary.approvedDays} Day{staffLeaveSummary.approvedDays !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-slate-500 font-medium mt-1">Approved for academic year</p>
             </div>
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Leave Balance</span>
-              <p className="text-2xl font-black text-blue-600">11 Days</p>
-              <p className="text-xs text-slate-500 font-medium mt-1">Remaining for year</p>
+              <p className="text-2xl font-black text-blue-600">{staffLeaveSummary.remainingDays} Days</p>
+              <p className="text-xs text-slate-500 font-medium mt-1">Remaining out of 15</p>
             </div>
           </div>
 
@@ -465,47 +504,69 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
 
           {/* Leave History Table */}
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
-            <h3 className="text-sm font-extrabold text-slate-900">Recent Leave Applications</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="py-3 px-4">LEAVE TYPE</th>
-                    <th className="py-3 px-4">FROM</th>
-                    <th className="py-3 px-4">TO</th>
-                    <th className="py-3 px-4">DAYS</th>
-                    <th className="py-3 px-4">REASON</th>
-                    <th className="py-3 px-4">STATUS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  <tr className="hover:bg-slate-50/50">
-                    <td className="py-3.5 px-4 font-bold text-slate-900">Casual Leave</td>
-                    <td className="py-3.5 px-4 text-slate-600">2026-08-12</td>
-                    <td className="py-3.5 px-4 text-slate-600">2026-08-12</td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-800">1 Day</td>
-                    <td className="py-3.5 px-4 text-slate-600">Family Event / Personal</td>
-                    <td className="py-3.5 px-4">
-                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Approved
-                      </span>
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/50">
-                    <td className="py-3.5 px-4 font-bold text-slate-900">Medical Leave</td>
-                    <td className="py-3.5 px-4 text-slate-600">2026-05-18</td>
-                    <td className="py-3.5 px-4 text-slate-600">2026-05-19</td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-800">2 Days</td>
-                    <td className="py-3.5 px-4 text-slate-600">Viral Fever (Doctor Certificate attached)</td>
-                    <td className="py-3.5 px-4">
-                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Approved
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-slate-900">Faculty Leave Applications ({staffLeaves.length})</h3>
+              <span className="text-xs text-slate-400 font-medium">Synced with MongoDB</span>
             </div>
+            {staffLeaves.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center">No leave applications recorded for this faculty member yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      <th className="py-3 px-4">LEAVE TYPE</th>
+                      <th className="py-3 px-4">FROM</th>
+                      <th className="py-3 px-4">TO</th>
+                      <th className="py-3 px-4">DAYS</th>
+                      <th className="py-3 px-4">REASON</th>
+                      <th className="py-3 px-4">STATUS</th>
+                      <th className="py-3 px-4 text-right">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {staffLeaves.map((l) => (
+                      <tr key={l._id} className="hover:bg-slate-50/50">
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{l.leaveType}</td>
+                        <td className="py-3.5 px-4 text-slate-600">{l.fromDate}</td>
+                        <td className="py-3.5 px-4 text-slate-600">{l.toDate}</td>
+                        <td className="py-3.5 px-4 font-semibold text-slate-800">{l.days} Day{l.days > 1 ? 's' : ''}</td>
+                        <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate" title={l.reason}>{l.reason}</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${
+                            l.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            l.status === 'Pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}>
+                            {l.status}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          {l.status === 'Pending' ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleAdminLeaveAction(l._id, 'Approved')}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[10px]"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => handleAdminLeaveAction(l._id, 'Rejected')}
+                                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-lg text-[10px]"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 font-medium">{l.approvedBy || '-'}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
         </div>

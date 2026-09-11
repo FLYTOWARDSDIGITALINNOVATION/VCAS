@@ -22,7 +22,7 @@ const NAV_ITEMS = [
   { name: 'Timetable', icon: Calendar, section: 'ACADEMIC' },
   { name: 'Assignments', icon: BookMarked, section: 'ACADEMIC' },
   { name: 'Notices', icon: Bell, section: 'COMMUNICATION' },
-  { name: 'Leave', icon: UserCheck, section: 'HR' },
+  { name: 'Leave', icon: UserCheck, section: 'HOD' },
   { name: 'My Profile', icon: User, section: 'ACCOUNT' },
 ];
 

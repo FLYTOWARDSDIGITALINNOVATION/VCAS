@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Bell, 
   Plus, 
@@ -9,13 +9,17 @@ import {
   X, 
   Send,
   Building2,
-  Megaphone
+  Megaphone,
+  Pin,
+  Trash2,
+  Loader2
 } from 'lucide-react';
-import { NOTICES_DATA } from './staffData';
 
-export default function StaffNotices({ staffUser }) {
-  const [notices, setNotices] = useState(() => NOTICES_DATA);
+export default function StaffNotices({ staffUser = {} }) {
+  const [notices, setNotices] = useState([]);
   const [selectedTag, setSelectedTag] = useState('ALL');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
   // New notice form state
@@ -24,36 +28,93 @@ export default function StaffNotices({ staffUser }) {
   const [newTag, setNewTag] = useState('Academic');
   const [isUrgent, setIsUrgent] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const tags = ['ALL', 'Academic', 'Exam', 'Development', 'Event', 'Research'];
 
-  const filteredNotices = notices.filter(n => {
-    if (selectedTag !== 'ALL' && n.tag !== selectedTag) return false;
-    return true;
-  });
+  // Fetch notices from backend
+  const fetchNotices = async () => {
+    try {
+      setLoading(true);
+      const url = selectedTag && selectedTag !== 'ALL'
+        ? `http://localhost:5000/api/notices?tag=${encodeURIComponent(selectedTag)}`
+        : 'http://localhost:5000/api/notices';
 
-  const handlePostNotice = (e) => {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setNotices(data.notices || []);
+      }
+    } catch (err) {
+      console.error('Failed to load notices:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotices();
+  }, [selectedTag]);
+
+  const handlePostNotice = async (e) => {
     e.preventDefault();
     if (!newTitle.trim() || !newBody.trim()) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const newEntry = {
-      id: `N-${Date.now()}`,
-      title: newTitle.trim(),
-      body: newBody.trim(),
-      postedBy: `${staffUser.name} (${staffUser.department})`,
-      date: todayStr,
-      tag: newTag,
-      urgent: isUrgent
-    };
+    setSubmitting(true);
+    setErrorMsg('');
 
-    setNotices(prev => [newEntry, ...prev]);
-    setShowModal(false);
-    setNewTitle('');
-    setNewBody('');
-    setIsUrgent(false);
-    setSuccessMsg('Notice posted to department and students successfully!');
-    setTimeout(() => setSuccessMsg(''), 4000);
+    try {
+      const res = await fetch('http://localhost:5000/api/notices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          body: newBody.trim(),
+          tag: newTag,
+          urgent: isUrgent,
+          postedBy: staffUser?.name ? `${staffUser.name} (${staffUser.department || 'Faculty'})` : 'Faculty Member',
+          postedByStaffId: staffUser?.staffId || '',
+          department: staffUser?.department || 'All'
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShowModal(false);
+        setNewTitle('');
+        setNewBody('');
+        setIsUrgent(false);
+        setSuccessMsg(data.message || 'Notice published successfully to college and department!');
+        setTimeout(() => setSuccessMsg(''), 4000);
+        fetchNotices();
+      } else {
+        setErrorMsg(data.message || 'Failed to post notice.');
+      }
+    } catch (err) {
+      setErrorMsg('Unable to connect to the backend server.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteNotice = async (noticeId) => {
+    if (!window.confirm('Are you sure you want to delete this notice?')) return;
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/notices/${noticeId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessMsg('Notice deleted successfully.');
+        setTimeout(() => setSuccessMsg(''), 4000);
+        fetchNotices();
+      } else {
+        alert(data.message || 'Failed to delete notice.');
+      }
+    } catch (err) {
+      alert('Unable to connect to server.');
+    }
   };
 
   return (
@@ -67,7 +128,7 @@ export default function StaffNotices({ staffUser }) {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => { setShowModal(true); setErrorMsg(''); }}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
@@ -76,9 +137,9 @@ export default function StaffNotices({ staffUser }) {
       </div>
 
       {successMsg && (
-        <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          {successMsg}
+        <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{successMsg}</span>
         </div>
       )}
 
@@ -101,59 +162,103 @@ export default function StaffNotices({ staffUser }) {
 
       {/* Notices List */}
       <div className="space-y-4">
-        {filteredNotices.map((notice) => (
-          <div
-            key={notice.id}
-            className={`bg-white rounded-2xl border p-5 transition-all shadow-sm ${
-              notice.urgent ? 'border-red-200/80' : 'border-slate-100'
-            }`}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
-                  {notice.tag}
+        {loading ? (
+          <div className="bg-white rounded-2xl border border-slate-100 p-12 flex flex-col items-center justify-center text-slate-400 gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            <p className="text-xs font-medium">Loading notices from database...</p>
+          </div>
+        ) : notices.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center text-slate-400">
+            <Bell className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+            <p className="text-xs font-semibold text-slate-600">No notices found in this category</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Click "Post New Notice" above to publish a circular.</p>
+          </div>
+        ) : (
+          notices.map((notice) => (
+            <div
+              key={notice._id || notice.id}
+              className={`bg-white rounded-2xl border p-5 transition-all shadow-sm ${
+                notice.urgent ? 'border-red-200/80' : 'border-slate-100'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
+                    {notice.tag}
+                  </span>
+                  {notice.pinned && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100">
+                      <Pin className="w-3 h-3 text-purple-600" /> Pinned
+                    </span>
+                  )}
+                  {notice.urgent && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100">
+                      <AlertCircle className="w-3 h-3" /> Urgent
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-slate-400 text-xs font-medium">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{notice.date}</span>
+                  </div>
+                  {/* Allow deleting if created by current staff or if staff user */}
+                  <button
+                    onClick={() => handleDeleteNotice(notice._id || notice.id)}
+                    title="Delete Notice"
+                    className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <h3 className="font-extrabold text-slate-900 text-base leading-snug">
+                {notice.title}
+              </h3>
+
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed whitespace-pre-line">
+                {notice.body || notice.content}
+              </p>
+
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                <span className="flex items-center gap-1 font-semibold text-slate-700">
+                  <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                  Posted by: {notice.postedBy || notice.author}
                 </span>
-                {notice.urgent && (
-                  <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100">
-                    <AlertCircle className="w-3 h-3" /> Urgent
+                {notice.department && notice.department !== 'All' && (
+                  <span className="text-slate-400 text-[10px]">
+                    Dept: {notice.department}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 text-slate-400 text-xs font-medium">
-                <Calendar className="w-3.5 h-3.5" />
-                <span>{notice.date}</span>
-              </div>
             </div>
-
-            <h3 className="font-extrabold text-slate-900 text-base leading-snug">
-              {notice.title}
-            </h3>
-
-            <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-              {notice.body}
-            </p>
-
-            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="flex items-center gap-1 font-semibold text-slate-700">
-                <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                Posted by: {notice.postedBy}
-              </span>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Post Notice Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setShowModal(false)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => !submitting && setShowModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg z-10 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <h3 className="font-extrabold text-slate-900 text-base">Post Department Notice</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+              <button 
+                onClick={() => setShowModal(false)} 
+                disabled={submitting}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {errorMsg && (
+              <div className="flex items-center gap-2 p-2.5 mb-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
 
             <form onSubmit={handlePostNotice} className="space-y-3.5">
               <div>
@@ -211,6 +316,7 @@ export default function StaffNotices({ staffUser }) {
               <div className="flex gap-3 pt-3">
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => setShowModal(false)}
                   className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
@@ -218,9 +324,11 @@ export default function StaffNotices({ staffUser }) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-bold text-white shadow-md shadow-blue-500/20"
+                  disabled={submitting}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-bold text-white shadow-md shadow-blue-500/20 flex items-center justify-center gap-2"
                 >
-                  Publish Notice
+                  {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {submitting ? 'Publishing...' : 'Publish Notice'}
                 </button>
               </div>
             </form>

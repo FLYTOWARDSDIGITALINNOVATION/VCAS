@@ -28,22 +28,20 @@ export default function StudentsPage() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [deleteModalStudent, setDeleteModalStudent] = useState(null);
 
-  // Disable background page scrolling ONLY when popup overlay modals are active
+  // Ensure main scroll container is active and unlocked for students page, wizard, and profile views
   React.useEffect(() => {
-    const isAnyModalOpen = Boolean(editingStudent || deleteModalStudent || showAddWizard || selectedStudentProfile);
     const scrollContainer = document.getElementById('main-content-scroll-container');
-    if (isAnyModalOpen) {
-      document.body.style.overflow = 'hidden';
-      if (scrollContainer) scrollContainer.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    document.body.style.overflow = 'unset';
+    if (scrollContainer) {
+      scrollContainer.style.overflow = 'auto';
     }
     return () => {
       document.body.style.overflow = 'unset';
-      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+      if (scrollContainer) {
+        scrollContainer.style.overflow = 'auto';
+      }
     };
-  }, [editingStudent, deleteModalStudent, showAddWizard, selectedStudentProfile]);
+  }, []);
 
   // Initial 7 students matching exact Figma screenshot data
   const [students, setStudents] = useState([

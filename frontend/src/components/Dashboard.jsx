@@ -12,9 +12,6 @@ import {
   Calendar, 
   BookMarked, 
   IndianRupee, 
-  Library, 
-  Home, 
-  Bus, 
   UserCheck, 
   Bell, 
   Sparkles, 
@@ -39,6 +36,7 @@ import StaffManagement from './StaffManagement';
 import DepartmentManagement from './DepartmentManagement';
 import CourseSubjectManagement from './CourseSubjectManagement';
 import AttendanceManagement from './AttendanceManagement';
+import LeaveManagement from './LeaveManagement';
 import ExaminationManagement from './ExaminationManagement';
 import TimetableManagement from './TimetableManagement';
 import AssignmentManagement from './AssignmentManagement';
@@ -126,14 +124,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           icon: IndianRupee,
           subItems: ['Exam Fees', 'Tuition Fees', 'Transport Fees']
         }
-      ]
-    },
-    {
-      title: 'CAMPUS',
-      items: [
-        { name: 'Library', icon: Library },
-        { name: 'Hostel', icon: Home },
-        { name: 'Transport', icon: Bus }
       ]
     },
     {
@@ -396,9 +386,13 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <CourseSubjectManagement />
           </main>
-        ) : activeNav === 'Attendance' || activeNav === 'Leave Management' ? (
+        ) : activeNav === 'Attendance' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <AttendanceManagement />
+          </main>
+        ) : activeNav === 'Leave Management' ? (
+          <main className="flex-1">
+            <LeaveManagement />
           </main>
         ) : activeNav === 'Examinations' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
@@ -435,18 +429,6 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         ) : activeNav === 'Fees' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <FeeManagement defaultFeeType={selectedFeeType} />
-          </main>
-        ) : activeNav === 'Library' ? (
-          <main className="flex-1">
-            <CampusFacilitiesManagement initialTab="library" />
-          </main>
-        ) : activeNav === 'Hostel' ? (
-          <main className="flex-1">
-            <CampusFacilitiesManagement initialTab="hostel" />
-          </main>
-        ) : activeNav === 'Transport' ? (
-          <main className="flex-1">
-            <CampusFacilitiesManagement initialTab="transport" />
           </main>
         ) : (
           /* DEFAULT DASHBOARD VIEW */

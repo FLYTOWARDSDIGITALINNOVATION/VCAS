@@ -10,6 +10,8 @@ const attendanceRoutes = require('./routes/attendanceRoutes');
 const timetableRoutes        = require('./routes/timetableRoutes');
 const internalMarksRoutes    = require('./routes/internalMarksRoutes');
 const assignmentRoutes       = require('./routes/assignmentRoutes');
+const noticeRoutes           = require('./routes/noticeRoutes');
+const leaveRoutes            = require('./routes/leaveRoutes');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -47,6 +49,8 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/timetable',        timetableRoutes);
 app.use('/api/internal-marks',   internalMarksRoutes);
 app.use('/api/assignments',      assignmentRoutes);
+app.use('/api/notices',          noticeRoutes);
+app.use('/api/leave',            leaveRoutes);
 
 // 404
 app.use((req, res) => {
@@ -69,5 +73,7 @@ app.listen(PORT, () => {
   console.log(`📅 Timetable:      http://localhost:${PORT}/api/timetable`);
   console.log(`📝 InternalMarks: http://localhost:${PORT}/api/internal-marks`);
   console.log(`📌 Assignments:   http://localhost:${PORT}/api/assignments`);
+  console.log(`📢 Notices:       http://localhost:${PORT}/api/notices`);
+  console.log(`🏖️ Leave:         http://localhost:${PORT}/api/leave`);
   console.log(`=================================================`);
 });

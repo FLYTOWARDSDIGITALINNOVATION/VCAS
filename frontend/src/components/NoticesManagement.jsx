@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Bell, 
   Plus, 
@@ -148,7 +148,8 @@ const PRIORITIES = ['All', 'Urgent', 'High', 'Normal', 'Low'];
 const AUDIENCES = ['All', 'All Students', 'Students', 'Faculty', 'Staff'];
 
 export default function NoticesManagement() {
-  const [notices, setNotices] = useState(INITIAL_NOTICES);
+  const [notices, setNotices] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedPriority, setSelectedPriority] = useState('All');
@@ -160,6 +161,44 @@ export default function NoticesManagement() {
   const [showEditModal, setShowEditModal] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+
+  // Fetch notices from MongoDB
+  const fetchNotices = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('http://localhost:5000/api/notices');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const formatted = (data.notices || []).map(n => ({
+          id: n._id || n.id,
+          _id: n._id || n.id,
+          refNo: n.refNo || `CIR/${new Date(n.createdAt || Date.now()).getFullYear()}/${(n._id || '0000').substring(0, 4).toUpperCase()}`,
+          title: n.title,
+          category: n.tag || n.category || 'Academic',
+          priority: n.urgent ? 'Urgent' : (n.priority || 'Normal'),
+          targetAudience: n.targetAudience || 'All Students',
+          targetDept: n.department || 'All Departments',
+          publishDate: n.date || (n.createdAt ? new Date(n.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+          expiryDate: n.expiryDate || '',
+          isPinned: Boolean(n.pinned || n.isPinned),
+          author: n.postedBy || n.author || 'Admin Office',
+          designation: n.designation || 'Dean / Registrar',
+          viewsCount: n.viewsCount || 0,
+          content: n.body || n.content || '',
+          attachments: n.attachments || []
+        }));
+        setNotices(formatted);
+      }
+    } catch (err) {
+      console.error('Failed to load notices:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotices();
+  }, []);
 
   // Lock background scroll when any modal is open
   React.useEffect(() => {
@@ -249,22 +288,39 @@ export default function NoticesManagement() {
     setShowCreateModal(true);
   };
 
-  const handleSaveCreate = (e) => {
+  const handleSaveCreate = async (e) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.content.trim()) {
       alert('Please fill out the circular title and detailed content.');
       return;
     }
 
-    const newNotice = {
-      ...formData,
-      id: Date.now(),
-      viewsCount: 0
-    };
+    try {
+      const res = await fetch('http://localhost:5000/api/notices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title.trim(),
+          body: formData.content.trim(),
+          tag: formData.category,
+          urgent: formData.priority === 'Urgent' || formData.priority === 'High',
+          pinned: formData.isPinned,
+          postedBy: `${formData.author} (${formData.designation})`,
+          department: formData.targetDept
+        })
+      });
 
-    setNotices([newNotice, ...notices]);
-    setShowCreateModal(false);
-    showToast('Notice published and broadcasted successfully!');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShowCreateModal(false);
+        showToast('Notice published and saved to database successfully!');
+        fetchNotices();
+      } else {
+        alert(data.message || 'Failed to save notice.');
+      }
+    } catch (err) {
+      alert('Unable to connect to server.');
+    }
   };
 
   const handleOpenEdit = (notice, e) => {
@@ -280,11 +336,16 @@ export default function NoticesManagement() {
     showToast('Notice updated successfully!');
   };
 
-  const handleDeleteNotice = (id) => {
-    setNotices(prev => prev.filter(n => n.id !== id));
-    setShowDeleteModal(null);
-    if (showViewModal?.id === id) setShowViewModal(null);
-    showToast('Notice removed successfully.');
+  const handleDeleteNotice = async (id) => {
+    try {
+      await fetch(`http://localhost:5000/api/notices/${id}`, { method: 'DELETE' });
+      setNotices(prev => prev.filter(n => n.id !== id && n._id !== id));
+      setShowDeleteModal(null);
+      if (showViewModal?.id === id || showViewModal?._id === id) setShowViewModal(null);
+      showToast('Notice permanently deleted from database.');
+    } catch (err) {
+      alert('Unable to delete notice from server.');
+    }
   };
 
   return (

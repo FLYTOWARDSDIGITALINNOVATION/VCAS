@@ -4,7 +4,7 @@ import {
   ChevronRight, TrendingUp, Clock, AlertCircle, CalendarCheck2,
   Users, GraduationCap, Zap, Calendar, FileSpreadsheet
 } from 'lucide-react';
-import { ASSIGNMENTS_DATA, NOTICES_DATA, LEAVE_DATA } from './staffData';
+
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -34,6 +34,9 @@ export default function StaffHome({ staffUser, onNavigate }) {
   const [dbClasses, setDbClasses] = useState([]);
   const [dbHistory, setDbHistory] = useState([]);
   const [dbTimetable, setDbTimetable] = useState({});
+  const [dbNotices, setDbNotices] = useState([]);
+  const [dbAssignments, setDbAssignments] = useState([]);
+  const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
 
   useEffect(() => {
     if (!staffUser?.staffId) return;
@@ -51,6 +54,23 @@ export default function StaffHome({ staffUser, onNavigate }) {
       .then(r => r.json())
       .then(d => { if (d.success && d.schedule) setDbTimetable(d.schedule); })
       .catch(() => {});
+
+    fetch(`http://localhost:5000/api/notices`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setDbNotices(d.notices || []); })
+      .catch(() => {});
+
+    fetch(`http://localhost:5000/api/assignments/${staffUser.staffId}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setDbAssignments(d.assignments || []); })
+      .catch(() => {});
+
+    fetch(`http://localhost:5000/api/leave/staff/${staffUser.staffId}`)
+      .then(r => r.json())
+      .then(d => { 
+        if (d.success && d.summary) setPendingLeaveCount(d.summary.pendingCount || 0); 
+      })
+      .catch(() => {});
   }, [staffUser?.staffId]);
 
   const todayClasses = useMemo(() => {
@@ -67,9 +87,8 @@ export default function StaffHome({ staffUser, onNavigate }) {
 
   const mySubjects = dbClasses;
   const history = dbHistory;
-  const assignments = ASSIGNMENTS_DATA[staffUser.staffId] || [];
+  const assignments = dbAssignments;
   const activeAssignments = assignments.filter(a => a.status === 'Active');
-  const pendingLeave = (LEAVE_DATA[staffUser.staffId] || []).filter(l => l.status === 'Pending');
 
   const colorMap = {
     blue: 'bg-blue-500', indigo: 'bg-indigo-500', purple: 'bg-purple-500',
@@ -105,10 +124,10 @@ export default function StaffHome({ staffUser, onNavigate }) {
             <BookOpen className="w-3.5 h-3.5 text-blue-300" />
             {mySubjects.length} subjects handled
           </div>
-          {pendingLeave.length > 0 && (
+          {pendingLeaveCount > 0 && (
             <div className="flex items-center gap-2 bg-amber-500/20 rounded-xl px-3 py-1.5 text-xs font-semibold text-amber-200">
               <AlertCircle className="w-3.5 h-3.5" />
-              {pendingLeave.length} leave pending approval
+              {pendingLeaveCount} leave pending approval
             </div>
           )}
         </div>
@@ -119,7 +138,7 @@ export default function StaffHome({ staffUser, onNavigate }) {
         <StatCard label="Subjects Handled" value={mySubjects.length} sub="This semester" icon={BookOpen} color="bg-blue-500" onClick={() => onNavigate('My Classes')} />
         <StatCard label="Sessions Taken" value={history.length} sub="This month" icon={CalendarCheck2} color="bg-emerald-500" onClick={() => onNavigate('Attendance')} />
         <StatCard label="Active Assignments" value={activeAssignments.length} sub="Pending evaluation" icon={BookMarked} color="bg-purple-500" onClick={() => onNavigate('Assignments')} />
-        <StatCard label="Leave Pending" value={pendingLeave.length} sub="Awaiting approval" icon={UserCheck} color="bg-amber-500" onClick={() => onNavigate('Leave')} />
+        <StatCard label="Leave Pending" value={pendingLeaveCount} sub="Awaiting approval" icon={UserCheck} color="bg-amber-500" onClick={() => onNavigate('Leave')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -203,18 +222,24 @@ export default function StaffHome({ staffUser, onNavigate }) {
           </button>
         </div>
         <div className="divide-y divide-slate-50">
-          {NOTICES_DATA.slice(0, 3).map(n => (
-            <div key={n.id} className="px-5 py-3 hover:bg-slate-50 transition-colors">
-              <div className="flex items-start gap-3">
-                <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${n.urgent ? 'bg-red-500' : 'bg-slate-300'}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-900 leading-tight">{n.title}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{n.postedBy} · {n.date}</p>
-                </div>
-                {n.urgent && <span className="text-[10px] bg-red-50 text-red-600 font-bold px-2 py-0.5 rounded-full border border-red-100 shrink-0">Urgent</span>}
-              </div>
+          {dbNotices.length === 0 ? (
+            <div className="px-5 py-6 text-center text-xs text-slate-400">
+              No recent notices.
             </div>
-          ))}
+          ) : (
+            dbNotices.slice(0, 3).map(n => (
+              <div key={n._id || n.id} className="px-5 py-3 hover:bg-slate-50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${n.urgent ? 'bg-red-500' : 'bg-slate-300'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-900 leading-tight">{n.title}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{n.postedBy || n.author} · {n.date}</p>
+                  </div>
+                  {n.urgent && <span className="text-[10px] bg-red-50 text-red-600 font-bold px-2 py-0.5 rounded-full border border-red-100 shrink-0">Urgent</span>}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
