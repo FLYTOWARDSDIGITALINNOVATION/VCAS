@@ -1,0 +1,2 @@
+PORT=5000
+MONGODB_URI=mongodb+srv://lathavairamuthu1004_db_user:Lathacs%4010@cluster0.ruon290.mongodb.net/VCAS?retryWrites=true&w=majority&appName=Cluster0
