@@ -1,83 +1,124 @@
-import React, { useState } from 'react';
-import { 
-  BookMarked, 
-  Plus, 
-  Calendar, 
-  Clock, 
-  FileText, 
-  CheckCircle2, 
-  X, 
+import React, { useState, useEffect } from "react";
+import {
+  BookMarked,
+  Plus,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  X,
   AlertCircle,
-  Eye,
   Trash2,
-  Filter
-} from 'lucide-react';
-import { SUBJECTS, ASSIGNMENTS_DATA } from './staffData';
+  Filter,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
+
+const API = "http://localhost:5000/api";
 
 export default function StaffAssignments({ staffUser }) {
-  const mySubjects = (staffUser.subjects || []).map(code => SUBJECTS[code]).filter(Boolean);
+  const staffId = staffUser?.staffId || staffUser?.employeeId || "";
 
-  const [assignments, setAssignments] = useState(() => {
-    return ASSIGNMENTS_DATA[staffUser.staffId] || [];
-  });
+  const [assignments, setAssignments]     = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [filterSubject, setFilterSubject] = useState("ALL");
+  const [filterStatus, setFilterStatus]   = useState("ALL");
+  const [showModal, setShowModal]         = useState(false);
+  const [successMsg, setSuccessMsg]       = useState("");
+  const [errorMsg, setErrorMsg]           = useState("");
+  const [saving, setSaving]               = useState(false);
 
-  const [filterSubject, setFilterSubject] = useState('ALL');
-  const [filterStatus, setFilterStatus] = useState('ALL');
-  const [showModal, setShowModal] = useState(false);
+  // Form state
+  const [newTitle, setNewTitle]               = useState("");
+  const [newSubjectCode, setNewSubjectCode]   = useState("");
+  const [newSubjectName, setNewSubjectName]   = useState("");
+  const [newDueDate, setNewDueDate]           = useState("");
+  const [newMarks, setNewMarks]               = useState("20");
+  const [newDescription, setNewDescription]   = useState("");
 
-  // New assignment form state
-  const [newTitle, setNewTitle] = useState('');
-  const [newSubjectCode, setNewSubjectCode] = useState(mySubjects[0]?.code || '');
-  const [newDueDate, setNewDueDate] = useState('');
-  const [newMarks, setNewMarks] = useState('20');
-  const [newDescription, setNewDescription] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const fetchAssignments = async () => {
+    if (!staffId) return;
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API}/assignments/${staffId}`);
+      const json = await res.json();
+      if (json.success) setAssignments(json.data);
+      else toast(json.message, true);
+    } catch {
+      toast("Failed to connect to server. Make sure the backend is running.", true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filteredAssignments = assignments.filter(item => {
-    if (filterSubject !== 'ALL' && item.subjectCode !== filterSubject) return false;
-    if (filterStatus !== 'ALL' && item.status !== filterStatus) return false;
+  useEffect(() => { fetchAssignments(); }, [staffId]);
+
+  const toast = (msg, isError = false) => {
+    if (isError) { setErrorMsg(msg); setSuccessMsg(""); }
+    else         { setSuccessMsg(msg); setErrorMsg(""); }
+    setTimeout(() => { setSuccessMsg(""); setErrorMsg(""); }, 4000);
+  };
+
+  const subjects = [...new Set(assignments.map((a) => a.subjectCode))].filter(Boolean);
+
+  const filteredAssignments = assignments.filter((item) => {
+    if (filterSubject !== "ALL" && item.subjectCode !== filterSubject) return false;
+    if (filterStatus  !== "ALL" && item.status      !== filterStatus)  return false;
     return true;
   });
 
-  const handleCreateAssignment = (e) => {
+  const handleCreateAssignment = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newDueDate) return;
-
-    const sub = SUBJECTS[newSubjectCode];
-    const newEntry = {
-      id: `ASGT-${Date.now()}`,
-      subjectCode: newSubjectCode,
-      subjectName: sub ? sub.name : newSubjectCode,
-      title: newTitle.trim(),
-      description: newDescription.trim(),
-      dueDate: newDueDate,
-      totalMarks: Number(newMarks) || 20,
-      status: 'Active',
-      submissions: 0
-    };
-
-    setAssignments(prev => [newEntry, ...prev]);
-    setShowModal(false);
-    setNewTitle('');
-    setNewDescription('');
-    setNewDueDate('');
-    setSuccessMsg('Assignment created and published to students successfully!');
-    setTimeout(() => setSuccessMsg(''), 4000);
-  };
-
-  const toggleStatus = (id) => {
-    setAssignments(prev => prev.map(a => {
-      if (a.id === id) {
-        return { ...a, status: a.status === 'Active' ? 'Closed' : 'Active' };
+    if (!newTitle.trim() || !newDueDate || !newSubjectCode.trim()) return;
+    setSaving(true);
+    try {
+      const res  = await fetch(`${API}/assignments/${staffId}`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          staffName:   staffUser?.name || "",
+          subjectCode: newSubjectCode.trim().toUpperCase(),
+          subjectName: newSubjectName.trim(),
+          department:  staffUser?.department || "",
+          title:       newTitle.trim(),
+          description: newDescription.trim(),
+          dueDate:     newDueDate,
+          totalMarks:  Number(newMarks) || 20,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAssignments((prev) => [json.data, ...prev]);
+        setShowModal(false);
+        setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
+        setNewDescription(""); setNewDueDate(""); setNewMarks("20");
+        toast("Assignment created and published successfully!");
+      } else {
+        toast(json.message, true);
       }
-      return a;
-    }));
+    } catch {
+      toast("Server error. Please try again.", true);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this assignment?')) {
-      setAssignments(prev => prev.filter(a => a.id !== id));
-    }
+  const toggleStatus = async (id) => {
+    try {
+      const res  = await fetch(`${API}/assignments/${staffId}/${id}/status`, { method: "PATCH" });
+      const json = await res.json();
+      if (json.success) setAssignments((prev) => prev.map((a) => (a._id === id ? json.data : a)));
+      else toast(json.message, true);
+    } catch { toast("Failed to update status.", true); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this assignment? This cannot be undone.")) return;
+    try {
+      const res  = await fetch(`${API}/assignments/${staffId}/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) { setAssignments((prev) => prev.filter((a) => a._id !== id)); toast("Assignment deleted."); }
+      else toast(json.message, true);
+    } catch { toast("Failed to delete. Please try again.", true); }
   };
 
   return (
@@ -87,122 +128,103 @@ export default function StaffAssignments({ staffUser }) {
         <div>
           <h2 className="text-xl font-extrabold text-slate-900">Assignments Management</h2>
           <p className="text-sm text-slate-500 mt-0.5">
-            Create homework, track submissions, and evaluate assignments for your subjects
+            Create homework, track submissions, and manage assignments for your subjects
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          Create New Assignment
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button onClick={fetchAssignments} className="p-2 text-slate-500 hover:text-slate-800 border border-slate-200 rounded-xl hover:bg-slate-50" title="Refresh">
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all">
+            <Plus className="w-4 h-4" /> Create New Assignment
+          </button>
+        </div>
       </div>
 
       {successMsg && (
         <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          {successMsg}
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />{successMsg}
+        </div>
+      )}
+      {errorMsg && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-semibold">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />{errorMsg}
         </div>
       )}
 
-      {/* Filters Bar */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
         <div className="flex items-center gap-2">
           <Filter className="w-3.5 h-3.5 text-slate-400" />
           <span className="text-xs font-bold text-slate-700">Filter By:</span>
         </div>
-
-        <select
-          value={filterSubject}
-          onChange={(e) => setFilterSubject(e.target.value)}
-          className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none"
-        >
+        <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
           <option value="ALL">All Subjects</option>
-          {mySubjects.map(sub => (
-            <option key={sub.code} value={sub.code}>{sub.code} – {sub.name}</option>
-          ))}
+          {subjects.map((code) => (<option key={code} value={code}>{code}</option>))}
         </select>
-
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none"
-        >
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
           <option value="ALL">All Statuses</option>
           <option value="Active">Active</option>
           <option value="Closed">Closed</option>
         </select>
-
-        <span className="text-xs text-slate-400 font-medium ml-auto">
-          Showing {filteredAssignments.length} assignments
-        </span>
+        <span className="text-xs text-slate-400 font-medium ml-auto">Showing {filteredAssignments.length} assignments</span>
       </div>
 
-      {/* Assignment Cards List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredAssignments.map((asgt) => {
-          const isActive = asgt.status === 'Active';
-          return (
-            <div key={asgt.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition-all">
-              <div>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
-                    {asgt.subjectCode}
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {asgt.status}
-                  </span>
-                </div>
-
-                <h3 className="font-extrabold text-slate-900 text-sm leading-snug">
-                  {asgt.title}
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                  {asgt.description || 'No detailed instructions provided.'}
-                </p>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-1.5 text-slate-600 font-medium text-[11px]">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Due: {asgt.dueDate}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Max Marks: {asgt.totalMarks} | Submissions: <b>{asgt.submissions}</b></span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => toggleStatus(asgt.id)}
-                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
-                  >
-                    {isActive ? 'Mark Closed' : 'Reopen'}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(asgt.id)}
-                    className="p-1 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50"
-                    title="Delete Assignment"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {filteredAssignments.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center text-slate-400">
-          <BookMarked className="w-10 h-10 mx-auto mb-2 text-slate-200" />
-          <p className="text-sm font-medium">No assignments found matching current filter.</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-slate-400">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          <span className="text-sm font-medium">Loading assignments...</span>
         </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredAssignments.map((asgt) => {
+              const isActive  = asgt.status === "Active";
+              const isOverdue = isActive && new Date(asgt.dueDate) < new Date();
+              return (
+                <div key={asgt._id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition-all">
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">{asgt.subjectCode}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isOverdue ? "bg-red-50 text-red-700 border border-red-100" : isActive ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-slate-100 text-slate-600"}`}>
+                        {isOverdue ? "Overdue" : asgt.status}
+                      </span>
+                    </div>
+                    <h3 className="font-extrabold text-slate-900 text-sm leading-snug">{asgt.title}</h3>
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{asgt.description || "No detailed instructions provided."}</p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-slate-600 font-medium text-[11px]">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" /><span>Due: {asgt.dueDate}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" /><span>Max Marks: {asgt.totalMarks} | Submissions: <b>{asgt.submissions}</b></span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => toggleStatus(asgt._id)} className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">
+                        {isActive ? "Mark Closed" : "Reopen"}
+                      </button>
+                      <button onClick={() => handleDelete(asgt._id)} className="p-1 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50" title="Delete">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {filteredAssignments.length === 0 && (
+            <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center text-slate-400">
+              <BookMarked className="w-10 h-10 mx-auto mb-2 text-slate-200" />
+              <p className="text-sm font-medium">
+                {assignments.length === 0 ? "No assignments yet. Create your first assignment!" : "No assignments match the current filter."}
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Create Modal */}
@@ -212,85 +234,41 @@ export default function StaffAssignments({ staffUser }) {
           <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg z-10 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <h3 className="font-extrabold text-slate-900 text-base">Create New Assignment</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
-                <X className="w-5 h-5" />
-              </button>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1"><X className="w-5 h-5" /></button>
             </div>
-
             <form onSubmit={handleCreateAssignment} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Subject</label>
-                <select
-                  value={newSubjectCode}
-                  onChange={(e) => setNewSubjectCode(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  {mySubjects.map(sub => (
-                    <option key={sub.code} value={sub.code}>{sub.code} – {sub.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assignment Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Unit 3 Case Study & Problem Set"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Submission Deadline</label>
-                  <input
-                    type="date"
-                    required
-                    value={newDueDate}
-                    onChange={(e) => setNewDueDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
+                  <input type="text" required placeholder="e.g., CS401" value={newSubjectCode} onChange={(e) => setNewSubjectCode(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name</label>
+                  <input type="text" placeholder="e.g., Data Structures" value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Assignment Title *</label>
+                <input type="text" required placeholder="e.g., Unit 3 Case Study" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Submission Deadline *</label>
+                  <input type="date" required value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Total Marks</label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="100"
-                    value={newMarks}
-                    onChange={(e) => setNewMarks(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
+                  <input type="number" min="5" max="100" value={newMarks} onChange={(e) => setNewMarks(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                 </div>
               </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Instructions / Description</label>
-                <textarea
-                  rows="3"
-                  placeholder="Provide assignment guidelines, expected format, deliverables..."
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                ></textarea>
+                <textarea rows="3" placeholder="Provide assignment guidelines, expected format, deliverables..." value={newDescription} onChange={(e) => setNewDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"></textarea>
               </div>
-
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-bold text-white shadow-md shadow-blue-500/20"
-                >
-                  Publish Assignment
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 rounded-xl text-xs font-bold text-white shadow-md shadow-blue-500/20 flex items-center justify-center gap-2">
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{saving ? "Publishing..." : "Publish Assignment"}
                 </button>
               </div>
             </form>

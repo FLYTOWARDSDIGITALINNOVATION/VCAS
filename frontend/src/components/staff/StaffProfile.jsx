@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Mail, 
@@ -15,14 +15,24 @@ import {
   BookOpen,
   Users
 } from 'lucide-react';
-export default function StaffProfile({ staffUser }) {
-  const [phone, setPhone] = useState(staffUser.phone || '');
-  const [altPhone, setAltPhone] = useState(staffUser.altPhone || '');
-  const [address, setAddress] = useState(staffUser.address || '');
-  const [emergencyContact, setEmergencyContact] = useState(staffUser.emergencyContact || '');
+
+export default function StaffProfile({ staffUser = {} }) {
+  const [phone, setPhone] = useState(staffUser?.phone || '');
+  const [altPhone, setAltPhone] = useState(staffUser?.altPhone || '');
+  const [address, setAddress] = useState(staffUser?.address || '');
+  const [emergencyContact, setEmergencyContact] = useState(staffUser?.emergencyContact || '');
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [mySubjects, setMySubjects] = useState([]);
+
+  useEffect(() => {
+    if (staffUser) {
+      if (staffUser.phone) setPhone(staffUser.phone);
+      if (staffUser.altPhone) setAltPhone(staffUser.altPhone);
+      if (staffUser.address) setAddress(staffUser.address);
+      if (staffUser.emergencyContact) setEmergencyContact(staffUser.emergencyContact);
+    }
+  }, [staffUser]);
 
   useEffect(() => {
     if (!staffUser?.staffId) return;
@@ -38,16 +48,24 @@ export default function StaffProfile({ staffUser }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!staffUser?.staffId) {
+      alert('Staff ID not found.');
+      return;
+    }
     setIsSaving(true);
     try {
       const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, address, emergencyContact })
+        body: JSON.stringify({ phone, altPhone, address, emergencyContact })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setIsSaved(true);
+        try {
+          const stored = JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+          sessionStorage.setItem('vcas_user', JSON.stringify({ ...stored, phone, altPhone, address, emergencyContact }));
+        } catch (_) {}
         setTimeout(() => setIsSaved(false), 4000);
       } else {
         alert(data.message || 'Failed to update profile.');
@@ -79,35 +97,35 @@ export default function StaffProfile({ staffUser }) {
       {/* Main Profile Card */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 pb-6 border-b border-slate-100">
-          <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${staffUser.avatarColor} flex items-center justify-center text-white font-extrabold text-2xl shadow-lg shrink-0`}>
-            {staffUser.avatarInitials}
+          <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${staffUser?.avatarColor || 'from-blue-600 to-indigo-700'} flex items-center justify-center text-white font-extrabold text-2xl shadow-lg shrink-0`}>
+            {staffUser?.avatarInitials || staffUser?.name?.substring(0, 2)?.toUpperCase() || 'ST'}
           </div>
           <div className="flex-1 text-center sm:text-left">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h3 className="text-xl font-extrabold text-slate-900">{staffUser.name}</h3>
+              <h3 className="text-xl font-extrabold text-slate-900">{staffUser?.name || 'Faculty Member'}</h3>
               <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
-                {staffUser.staffId}
+                {staffUser?.staffId || 'EMP---'}
               </span>
             </div>
             <p className="text-xs font-semibold text-blue-600 mt-1">
-              {staffUser.designation} – Department of {staffUser.department}
+              {staffUser?.designation || 'Faculty'} – Department of {staffUser?.department || 'General'}
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              {staffUser.qualification}
+              {staffUser?.qualification || 'Not Specified'}
             </p>
 
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-3 text-xs text-slate-600">
               <span className="flex items-center gap-1">
                 <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-                {staffUser.experience} Experience
+                {staffUser?.experience || '0 Years'} Experience
               </span>
               <span className="flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                Joined: {staffUser.joiningDate}
+                Joined: {staffUser?.joiningDate || 'N/A'}
               </span>
               <span className="flex items-center gap-1">
                 <Heart className="w-3.5 h-3.5 text-rose-400" />
-                Blood Group: {staffUser.bloodGroup}
+                Blood Group: {staffUser?.bloodGroup || 'O+'}
               </span>
             </div>
           </div>
@@ -122,7 +140,7 @@ export default function StaffProfile({ staffUser }) {
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
               <p className="text-xs text-slate-500 font-medium">Class In-charge / Mentorship</p>
               <p className="text-xs font-extrabold text-slate-800 mt-0.5">
-                {staffUser.classTeacherOf || 'N/A'}
+                {staffUser?.classTeacherOf || 'N/A'}
               </p>
             </div>
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
@@ -152,7 +170,7 @@ export default function StaffProfile({ staffUser }) {
                 <input
                   type="email"
                   disabled
-                  value={staffUser.email}
+                  value={staffUser?.email || ''}
                   className="w-full bg-slate-100 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-500 cursor-not-allowed"
                 />
               </div>

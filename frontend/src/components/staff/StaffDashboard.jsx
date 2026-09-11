@@ -163,12 +163,12 @@ export default function StaffDashboard({ staffUser, onLogout }) {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${staffUser.avatarColor} flex items-center justify-center text-white text-xs font-bold`}>
-                {staffUser.avatarInitials}
+              <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${staffUser?.avatarColor || 'from-blue-600 to-indigo-600'} flex items-center justify-center text-white text-xs font-bold`}>
+                {staffUser?.avatarInitials || staffUser?.avatarText || staffUser?.name?.substring(0, 2)?.toUpperCase() || 'ST'}
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-bold text-slate-800 leading-tight">{staffUser.name.split(' ').slice(0, 2).join(' ')}</p>
-                <p className="text-[10px] text-slate-400">{staffUser.department}</p>
+                <p className="text-xs font-bold text-slate-800 leading-tight">{staffUser?.name ? staffUser.name.split(' ').slice(0, 2).join(' ') : 'Staff Member'}</p>
+                <p className="text-[10px] text-slate-400">{staffUser?.department || 'Department'}</p>
               </div>
             </div>
           </div>

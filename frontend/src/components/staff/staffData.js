@@ -49,11 +49,12 @@ export const LEAVE_DATA = {};
 
 // ── Assessment Configuration for Internal Marks ──────────────
 export const ASSESSMENT_COMPONENTS = [
-  { id: 'cia1', label: 'CIA Test 1', maxMarks: 25, weightage: '25%' },
-  { id: 'cia2', label: 'CIA Test 2', maxMarks: 25, weightage: '25%' },
-  { id: 'model', label: 'Model Exam', maxMarks: 25, weightage: '25%' },
-  { id: 'assignment', label: 'Assignment / Seminar', maxMarks: 20, weightage: '20%' },
-  { id: 'attendance', label: 'Attendance Score', maxMarks: 5, weightage: '5%' },
+  { id: 'cia1',         label: 'CIA Test 1',         maxMarks: 50, weightage: '10%' },
+  { id: 'cia2',         label: 'CIA Test 2',         maxMarks: 50, weightage: '10%' },
+  { id: 'model',        label: 'Model Exam',         maxMarks: 75, weightage: '5%'  },
+  { id: 'assignment',   label: 'Assignment / Seminar', maxMarks: 20, weightage: '4%'  },
+  { id: 'attendance',   label: 'Attendance Score',   maxMarks: 5,  weightage: '5%'  },
+  { id: 'consolidated', label: 'Consolidated View',  maxMarks: 25, weightage: '25%' },
 ];
 
 export const INITIAL_INTERNAL_MARKS = {};
