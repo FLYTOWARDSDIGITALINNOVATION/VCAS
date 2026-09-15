@@ -1,6 +1,6 @@
 const Assignment = require("../models/Assignment");
 
-// GET /api/assignments/:staffId  — list all assignments for a staff
+// GET /api/assignments/:staffId  - list all assignments for a staff
 const listAssignments = async (req, res) => {
   try {
     const { staffId } = req.params;
@@ -11,7 +11,7 @@ const listAssignments = async (req, res) => {
   }
 };
 
-// POST /api/assignments/:staffId  — create a new assignment
+// POST /api/assignments/:staffId  - create a new assignment
 const createAssignment = async (req, res) => {
   try {
     const { staffId } = req.params;
@@ -34,7 +34,7 @@ const createAssignment = async (req, res) => {
   }
 };
 
-// PATCH /api/assignments/:staffId/:id/status  — toggle Active/Closed
+// PATCH /api/assignments/:staffId/:id/status  - toggle Active/Closed
 const toggleStatus = async (req, res) => {
   try {
     const { staffId, id } = req.params;
@@ -49,7 +49,29 @@ const toggleStatus = async (req, res) => {
   }
 };
 
-// DELETE /api/assignments/:staffId/:id  — delete an assignment
+// PUT /api/assignments/:staffId/:id  - update assignment fields
+const updateAssignment = async (req, res) => {
+  try {
+    const { staffId, id } = req.params;
+    const { subjectCode, subjectName, title, description, dueDate, totalMarks } = req.body;
+    const assignment = await Assignment.findOne({ _id: id, staffId });
+    if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
+
+    if (subjectCode)             assignment.subjectCode  = subjectCode;
+    if (subjectName !== undefined) assignment.subjectName = subjectName;
+    if (title)                   assignment.title        = title;
+    if (description !== undefined) assignment.description = description;
+    if (dueDate)                 assignment.dueDate      = dueDate;
+    if (totalMarks)              assignment.totalMarks   = Number(totalMarks);
+
+    await assignment.save();
+    res.json({ success: true, data: assignment, message: "Assignment updated." });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// DELETE /api/assignments/:staffId/:id  - delete an assignment
 const deleteAssignment = async (req, res) => {
   try {
     const { staffId, id } = req.params;
@@ -61,4 +83,4 @@ const deleteAssignment = async (req, res) => {
   }
 };
 
-module.exports = { listAssignments, createAssignment, toggleStatus, deleteAssignment };
+module.exports = { listAssignments, createAssignment, toggleStatus, updateAssignment, deleteAssignment };

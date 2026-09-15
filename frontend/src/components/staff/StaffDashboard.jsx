@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, BookOpen, CheckSquare, Calendar, BookMarked,
   Bell, UserCheck, User, LogOut, Menu, X, GraduationCap,
-  ChevronRight, Shield, FileSpreadsheet
+  ChevronRight, Shield, FileSpreadsheet, ClipboardList
 } from 'lucide-react';
 import StaffHome from './StaffHome';
 import StaffMyClasses from './StaffMyClasses';
@@ -13,6 +13,7 @@ import StaffInternalMarks from './StaffInternalMarks';
 import StaffNotices from './StaffNotices';
 import StaffLeave from './StaffLeave';
 import StaffProfile from './StaffProfile';
+import StaffQuestionPaper from './StaffQuestionPaper';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, section: 'MAIN' },
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { name: 'Internal Marks', icon: FileSpreadsheet, section: 'ACADEMIC' },
   { name: 'Timetable', icon: Calendar, section: 'ACADEMIC' },
   { name: 'Assignments', icon: BookMarked, section: 'ACADEMIC' },
+  { name: 'Question Papers', icon: ClipboardList, section: 'ACADEMIC' },
   { name: 'Notices', icon: Bell, section: 'COMMUNICATION' },
   { name: 'Leave', icon: UserCheck, section: 'HOD' },
   { name: 'My Profile', icon: User, section: 'ACCOUNT' },
@@ -53,6 +55,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Internal Marks': return <StaffInternalMarks staffUser={staffUser} />;
       case 'Timetable':      return <StaffTimetable staffUser={staffUser} />;
       case 'Assignments':    return <StaffAssignments staffUser={staffUser} />;
+      case 'Question Papers': return <StaffQuestionPaper staffUser={staffUser} />;
       case 'Notices':        return <StaffNotices staffUser={staffUser} />;
       case 'Leave':          return <StaffLeave staffUser={staffUser} />;
       case 'My Profile':     return <StaffProfile staffUser={staffUser} />;

@@ -293,6 +293,7 @@ export default function AssignmentManagement() {
 
   // Modals State
   const [isAddAssignmentOpen, setIsAddAssignmentOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState(null); // null = create mode, object = edit mode
   const [gradingSubmission, setGradingSubmission] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -380,7 +381,51 @@ export default function AssignmentManagement() {
     return submissionsList.filter(s => s.status.includes('Pending')).length;
   }, [submissionsList]);
 
-  // Save New Assignment
+  const BLANK_FORM = {
+    title: '',
+    code: 'CS505',
+    subject: 'Cloud Computing & DevOps',
+    department: 'Computer Science',
+    year: 3,
+    sem: 'Sem 5',
+    faculty: 'Dr. Sunita Rao (HOD)',
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    dueTime: '11:59 PM',
+    maxMarks: 25,
+    weightage: '10% CIA',
+    description: '',
+    type: 'Code & Report'
+  };
+
+  // Open modal for editing an existing assignment
+  const handleOpenEdit = (a) => {
+    setEditingAssignment(a);
+    setAssignmentForm({
+      title: a.title,
+      code: a.code,
+      subject: a.subject,
+      department: a.department,
+      year: a.year,
+      sem: a.sem,
+      faculty: a.faculty,
+      dueDate: a.dueDate,
+      dueTime: a.dueTime,
+      maxMarks: a.maxMarks,
+      weightage: a.weightage,
+      description: a.description,
+      type: a.type
+    });
+    setIsAddAssignmentOpen(true);
+  };
+
+  // Close & reset the assignment modal
+  const handleCloseAssignmentModal = () => {
+    setIsAddAssignmentOpen(false);
+    setEditingAssignment(null);
+    setAssignmentForm(BLANK_FORM);
+  };
+
+  // Save New or Edited Assignment
   const handleSaveAssignment = (e) => {
     e.preventDefault();
     if (!assignmentForm.title.trim()) {
@@ -388,34 +433,30 @@ export default function AssignmentManagement() {
       return;
     }
 
-    const newAssignment = {
-      id: Date.now(),
-      ...assignmentForm,
-      totalStudents: 60,
-      submittedCount: 0,
-      gradedCount: 0,
-      status: 'Active',
-      attachedDoc: `${assignmentForm.code}_Brief.pdf`
-    };
-
-    setAssignmentsList(prev => [newAssignment, ...prev]);
-    setIsAddAssignmentOpen(false);
-    setAssignmentForm({
-      title: '',
-      code: 'CS505',
-      subject: 'Cloud Computing & DevOps',
-      department: 'Computer Science',
-      year: 3,
-      sem: 'Sem 5',
-      faculty: 'Dr. Sunita Rao (HOD)',
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      dueTime: '11:59 PM',
-      maxMarks: 25,
-      weightage: '10% CIA',
-      description: '',
-      type: 'Code & Report'
-    });
-    showToast('New Assignment published successfully to student portal!');
+    if (editingAssignment) {
+      // Update existing
+      setAssignmentsList(prev => prev.map(a =>
+        a.id === editingAssignment.id
+          ? { ...a, ...assignmentForm }
+          : a
+      ));
+      handleCloseAssignmentModal();
+      showToast('Assignment updated successfully!');
+    } else {
+      // Create new
+      const newAssignment = {
+        id: Date.now(),
+        ...assignmentForm,
+        totalStudents: 60,
+        submittedCount: 0,
+        gradedCount: 0,
+        status: 'Active',
+        attachedDoc: `${assignmentForm.code}_Brief.pdf`
+      };
+      setAssignmentsList(prev => [newAssignment, ...prev]);
+      handleCloseAssignmentModal();
+      showToast('New Assignment published successfully to student portal!');
+    }
   };
 
   // Open Grading Modal
@@ -737,16 +778,25 @@ export default function AssignmentManagement() {
                         {a.attachedDoc}
                       </span>
 
-                      <button
-                        onClick={() => {
-                          setSelectedAssignmentId(a.id);
-                          setActiveTab('submissions');
-                        }}
-                        className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center gap-1.5"
-                      >
-                        <FileCheck className="w-3.5 h-3.5" />
-                        <span>Grade Submissions</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleOpenEdit(a)}
+                          className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs rounded-xl border border-amber-200 transition-all flex items-center gap-1.5"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedAssignmentId(a.id);
+                            setActiveTab('submissions');
+                          }}
+                          className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center gap-1.5"
+                        >
+                          <FileCheck className="w-3.5 h-3.5" />
+                          <span>Grade Submissions</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -885,20 +935,26 @@ export default function AssignmentManagement() {
       {/* 6. MODAL: CREATE NEW ASSIGNMENT                                           */}
       {/* ========================================================================= */}
       {isAddAssignmentOpen && (
-        <ModalPortal isOpen={isAddAssignmentOpen} onClose={() => setIsAddAssignmentOpen(false)}>
+        <ModalPortal isOpen={isAddAssignmentOpen} onClose={handleCloseAssignmentModal}>
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
             
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
-                  <Plus className="w-5 h-5" />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${editingAssignment ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-purple-600'}`}>
+                  {editingAssignment ? <Edit className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                 </div>
                 <div>
-                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">Create New Assignment</h3>
-                  <p className="text-[11px] text-slate-500">Publish a coursework homework task with instructions for students</p>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">
+                    {editingAssignment ? 'Edit Assignment' : 'Create New Assignment'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {editingAssignment
+                      ? `Editing: ${editingAssignment.code} — ${editingAssignment.title.substring(0, 40)}...`
+                      : 'Publish a coursework homework task with instructions for students'}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setIsAddAssignmentOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
+              <button onClick={handleCloseAssignmentModal} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -981,17 +1037,21 @@ export default function AssignmentManagement() {
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsAddAssignmentOpen(false)}
+                  onClick={handleCloseAssignmentModal}
                   className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
+                  className={`px-6 py-2.5 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 ${
+                    editingAssignment
+                      ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
+                      : 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/20'
+                  }`}
                 >
                   <Save className="w-4 h-4" />
-                  <span>Publish Assignment</span>
+                  <span>{editingAssignment ? 'Save Changes' : 'Publish Assignment'}</span>
                 </button>
               </div>
 

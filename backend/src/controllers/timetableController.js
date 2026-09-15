@@ -13,6 +13,21 @@ function getDefaultSchedule() {
   };
 }
 
+// @desc    Get all staff timetables for Admin portal
+// @route   GET /api/timetable
+exports.getAllTimetables = async (req, res) => {
+  try {
+    const timetables = await Timetable.find({}).sort({ staffName: 1, staffId: 1 });
+    res.status(200).json({
+      success: true,
+      count: timetables.length,
+      timetables
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get timetable for a specific staff member
 // @route   GET /api/timetable/staff/:staffId
 exports.getStaffTimetable = async (req, res) => {

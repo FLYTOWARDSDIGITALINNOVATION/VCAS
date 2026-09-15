@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Calendar,
@@ -31,6 +31,8 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
   const [markedToday, setMarkedToday] = useState(false);
   const [staffLeaves, setStaffLeaves] = useState([]);
   const [staffLeaveSummary, setStaffLeaveSummary] = useState({ totalQuota: 15, approvedDays: 0, pendingCount: 0, remainingDays: 15 });
+  const [staffSchedule, setStaffSchedule] = useState(null);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
 
   const staffId = staff.id || staff.staffId;
 
@@ -49,6 +51,16 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
 
   useEffect(() => {
     fetchStaffLeaves();
+    if (staffId) {
+      setLoadingSchedule(true);
+      fetch(`http://localhost:5000/api/timetable/staff/${staffId}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.schedule) setStaffSchedule(d.schedule);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingSchedule(false));
+    }
   }, [staffId]);
 
   const handleAdminLeaveAction = async (leaveId, status) => {
@@ -634,37 +646,98 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
       {/* ========================================================================= */}
       {activeTab === 'timetable' && (
         <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900">Faculty Schedule & Period Slots</h3>
-              <p className="text-xs text-slate-500 font-medium">Weekly lecture, lab, and office hours distribution</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {timetable.map((t, idx) => (
-              <div key={idx} className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 text-blue-600" /> {t.day}
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {t.slots.map((slot, sIdx) => (
-                    <div key={sIdx} className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-blue-600 font-mono">{slot.time}</span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {slot.type}
-                        </span>
-                      </div>
-                      <p className="text-xs font-bold text-slate-900 leading-tight">{slot.subject}</p>
-                      <p className="text-[11px] text-slate-500">{slot.room}</p>
-                    </div>
-                  ))}
-                </div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-extrabold text-slate-900">Faculty Assigned Timetable</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                  Live from MongoDB
+                </span>
               </div>
-            ))}
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Weekly scheduled lectures and lab allocations for {staff.name} ({staffId})
+              </p>
+            </div>
+            {staffSchedule && (
+              <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 self-start sm:self-auto">
+                {Object.values(staffSchedule).reduce((total, daySlots) => total + Object.keys(daySlots || {}).length, 0)} Total Assigned Slots
+              </span>
+            )}
           </div>
+
+          {loadingSchedule ? (
+            <div className="py-12 text-center text-slate-400 text-xs font-semibold">
+              Loading timetable schedule from database...
+            </div>
+          ) : !staffSchedule || Object.values(staffSchedule).every(daySlots => Object.keys(daySlots || {}).length === 0) ? (
+            <div className="py-12 text-center text-slate-400">
+              <Calendar className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+              <p className="text-sm font-bold text-slate-700">No Timetable Assigned Yet</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Slots assigned by faculty or administration will appear here automatically.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => {
+                const daySlots = staffSchedule[day] || {};
+                const activeEntries = Object.entries(daySlots)
+                  .filter(([_, s]) => s && s.code)
+                  .sort(([a], [b]) => Number(a) - Number(b));
+
+                if (activeEntries.length === 0) return null;
+
+                const SLOT_TIMES = {
+                  '1': '8:30 – 9:20 AM',
+                  '2': '9:20 – 10:10 AM',
+                  '3': '10:10 – 11:00 AM',
+                  '4': '11:15 AM – 12:05 PM',
+                  '5': '12:05 – 12:55 PM',
+                  '6': '1:45 – 2:35 PM',
+                  '7': '2:35 – 3:25 PM',
+                  '8': '3:25 – 4:15 PM'
+                };
+
+                return (
+                  <div key={day} className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-blue-600" /> {day}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {activeEntries.length} Period{activeEntries.length > 1 ? 's' : ''}
+                      </span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {activeEntries.map(([slotNum, slot]) => (
+                        <div key={slotNum} className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs space-y-1.5 hover:border-blue-300 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-blue-600 font-mono">
+                              Period {slotNum} ({SLOT_TIMES[slotNum] || `Slot ${slotNum}`})
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
+                              slot.type === 'lab' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            }`}>
+                              {slot.type || 'Theory'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-extrabold text-slate-900 leading-tight">
+                            {slot.code}: {slot.name}
+                          </p>
+                          <div className="flex items-center gap-2 pt-0.5 text-[11px] text-slate-500 font-medium">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 font-semibold text-slate-700">
+                              📍 {slot.room || 'Classroom / Lab'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

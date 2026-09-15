@@ -22,6 +22,22 @@ const internalMarksSchema = new mongoose.Schema({
   academicYear: { type: String, default: '' },
   isLocked:     { type: Boolean, default: false },
   lockedAt:     { type: Date, default: null },
+  maxMarks: {
+    cia1:         { type: Number, default: 50 },
+    cia2:         { type: Number, default: 50 },
+    model:        { type: Number, default: 75 },
+    assignment:   { type: Number, default: 20 },
+    attendance:   { type: Number, default: 5 },
+    consolidated: { type: Number, default: 25 },
+  },
+  passMarks: {
+    cia1:         { type: Number, default: 20 },
+    cia2:         { type: Number, default: 20 },
+    model:        { type: Number, default: 30 },
+    assignment:   { type: Number, default: 8 },
+    attendance:   { type: Number, default: 2 },
+    consolidated: { type: Number, default: 10 },
+  },
   students:     [studentMarkSchema],
 }, { timestamps: true, collection: 'InternalMarks' });
 

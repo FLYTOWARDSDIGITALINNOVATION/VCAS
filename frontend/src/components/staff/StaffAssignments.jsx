@@ -11,6 +11,8 @@ import {
   Filter,
   Loader2,
   RefreshCw,
+  Edit,
+  Save,
 } from "lucide-react";
 
 const API = "http://localhost:5000/api";
@@ -27,7 +29,10 @@ export default function StaffAssignments({ staffUser }) {
   const [errorMsg, setErrorMsg]           = useState("");
   const [saving, setSaving]               = useState(false);
 
-  // Form state
+  // Edit mode state
+  const [editingId, setEditingId]         = useState(null); // _id of assignment being edited
+
+  // Form state (shared for create + edit)
   const [newTitle, setNewTitle]               = useState("");
   const [newSubjectCode, setNewSubjectCode]   = useState("");
   const [newSubjectName, setNewSubjectName]   = useState("");
@@ -66,6 +71,35 @@ export default function StaffAssignments({ staffUser }) {
     return true;
   });
 
+  // Open modal for creating
+  const openCreateModal = () => {
+    setEditingId(null);
+    setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
+    setNewDescription(""); setNewDueDate(""); setNewMarks("20");
+    setErrorMsg("");
+    setShowModal(true);
+  };
+
+  // Open modal pre-filled for editing
+  const openEditModal = (asgt) => {
+    setEditingId(asgt._id);
+    setNewTitle(asgt.title || "");
+    setNewSubjectCode(asgt.subjectCode || "");
+    setNewSubjectName(asgt.subjectName || "");
+    setNewDueDate(asgt.dueDate || "");
+    setNewMarks(String(asgt.totalMarks || "20"));
+    setNewDescription(asgt.description || "");
+    setErrorMsg("");
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingId(null);
+    setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
+    setNewDescription(""); setNewDueDate(""); setNewMarks("20");
+  };
+
   const handleCreateAssignment = async (e) => {
     e.preventDefault();
     if (!newTitle.trim() || !newDueDate || !newSubjectCode.trim()) return;
@@ -88,10 +122,40 @@ export default function StaffAssignments({ staffUser }) {
       const json = await res.json();
       if (json.success) {
         setAssignments((prev) => [json.data, ...prev]);
-        setShowModal(false);
-        setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
-        setNewDescription(""); setNewDueDate(""); setNewMarks("20");
+        closeModal();
         toast("Assignment created and published successfully!");
+      } else {
+        toast(json.message, true);
+      }
+    } catch {
+      toast("Server error. Please try again.", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateAssignment = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !newDueDate || !newSubjectCode.trim()) return;
+    setSaving(true);
+    try {
+      const res  = await fetch(`${API}/assignments/${staffId}/${editingId}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          subjectCode: newSubjectCode.trim().toUpperCase(),
+          subjectName: newSubjectName.trim(),
+          title:       newTitle.trim(),
+          description: newDescription.trim(),
+          dueDate:     newDueDate,
+          totalMarks:  Number(newMarks) || 20,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAssignments((prev) => prev.map((a) => (a._id === editingId ? json.data : a)));
+        closeModal();
+        toast("Assignment updated successfully!");
       } else {
         toast(json.message, true);
       }
@@ -135,7 +199,7 @@ export default function StaffAssignments({ staffUser }) {
           <button onClick={fetchAssignments} className="p-2 text-slate-500 hover:text-slate-800 border border-slate-200 rounded-xl hover:bg-slate-50" title="Refresh">
             <RefreshCw className="w-4 h-4" />
           </button>
-          <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all">
+          <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all">
             <Plus className="w-4 h-4" /> Create New Assignment
           </button>
         </div>
@@ -203,6 +267,13 @@ export default function StaffAssignments({ staffUser }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => openEditModal(asgt)}
+                        className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-all"
+                        title="Edit Assignment"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
                       <button onClick={() => toggleStatus(asgt._id)} className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">
                         {isActive ? "Mark Closed" : "Reopen"}
                       </button>
@@ -227,16 +298,23 @@ export default function StaffAssignments({ staffUser }) {
         </>
       )}
 
-      {/* Create Modal */}
+      {/* Create / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setShowModal(false)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={closeModal} />
           <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg z-10 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="font-extrabold text-slate-900 text-base">Create New Assignment</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1"><X className="w-5 h-5" /></button>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${editingId ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                  {editingId ? <Edit className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                </div>
+                <h3 className="font-extrabold text-slate-900 text-base">
+                  {editingId ? "Edit Assignment" : "Create New Assignment"}
+                </h3>
+              </div>
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 p-1"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleCreateAssignment} className="space-y-3.5">
+            <form onSubmit={editingId ? handleUpdateAssignment : handleCreateAssignment} className="space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
@@ -266,9 +344,14 @@ export default function StaffAssignments({ staffUser }) {
                 <textarea rows="3" placeholder="Provide assignment guidelines, expected format, deliverables..." value={newDescription} onChange={(e) => setNewDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"></textarea>
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-                <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 rounded-xl text-xs font-bold text-white shadow-md shadow-blue-500/20 flex items-center justify-center gap-2">
-                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{saving ? "Publishing..." : "Publish Assignment"}
+                <button type="button" onClick={closeModal} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className={`flex-1 py-2.5 disabled:opacity-60 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2 ${editingId ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'}`}
+                >
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {saving ? (editingId ? "Saving..." : "Publishing...") : (editingId ? "Save Changes" : "Publish Assignment")}
                 </button>
               </div>
             </form>

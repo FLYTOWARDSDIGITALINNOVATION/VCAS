@@ -1,28 +1,5 @@
 const Notice = require('../models/Notice');
 
-const INITIAL_NOTICES = [
-  {
-    title: 'Semester End Examination Schedule Released',
-    body: 'The end semester theory examinations will commence from November 15, 2026. Faculty members are requested to complete syllabus and internal assessment compilation by October 25, 2026.',
-    tag: 'Exam',
-    postedBy: 'Controller of Examinations',
-    department: 'All',
-    date: '2026-09-02',
-    urgent: false,
-    pinned: true
-  },
-  {
-    title: 'Department Faculty Meeting – Curriculum Revision',
-    body: 'All faculty members are requested to attend the curriculum review meeting on Friday at 3:30 PM in the Conference Hall.',
-    tag: 'Academic',
-    postedBy: 'Dean Academics',
-    department: 'All',
-    date: '2026-09-01',
-    urgent: false,
-    pinned: false
-  }
-];
-
 // @route  GET /api/notices
 // @desc   Get all notices (with optional search and tag/category filter)
 exports.getNotices = async (req, res) => {
@@ -77,6 +54,31 @@ exports.createNotice = async (req, res) => {
     res.status(201).json({ success: true, message: 'Notice published successfully.', notice });
   } catch (error) {
     console.error('Error creating notice:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @route  PUT /api/notices/:id
+// @desc   Update an existing notice
+exports.updateNotice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, body, tag, urgent } = req.body;
+
+    const notice = await Notice.findById(id);
+    if (!notice) {
+      return res.status(404).json({ success: false, message: 'Notice not found.' });
+    }
+
+    if (title && title.trim()) notice.title = title.trim();
+    if (body && body.trim())   notice.body  = body.trim();
+    if (tag)                   notice.tag   = tag;
+    if (urgent !== undefined)  notice.urgent = Boolean(urgent);
+
+    await notice.save();
+    res.status(200).json({ success: true, message: 'Notice updated successfully.', notice });
+  } catch (error) {
+    console.error('Error updating notice:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

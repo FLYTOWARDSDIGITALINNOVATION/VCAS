@@ -12,7 +12,9 @@ import {
   Megaphone,
   Pin,
   Trash2,
-  Loader2
+  Loader2,
+  Edit,
+  Save
 } from 'lucide-react';
 
 export default function StaffNotices({ staffUser = {} }) {
@@ -22,7 +24,10 @@ export default function StaffNotices({ staffUser = {} }) {
   const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
-  // New notice form state
+  // Edit mode state
+  const [editingId, setEditingId] = useState(null); // null = create, string = edit
+
+  // Form state (shared for create + edit)
   const [newTitle, setNewTitle] = useState('');
   const [newBody, setNewBody] = useState('');
   const [newTag, setNewTag] = useState('Academic');
@@ -56,6 +61,32 @@ export default function StaffNotices({ staffUser = {} }) {
     fetchNotices();
   }, [selectedTag]);
 
+  // Open create modal
+  const openCreateModal = () => {
+    setEditingId(null);
+    setNewTitle(''); setNewBody(''); setNewTag('Academic'); setIsUrgent(false);
+    setErrorMsg('');
+    setShowModal(true);
+  };
+
+  // Open edit modal pre-filled
+  const openEditModal = (notice) => {
+    setEditingId(notice._id || notice.id);
+    setNewTitle(notice.title || '');
+    setNewBody(notice.body || notice.content || '');
+    setNewTag(notice.tag || 'Academic');
+    setIsUrgent(Boolean(notice.urgent));
+    setErrorMsg('');
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingId(null);
+    setNewTitle(''); setNewBody(''); setNewTag('Academic'); setIsUrgent(false);
+    setErrorMsg('');
+  };
+
   const handlePostNotice = async (e) => {
     e.preventDefault();
     if (!newTitle.trim() || !newBody.trim()) return;
@@ -80,15 +111,47 @@ export default function StaffNotices({ staffUser = {} }) {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setShowModal(false);
-        setNewTitle('');
-        setNewBody('');
-        setIsUrgent(false);
-        setSuccessMsg(data.message || 'Notice published successfully to college and department!');
+        closeModal();
+        setSuccessMsg(data.message || 'Notice published successfully!');
         setTimeout(() => setSuccessMsg(''), 4000);
         fetchNotices();
       } else {
         setErrorMsg(data.message || 'Failed to post notice.');
+      }
+    } catch (err) {
+      setErrorMsg('Unable to connect to the backend server.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateNotice = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !newBody.trim()) return;
+
+    setSubmitting(true);
+    setErrorMsg('');
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/notices/${editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          body: newBody.trim(),
+          tag: newTag,
+          urgent: isUrgent,
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        closeModal();
+        setSuccessMsg('Notice updated successfully!');
+        setTimeout(() => setSuccessMsg(''), 4000);
+        fetchNotices();
+      } else {
+        setErrorMsg(data.message || 'Failed to update notice.');
       }
     } catch (err) {
       setErrorMsg('Unable to connect to the backend server.');
@@ -128,7 +191,7 @@ export default function StaffNotices({ staffUser = {} }) {
           </p>
         </div>
         <button
-          onClick={() => { setShowModal(true); setErrorMsg(''); }}
+          onClick={openCreateModal}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
@@ -197,12 +260,18 @@ export default function StaffNotices({ staffUser = {} }) {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5 text-slate-400 text-xs font-medium">
                     <Calendar className="w-3.5 h-3.5" />
                     <span>{notice.date}</span>
                   </div>
-                  {/* Allow deleting if created by current staff or if staff user */}
+                  <button
+                    onClick={() => openEditModal(notice)}
+                    title="Edit Notice"
+                    className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-all"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={() => handleDeleteNotice(notice._id || notice.id)}
                     title="Delete Notice"
@@ -237,15 +306,22 @@ export default function StaffNotices({ staffUser = {} }) {
         )}
       </div>
 
-      {/* Post Notice Modal */}
+      {/* Post / Edit Notice Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => !submitting && setShowModal(false)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => !submitting && closeModal()} />
           <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg z-10 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="font-extrabold text-slate-900 text-base">Post Department Notice</h3>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${editingId ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                  {editingId ? <Edit className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                </div>
+                <h3 className="font-extrabold text-slate-900 text-base">
+                  {editingId ? 'Edit Notice' : 'Post Department Notice'}
+                </h3>
+              </div>
               <button 
-                onClick={() => setShowModal(false)} 
+                onClick={closeModal} 
                 disabled={submitting}
                 className="text-slate-400 hover:text-slate-600 p-1"
               >
@@ -260,7 +336,7 @@ export default function StaffNotices({ staffUser = {} }) {
               </div>
             )}
 
-            <form onSubmit={handlePostNotice} className="space-y-3.5">
+            <form onSubmit={editingId ? handleUpdateNotice : handlePostNotice} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Category / Tag</label>
                 <select
@@ -317,7 +393,7 @@ export default function StaffNotices({ staffUser = {} }) {
                 <button
                   type="button"
                   disabled={submitting}
-                  onClick={() => setShowModal(false)}
+                  onClick={closeModal}
                   className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
@@ -325,10 +401,10 @@ export default function StaffNotices({ staffUser = {} }) {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-bold text-white shadow-md shadow-blue-500/20 flex items-center justify-center gap-2"
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2 ${editingId ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'}`}
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {submitting ? 'Publishing...' : 'Publish Notice'}
+                  {submitting ? (editingId ? 'Saving...' : 'Publishing...') : (editingId ? 'Save Changes' : 'Publish Notice')}
                 </button>
               </div>
             </form>

@@ -12,6 +12,7 @@ const internalMarksRoutes    = require('./routes/internalMarksRoutes');
 const assignmentRoutes       = require('./routes/assignmentRoutes');
 const noticeRoutes           = require('./routes/noticeRoutes');
 const leaveRoutes            = require('./routes/leaveRoutes');
+const questionPaperRoutes    = require('./routes/questionPaperRoutes');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -51,6 +52,7 @@ app.use('/api/internal-marks',   internalMarksRoutes);
 app.use('/api/assignments',      assignmentRoutes);
 app.use('/api/notices',          noticeRoutes);
 app.use('/api/leave',            leaveRoutes);
+app.use('/api/question-papers',  questionPaperRoutes);
 
 // 404
 app.use((req, res) => {
