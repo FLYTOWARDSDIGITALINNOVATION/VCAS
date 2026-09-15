@@ -313,7 +313,7 @@ export default function NoticesManagement() {
       const data = await res.json();
       if (res.ok && data.success) {
         setShowCreateModal(false);
-        showToast('Notice published and saved to database successfully!');
+        showToast('Notice published successfully!');
         fetchNotices();
       } else {
         alert(data.message || 'Failed to save notice.');
@@ -342,7 +342,7 @@ export default function NoticesManagement() {
       setNotices(prev => prev.filter(n => n.id !== id && n._id !== id));
       setShowDeleteModal(null);
       if (showViewModal?.id === id || showViewModal?._id === id) setShowViewModal(null);
-      showToast('Notice permanently deleted from database.');
+      showToast('Notice deleted successfully.');
     } catch (err) {
       alert('Unable to delete notice from server.');
     }

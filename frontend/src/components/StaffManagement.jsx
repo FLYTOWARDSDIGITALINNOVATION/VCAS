@@ -302,9 +302,9 @@ export default function StaffManagement() {
         const newStaff = normalizeStaff(result.data);
         setStaffList(prev => [newStaff, ...prev]);
         setIsAddModalOpen(false);
-        showToast(`Staff member "${newStaff.name}" saved to MongoDB Atlas!`);
+        showToast(`Staff member "${newStaff.name}" added successfully!`);
       } else {
-        setModalError(result.message || 'Failed to save staff member to database.');
+        setModalError(result.message || 'Failed to save staff member.');
       }
     } catch (err) {
       setModalError('Unable to connect to server. Please ensure backend is running.');
@@ -313,7 +313,7 @@ export default function StaffManagement() {
     }
   };
 
-  // Save edited staff to MongoDB Atlas
+  // Save edited staff
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -351,7 +351,7 @@ export default function StaffManagement() {
         }
 
         setEditingStaff(null);
-        showToast(`Staff profile for "${updatedItem.name}" updated in MongoDB Atlas!`);
+        showToast(`Staff profile for "${updatedItem.name}" updated successfully!`);
       } else {
         setModalError(result.message || 'Failed to update staff member.');
       }
@@ -362,7 +362,7 @@ export default function StaffManagement() {
     }
   };
 
-  // Confirm delete from MongoDB Atlas
+  // Confirm delete staff
   const handleConfirmDelete = async () => {
     if (!deletingStaff) return;
     setIsSaving(true);
@@ -380,7 +380,7 @@ export default function StaffManagement() {
         if (selectedStaffForDetails && (selectedStaffForDetails.id === deletingStaff.id || selectedStaffForDetails._id === deletingStaff._id)) {
           setSelectedStaffForDetails(null);
         }
-        showToast(`Staff member "${deletingStaff.name}" deleted from MongoDB Atlas.`);
+        showToast(`Staff member "${deletingStaff.name}" deleted successfully.`);
         setDeletingStaff(null);
       } else {
         alert(result.message || 'Failed to delete staff member.');
@@ -668,7 +668,7 @@ export default function StaffManagement() {
                       <td colSpan={10} className="py-16 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center space-y-3">
                           <div className="w-8 h-8 border-3 border-blue-600/30 border-t-blue-600 rounded-full animate-spin"></div>
-                          <p className="text-xs font-semibold text-slate-600">Loading staff from MongoDB Atlas...</p>
+                          <p className="text-xs font-semibold text-slate-600">Loading staff members...</p>
                         </div>
                       </td>
                     </tr>
@@ -679,9 +679,9 @@ export default function StaffManagement() {
                           <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
                             <User className="w-6 h-6" />
                           </div>
-                          <p className="text-base font-bold text-slate-800">No Staff Members in Database</p>
+                          <p className="text-base font-bold text-slate-800">No Staff Members Found</p>
                           <p className="text-xs text-slate-500 leading-relaxed">
-                            No staff records found in MongoDB Atlas. Click below to add your first staff member. It will be stored directly in MongoDB.
+                            No staff records found. Click below to add your first staff member.
                           </p>
                           <button
                             type="button"
@@ -1068,7 +1068,7 @@ export default function StaffManagement() {
                   ) : (
                     <Save className="w-4 h-4" />
                   )}
-                  <span>{isSaving ? 'Saving to Database...' : 'Save Staff Member'}</span>
+                  <span>{isSaving ? 'Saving...' : 'Save Staff Member'}</span>
                 </button>
               </div>
 
@@ -1349,7 +1349,7 @@ export default function StaffManagement() {
                   ) : (
                     <Save className="w-4 h-4" />
                   )}
-                  <span>{isSaving ? 'Updating Database...' : 'Update Staff Profile'}</span>
+                  <span>{isSaving ? 'Updating...' : 'Update Staff Profile'}</span>
                 </button>
               </div>
 

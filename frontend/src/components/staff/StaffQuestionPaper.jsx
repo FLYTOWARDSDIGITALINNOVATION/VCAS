@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FileText, Plus, Trash2, Edit3, Eye, Save, CheckCircle,
   ChevronDown, ChevronRight, BookOpen, Layers, X, AlertCircle,
@@ -84,23 +84,39 @@ export default function StaffQuestionPaper({ staffUser }) {
   const openPreview = (paper) => { setCurrent(JSON.parse(JSON.stringify(paper))); setView("preview"); };
 
   const savePaper = async () => {
+    // Validate required fields
+    if (!current.subjectCode?.trim()) { showToast("Subject Code is required", "error"); return; }
+    if (!current.subjectName?.trim()) { showToast("Subject Name is required", "error"); return; }
+    if (!current.staffId?.trim()) { showToast("Staff ID missing – please re-login", "error"); return; }
+
     setSaving(true);
     try {
       const updated = {
         ...current,
+        staffId: current.staffId || staffUser?.staffId || "",
+        staffName: current.staffName || staffUser?.name || "",
+        department: current.department || staffUser?.department || "",
         sections: current.sections.map(s => ({
           ...s,
           totalMarks: s.questions.reduce((a, q) => a + Number(q.marks || 0), 0)
         }))
       };
       updated.totalMarks = updated.sections.reduce((a, s) => a + s.totalMarks, 0);
+
       const method = updated._id ? "PUT" : "POST";
       const url = updated._id ? `${API}/${updated._id}` : API;
+
+      console.log("[QP] Saving to:", url, "Method:", method);
       const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
       const d = await r.json();
+      console.log("[QP] Response:", d);
+
       if (d.success) { showToast("Paper saved successfully!"); await fetchPapers(); setView("list"); }
       else showToast(d.message || "Save failed", "error");
-    } catch { showToast("Network error", "error"); }
+    } catch (err) {
+      console.error("[QP] Save error:", err);
+      showToast("Network error: " + (err.message || "Cannot reach server"), "error");
+    }
     setSaving(false);
   };
 

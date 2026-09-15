@@ -176,7 +176,7 @@ export default function StaffAttendance({ staffUser }) {
         return;
       }
 
-      setSavedSuccessMsg(`Attendance for ${currentClass.code} on ${selectedDate} (${sessionSlot}) saved directly to MongoDB Atlas!`);
+      setSavedSuccessMsg(`Attendance for ${currentClass.code} on ${selectedDate} (${sessionSlot}) recorded successfully!`);
       fetchHistory();
       setTimeout(() => setSavedSuccessMsg(''), 6000);
     } catch (err) {
@@ -192,18 +192,14 @@ export default function StaffAttendance({ staffUser }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-slate-900">Attendance Management</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Mark daily class attendance or view past submitted logs from database
-          </p>
         </div>
         <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-xl self-start sm:self-auto">
           <button
             onClick={() => setActiveTab('mark')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'mark'
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'mark'
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <CheckSquare className="w-4 h-4" />
             Mark Attendance
@@ -213,11 +209,10 @@ export default function StaffAttendance({ staffUser }) {
               setActiveTab('history');
               fetchHistory();
             }}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'history'
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'history'
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <History className="w-4 h-4" />
             Attendance History ({historyList.length})
@@ -398,33 +393,30 @@ export default function StaffAttendance({ staffUser }) {
                                   <button
                                     type="button"
                                     onClick={() => toggleStudentStatus(student.rollNo, 'Present')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                      status === 'Present'
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${status === 'Present'
                                         ? 'bg-emerald-600 text-white shadow-xs'
                                         : 'text-slate-600 hover:text-slate-900'
-                                    }`}
+                                      }`}
                                   >
                                     Present
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => toggleStudentStatus(student.rollNo, 'Absent')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                      status === 'Absent'
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${status === 'Absent'
                                         ? 'bg-rose-600 text-white shadow-xs'
                                         : 'text-slate-600 hover:text-slate-900'
-                                    }`}
+                                      }`}
                                   >
                                     Absent
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => toggleStudentStatus(student.rollNo, 'Late')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                      status === 'Late'
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${status === 'Late'
                                         ? 'bg-amber-600 text-white shadow-xs'
                                         : 'text-slate-600 hover:text-slate-900'
-                                    }`}
+                                      }`}
                                   >
                                     Late
                                   </button>
@@ -523,9 +515,8 @@ export default function StaffAttendance({ staffUser }) {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-md font-extrabold ${
-                            pct >= 85 ? 'bg-emerald-50 text-emerald-700' : pct >= 75 ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-md font-extrabold ${pct >= 85 ? 'bg-emerald-50 text-emerald-700' : pct >= 75 ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                            }`}>
                             {pct}%
                           </span>
                         </td>

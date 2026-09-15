@@ -326,7 +326,7 @@ export default function TimetableManagement() {
           showToast(`Error: ${data.message || 'Could not save slot'}`);
         }
       } catch (err) {
-        showToast('Failed to save slot to database.');
+        showToast('Failed to save slot.');
       } finally {
         setIsSavingSlot(false);
       }
@@ -377,7 +377,7 @@ export default function TimetableManagement() {
           showToast(`Error: ${data.message || 'Could not clear slot'}`);
         }
       } catch (err) {
-        showToast('Failed to clear slot in database.');
+        showToast('Failed to clear slot.');
       } finally {
         setIsSavingSlot(false);
       }

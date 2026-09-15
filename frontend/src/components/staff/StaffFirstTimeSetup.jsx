@@ -155,7 +155,7 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
             </h2>
             <p className="text-xs text-blue-200/90 mt-1 leading-relaxed">
               Your institutional account has been initialized. Because the administration may not know all your personal and academic credentials, please complete the details below. 
-              <strong> The information you submit will be stored directly into your MongoDB database profile and will be visible in the Admin Staff section.</strong>
+              <strong> The information you submit will be saved to your profile and will be visible in the Admin Staff section.</strong>
             </p>
           </div>
         </div>

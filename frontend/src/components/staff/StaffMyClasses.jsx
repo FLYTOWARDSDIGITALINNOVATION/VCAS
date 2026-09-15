@@ -111,7 +111,7 @@ export default function StaffMyClasses({ staffUser }) {
         return;
       }
 
-      showFeedback(`Subject ${data.class.code} – "${data.class.name}" added successfully to database!`);
+      showFeedback(`Subject ${data.class.code} – "${data.class.name}" added successfully!`);
       setIsAddClassOpen(false);
       setNewClass({
         name: '',
@@ -135,12 +135,12 @@ export default function StaffMyClasses({ staffUser }) {
     e.stopPropagation();
     setEditError('');
     setEditForm({
-      name:     cls.name     || '',
-      section:  cls.section  || 'A',
-      year:     cls.year     || 2,
+      name: cls.name || '',
+      section: cls.section || 'A',
+      year: cls.year || 2,
       semester: cls.semester || 4,
-      credits:  cls.credits  || 3,
-      room:     cls.room     || '',
+      credits: cls.credits || 3,
+      room: cls.room || '',
     });
     setEditingClass(cls);
   };
@@ -155,12 +155,12 @@ export default function StaffMyClasses({ staffUser }) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name:     editForm.name.trim(),
-          section:  editForm.section.trim().toUpperCase(),
-          year:     Number(editForm.year),
+          name: editForm.name.trim(),
+          section: editForm.section.trim().toUpperCase(),
+          year: Number(editForm.year),
           semester: Number(editForm.semester),
-          credits:  Number(editForm.credits),
-          room:     editForm.room.trim(),
+          credits: Number(editForm.credits),
+          room: editForm.room.trim(),
         }),
       });
       const data = await res.json();
@@ -273,9 +273,7 @@ export default function StaffMyClasses({ staffUser }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-slate-900">My Classes & Subjects</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Subjects you handle this semester, stored in your database
-          </p>
+
         </div>
         <button
           type="button"
@@ -312,7 +310,7 @@ export default function StaffMyClasses({ staffUser }) {
       {/* Classes List */}
       {loading ? (
         <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
-          <p className="text-xs text-slate-400 font-bold">Loading classes from database...</p>
+          <p className="text-xs text-slate-400 font-bold">Loading classes...</p>
         </div>
       ) : classes.length === 0 ? (
         /* Empty State */
@@ -639,7 +637,7 @@ export default function StaffMyClasses({ staffUser }) {
                     <option value="Network Lab">Network Lab</option>
                     <option value="Project Lab">Project Lab</option>
                   </optgroup>
-                  {newClass.room && !['LH-101','LH-102','LH-201','LH-202','LH-301','LH-302','Room 101','Room 102','Room 201','Room 202','Seminar Hall 1','Seminar Hall 2','Computer Lab 1','Computer Lab 2','Computer Lab 3','AI & ML Lab','Data Science Lab','IoT & Embedded Lab','Electronics Lab','Hardware Lab','Network Lab','Project Lab'].includes(newClass.room) && (
+                  {newClass.room && !['LH-101', 'LH-102', 'LH-201', 'LH-202', 'LH-301', 'LH-302', 'Room 101', 'Room 102', 'Room 201', 'Room 202', 'Seminar Hall 1', 'Seminar Hall 2', 'Computer Lab 1', 'Computer Lab 2', 'Computer Lab 3', 'AI & ML Lab', 'Data Science Lab', 'IoT & Embedded Lab', 'Electronics Lab', 'Hardware Lab', 'Network Lab', 'Project Lab'].includes(newClass.room) && (
                     <optgroup label="Custom Venue">
                       <option value={newClass.room}>{newClass.room}</option>
                     </optgroup>
@@ -660,7 +658,7 @@ export default function StaffMyClasses({ staffUser }) {
                   disabled={isSubmittingClass}
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 disabled:opacity-50"
                 >
-                  {isSubmittingClass ? 'Saving to Database...' : 'Save Subject'}
+                  {isSubmittingClass ? 'Saving...' : 'Save Subject'}
                 </button>
               </div>
             </form>
@@ -805,7 +803,7 @@ export default function StaffMyClasses({ staffUser }) {
                     <option value="Network Lab">Network Lab</option>
                     <option value="Project Lab">Project Lab</option>
                   </optgroup>
-                  {editForm.room && !['LH-101','LH-102','LH-201','LH-202','LH-301','LH-302','Room 101','Room 102','Room 201','Room 202','Seminar Hall 1','Seminar Hall 2','Computer Lab 1','Computer Lab 2','Computer Lab 3','AI & ML Lab','Data Science Lab','IoT & Embedded Lab','Electronics Lab','Hardware Lab','Network Lab','Project Lab'].includes(editForm.room) && (
+                  {editForm.room && !['LH-101', 'LH-102', 'LH-201', 'LH-202', 'LH-301', 'LH-302', 'Room 101', 'Room 102', 'Room 201', 'Room 202', 'Seminar Hall 1', 'Seminar Hall 2', 'Computer Lab 1', 'Computer Lab 2', 'Computer Lab 3', 'AI & ML Lab', 'Data Science Lab', 'IoT & Embedded Lab', 'Electronics Lab', 'Hardware Lab', 'Network Lab', 'Project Lab'].includes(editForm.room) && (
                     <optgroup label="Current Assigned Venue">
                       <option value={editForm.room}>{editForm.room}</option>
                     </optgroup>

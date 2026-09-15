@@ -34,7 +34,30 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
   const [staffSchedule, setStaffSchedule] = useState(null);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
 
-  const staffId = staff.id || staff.staffId;
+  const staffId = staff.staffId || staff.empId || staff.id || '';
+
+  const [staffCourses, setStaffCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+
+  const fetchStaffClasses = () => {
+    if (!staffId) return;
+    setLoadingCourses(true);
+    fetch(`http://localhost:5000/api/classes/staff/${staffId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.classes)) {
+          setStaffCourses(d.classes);
+        } else if (staff.classes && Array.isArray(staff.classes)) {
+          setStaffCourses(staff.classes);
+        }
+      })
+      .catch(() => {
+        if (staff.classes && Array.isArray(staff.classes)) {
+          setStaffCourses(staff.classes);
+        }
+      })
+      .finally(() => setLoadingCourses(false));
+  };
 
   const fetchStaffLeaves = () => {
     if (!staffId) return;
@@ -51,6 +74,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
 
   useEffect(() => {
     fetchStaffLeaves();
+    fetchStaffClasses();
     if (staffId) {
       setLoadingSchedule(true);
       fetch(`http://localhost:5000/api/timetable/staff/${staffId}`)
@@ -89,59 +113,17 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
   const dob = staff.dob || 'Not specified';
   const address = staff.address || 'Pending staff first-time setup';
   const emergencyContact = staff.emergencyContact || 'Pending staff first-time setup';
-  
-  // Dynamic courses based on department
-  const courses = staff.courses || (staff.department === 'Computer Science' ? [
-    { code: 'CS301', name: 'Data Structures & Algorithms', sem: '4th Sem - Sec A', students: 62, hours: '4 hrs/wk', room: 'LH-102', progress: 78 },
-    { code: 'CS502', name: 'Artificial Intelligence & ML', sem: '6th Sem - Sec B', students: 58, hours: '3 hrs/wk', room: 'LH-204', progress: 65 },
-    { code: 'CS309', name: 'Data Structures Lab', sem: '4th Sem - Lab 1', students: 31, hours: '3 hrs/wk', room: 'CS Lab 3', progress: 85 }
-  ] : staff.department === 'Electronics' ? [
-    { code: 'EC401', name: 'Digital Signal Processing', sem: '4th Sem - Sec A', students: 55, hours: '4 hrs/wk', room: 'EC-101', progress: 80 },
-    { code: 'EC602', name: 'Microcontrollers & Embedded', sem: '6th Sem - Sec A', students: 50, hours: '3 hrs/wk', room: 'EC-202', progress: 70 }
-  ] : [
-    { code: 'MB101', name: 'Principles of Management', sem: '1st Sem - MBA', students: 60, hours: '4 hrs/wk', room: 'MBA Hall 1', progress: 82 },
-    { code: 'MB304', name: 'Strategic Decision Making', sem: '3rd Sem - MBA', students: 48, hours: '3 hrs/wk', room: 'MBA Hall 2', progress: 75 }
-  ]);
 
-  // Timetable
-  const timetable = [
-    {
-      day: 'Monday',
-      slots: [
-        { time: '09:00 - 10:00 AM', subject: courses[0]?.name || 'Core Lecture 1', room: courses[0]?.room || 'LH-101', type: 'Lecture' },
-        { time: '11:15 - 12:15 PM', subject: courses[1]?.name || 'Core Lecture 2', room: courses[1]?.room || 'LH-102', type: 'Lecture' },
-        { time: '02:00 - 04:00 PM', subject: courses[2]?.name || 'Practical Lab', room: courses[2]?.room || 'Lab 2', type: 'Lab Session' }
-      ]
-    },
-    {
-      day: 'Tuesday',
-      slots: [
-        { time: '10:00 - 11:00 AM', subject: courses[0]?.name || 'Core Lecture 1', room: courses[0]?.room || 'LH-101', type: 'Lecture' },
-        { time: '01:30 - 02:30 PM', subject: 'Faculty Department Meeting', room: 'Dept Conf Room', type: 'Meeting' }
-      ]
-    },
-    {
-      day: 'Wednesday',
-      slots: [
-        { time: '09:00 - 10:00 AM', subject: courses[1]?.name || 'Core Lecture 2', room: courses[1]?.room || 'LH-204', type: 'Lecture' },
-        { time: '11:15 - 01:15 PM', subject: courses[2]?.name || 'Practical Lab', room: courses[2]?.room || 'CS Lab 3', type: 'Lab Session' }
-      ]
-    },
-    {
-      day: 'Thursday',
-      slots: [
-        { time: '10:00 - 11:00 AM', subject: courses[0]?.name || 'Core Lecture 1', room: courses[0]?.room || 'LH-102', type: 'Lecture' },
-        { time: '02:00 - 03:00 PM', subject: 'Student Mentoring & Doubt Session', room: 'Faculty Cabin 12', type: 'Office Hours' }
-      ]
-    },
-    {
-      day: 'Friday',
-      slots: [
-        { time: '09:00 - 10:00 AM', subject: courses[1]?.name || 'Core Lecture 2', room: courses[1]?.room || 'LH-204', type: 'Lecture' },
-        { time: '11:15 - 12:15 PM', subject: 'Research / Project Guidance', room: 'Research Lab', type: 'Research' }
-      ]
-    }
-  ];
+  // Map real staff courses/classes
+  const courses = staffCourses.map(c => ({
+    code: c.code || c.classCode || '',
+    name: c.name || c.className || '',
+    sem: c.sem || (c.semester ? `${c.semester}${c.semester === 1 ? 'st' : c.semester === 2 ? 'nd' : c.semester === 3 ? 'rd' : 'th'} Sem${c.section ? ` - Sec ${c.section}` : ''}` : 'Active Sem'),
+    students: Array.isArray(c.students) ? c.students.length : (c.totalStudents || (Array.isArray(c.enrolledStudents) ? c.enrolledStudents.length : 0)),
+    hours: c.hours || `${c.credits || 3} hrs/wk`,
+    room: c.room || 'Classroom / Lab',
+    progress: typeof c.progress === 'number' ? c.progress : 0
+  }));
 
   // Calendar Attendance Grid Generator for August 2026 (31 Days)
   // Generates status for each day: 'P' (Present), 'A' (Absent), 'L' (Leave), 'H' (Holiday/Weekend)
@@ -518,7 +500,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-extrabold text-slate-900">Faculty Leave Applications ({staffLeaves.length})</h3>
-              <span className="text-xs text-slate-400 font-medium">Synced with MongoDB</span>
+              <span className="text-xs text-slate-400 font-medium">Live Records</span>
             </div>
             {staffLeaves.length === 0 ? (
               <p className="text-xs text-slate-400 py-6 text-center">No leave applications recorded for this faculty member yet.</p>
@@ -594,50 +576,64 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
             <span className="text-xs text-slate-500 font-medium">Academic Semester 2026-27</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {courses.map((c, i) => (
-              <div key={i} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4 hover:shadow-md transition-all">
-                <div className="flex items-start justify-between">
-                  <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 font-bold">
-                    <BookOpen className="w-5 h-5" />
+          {loadingCourses ? (
+            <div className="py-12 text-center text-slate-400 text-xs font-semibold">
+              Loading courses and classes...
+            </div>
+          ) : courses.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-400">
+              <BookOpen className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+              <p className="text-sm font-bold text-slate-700">No Courses or Classes Assigned Yet</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Classes created or assigned to {staff.name} will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {courses.map((c, i) => (
+                <div key={i} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4 hover:shadow-md transition-all">
+                  <div className="flex items-start justify-between">
+                    <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 font-bold">
+                      <BookOpen className="w-5 h-5" />
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-slate-100 text-slate-800">
+                      {c.code}
+                    </span>
                   </div>
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-slate-100 text-slate-800">
-                    {c.code}
-                  </span>
-                </div>
 
-                <div>
-                  <h4 className="text-base font-bold text-slate-900">{c.name}</h4>
-                  <p className="text-xs text-slate-500 font-medium mt-1">{c.sem}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl">
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Enrolled</span>
-                    <span className="font-extrabold text-slate-800">{c.students} Students</span>
+                    <h4 className="text-base font-bold text-slate-900">{c.name}</h4>
+                    <p className="text-xs text-slate-500 font-medium mt-1">{c.sem}</p>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Load</span>
-                    <span className="font-extrabold text-slate-800">{c.hours}</span>
-                  </div>
-                  <div className="col-span-2 mt-1">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Classroom</span>
-                    <span className="font-semibold text-slate-700">{c.room}</span>
-                  </div>
-                </div>
 
-                <div className="space-y-1.5 pt-2">
-                  <div className="flex justify-between text-xs font-bold text-slate-700">
-                    <span>Syllabus Covered</span>
-                    <span className="text-blue-600 font-extrabold">{c.progress}%</span>
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Enrolled</span>
+                      <span className="font-extrabold text-slate-800">{c.students} Students</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Load</span>
+                      <span className="font-extrabold text-slate-800">{c.hours}</span>
+                    </div>
+                    <div className="col-span-2 mt-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Classroom</span>
+                      <span className="font-semibold text-slate-700">{c.room}</span>
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-600 rounded-full" style={{ width: `${c.progress}%` }}></div>
+
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex justify-between text-xs font-bold text-slate-700">
+                      <span>Syllabus Covered</span>
+                      <span className="text-blue-600 font-extrabold">{c.progress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-600 rounded-full" style={{ width: `${c.progress}%` }}></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -651,7 +647,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-extrabold text-slate-900">Faculty Assigned Timetable</h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                  Live from MongoDB
+                  Active Schedule
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -667,7 +663,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
 
           {loadingSchedule ? (
             <div className="py-12 text-center text-slate-400 text-xs font-semibold">
-              Loading timetable schedule from database...
+              Loading timetable schedule...
             </div>
           ) : !staffSchedule || Object.values(staffSchedule).every(daySlots => Object.keys(daySlots || {}).length === 0) ? (
             <div className="py-12 text-center text-slate-400">
