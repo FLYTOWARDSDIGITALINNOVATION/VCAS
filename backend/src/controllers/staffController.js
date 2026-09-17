@@ -15,7 +15,7 @@ function getInitials(name) {
 // @route  GET /api/staff
 exports.getAllStaff = async (req, res) => {
   try {
-    const staffMembers = await Staff.find().sort({ createdAt: -1 });
+    const staffMembers = await Staff.find().select('-password').sort({ createdAt: -1 });
     res.status(200).json({
       success: true,
       count: staffMembers.length,
@@ -34,10 +34,10 @@ exports.getStaffById = async (req, res) => {
     let staff = null;
 
     if (id.match(/^[0-9a-fA-F]{24}$/)) {
-      staff = await Staff.findById(id);
+      staff = await Staff.findById(id).select('-password');
     }
     if (!staff) {
-      staff = await Staff.findOne({ staffId: id });
+      staff = await Staff.findOne({ staffId: id }).select('-password');
     }
 
     if (!staff) {
@@ -137,11 +137,13 @@ exports.createStaff = async (req, res) => {
     });
 
     const savedStaff = await newStaff.save();
+    const staffData = savedStaff.toObject();
+    delete staffData.password;
 
     res.status(201).json({
       success: true,
       message: `Staff member "${savedStaff.name}" created successfully.`,
-      data: savedStaff
+      data: staffData
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -183,11 +185,13 @@ exports.updateStaff = async (req, res) => {
     }
 
     const updated = await staff.save();
+    const staffData = updated.toObject();
+    delete staffData.password;
 
     res.status(200).json({
       success: true,
       message: `Staff member "${updated.name}" updated successfully.`,
-      data: updated
+      data: staffData
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

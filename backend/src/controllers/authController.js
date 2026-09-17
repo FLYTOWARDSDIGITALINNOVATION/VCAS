@@ -35,9 +35,16 @@ exports.staffLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email/ID or password.' });
     }
 
-    // Check password
-    if (staff.password !== password) {
+    // Check password using bcrypt
+    const isMatch = await staff.matchPassword(password);
+    if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid email/ID or password.' });
+    }
+
+    // Auto-migrate legacy unhashed password in database to secure bcrypt hash
+    if (staff.password && !(staff.password.startsWith('$2a$') || staff.password.startsWith('$2b$'))) {
+      staff.password = password;
+      await staff.save();
     }
 
     // Check if profile is already considered complete (e.g. if qualification & phone exist)

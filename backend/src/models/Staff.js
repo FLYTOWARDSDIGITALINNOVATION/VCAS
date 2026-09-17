@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const studentSchema = new mongoose.Schema({
   rollNo:  { type: String, required: true },
@@ -54,5 +55,30 @@ const staffSchema = new mongoose.Schema({
   timestamps: true,
   collection: 'Staff'
 });
+
+// Hash password with bcrypt before saving if modified
+staffSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  // If already hashed (e.g. bcrypt prefix $2a$ or $2b$), skip
+  if (this.password && (this.password.startsWith('$2a$') || this.password.startsWith('$2b$'))) {
+    return next();
+  }
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Compare password supporting both hashed and legacy unhashed passwords
+staffSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password || !enteredPassword) return false;
+  if (this.password.startsWith('$2a$') || this.password.startsWith('$2b$')) {
+    return await bcrypt.compare(enteredPassword, this.password);
+  }
+  return this.password === enteredPassword;
+};
 
 module.exports = mongoose.model('Staff', staffSchema, 'Staff');
