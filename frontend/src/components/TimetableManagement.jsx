@@ -50,60 +50,7 @@ const FACULTY_PERIODS = [
   { slot: 8, time: '3:25 – 4:15 PM' },
 ];
 
-const INITIAL_SCHEDULES = {
-  'Computer Science': {
-    3: { // Year 3 (Sem 5)
-      Monday: {
-        1: { code: 'CS401', name: 'Database Management Systems', faculty: 'Dr. Sunita Rao (HOD)', room: 'LH-201', type: 'theory', color: 'blue' },
-        2: { code: 'CS501', name: 'Operating Systems', faculty: 'Dr. Neeraj Gupta', room: 'LH-201', type: 'theory', color: 'indigo' },
-        3: { code: 'CS502', name: 'AI & Machine Learning', faculty: 'Prof. Arvind Menon', room: 'LH-201', type: 'theory', color: 'purple' },
-        4: { code: 'CS402', name: 'DBMS & SQL Laboratory', faculty: 'Dr. Sunita Rao / Dr. Priya Sharma', room: 'Computer Lab 3', type: 'lab', color: 'emerald' },
-        5: { code: 'CS402', name: 'DBMS & SQL Laboratory', faculty: 'Dr. Sunita Rao / Dr. Priya Sharma', room: 'Computer Lab 3', type: 'lab', color: 'emerald' },
-        6: { code: 'CS402', name: 'DBMS & SQL Laboratory', faculty: 'Dr. Sunita Rao / Dr. Priya Sharma', room: 'Computer Lab 3', type: 'lab', color: 'emerald' }
-      },
-      Tuesday: {
-        1: { code: 'CS502', name: 'AI & Machine Learning', faculty: 'Prof. Arvind Menon', room: 'LH-201', type: 'theory', color: 'purple' },
-        2: { code: 'CS401', name: 'Database Management Systems', faculty: 'Dr. Sunita Rao (HOD)', room: 'LH-201', type: 'theory', color: 'blue' },
-        3: { code: 'MA501', name: 'Discrete Mathematics & Graph Theory', faculty: 'Dr. S. Ramanujan', room: 'LH-201', type: 'theory', color: 'amber' },
-        4: { code: 'CS501', name: 'Operating Systems', faculty: 'Dr. Neeraj Gupta', room: 'LH-201', type: 'theory', color: 'indigo' },
-        5: { code: 'PE501', name: 'Professional Elective: Cloud Computing', faculty: 'Dr. Priya Sharma', room: 'LH-201', type: 'elective', color: 'rose' },
-        6: { code: 'LIB', name: 'Library & Online Research Hour', faculty: 'Dr. Neeraj Gupta', room: 'Room 101', type: 'library', color: 'teal' }
-      },
-      Wednesday: {
-        1: { code: 'CS501', name: 'Operating Systems', faculty: 'Dr. Neeraj Gupta', room: 'LH-201', type: 'theory', color: 'indigo' },
-        2: { code: 'MA501', name: 'Discrete Mathematics & Graph Theory', faculty: 'Dr. S. Ramanujan', room: 'LH-201', type: 'theory', color: 'amber' },
-        3: { code: 'CS401', name: 'Database Management Systems', faculty: 'Dr. Sunita Rao (HOD)', room: 'LH-201', type: 'theory', color: 'blue' },
-        4: { code: 'CS503', name: 'AI & Neural Networks Lab', faculty: 'Prof. Arvind Menon / Dr. Neeraj Gupta', room: 'AI & ML Lab', type: 'lab', color: 'emerald' },
-        5: { code: 'CS503', name: 'AI & Neural Networks Lab', faculty: 'Prof. Arvind Menon / Dr. Neeraj Gupta', room: 'AI & ML Lab', type: 'lab', color: 'emerald' },
-        6: { code: 'CS503', name: 'AI & Neural Networks Lab', faculty: 'Prof. Arvind Menon / Dr. Neeraj Gupta', room: 'AI & ML Lab', type: 'lab', color: 'emerald' }
-      },
-      Thursday: {
-        1: { code: 'PE501', name: 'Professional Elective: Cloud Computing', faculty: 'Dr. Priya Sharma', room: 'LH-201', type: 'elective', color: 'rose' },
-        2: { code: 'CS502', name: 'AI & Machine Learning', faculty: 'Prof. Arvind Menon', room: 'LH-201', type: 'theory', color: 'purple' },
-        3: { code: 'CS401', name: 'Database Management Systems', faculty: 'Dr. Sunita Rao (HOD)', room: 'LH-201', type: 'theory', color: 'blue' },
-        4: { code: 'MA501', name: 'Discrete Mathematics & Graph Theory', faculty: 'Dr. S. Ramanujan', room: 'LH-201', type: 'theory', color: 'amber' },
-        5: { code: 'CS501', name: 'Operating Systems', faculty: 'Dr. Neeraj Gupta', room: 'LH-201', type: 'theory', color: 'indigo' },
-        6: { code: 'TUT', name: 'Tutorial Remedial Session', faculty: 'Dr. Sunita Rao (HOD)', room: 'LH-201', type: 'tutorial', color: 'cyan' }
-      },
-      Friday: {
-        1: { code: 'MA501', name: 'Discrete Mathematics & Graph Theory', faculty: 'Dr. S. Ramanujan', room: 'LH-201', type: 'theory', color: 'amber' },
-        2: { code: 'CS501', name: 'Operating Systems', faculty: 'Dr. Neeraj Gupta', room: 'LH-201', type: 'theory', color: 'indigo' },
-        3: { code: 'PE501', name: 'Professional Elective: Cloud Computing', faculty: 'Dr. Priya Sharma', room: 'LH-201', type: 'elective', color: 'rose' },
-        4: { code: 'CS502', name: 'AI & Machine Learning', faculty: 'Prof. Arvind Menon', room: 'LH-201', type: 'theory', color: 'purple' },
-        5: { code: 'PROJ', name: 'Mini-Project Guidance', faculty: 'Dr. Sunita Rao / Prof. Arvind Menon', room: 'Project Lab', type: 'project', color: 'purple' },
-        6: { code: 'SPT', name: 'Sports & Wellness', faculty: 'Prof. Physical Director', room: 'Seminar Hall 1', type: 'sports', color: 'emerald' }
-      },
-      Saturday: {
-        1: { code: 'CS401', name: 'Database Management Systems', faculty: 'Dr. Sunita Rao (HOD)', room: 'LH-201', type: 'theory', color: 'blue' },
-        2: { code: 'CS502', name: 'AI & Machine Learning', faculty: 'Prof. Arvind Menon', room: 'LH-201', type: 'theory', color: 'purple' },
-        3: { code: 'SEM', name: 'Technical Seminar', faculty: 'Dr. Priya Sharma', room: 'Seminar Hall 1', type: 'seminar', color: 'amber' },
-        4: { code: 'CLUB', name: 'Coding Club Practice', faculty: 'Prof. Arvind Menon', room: 'Computer Lab 3', type: 'club', color: 'indigo' },
-        5: { code: 'FREE', name: 'Self-Study & Consultation', faculty: 'Faculty Mentors', room: 'LH-201', type: 'free', color: 'slate' },
-        6: { code: 'FREE', name: 'Weekend Wrap-up', faculty: '--', room: '--', type: 'free', color: 'slate' }
-      }
-    }
-  }
-};
+const INITIAL_SCHEDULES = {};
 
 const COLOR_MAP = {
   theory: 'blue',

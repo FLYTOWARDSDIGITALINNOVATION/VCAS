@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   FileText,
   Search,
@@ -33,9 +33,13 @@ import {
   CheckSquare,
   ChevronDown,
   Filter,
-  Save
+  Save,
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+
+const API_BASE = 'http://localhost:5000/api';
 
 const DEPARTMENTS = [
   'All Departments',
@@ -47,233 +51,8 @@ const DEPARTMENTS = [
   'BCA'
 ];
 
-const INITIAL_ASSIGNMENTS = [
-  {
-    id: 1,
-    title: 'B+ Tree Indexing & SQL Query Optimization',
-    code: 'CS401',
-    subject: 'Database Management Systems',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    faculty: 'Dr. Sunita Rao (HOD)',
-    dueDate: '2026-09-15',
-    dueTime: '11:59 PM',
-    maxMarks: 25,
-    weightage: '10% CIA',
-    totalStudents: 60,
-    submittedCount: 56,
-    gradedCount: 52,
-    status: 'Active',
-    description: 'Implement B+ Tree index simulation and analyze query execution plan cost for joins on 100k records.',
-    attachedDoc: 'CS401_Assignment_1_Guidelines.pdf',
-    type: 'Practical & Theory'
-  },
-  {
-    id: 2,
-    title: 'Neural Networks & Deep Learning CNN Architecture for Image Classification',
-    code: 'CS502',
-    subject: 'AI & Machine Learning',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    faculty: 'Prof. Arvind Menon',
-    dueDate: '2026-09-18',
-    dueTime: '05:00 PM',
-    maxMarks: 25,
-    weightage: '10% CIA',
-    totalStudents: 60,
-    submittedCount: 48,
-    gradedCount: 30,
-    status: 'Active',
-    description: 'Build a Convolutional Neural Network (CNN) in PyTorch/TensorFlow for CIFAR-10 classification with >85% test accuracy.',
-    attachedDoc: 'CS502_CNN_Project_Brief.pdf',
-    type: 'Code & Report'
-  },
-  {
-    id: 3,
-    title: 'CPU Scheduling & Memory Paging Algorithms Case Study',
-    code: 'CS501',
-    subject: 'Operating Systems',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    faculty: 'Dr. Neeraj Gupta',
-    dueDate: '2026-09-10',
-    dueTime: '11:59 PM',
-    maxMarks: 20,
-    weightage: '5% CIA',
-    totalStudents: 60,
-    submittedCount: 60,
-    gradedCount: 60,
-    status: 'Completed',
-    description: 'Comparative analysis of Round Robin, Multilevel Feedback Queue, and LRU Page Replacement in Linux Kernel.',
-    attachedDoc: 'CS501_OS_Assignment.pdf',
-    type: 'Research Report'
-  },
-  {
-    id: 4,
-    title: 'Operational Amplifiers & Filter Design Simulation in SPICE',
-    code: 'EC201',
-    subject: 'Electronic Circuits & Design',
-    department: 'Electronics',
-    year: 2,
-    sem: 'Sem 3',
-    faculty: 'Prof. Ramesh Kumar',
-    dueDate: '2026-09-20',
-    dueTime: '11:59 PM',
-    maxMarks: 25,
-    weightage: '10% CIA',
-    totalStudents: 55,
-    submittedCount: 42,
-    gradedCount: 20,
-    status: 'Active',
-    description: 'Design a 4th-order Butterworth Low-Pass Filter with 10kHz cut-off frequency using LTSpice simulation.',
-    attachedDoc: 'EC201_OpAmp_Design.pdf',
-    type: 'Simulation'
-  },
-  {
-    id: 5,
-    title: 'Strategic Corporate Leadership & Business Valuation Case Study',
-    code: 'MB101',
-    subject: 'Principles of Management',
-    department: 'MBA',
-    year: 1,
-    sem: 'Sem 1',
-    faculty: 'Dr. Anita Desai',
-    dueDate: '2026-09-16',
-    dueTime: '06:00 PM',
-    maxMarks: 50,
-    weightage: '15% CIA',
-    totalStudents: 45,
-    submittedCount: 44,
-    gradedCount: 40,
-    status: 'Active',
-    description: 'Comprehensive financial and organizational turnaround analysis of Tata Motors and EV transformation.',
-    attachedDoc: 'MB101_CaseStudy_Brief.pdf',
-    type: 'Case Study'
-  },
-  {
-    id: 6,
-    title: 'Finite Element Analysis (FEA) of Cantilever Structural Beam',
-    code: 'ME401',
-    subject: 'CAD/CAM Modeling & Robotics',
-    department: 'Mechanical',
-    year: 3,
-    sem: 'Sem 5',
-    faculty: 'Dr. Pradeep Joshi',
-    dueDate: '2026-09-22',
-    dueTime: '11:59 PM',
-    maxMarks: 25,
-    weightage: '10% CIA',
-    totalStudents: 50,
-    submittedCount: 35,
-    gradedCount: 15,
-    status: 'Active',
-    description: 'Stress distribution and thermal load simulation on structural aerospace alloy using ANSYS Mechanical.',
-    attachedDoc: 'ME401_FEA_Guidance.pdf',
-    type: 'Engineering Simulation'
-  }
-];
-
-const INITIAL_SUBMISSIONS = [
-  {
-    id: 101,
-    assignmentId: 1,
-    studentName: 'Aadhavan Kumar',
-    rollNo: '22CS001',
-    regNo: '710022104001',
-    department: 'Computer Science',
-    submittedAt: '2026-09-02 04:30 PM',
-    fileName: '22CS001_Aadhavan_BTree_Assignment.pdf',
-    fileSize: '2.4 MB',
-    plagiarism: 3,
-    status: 'Graded',
-    marksAwarded: 24,
-    maxMarks: 25,
-    feedback: 'Excellent implementation of B+ Tree splitting and query indexing diagrams. Great job!'
-  },
-  {
-    id: 102,
-    assignmentId: 1,
-    studentName: 'Abinaya Sundaram',
-    rollNo: '22CS002',
-    regNo: '710022104002',
-    department: 'Computer Science',
-    submittedAt: '2026-09-02 06:15 PM',
-    fileName: '22CS002_Abinaya_DBMS_Task.pdf',
-    fileSize: '1.9 MB',
-    plagiarism: 5,
-    status: 'Graded',
-    marksAwarded: 23,
-    maxMarks: 25,
-    feedback: 'Very thorough SQL cost execution plan. Good explanations.'
-  },
-  {
-    id: 103,
-    assignmentId: 1,
-    studentName: 'Deepika Ramanathan',
-    rollNo: '22CS004',
-    regNo: '710022104004',
-    department: 'Computer Science',
-    submittedAt: '2026-09-01 09:10 PM',
-    fileName: '22CS004_Deepika_BPlusTree_Complete.pdf',
-    fileSize: '3.1 MB',
-    plagiarism: 2,
-    status: 'Graded',
-    marksAwarded: 25,
-    maxMarks: 25,
-    feedback: 'Outstanding submission! Clean code, complete test cases, and comprehensive report.'
-  },
-  {
-    id: 104,
-    assignmentId: 1,
-    studentName: 'Harini Jayaraman',
-    rollNo: '22CS006',
-    regNo: '710022104006',
-    department: 'Computer Science',
-    submittedAt: '2026-09-03 11:20 AM',
-    fileName: '22CS006_Harini_Database_Indexing.pdf',
-    fileSize: '2.1 MB',
-    plagiarism: 4,
-    status: 'Graded',
-    marksAwarded: 22,
-    maxMarks: 25,
-    feedback: 'Good work on indexing structures. Include more benchmarks next time.'
-  },
-  {
-    id: 105,
-    assignmentId: 1,
-    studentName: 'Balaji Venkatesh',
-    rollNo: '22CS003',
-    regNo: '710022104003',
-    department: 'Computer Science',
-    submittedAt: '2026-09-04 02:45 PM',
-    fileName: '22CS003_Balaji_BTree.pdf',
-    fileSize: '1.2 MB',
-    plagiarism: 12,
-    status: 'Submitted (Pending Review)',
-    marksAwarded: 0,
-    maxMarks: 25,
-    feedback: ''
-  },
-  {
-    id: 106,
-    assignmentId: 1,
-    studentName: 'Dinesh Karthik',
-    rollNo: '22CS005',
-    regNo: '710022104005',
-    department: 'Computer Science',
-    submittedAt: '--',
-    fileName: '--',
-    fileSize: '--',
-    plagiarism: 0,
-    status: 'Not Submitted (Overdue)',
-    marksAwarded: 0,
-    maxMarks: 25,
-    feedback: 'Pending submission'
-  }
-];
+const INITIAL_ASSIGNMENTS = [];
+const INITIAL_SUBMISSIONS = [];
 
 export default function AssignmentManagement() {
   // Tabs: 'assignments', 'submissions', 'analytics'
@@ -282,6 +61,7 @@ export default function AssignmentManagement() {
   // State
   const [assignmentsList, setAssignmentsList] = useState(INITIAL_ASSIGNMENTS);
   const [submissionsList, setSubmissionsList] = useState(INITIAL_SUBMISSIONS);
+  const [loading, setLoading] = useState(false);
 
   // Selected Assignment for Submissions view
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(1);
@@ -290,12 +70,70 @@ export default function AssignmentManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [selectedFaculty, setSelectedFaculty] = useState('All Faculty');
 
   // Modals State
   const [isAddAssignmentOpen, setIsAddAssignmentOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState(null); // null = create mode, object = edit mode
   const [gradingSubmission, setGradingSubmission] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Normalize DB assignment to component format
+  const normalizeAssignment = (a) => ({
+    id: a._id || a.id,
+    _id: a._id,
+    title: a.title || '',
+    code: a.subjectCode || a.code || 'GEN',
+    subject: a.subjectName || a.subject || a.subjectCode || 'Coursework',
+    department: a.department || 'Computer Science',
+    year: a.year || (a.semester ? Math.ceil(a.semester / 2) : 3),
+    sem: a.sem || (a.semester ? `Sem ${a.semester}` : 'Sem 5'),
+    faculty: a.staffName || (a.staffId ? `Staff (${a.staffId})` : 'Faculty'),
+    staffId: a.staffId || '',
+    staffName: a.staffName || '',
+    dueDate: a.dueDate || '',
+    dueTime: a.dueTime || '11:59 PM',
+    maxMarks: a.totalMarks !== undefined ? a.totalMarks : (a.maxMarks || 20),
+    weightage: a.weightage || '10% CIA',
+    totalStudents: a.totalStudents || 60,
+    submittedCount: a.submissions !== undefined ? a.submissions : (a.submittedCount || 0),
+    gradedCount: a.gradedCount || 0,
+    status: a.status || 'Active',
+    description: a.description || '',
+    attachedDoc: a.attachedDoc || `${a.subjectCode || 'Assignment'}_Brief.pdf`,
+    type: a.type || 'Practical & Theory',
+    isDbRecord: Boolean(a._id),
+    createdAt: a.createdAt || null
+  });
+
+  // Fetch all assignments across all staff from backend
+  const fetchAssignments = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/assignments`);
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        const dbItems = json.data.map(normalizeAssignment);
+        setAssignmentsList(dbItems);
+        if (dbItems.length > 0) {
+          setSelectedAssignmentId(prev => {
+            if (prev && dbItems.some(d => String(d.id) === String(prev))) return prev;
+            return dbItems[0].id;
+          });
+        } else {
+          setSelectedAssignmentId(null);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch assignments from backend:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAssignments();
+  }, []);
 
   // Lock background scroll when any modal is open
   React.useEffect(() => {
@@ -322,7 +160,7 @@ export default function AssignmentManagement() {
     department: 'Computer Science',
     year: 3,
     sem: 'Sem 5',
-    faculty: 'Dr. Sunita Rao (HOD)',
+    faculty: 'Admin / Faculty',
     dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     dueTime: '11:59 PM',
     maxMarks: 25,
@@ -340,32 +178,45 @@ export default function AssignmentManagement() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Distinct Faculty List for Filter Dropdown
+  const facultyOptions = useMemo(() => {
+    const list = new Set();
+    assignmentsList.forEach(a => {
+      if (a.faculty) list.add(a.faculty);
+      if (a.staffName) list.add(a.staffName);
+    });
+    return ['All Faculty', ...Array.from(list)];
+  }, [assignmentsList]);
+
   // Filtered Assignments
   const filteredAssignments = useMemo(() => {
     return assignmentsList.filter(a => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch = !q || (
-        a.title.toLowerCase().includes(q) ||
-        a.code.toLowerCase().includes(q) ||
-        a.subject.toLowerCase().includes(q) ||
-        a.faculty.toLowerCase().includes(q)
+        (a.title && a.title.toLowerCase().includes(q)) ||
+        (a.code && a.code.toLowerCase().includes(q)) ||
+        (a.subject && a.subject.toLowerCase().includes(q)) ||
+        (a.faculty && a.faculty.toLowerCase().includes(q)) ||
+        (a.staffName && a.staffName.toLowerCase().includes(q)) ||
+        (a.staffId && a.staffId.toLowerCase().includes(q))
       );
 
       const matchesDept = selectedDept === 'All Departments' || a.department === selectedDept;
       const matchesStatus = selectedStatus === 'ALL' || a.status === selectedStatus;
+      const matchesFaculty = selectedFaculty === 'All Faculty' || a.faculty === selectedFaculty || a.staffName === selectedFaculty;
 
-      return matchesSearch && matchesDept && matchesStatus;
+      return matchesSearch && matchesDept && matchesStatus && matchesFaculty;
     });
-  }, [assignmentsList, searchQuery, selectedDept, selectedStatus]);
+  }, [assignmentsList, searchQuery, selectedDept, selectedStatus, selectedFaculty]);
 
   // Selected Assignment Details
   const currentAssignment = useMemo(() => {
-    return assignmentsList.find(a => a.id === selectedAssignmentId) || assignmentsList[0];
+    return assignmentsList.find(a => String(a.id) === String(selectedAssignmentId)) || assignmentsList[0];
   }, [assignmentsList, selectedAssignmentId]);
 
   // Submissions for Selected Assignment
   const currentSubmissions = useMemo(() => {
-    return submissionsList.filter(s => s.assignmentId === selectedAssignmentId);
+    return submissionsList.filter(s => String(s.assignmentId) === String(selectedAssignmentId));
   }, [submissionsList, selectedAssignmentId]);
 
   // Key Stats
@@ -426,7 +277,7 @@ export default function AssignmentManagement() {
   };
 
   // Save New or Edited Assignment
-  const handleSaveAssignment = (e) => {
+  const handleSaveAssignment = async (e) => {
     e.preventDefault();
     if (!assignmentForm.title.trim()) {
       alert('Please enter Assignment Title');
@@ -435,6 +286,27 @@ export default function AssignmentManagement() {
 
     if (editingAssignment) {
       // Update existing
+      try {
+        if (editingAssignment._id) {
+          await fetch(`${API_BASE}/assignments/${editingAssignment._id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: assignmentForm.title,
+              subjectCode: assignmentForm.code,
+              subjectName: assignmentForm.subject,
+              department: assignmentForm.department,
+              semester: assignmentForm.sem ? parseInt(String(assignmentForm.sem).replace(/\D/g, '')) || 1 : 1,
+              dueDate: assignmentForm.dueDate,
+              totalMarks: assignmentForm.maxMarks,
+              description: assignmentForm.description,
+              staffName: assignmentForm.faculty
+            })
+          });
+        }
+      } catch (err) {
+        console.warn('Error updating assignment in backend:', err);
+      }
       setAssignmentsList(prev => prev.map(a =>
         a.id === editingAssignment.id
           ? { ...a, ...assignmentForm }
@@ -442,20 +314,88 @@ export default function AssignmentManagement() {
       ));
       handleCloseAssignmentModal();
       showToast('Assignment updated successfully!');
+      fetchAssignments();
     } else {
       // Create new
-      const newAssignment = {
-        id: Date.now(),
-        ...assignmentForm,
-        totalStudents: 60,
-        submittedCount: 0,
-        gradedCount: 0,
-        status: 'Active',
-        attachedDoc: `${assignmentForm.code}_Brief.pdf`
-      };
-      setAssignmentsList(prev => [newAssignment, ...prev]);
+      try {
+        const res = await fetch(`${API_BASE}/assignments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: assignmentForm.title,
+            subjectCode: assignmentForm.code,
+            subjectName: assignmentForm.subject,
+            department: assignmentForm.department,
+            semester: assignmentForm.sem ? parseInt(String(assignmentForm.sem).replace(/\D/g, '')) || 1 : 1,
+            dueDate: assignmentForm.dueDate,
+            totalMarks: assignmentForm.maxMarks,
+            description: assignmentForm.description,
+            staffName: assignmentForm.faculty || 'Admin'
+          })
+        });
+        const json = await res.json();
+        if (json.success && json.data) {
+          fetchAssignments();
+        } else {
+          const newAssignment = {
+            id: Date.now(),
+            ...assignmentForm,
+            totalStudents: 60,
+            submittedCount: 0,
+            gradedCount: 0,
+            status: 'Active',
+            attachedDoc: `${assignmentForm.code}_Brief.pdf`
+          };
+          setAssignmentsList(prev => [newAssignment, ...prev]);
+        }
+      } catch (err) {
+        const newAssignment = {
+          id: Date.now(),
+          ...assignmentForm,
+          totalStudents: 60,
+          submittedCount: 0,
+          gradedCount: 0,
+          status: 'Active',
+          attachedDoc: `${assignmentForm.code}_Brief.pdf`
+        };
+        setAssignmentsList(prev => [newAssignment, ...prev]);
+      }
       handleCloseAssignmentModal();
       showToast('New Assignment published successfully to student portal!');
+    }
+  };
+
+  // Toggle Status (Active / Closed)
+  const handleToggleStatus = async (a) => {
+    try {
+      if (a._id) {
+        await fetch(`${API_BASE}/assignments/${a._id}/status`, {
+          method: 'PATCH'
+        });
+      }
+      const newStatus = a.status === 'Active' ? 'Closed' : 'Active';
+      setAssignmentsList(prev => prev.map(item =>
+        item.id === a.id ? { ...item, status: newStatus } : item
+      ));
+      showToast(`Status changed to ${newStatus}`);
+    } catch (err) {
+      showToast('Failed to toggle status', true);
+    }
+  };
+
+  // Delete Assignment
+  const handleDeleteAssignment = async (a) => {
+    if (!window.confirm(`Are you sure you want to delete "${a.title}"?`)) return;
+    try {
+      if (a._id) {
+        await fetch(`${API_BASE}/assignments/${a._id}`, {
+          method: 'DELETE'
+        });
+      }
+      setAssignmentsList(prev => prev.filter(item => item.id !== a.id));
+      showToast('Assignment deleted successfully.');
+    } catch (err) {
+      showToast('Failed to delete assignment', true);
     }
   };
 
@@ -547,6 +487,16 @@ export default function AssignmentManagement() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={fetchAssignments}
+            disabled={loading}
+            title="Reload assignments from database"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs disabled:opacity-60 cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+
           <button
             onClick={handleExportSubmissionsCSV}
             title="Download CSV Submissions"
@@ -677,7 +627,7 @@ export default function AssignmentManagement() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department</label>
                 <select
@@ -700,7 +650,21 @@ export default function AssignmentManagement() {
                 >
                   <option value="ALL">All Statuses</option>
                   <option value="Active">Active (Open for Submission)</option>
+                  <option value="Closed">Closed</option>
                   <option value="Completed">Completed & Graded</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Staff / Faculty</label>
+                <select
+                  value={selectedFaculty}
+                  onChange={(e) => setSelectedFaculty(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                >
+                  {facultyOptions.map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -708,7 +672,32 @@ export default function AssignmentManagement() {
 
           {/* Assignments Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {filteredAssignments.map((a) => {
+            {loading ? (
+              <div className="col-span-full py-16 text-center bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+                <Loader2 className="w-8 h-8 mx-auto text-blue-600 animate-spin mb-3" />
+                <p className="text-xs font-semibold text-slate-500">Loading assignments from server...</p>
+              </div>
+            ) : filteredAssignments.length === 0 ? (
+              <div className="col-span-full py-16 text-center bg-white rounded-3xl border border-slate-200 p-8 shadow-xs space-y-3">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <FileText className="w-7 h-7" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800">No Assignments Found</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  {searchQuery || selectedDept !== 'All Departments' || selectedStatus !== 'ALL' || selectedFaculty !== 'All Faculty'
+                    ? 'No assignments match your filter criteria. Try resetting filters.'
+                    : 'No assignments have been created yet. Assignments set by individual staff will appear here.'}
+                </p>
+                <button
+                  onClick={() => setIsAddAssignmentOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs shadow-blue-500/20 transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Assignment</span>
+                </button>
+              </div>
+            ) : (
+              filteredAssignments.map((a) => {
               const submissionRate = ((a.submittedCount / a.totalStudents) * 100).toFixed(0);
               return (
                 <div 
@@ -717,23 +706,33 @@ export default function AssignmentManagement() {
                 >
                   <div>
                     {/* Top Row Badges */}
-                    <div className="flex items-center justify-between gap-2 mb-2.5">
-                      <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span className="font-mono font-black text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-200">
                           {a.code}
                         </span>
                         <span className="text-[11px] font-semibold text-slate-500">
                           {a.department} • {a.sem}
                         </span>
+                        {a.staffId && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-200">
+                            <Users className="w-3 h-3 text-purple-500" />
+                            Staff: {a.staffName || a.faculty} ({a.staffId})
+                          </span>
+                        )}
                       </div>
 
-                      <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold ${
-                        a.status === 'Active'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}>
+                      <button
+                        onClick={() => handleToggleStatus(a)}
+                        title="Click to toggle Active / Closed"
+                        className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                          a.status === 'Active'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
+                        }`}
+                      >
                         {a.status}
-                      </span>
+                      </button>
                     </div>
 
                     <h3 className="font-extrabold text-base text-slate-900 leading-snug group-hover:text-blue-600 transition-colors">
@@ -743,7 +742,7 @@ export default function AssignmentManagement() {
                       Subject: <strong className="text-slate-800">{a.subject}</strong> • Faculty: <strong className="text-slate-800">{a.faculty}</strong>
                     </p>
                     <p className="text-xs text-slate-600 mt-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-100 line-clamp-2">
-                      {a.description}
+                      {a.description || 'No description provided.'}
                     </p>
                   </div>
 
@@ -781,17 +780,24 @@ export default function AssignmentManagement() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleOpenEdit(a)}
-                          className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs rounded-xl border border-amber-200 transition-all flex items-center gap-1.5"
+                          className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs rounded-xl border border-amber-200 transition-all flex items-center gap-1"
                         >
                           <Edit className="w-3.5 h-3.5" />
                           <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAssignment(a)}
+                          title="Delete assignment"
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-200 transition-all flex items-center cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => {
                             setSelectedAssignmentId(a.id);
                             setActiveTab('submissions');
                           }}
-                          className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center gap-1.5"
+                          className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center gap-1"
                         >
                           <FileCheck className="w-3.5 h-3.5" />
                           <span>Grade Submissions</span>
@@ -802,7 +808,8 @@ export default function AssignmentManagement() {
 
                 </div>
               );
-            })}
+            })
+            )}
           </div>
 
         </div>
@@ -825,6 +832,7 @@ export default function AssignmentManagement() {
               </h3>
               <p className="text-xs text-slate-500 font-medium">
                 {currentAssignment?.department} (Year {currentAssignment?.year} - {currentAssignment?.sem}) • Max: {currentAssignment?.maxMarks} Marks
+                {currentAssignment?.staffId && ` • Staff ID: ${currentAssignment?.staffId}`}
               </p>
             </div>
 
@@ -832,7 +840,7 @@ export default function AssignmentManagement() {
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Switch Assignment</label>
               <select
                 value={selectedAssignmentId}
-                onChange={(e) => setSelectedAssignmentId(Number(e.target.value))}
+                onChange={(e) => setSelectedAssignmentId(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
               >
                 {assignmentsList.map(a => (

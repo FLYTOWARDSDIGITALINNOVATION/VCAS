@@ -59,6 +59,23 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
       .finally(() => setLoadingCourses(false));
   };
 
+  const [staffAssignments, setStaffAssignments] = useState([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+
+  const fetchStaffAssignments = () => {
+    if (!staffId) return;
+    setLoadingAssignments(true);
+    fetch(`http://localhost:5000/api/assignments/${staffId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.data)) {
+          setStaffAssignments(d.data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingAssignments(false));
+  };
+
   const fetchStaffLeaves = () => {
     if (!staffId) return;
     fetch(`http://localhost:5000/api/leave/staff/${staffId}`)
@@ -75,6 +92,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
   useEffect(() => {
     fetchStaffLeaves();
     fetchStaffClasses();
+    fetchStaffAssignments();
     if (staffId) {
       setLoadingSchedule(true);
       fetch(`http://localhost:5000/api/timetable/staff/${staffId}`)
@@ -161,6 +179,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
     { id: 'attendance', label: 'Attendance & Leaves', icon: Calendar, badge: `${attendancePercentage}%` },
     { id: 'classes', label: 'Courses & Classes', icon: BookOpen, badge: `${courses.length}` },
     { id: 'timetable', label: 'Weekly Timetable', icon: Clock },
+    { id: 'assignments', label: 'Assignments Set', icon: FileText, badge: `${staffAssignments.length}` },
     { id: 'performance', label: 'Achievements & Ratings', icon: Award }
   ];
 
@@ -812,6 +831,79 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 6: ASSIGNMENTS SET BY THIS STAFF MEMBER                               */}
+      {/* ========================================================================= */}
+      {activeTab === 'assignments' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span>Assignments Created by {staff.name}</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Total {staffAssignments.length} assignments published for students
+              </p>
+            </div>
+          </div>
+
+          {loadingAssignments ? (
+            <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+              Loading staff assignments...
+            </div>
+          ) : staffAssignments.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+              <FileText className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+              <p className="font-semibold text-xs text-slate-600">No assignments created yet by this staff member.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {staffAssignments.map((a) => (
+                <div key={a._id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-200">
+                        {a.subjectCode}
+                      </span>
+                      {a.subjectName && (
+                        <span className="text-xs font-semibold text-slate-600">{a.subjectName}</span>
+                      )}
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold ${
+                      a.status === 'Active'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-slate-100 text-slate-700 border border-slate-200'
+                    }`}>
+                      {a.status}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900">{a.title}</h4>
+                    {a.description && (
+                      <p className="text-xs text-slate-500 mt-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        {a.description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <span className="text-slate-500 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Due: <strong className="text-slate-800">{a.dueDate}</strong></span>
+                    </span>
+                    <span className="font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                      Max: {a.totalMarks || 20} Marks
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

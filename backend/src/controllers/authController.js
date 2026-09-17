@@ -68,7 +68,8 @@ exports.staffLogin = async (req, res) => {
         avatarText:         staff.avatarText || getInitials(staff.name),
         classTeacherOf:     staff.classTeacherOf || '',
         isProfileCompleted: isCompleted,
-        classes:            staff.classes || []
+        classes:            staff.classes || [],
+        achievements:       staff.achievements || []
       }
     });
   } catch (error) {
@@ -139,7 +140,8 @@ exports.completeProfile = async (req, res) => {
         avatarText:         staff.avatarText,
         classTeacherOf:     staff.classTeacherOf,
         isProfileCompleted: true,
-        classes:            staff.classes || []
+        classes:            staff.classes || [],
+        achievements:       staff.achievements || []
       }
     });
   } catch (error) {
@@ -167,33 +169,46 @@ exports.staffRegister = async (req, res) => {
       emergencyContact
     } = req.body;
 
-    if (!staffId || !name || !email || !password || !department) {
+    if (!name || !email || !password || !department) {
       return res.status(400).json({
         success: false,
-        message: 'Staff ID, Name, Email, Password, and Department are required.'
+        message: 'Name, Email, Password, and Department are required.'
       });
     }
 
-    const existing = await Staff.findOne({
-      $or: [
-        { email: email.toLowerCase().trim() },
-        { staffId: staffId.trim().toUpperCase() }
-      ]
-    });
+    let finalStaffId = (staffId || '').trim().toUpperCase();
+    if (!finalStaffId) {
+      let unique = false;
+      while (!unique) {
+        const candidate = `STF${Math.floor(1000 + Math.random() * 9000)}`;
+        const exists = await Staff.findOne({ staffId: candidate });
+        if (!exists) {
+          finalStaffId = candidate;
+          unique = true;
+        }
+      }
+    } else {
+      const existingId = await Staff.findOne({ staffId: finalStaffId });
+      if (existingId) {
+        return res.status(400).json({
+          success: false,
+          message: 'A staff member with this Staff ID already exists.'
+        });
+      }
+    }
 
-    if (existing) {
+    const existingEmail = await Staff.findOne({ email: email.toLowerCase().trim() });
+    if (existingEmail) {
       return res.status(400).json({
         success: false,
-        message: existing.email === email.toLowerCase().trim()
-          ? 'A staff member with this email already exists.'
-          : 'A staff member with this Staff ID already exists.'
+        message: 'A staff member with this email already exists.'
       });
     }
 
     const isCompleted = Boolean(qualification && phone && address);
 
     const newStaff = new Staff({
-      staffId:            staffId.trim().toUpperCase(),
+      staffId:            finalStaffId,
       name:               name.trim(),
       email:              email.toLowerCase().trim(),
       password:           password.trim(),
@@ -250,3 +265,64 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc   Add an achievement to a staff member's profile
+// @route  POST /api/auth/staff/:staffId/achievements
+exports.addAchievement = async (req, res) => {
+  try {
+    const { staffId } = req.params;
+    const { title, category, year, issuedBy, description } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, message: 'Achievement title is required.' });
+    }
+
+    const staff = await Staff.findOne({ staffId });
+    if (!staff) return res.status(404).json({ success: false, message: 'Staff member not found.' });
+
+    staff.achievements.push({
+      title:       title.trim(),
+      category:    category || 'Award',
+      year:        year || '',
+      issuedBy:    issuedBy ? issuedBy.trim() : '',
+      description: description ? description.trim() : ''
+    });
+
+    await staff.save();
+
+    const added = staff.achievements[staff.achievements.length - 1];
+    res.status(201).json({
+      success: true,
+      message: 'Achievement added successfully.',
+      achievement: added
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc   Delete an achievement from a staff member's profile
+// @route  DELETE /api/auth/staff/:staffId/achievements/:achievementId
+exports.deleteAchievement = async (req, res) => {
+  try {
+    const { staffId, achievementId } = req.params;
+
+    const staff = await Staff.findOne({ staffId });
+    if (!staff) return res.status(404).json({ success: false, message: 'Staff member not found.' });
+
+    const initialLength = staff.achievements.length;
+    staff.achievements = staff.achievements.filter(
+      (a) => a._id.toString() !== achievementId
+    );
+
+    if (staff.achievements.length === initialLength) {
+      return res.status(404).json({ success: false, message: 'Achievement not found.' });
+    }
+
+    await staff.save();
+    res.status(200).json({ success: true, message: 'Achievement deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+

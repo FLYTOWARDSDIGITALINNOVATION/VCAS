@@ -19,6 +19,14 @@ const classSubjectSchema = new mongoose.Schema({
   enrolledStudents: [studentSchema]
 }, { _id: true });
 
+const achievementSchema = new mongoose.Schema({
+  title:       { type: String, required: true, trim: true },
+  category:    { type: String, default: 'Award', enum: ['Award', 'Certification', 'Publication', 'Conference', 'Research', 'Other'] },
+  year:        { type: String, default: '' },
+  issuedBy:    { type: String, default: '', trim: true },
+  description: { type: String, default: '', trim: true }
+}, { _id: true, timestamps: true });
+
 const staffSchema = new mongoose.Schema({
   staffId:            { type: String, required: true, unique: true, trim: true },
   name:               { type: String, required: true, trim: true },
@@ -40,7 +48,8 @@ const staffSchema = new mongoose.Schema({
   avatarText:         { type: String, default: '' },
   classTeacherOf:     { type: String, default: '' },
   isProfileCompleted: { type: Boolean, default: false },
-  classes:            [classSubjectSchema]
+  classes:            [classSubjectSchema],
+  achievements:       [achievementSchema]
 }, {
   timestamps: true,
   collection: 'Staff'

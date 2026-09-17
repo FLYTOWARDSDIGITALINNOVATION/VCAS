@@ -26,86 +26,9 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const INITIAL_USERS = [
-  {
-    id: 1,
-    name: 'Dr. Sunita Rao',
-    email: 'sunita.rao@vcas.edu',
-    empId: 'FAC-CS-001',
-    phone: '+91 98112 23344',
-    role: 'HOD',
-    department: 'Computer Science',
-    status: 'Active',
-    twoFactorEnabled: true,
-    lastLogin: 'Today, 10:45 AM',
-    createdDate: '2022-06-15'
-  },
-  {
-    id: 2,
-    name: 'Prof. Ramesh Kumar',
-    email: 'ramesh.k@vcas.edu',
-    empId: 'FAC-EC-004',
-    phone: '+91 98112 23345',
-    role: 'Faculty',
-    department: 'Electronics & Comm',
-    status: 'Active',
-    twoFactorEnabled: true,
-    lastLogin: 'Today, 09:12 AM',
-    createdDate: '2021-08-10'
-  },
-  {
-    id: 3,
-    name: 'Admin User',
-    email: 'admin@vcas.edu',
-    empId: 'ADM-SYS-001',
-    phone: '+91 98400 11111',
-    role: 'Super Admin',
-    department: 'Administration',
-    status: 'Active',
-    twoFactorEnabled: true,
-    lastLogin: 'Just now',
-    createdDate: '2020-01-01'
-  },
-  {
-    id: 4,
-    name: 'Mr. K. Narayanan',
-    email: 'accounts@vcas.edu',
-    empId: 'STAFF-FIN-002',
-    phone: '+91 98401 55667',
-    role: 'Accountant',
-    department: 'Finance & Accounts',
-    status: 'Active',
-    twoFactorEnabled: false,
-    lastLogin: 'Yesterday, 04:30 PM',
-    createdDate: '2023-01-12'
-  },
-  {
-    id: 5,
-    name: 'Aditya Kapoor',
-    email: 'aditya.k@student.vcas.edu',
-    empId: 'VCAS22CS001',
-    phone: '+91 98402 77889',
-    role: 'Student',
-    department: 'Computer Science',
-    status: 'Active',
-    twoFactorEnabled: true,
-    lastLogin: 'Today, 11:20 AM',
-    createdDate: '2022-09-01'
-  },
-  {
-    id: 6,
-    name: 'Dr. Neeraj Gupta',
-    email: 'neeraj.gupta@vcas.edu',
-    empId: 'FAC-EC-009',
-    phone: '+91 98403 44556',
-    role: 'Faculty',
-    department: 'Electronics & Comm',
-    status: 'Inactive',
-    twoFactorEnabled: false,
-    lastLogin: '5 days ago',
-    createdDate: '2024-02-15'
-  }
-];
+const API_BASE = 'http://localhost:5000/api';
+
+const INITIAL_USERS = [];
 
 const ROLES_LIST = [
   'Super Admin',
@@ -140,6 +63,39 @@ const AUDIT_LOGS = [
 export default function UsersRolesManagement() {
   const [activeTab, setActiveTab] = useState('users'); // 'users', 'roles', 'audit'
   const [users, setUsers] = useState(INITIAL_USERS);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Fetch staff from backend on mount
+  React.useEffect(() => {
+    const fetchUsers = async () => {
+      setLoadingUsers(true);
+      try {
+        const res = await fetch(`${API_BASE}/staff`);
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const mapped = json.data.map(s => ({
+            id: s._id,
+            name: s.name || '',
+            email: s.email || '',
+            empId: s.empId || s.staffId || '',
+            phone: s.phone || s.contact || '',
+            role: s.role || 'Faculty',
+            department: s.department || '',
+            status: s.status || 'Active',
+            twoFactorEnabled: false,
+            lastLogin: '—',
+            createdDate: s.createdAt ? s.createdAt.split('T')[0] : '—'
+          }));
+          setUsers(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not fetch staff from backend:', err);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    fetchUsers();
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');

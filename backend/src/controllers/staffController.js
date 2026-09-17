@@ -76,29 +76,40 @@ exports.createStaff = async (req, res) => {
       classTeacherOf
     } = req.body;
 
-    const finalStaffId = (empId || staffId || '').trim();
+    let finalStaffId = (empId || staffId || '').trim().toUpperCase();
 
-    if (!finalStaffId || !name || !email || !department) {
+    if (!name || !email || !department) {
       return res.status(400).json({
         success: false,
-        message: 'Staff ID / Employee ID, Name, Email, and Department are required.'
+        message: 'Name, Email, and Department are required.'
       });
     }
 
-    // Check duplicate
-    const existing = await Staff.findOne({
-      $or: [
-        { staffId: finalStaffId },
-        { email: email.toLowerCase().trim() }
-      ]
-    });
+    if (!finalStaffId) {
+      let unique = false;
+      while (!unique) {
+        const candidate = `EMP${Math.floor(1000 + Math.random() * 9000)}`;
+        const exists = await Staff.findOne({ staffId: candidate });
+        if (!exists) {
+          finalStaffId = candidate;
+          unique = true;
+        }
+      }
+    } else {
+      const existingId = await Staff.findOne({ staffId: finalStaffId });
+      if (existingId) {
+        return res.status(400).json({
+          success: false,
+          message: `Staff member with ID "${finalStaffId}" already exists.`
+        });
+      }
+    }
 
-    if (existing) {
+    const existingEmail = await Staff.findOne({ email: email.toLowerCase().trim() });
+    if (existingEmail) {
       return res.status(400).json({
         success: false,
-        message: existing.staffId === finalStaffId 
-          ? `Staff member with ID "${finalStaffId}" already exists.`
-          : `Staff member with email "${email}" already exists.`
+        message: `Staff member with email "${email}" already exists.`
       });
     }
 

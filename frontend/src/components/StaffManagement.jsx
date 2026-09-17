@@ -253,7 +253,6 @@ export default function StaffManagement() {
   const validateForm = () => {
     const errors = {};
     if (!formData.name.trim()) errors.name = 'Staff name is required';
-    if (!formData.empId.trim()) errors.empId = 'Employee ID is required';
     if (!formData.email.trim()) {
       errors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
@@ -842,13 +841,13 @@ export default function StaffManagement() {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Employee ID *
+                      Employee ID <span className="text-slate-400 font-normal">(Optional)</span>
                     </label>
                     <input
                       type="text"
                       value={formData.empId}
                       onChange={(e) => setFormData({ ...formData, empId: e.target.value })}
-                      placeholder="e.g. EMP001"
+                      placeholder="e.g. EMP001 (auto-generated if empty)"
                       className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold font-mono text-slate-800 focus:bg-white focus:outline-none transition-all ${formErrors.empId ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
                         }`}
                     />
@@ -1142,12 +1141,13 @@ export default function StaffManagement() {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Employee ID *
+                      Employee ID <span className="text-slate-400 font-normal">(Optional)</span>
                     </label>
                     <input
                       type="text"
                       value={formData.empId}
                       onChange={(e) => setFormData({ ...formData, empId: e.target.value })}
+                      placeholder="e.g. EMP001"
                       className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold font-mono text-slate-800 focus:bg-white focus:outline-none transition-all ${formErrors.empId ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
                         }`}
                     />
