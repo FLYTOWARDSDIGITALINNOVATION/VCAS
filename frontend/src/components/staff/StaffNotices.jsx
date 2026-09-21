@@ -228,7 +228,7 @@ export default function StaffNotices({ staffUser = {} }) {
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-100 p-12 flex flex-col items-center justify-center text-slate-400 gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-            <p className="text-xs font-medium">Loading notices from database...</p>
+            <p className="text-xs font-medium">Loading notices...</p>
           </div>
         ) : notices.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center text-slate-400">

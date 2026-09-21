@@ -238,7 +238,7 @@ export default function StaffAttendance({ staffUser }) {
       {activeTab === 'mark' ? (
         loadingClasses ? (
           <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
-            <p className="text-xs text-slate-400 font-bold">Loading your classes from database...</p>
+            <p className="text-xs text-slate-400 font-bold">Loading your classes...</p>
           </div>
         ) : classes.length === 0 ? (
           /* Empty classes banner */
@@ -464,13 +464,13 @@ export default function StaffAttendance({ staffUser }) {
 
           {loadingHistory ? (
             <div className="p-10 text-center">
-              <p className="text-xs text-slate-400 font-bold">Loading history from database...</p>
+              <p className="text-xs text-slate-400 font-bold">Loading attendance history...</p>
             </div>
           ) : historyList.length === 0 ? (
             <div className="p-12 text-center space-y-2">
               <p className="text-xs font-bold text-slate-700">No attendance sessions recorded yet</p>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Once you mark and submit attendance for a class, your logs will appear here directly from MongoDB Atlas.
+                Once you mark and submit attendance for a class, your logs will appear here directly.
               </p>
             </div>
           ) : (

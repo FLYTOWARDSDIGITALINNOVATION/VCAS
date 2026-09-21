@@ -22,8 +22,24 @@ import {
   ChevronRight,
   TrendingUp,
   FileText,
-  Star
+  Star,
+  Trophy,
+  ShieldCheck,
+  Mic,
+  FlaskConical,
+  Sparkles,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
+
+const CATEGORY_CONFIG = {
+  Award:         { label: 'Award',         color: 'bg-amber-50 text-amber-700 border-amber-200',     badge: 'bg-amber-100 text-amber-800',  icon: Trophy },
+  Certification: { label: 'Certification', color: 'bg-blue-50 text-blue-700 border-blue-200',        badge: 'bg-blue-100 text-blue-800',    icon: ShieldCheck },
+  Publication:   { label: 'Publication',   color: 'bg-violet-50 text-violet-700 border-violet-200',  badge: 'bg-violet-100 text-violet-800',icon: FileText },
+  Conference:    { label: 'Conference',    color: 'bg-teal-50 text-teal-700 border-teal-200',        badge: 'bg-teal-100 text-teal-800',    icon: Mic },
+  Research:      { label: 'Research',      color: 'bg-rose-50 text-rose-700 border-rose-200',        badge: 'bg-rose-100 text-rose-800',    icon: FlaskConical },
+  Other:         { label: 'Other',         color: 'bg-slate-50 text-slate-600 border-slate-200',     badge: 'bg-slate-100 text-slate-700',  icon: Sparkles },
+};
 
 export default function StaffDetailView({ staff, onBack, onEdit }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'classes', 'timetable', 'leaves'
@@ -89,10 +105,35 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
       .catch(() => {});
   };
 
+  const [achievements, setAchievements] = useState(staff.achievements || []);
+  const [loadingAchievements, setLoadingAchievements] = useState(false);
+  const [achievementFilter, setAchievementFilter] = useState('All');
+
+  const fetchStaffAchievements = () => {
+    if (!staffId) return;
+    setLoadingAchievements(true);
+    fetch(`http://localhost:5000/api/staff/${staffId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data && Array.isArray(d.data.achievements)) {
+          setAchievements(d.data.achievements);
+        } else if (staff.achievements && Array.isArray(staff.achievements)) {
+          setAchievements(staff.achievements);
+        }
+      })
+      .catch(() => {
+        if (staff.achievements && Array.isArray(staff.achievements)) {
+          setAchievements(staff.achievements);
+        }
+      })
+      .finally(() => setLoadingAchievements(false));
+  };
+
   useEffect(() => {
     fetchStaffLeaves();
     fetchStaffClasses();
     fetchStaffAssignments();
+    fetchStaffAchievements();
     if (staffId) {
       setLoadingSchedule(true);
       fetch(`http://localhost:5000/api/timetable/staff/${staffId}`)
@@ -180,7 +221,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
     { id: 'classes', label: 'Courses & Classes', icon: BookOpen, badge: `${courses.length}` },
     { id: 'timetable', label: 'Weekly Timetable', icon: Clock },
     { id: 'assignments', label: 'Assignments Set', icon: FileText, badge: `${staffAssignments.length}` },
-    { id: 'performance', label: 'Achievements & Ratings', icon: Award }
+    { id: 'performance', label: 'Achievements', icon: Award, badge: `${achievements.length}` }
   ];
 
   return (
@@ -211,14 +252,6 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
           >
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>{markedToday ? 'Attendance Marked (Present)' : 'Mark Present Today'}</span>
-          </button>
-
-          <button
-            onClick={() => onEdit && onEdit(staff)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs shadow-blue-500/20 transition-all"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            <span>Edit Profile</span>
           </button>
         </div>
       </div>
@@ -439,6 +472,42 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
               </div>
             </div>
 
+            {/* Achievements Quick Preview */}
+            {achievements.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                    <Trophy className="w-4 h-4 text-amber-500" /> Recent Achievements
+                  </h3>
+                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                    {achievements.length} Total
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {achievements.slice(0, 3).map((ach) => {
+                    const cfg = CATEGORY_CONFIG[ach.category] || CATEGORY_CONFIG.Other;
+                    return (
+                      <div key={ach._id || ach.title} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className="font-bold text-slate-900 truncate">{ach.title}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${cfg.color}`}>
+                            {ach.category}
+                          </span>
+                        </div>
+                        {ach.issuedBy && <p className="text-[11px] text-slate-500 truncate">{ach.issuedBy} {ach.year ? `• ${ach.year}` : ''}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setActiveTab('performance')}
+                  className="w-full py-1.5 text-center text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/60 hover:bg-blue-100/60 rounded-xl transition-all"
+                >
+                  View All Achievements ({achievements.length}) →
+                </button>
+              </div>
+            )}
+
           </div>
 
         </div>
@@ -470,7 +539,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Leave Balance</span>
               <p className="text-2xl font-black text-blue-600">{staffLeaveSummary.remainingDays} Days</p>
-              <p className="text-xs text-slate-500 font-medium mt-1">Remaining out of 15</p>
+              <p className="text-xs text-slate-500 font-medium mt-1">Remaining out of {staffLeaveSummary.totalQuota || 15}</p>
             </div>
           </div>
 
@@ -757,82 +826,225 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 5: ACHIEVEMENTS & RATINGS */}
+      {/* TAB 5: ACHIEVEMENTS (REAL STAFF DATA)                                     */}
       {/* ========================================================================= */}
-      {activeTab === 'performance' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          <div className="lg:col-span-2 space-y-6">
+      {activeTab === 'performance' && (() => {
+        const filteredAchievements = achievementFilter === 'All'
+          ? achievements
+          : achievements.filter(a => a.category === achievementFilter);
+
+        const categoryCounts = achievements.reduce((acc, a) => {
+          const cat = a.category || 'Other';
+          acc[cat] = (acc[cat] || 0) + 1;
+          return acc;
+        }, {});
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* Student Feedback Card */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> Student Evaluation & Feedback
-              </h3>
+            {/* Left 2 Columns: Real Staff Achievements List */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
+                
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                      <Award className="w-5 h-5 text-amber-500" />
+                      <span>Faculty Achievements & Recognitions</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Official profile records submitted by {staff.name} • {achievements.length} verified {achievements.length === 1 ? 'entry' : 'entries'}
+                    </p>
+                  </div>
 
-              <div className="flex items-center gap-6 p-4 bg-amber-50/60 rounded-2xl border border-amber-100">
-                <div className="text-center">
-                  <span className="text-3xl font-black text-amber-600">4.8</span>
-                  <span className="text-xs font-bold text-slate-500 block">/ 5.0 Rating</span>
+                  <button
+                    onClick={fetchStaffAchievements}
+                    title="Refresh achievements"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-xl transition-all self-start sm:self-auto shadow-2xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingAchievements ? 'animate-spin text-blue-600' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
                 </div>
-                <div className="text-xs text-slate-600 space-y-1">
-                  <p className="font-bold text-slate-900">Excellent Teaching & Clarity</p>
-                  <p>Based on feedback submitted by 142 students across all batches.</p>
+
+                {/* Category Filter Chips */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                  {['All', 'Award', 'Certification', 'Publication', 'Conference', 'Research', 'Other'].map(cat => {
+                    const count = cat === 'All' ? achievements.length : (categoryCounts[cat] || 0);
+                    const isSelected = achievementFilter === cat;
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setAchievementFilter(cat)}
+                        className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/20'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>{cat === 'All' ? 'All Categories' : cat}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {/* Achievements List */}
+                <div className="space-y-3 pt-1">
+                  {loadingAchievements && achievements.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400">
+                      <div className="w-8 h-8 border-3 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-xs font-semibold">Loading verified achievements...</p>
+                    </div>
+                  ) : filteredAchievements.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                        <Trophy className="w-6 h-6 text-slate-300" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-600">
+                        {achievementFilter === 'All' ? 'No achievements added yet' : `No ${achievementFilter} achievements found`}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                        {achievementFilter === 'All'
+                          ? `${staff.name} has not submitted any awards, certifications, or research publications to their profile yet.`
+                          : `There are currently no entries under the "${achievementFilter}" category for this staff member.`
+                        }
+                      </p>
+                    </div>
+                  ) : (
+                    filteredAchievements.map((ach) => {
+                      const cfg = CATEGORY_CONFIG[ach.category] || CATEGORY_CONFIG.Other;
+                      const Icon = cfg.icon;
+                      return (
+                        <div
+                          key={ach._id || ach.title}
+                          className="flex items-start gap-4 p-4.5 rounded-2xl border border-slate-200 bg-white hover:border-blue-200 hover:shadow-xs transition-all"
+                        >
+                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border ${cfg.color}`}>
+                            <Icon className="w-5 h-5" />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <h4 className="text-sm font-extrabold text-slate-900 leading-tight">{ach.title}</h4>
+                              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border ${cfg.color}`}>
+                                {ach.category}
+                              </span>
+                              {ach.year && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">
+                                  {ach.year}
+                                </span>
+                              )}
+                            </div>
+
+                            {ach.issuedBy && (
+                              <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5 mt-1">
+                                <span className="text-slate-400 font-normal">Issued by / Organization:</span>
+                                <span className="text-slate-800 font-bold">{ach.issuedBy}</span>
+                              </p>
+                            )}
+
+                            {ach.description && (
+                              <p className="text-xs text-slate-600 mt-2 leading-relaxed bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+                                {ach.description}
+                              </p>
+                            )}
+
+                            {ach.createdAt && (
+                              <p className="text-[10px] text-slate-400 mt-2">
+                                Submitted on {new Date(ach.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
               </div>
+
             </div>
 
-            {/* Research & Publications */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-indigo-600" /> Research Papers & Publications
-              </h3>
-
-              <div className="space-y-3 text-xs">
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
-                  <span className="text-[10px] font-bold text-blue-600 uppercase">IEEE Journal (2025)</span>
-                  <p className="font-bold text-slate-900">"Scalable Architectures for Distributed Machine Learning Systems"</p>
-                  <p className="text-slate-500">Co-authored with IIT Research Labs</p>
+            {/* Right Column: Achievements Portfolio Breakdown & Faculty Quick Info */}
+            <div className="space-y-6">
+              
+              {/* Category Breakdown Card */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-extrabold text-slate-900">Portfolio Breakdown</h3>
+                  <span className="text-xs font-black px-2.5 py-1 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+                    {achievements.length} Verified
+                  </span>
                 </div>
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
-                  <span className="text-[10px] font-bold text-blue-600 uppercase">ACM Conference (2024)</span>
-                  <p className="font-bold text-slate-900">"Optimizing Edge Inference for Low-Power Microcontrollers"</p>
-                  <p className="text-slate-500">Presented at ACM SIGBED, Bengaluru</p>
+
+                <div className="grid grid-cols-2 gap-2.5 text-xs">
+                  {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => {
+                    const count = categoryCounts[key] || 0;
+                    const Icon = cfg.icon;
+                    const isFiltered = achievementFilter === key;
+                    return (
+                      <div
+                        key={key}
+                        onClick={() => setAchievementFilter(achievementFilter === key ? 'All' : key)}
+                        className={`p-3 rounded-2xl border cursor-pointer transition-all ${
+                          isFiltered
+                            ? 'border-blue-500 bg-blue-50/60 shadow-xs'
+                            : 'border-slate-100 bg-slate-50 hover:bg-slate-100'
+                        }`}
+                        title={`Filter by ${cfg.label}`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <Icon className="w-4 h-4 text-slate-500" />
+                          <span className="text-base font-extrabold text-slate-900">{count}</span>
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-600 block truncate">{cfg.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {achievementFilter !== 'All' && (
+                  <button
+                    onClick={() => setAchievementFilter('All')}
+                    className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+                  >
+                    Clear Filter (Show All)
+                  </button>
+                )}
+              </div>
+
+              {/* Faculty Profile Summary */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-3">
+                <h3 className="text-sm font-extrabold text-slate-900">Faculty Credentials</h3>
+                <div className="space-y-2 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block mb-0.5">Department & Role</span>
+                    <p className="font-bold text-slate-800">{staff.designation}</p>
+                    <p className="text-slate-500">{staff.department}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block mb-0.5">Highest Qualification</span>
+                    <p className="font-bold text-slate-800">{staff.qualification || 'Not provided'}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block mb-0.5">Teaching Experience</span>
+                    <p className="font-bold text-slate-800">{staff.experience ? `${staff.experience} Years` : 'Not specified'}</p>
+                  </div>
                 </div>
               </div>
+
             </div>
 
           </div>
-
-          {/* Badges / Department Awards */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
-              <h3 className="text-sm font-extrabold text-slate-900">Faculty Honors</h3>
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center font-bold shrink-0">
-                    🏆
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900">Best Faculty Award 2024</p>
-                    <p className="text-slate-500">For Academic Excellence</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0">
-                    📜
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900">NPTEL Elite Gold Certified</p>
-                    <p className="text-slate-500">Advanced Algorithms Course</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      )}
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* TAB 6: ASSIGNMENTS SET BY THIS STAFF MEMBER                               */}

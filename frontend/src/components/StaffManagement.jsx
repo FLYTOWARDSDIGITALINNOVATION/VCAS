@@ -447,14 +447,6 @@ export default function StaffManagement() {
                 </h1>
               </div>
             </div>
-
-            <button
-              onClick={handleOpenAddModal}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs shadow-blue-500/20 transition-all self-start sm:self-auto shrink-0"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Add Staff Member</span>
-            </button>
           </div>
 
           {/* 2. SEARCH & FILTER BAR */}
@@ -680,16 +672,8 @@ export default function StaffManagement() {
                           </div>
                           <p className="text-base font-bold text-slate-800">No Staff Members Found</p>
                           <p className="text-xs text-slate-500 leading-relaxed">
-                            No staff records found. Click below to add your first staff member.
+                            No staff records currently found in the system directory.
                           </p>
-                          <button
-                            type="button"
-                            onClick={handleOpenAddModal}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
-                          >
-                            <Plus className="w-4 h-4 stroke-[2.5]" />
-                            <span>Add Staff Member</span>
-                          </button>
                         </div>
                       </td>
                     </tr>

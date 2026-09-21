@@ -1,4 +1,48 @@
 const Assignment = require("../models/Assignment");
+const Class = require("../models/Class");
+
+// Helper to ensure an assignment has student submissions initialized from its class
+const ensureSubmissionsForAssignment = async (assignment) => {
+  try {
+    if (assignment.studentSubmissions && assignment.studentSubmissions.length > 0) {
+      // Update overdue status for pending students if due date has passed
+      const isPastDue = assignment.dueDate ? new Date(assignment.dueDate + 'T23:59:59') < new Date() : false;
+      let modified = false;
+      if (isPastDue) {
+        assignment.studentSubmissions.forEach(sub => {
+          if (sub.status === 'Pending Submission' || sub.status === 'Not Submitted' || sub.status === 'Pending') {
+            sub.status = 'Not Submitted (Overdue)';
+            modified = true;
+          }
+        });
+        if (modified) await assignment.save();
+      }
+      return assignment;
+    }
+
+    // Lookup matching class by code
+    const classDoc = await Class.findOne({ code: new RegExp('^' + assignment.subjectCode + '$', 'i') });
+    if (classDoc && Array.isArray(classDoc.students) && classDoc.students.length > 0) {
+      const isPastDue = assignment.dueDate ? new Date(assignment.dueDate + 'T23:59:59') < new Date() : false;
+      assignment.studentSubmissions = classDoc.students.map(std => ({
+        rollNo: std.rollNo,
+        studentName: std.name,
+        regNo: std.rollNo,
+        department: assignment.department || classDoc.dept || '',
+        submittedAt: '--',
+        fileName: '--',
+        fileSize: '--',
+        status: isPastDue ? 'Not Submitted (Overdue)' : 'Pending Submission',
+        marksAwarded: null,
+        feedback: ''
+      }));
+      await assignment.save();
+    }
+  } catch (err) {
+    console.warn("Could not ensure submissions for assignment:", err.message);
+  }
+  return assignment;
+};
 
 // GET /api/assignments - list all assignments across all staff (for admin)
 const getAllAssignments = async (req, res) => {
@@ -25,6 +69,7 @@ const getAllAssignments = async (req, res) => {
       ];
     }
     const records = await Assignment.find(query).sort({ createdAt: -1 });
+    await Promise.all(records.map(r => ensureSubmissionsForAssignment(r)));
     res.json({ success: true, data: records });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -36,6 +81,7 @@ const listAssignments = async (req, res) => {
   try {
     const { staffId } = req.params;
     const records = await Assignment.find({ staffId }).sort({ createdAt: -1 });
+    await Promise.all(records.map(r => ensureSubmissionsForAssignment(r)));
     res.json({ success: true, data: records });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -47,7 +93,8 @@ const createAssignment = async (req, res) => {
   try {
     const staffId = req.params.staffId || req.body.staffId || "ADMIN";
     const { staffName, subjectCode, subjectName, department, semester, academicYear,
-            title, description, dueDate, totalMarks, dueTime, weightage, type } = req.body;
+            title, description, dueDate, totalMarks, dueTime, weightage, type,
+            attachmentName, attachmentData, attachmentSize, attachmentType } = req.body;
 
     if (!title || !dueDate || !subjectCode) {
       return res.status(400).json({ success: false, message: "title, dueDate and subjectCode are required." });
@@ -67,6 +114,10 @@ const createAssignment = async (req, res) => {
       totalMarks: Number(totalMarks) || 20,
       status: "Active",
       submissions: 0,
+      attachmentName: attachmentName || "",
+      attachmentData: attachmentData || "",
+      attachmentSize: attachmentSize || "",
+      attachmentType: attachmentType || "",
     });
     res.status(201).json({ success: true, data: assignment, message: "Assignment created." });
   } catch (err) {
@@ -101,7 +152,8 @@ const updateAssignment = async (req, res) => {
     const query = { _id: targetId };
     if (staffId && id) query.staffId = staffId;
 
-    const { subjectCode, subjectName, title, description, dueDate, totalMarks, status, department, semester, academicYear, staffName } = req.body;
+    const { subjectCode, subjectName, title, description, dueDate, totalMarks, status, department, semester, academicYear, staffName,
+            attachmentName, attachmentData, attachmentSize, attachmentType } = req.body;
     const assignment = await Assignment.findOne(query);
     if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
 
@@ -116,6 +168,11 @@ const updateAssignment = async (req, res) => {
     if (semester)                  assignment.semester     = Number(semester);
     if (academicYear)              assignment.academicYear = academicYear;
     if (staffName)                 assignment.staffName    = staffName;
+
+    if (attachmentName !== undefined) assignment.attachmentName = attachmentName;
+    if (attachmentData !== undefined) assignment.attachmentData = attachmentData;
+    if (attachmentSize !== undefined) assignment.attachmentSize = attachmentSize;
+    if (attachmentType !== undefined) assignment.attachmentType = attachmentType;
 
     await assignment.save();
     res.json({ success: true, data: assignment, message: "Assignment updated." });
@@ -140,5 +197,313 @@ const deleteAssignment = async (req, res) => {
   }
 };
 
-module.exports = { getAllAssignments, listAssignments, createAssignment, toggleStatus, updateAssignment, deleteAssignment };
+// PUT /api/assignments/:id/grade - grade a student submission
+const gradeSubmission = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { submissionId, rollNo, marksAwarded, feedback, studentName, regNo } = req.body;
+
+    const assignment = await Assignment.findById(id);
+    if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
+
+    if (!assignment.studentSubmissions) {
+      assignment.studentSubmissions = [];
+    }
+
+    let sub = null;
+    if (submissionId) {
+      sub = assignment.studentSubmissions.id(submissionId);
+    }
+    if (!sub && rollNo) {
+      sub = assignment.studentSubmissions.find(s => s.rollNo === rollNo);
+    }
+
+    if (!sub && rollNo) {
+      assignment.studentSubmissions.push({
+        rollNo,
+        studentName: studentName || rollNo,
+        regNo: regNo || rollNo,
+        department: assignment.department || "",
+        submittedAt: new Date().toLocaleString(),
+        fileName: `${assignment.subjectCode}_${rollNo}_Submission.pdf`,
+        fileSize: "1.2 MB",
+        status: "Graded",
+        marksAwarded: Number(marksAwarded),
+        feedback: feedback || ""
+      });
+    } else if (sub) {
+      sub.marksAwarded = Number(marksAwarded);
+      sub.feedback = feedback || "";
+      sub.status = "Graded";
+      if (!sub.submittedAt || sub.submittedAt === "--") {
+        sub.submittedAt = new Date().toLocaleString();
+      }
+      if (!sub.fileName || sub.fileName === "--") {
+        sub.fileName = `${assignment.subjectCode}_${sub.rollNo}_Submission.pdf`;
+        sub.fileSize = "1.2 MB";
+      }
+    }
+
+    assignment.submissions = assignment.studentSubmissions.filter(s => s.status === "Graded" || s.status === "Submitted").length;
+    await assignment.save();
+
+    res.json({ success: true, data: assignment, message: "Grade saved successfully." });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/assignments/:id/students - add a new student to assignment roster
+const addStudentToAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rollNo, studentName, regNo, department, status } = req.body;
+    if (!rollNo || !studentName) {
+      return res.status(400).json({ success: false, message: "Roll No and Student Name are required." });
+    }
+
+    const assignment = await Assignment.findById(id);
+    if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
+
+    if (!Array.isArray(assignment.studentSubmissions)) assignment.studentSubmissions = [];
+
+    const existing = assignment.studentSubmissions.find(
+      s => s.rollNo.toUpperCase() === rollNo.trim().toUpperCase()
+    );
+    if (existing) {
+      return res.status(400).json({ success: false, message: `Student ${rollNo} is already in this assignment.` });
+    }
+
+    const isSubmitted = status === "Submitted";
+    assignment.studentSubmissions.push({
+      rollNo: rollNo.trim().toUpperCase(),
+      studentName: studentName.trim(),
+      regNo: regNo ? regNo.trim() : rollNo.trim().toUpperCase(),
+      department: department || assignment.department || "",
+      submittedAt: isSubmitted ? new Date().toLocaleDateString() : "--",
+      fileName: isSubmitted ? `${assignment.subjectCode}_${rollNo.trim().toUpperCase()}_Submission.pdf` : "--",
+      fileSize: isSubmitted ? "1.2 MB" : "--",
+      status: isSubmitted ? "Submitted" : "Not Submitted",
+      marksAwarded: null,
+      feedback: ""
+    });
+
+    assignment.submissions = assignment.studentSubmissions.filter(
+      s => s.status === "Submitted" || s.status === "Graded"
+    ).length;
+    await assignment.save();
+
+    res.status(201).json({ 
+      success: true, 
+      data: assignment, 
+      message: `Student ${studentName} (${rollNo}) added to assignment.` 
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// PUT /api/assignments/:id/students/:studentId/status - toggle or set submission status for student
+const updateStudentSubmissionStatus = async (req, res) => {
+  try {
+    const { id, studentId } = req.params;
+    const { status, marksAwarded, feedback } = req.body;
+
+    const assignment = await Assignment.findById(id);
+    if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
+
+    if (!Array.isArray(assignment.studentSubmissions)) assignment.studentSubmissions = [];
+
+    let sub = assignment.studentSubmissions.id(studentId);
+    if (!sub) {
+      sub = assignment.studentSubmissions.find(s => s.rollNo === studentId || String(s._id) === studentId);
+    }
+    if (!sub) return res.status(404).json({ success: false, message: "Student record not found in assignment." });
+
+    if (status) {
+      sub.status = status;
+      if (status === "Submitted" || status === "Graded") {
+        if (!sub.submittedAt || sub.submittedAt === "--") {
+          sub.submittedAt = new Date().toLocaleDateString();
+        }
+        if (!sub.fileName || sub.fileName === "--") {
+          sub.fileName = `${assignment.subjectCode}_${sub.rollNo}_Submission.pdf`;
+          sub.fileSize = "1.2 MB";
+        }
+      } else if (status === "Not Submitted") {
+        sub.submittedAt = "--";
+        sub.fileName = "--";
+        sub.fileSize = "--";
+        sub.marksAwarded = null;
+      }
+    }
+
+    if (marksAwarded !== undefined) {
+      sub.marksAwarded = marksAwarded === null || marksAwarded === "" ? null : Number(marksAwarded);
+      if (sub.marksAwarded !== null) sub.status = "Graded";
+    }
+    if (feedback !== undefined) sub.feedback = feedback;
+
+    assignment.submissions = assignment.studentSubmissions.filter(
+      s => s.status === "Submitted" || s.status === "Graded"
+    ).length;
+    await assignment.save();
+
+    res.json({ 
+      success: true, 
+      data: assignment, 
+      message: `Submission status for ${sub.studentName} updated to "${sub.status}".` 
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/assignments/:id/submissions/quick-set - set how many students submitted or mark all
+const quickSetSubmissionsCount = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { count, allSubmitted } = req.body;
+
+    const assignment = await Assignment.findById(id);
+    if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
+
+    if (!Array.isArray(assignment.studentSubmissions)) assignment.studentSubmissions = [];
+
+    const total = assignment.studentSubmissions.length;
+    if (total === 0) {
+      return res.status(400).json({ success: false, message: "No students enrolled in this assignment yet. Add students first." });
+    }
+
+    let targetCount = Number(count);
+    if (allSubmitted === true) targetCount = total;
+    if (allSubmitted === false) targetCount = 0;
+    targetCount = Math.max(0, Math.min(targetCount, total));
+
+    assignment.studentSubmissions.forEach((sub, idx) => {
+      if (idx < targetCount) {
+        if (sub.status !== "Graded") {
+          sub.status = "Submitted";
+          if (!sub.submittedAt || sub.submittedAt === "--") sub.submittedAt = new Date().toLocaleDateString();
+          if (!sub.fileName || sub.fileName === "--") {
+            sub.fileName = `${assignment.subjectCode}_${sub.rollNo}_Submission.pdf`;
+            sub.fileSize = "1.2 MB";
+          }
+        }
+      } else {
+        if (sub.status !== "Graded") {
+          sub.status = "Not Submitted";
+          sub.submittedAt = "--";
+          sub.fileName = "--";
+          sub.fileSize = "--";
+          sub.marksAwarded = null;
+        }
+      }
+    });
+
+    assignment.submissions = assignment.studentSubmissions.filter(
+      s => s.status === "Submitted" || s.status === "Graded"
+    ).length;
+    await assignment.save();
+
+    res.json({ 
+      success: true, 
+      data: assignment, 
+      message: `Submissions set: ${assignment.submissions} of ${total} students marked as submitted.` 
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// DELETE /api/assignments/:id/students/:studentId - remove a student from assignment roster
+const removeStudentFromAssignment = async (req, res) => {
+  try {
+    const { id, studentId } = req.params;
+    const assignment = await Assignment.findById(id);
+    if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
+
+    assignment.studentSubmissions = (assignment.studentSubmissions || []).filter(
+      s => String(s._id) !== studentId && s.rollNo !== studentId
+    );
+    assignment.submissions = assignment.studentSubmissions.filter(
+      s => s.status === "Submitted" || s.status === "Graded"
+    ).length;
+    await assignment.save();
+
+    res.json({ success: true, data: assignment, message: "Student removed from assignment." });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/assignments/:id/students/import-class - import registered class students into assignment
+const importStudentsFromClass = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const assignment = await Assignment.findById(id);
+    if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
+
+    const classDoc = await Class.findOne({ code: new RegExp('^' + assignment.subjectCode + '$', 'i') });
+    if (!classDoc || !Array.isArray(classDoc.students) || classDoc.students.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: `No class roster found matching subject code "${assignment.subjectCode}". You can add students manually.` 
+      });
+    }
+
+    if (!Array.isArray(assignment.studentSubmissions)) assignment.studentSubmissions = [];
+    const existingRolls = new Set(assignment.studentSubmissions.map(s => s.rollNo.toUpperCase()));
+
+    let addedCount = 0;
+    classDoc.students.forEach(std => {
+      if (!existingRolls.has(std.rollNo.toUpperCase())) {
+        assignment.studentSubmissions.push({
+          rollNo: std.rollNo.toUpperCase(),
+          studentName: std.name,
+          regNo: std.rollNo.toUpperCase(),
+          department: assignment.department || classDoc.dept || "",
+          submittedAt: "--",
+          fileName: "--",
+          fileSize: "--",
+          status: "Not Submitted",
+          marksAwarded: null,
+          feedback: ""
+        });
+        addedCount++;
+      }
+    });
+
+    assignment.submissions = assignment.studentSubmissions.filter(
+      s => s.status === "Submitted" || s.status === "Graded"
+    ).length;
+    await assignment.save();
+
+    res.json({ 
+      success: true, 
+      data: assignment, 
+      message: addedCount > 0 
+        ? `Imported ${addedCount} student(s) from class "${classDoc.name}". Total: ${assignment.studentSubmissions.length}.` 
+        : `All ${classDoc.students.length} students from class roster are already in this assignment.`
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { 
+  getAllAssignments, 
+  listAssignments, 
+  createAssignment, 
+  toggleStatus, 
+  updateAssignment, 
+  deleteAssignment, 
+  gradeSubmission,
+  addStudentToAssignment,
+  updateStudentSubmissionStatus,
+  quickSetSubmissionsCount,
+  removeStudentFromAssignment,
+  importStudentsFromClass
+};
+
 

@@ -11,16 +11,27 @@ import {
   ShieldCheck,
   AlertCircle,
   Trash2,
-  Loader2
+  Loader2,
+  Info,
+  CalendarCheck,
+  Sparkles
 } from 'lucide-react';
 
 export default function StaffLeave({ staffUser = {} }) {
   const [leaves, setLeaves] = useState([]);
   const [summary, setSummary] = useState({
     totalQuota: 15,
+    casualLeaves: 12,
+    specialCasualLeaves: 3,
+    medicalLeaves: 5,
+    quotaBreakdown: '12 Casual + 3 Special',
     approvedDays: 0,
     pendingCount: 0,
-    remainingDays: 15
+    remainingDays: 15,
+    remainingCasual: 12,
+    remainingSpecial: 3,
+    academicYear: '2025-2026',
+    isCustomQuota: false
   });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -57,6 +68,15 @@ export default function StaffLeave({ staffUser = {} }) {
   useEffect(() => {
     fetchLeaves();
   }, [staffId]);
+
+  const calculateDays = () => {
+    if (!fromDate || !toDate) return 1;
+    const d1 = new Date(fromDate);
+    const d2 = new Date(toDate);
+    if (d2 < d1) return 1;
+    const diff = Math.abs(d2 - d1);
+    return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1);
+  };
 
   const handleApplyLeave = async (e) => {
     e.preventDefault();
@@ -129,7 +149,7 @@ export default function StaffLeave({ staffUser = {} }) {
     }
     if (status === 'Pending') {
       return (
-        <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200/60">
+        <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200/60 animate-pulse">
           <Clock3 className="w-3.5 h-3.5 text-amber-600" />
           Pending
         </span>
@@ -142,6 +162,9 @@ export default function StaffLeave({ staffUser = {} }) {
       </span>
     );
   };
+
+  const selectedDays = calculateDays();
+  const isOverQuota = selectedDays > (summary.remainingDays || 0);
 
   return (
     <div className="p-5 sm:p-7 space-y-6 max-w-5xl mx-auto">
@@ -169,41 +192,84 @@ export default function StaffLeave({ staffUser = {} }) {
         </div>
       )}
 
-      {/* Quota Cards */}
+      {/* Quota Cards (Dynamic Admin-Configured Quota) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Annual Leave Quota</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-extrabold text-slate-900">{summary.totalQuota}</span>
-            <span className="text-xs text-slate-400">days / year</span>
+        {/* Card 1: Annual Leave Quota */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow p-5 relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Annual Leave Quota</p>
+            {summary.academicYear && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                AY {summary.academicYear}
+              </span>
+            )}
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">12 Casual + 3 Special</p>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-3xl font-black text-slate-900">{summary.totalQuota ?? 15}</span>
+            <span className="text-xs text-slate-400 font-medium">days / year</span>
+            {summary.isCustomQuota && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 ml-auto">
+                Custom Quota
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-600 mt-2.5 font-medium flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+            {summary.quotaBreakdown || `${summary.casualLeaves || 12} Casual + ${summary.specialCasualLeaves || 3} Special`}
+          </p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Leaves Availed</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-extrabold text-blue-600">{summary.approvedDays}</span>
-            <span className="text-xs text-slate-400">days approved</span>
+        {/* Card 2: Leaves Availed */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow p-5 relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Leaves Availed</p>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+              Live Approved
+            </span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">{summary.remainingDays} days remaining</p>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-3xl font-black text-blue-600">{summary.approvedDays ?? 0}</span>
+            <span className="text-xs text-slate-400 font-medium">days approved</span>
+          </div>
+          <p className="text-[11px] text-slate-600 mt-2.5 font-medium flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span className="font-bold text-slate-800">{summary.remainingDays ?? 0} days</span> remaining
+          </p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Approvals</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-extrabold text-amber-600">{summary.pendingCount}</span>
-            <span className="text-xs text-slate-400">requests</span>
+        {/* Card 3: Pending Approvals */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow p-5 relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Approvals</p>
+            {summary.pendingCount > 0 ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                In Review
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                All Cleared
+              </span>
+            )}
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">Under review by HoD / Principal</p>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-3xl font-black text-amber-600">{summary.pendingCount ?? 0}</span>
+            <span className="text-xs text-slate-400 font-medium">requests</span>
+          </div>
+          <p className="text-[11px] text-slate-600 mt-2.5 font-medium flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            Under review by HoD / Principal
+          </p>
         </div>
       </div>
 
       {/* Leave Application Records */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-extrabold text-slate-900 text-sm">Leave History & Applications</h3>
-          <span className="text-xs text-slate-400 font-medium">{leaves.length} records in MongoDB</span>
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 sm:px-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CalendarCheck className="w-4 h-4 text-blue-600" />
+            <h3 className="font-extrabold text-slate-900 text-sm">Leave History & Applications</h3>
+          </div>
+          <span className="text-xs text-slate-400 font-medium">{leaves.length} total records</span>
         </div>
 
         {loading ? (
@@ -221,34 +287,39 @@ export default function StaffLeave({ staffUser = {} }) {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Leave Type</th>
-                  <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Duration</th>
-                  <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Days</th>
-                  <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Reason</th>
-                  <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Approver</th>
-                  <th className="text-center px-4 py-3 font-bold text-slate-500 uppercase tracking-wider">Action</th>
+                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                  <th className="text-left px-5 py-3">Leave Type</th>
+                  <th className="text-left px-5 py-3">Duration</th>
+                  <th className="text-center px-5 py-3">Days</th>
+                  <th className="text-left px-5 py-3">Reason</th>
+                  <th className="text-center px-5 py-3">Status</th>
+                  <th className="text-left px-5 py-3">Approver</th>
+                  <th className="text-center px-4 py-3">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {leaves.map((item) => (
-                  <tr key={item._id || item.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={item._id || item.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-5 py-3.5 font-bold text-slate-800">{item.leaveType || item.type}</td>
-                    <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
-                      {item.fromDate || item.from} {item.toDate && item.toDate !== item.fromDate ? `to ${item.toDate}` : ''}
+                    <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap font-medium">
+                      {item.fromDate || item.from} {item.toDate && item.toDate !== item.fromDate ? `→ ${item.toDate}` : ''}
                     </td>
                     <td className="px-5 py-3.5 text-center font-extrabold text-slate-700">
-                      {item.days}
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                        {item.days}
+                      </span>
                     </td>
-                    <td className="px-5 py-3.5 text-slate-600 max-w-xs truncate" title={item.reason}>
+                    <td className="px-5 py-3.5 text-slate-600 max-w-xs truncate font-medium" title={item.reason}>
                       {item.reason}
                     </td>
                     <td className="px-5 py-3.5 text-center">
                       {statusBadge(item.status)}
                     </td>
                     <td className="px-5 py-3.5 text-slate-500 font-medium">
-                      {item.approvedBy || '-'}
+                      <div>{item.approvedBy || '—'}</div>
+                      {item.remarks && (
+                        <p className="text-[10px] text-slate-400 italic mt-0.5">"{item.remarks}"</p>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       {item.status === 'Pending' ? (
@@ -277,7 +348,12 @@ export default function StaffLeave({ staffUser = {} }) {
           <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => !submitting && setShowModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md z-10 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="font-extrabold text-slate-900 text-base">Apply for Leave (HoD Approval)</h3>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">Apply for Leave (HoD Approval)</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Quota remaining: <strong className="text-slate-700">{summary.remainingDays} days</strong>
+                </p>
+              </div>
               <button 
                 onClick={() => setShowModal(false)} 
                 disabled={submitting}
@@ -307,6 +383,9 @@ export default function StaffLeave({ staffUser = {} }) {
                   <option value="On Duty">On Duty (OD) / Conference</option>
                   <option value="Special Casual Leave">Special Casual Leave</option>
                 </select>
+                <div className="mt-1 text-[11px] text-slate-500 flex items-center justify-between">
+                  <span>Policy allowance: {summary.quotaBreakdown || '12 Casual + 3 Special'}</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -332,6 +411,20 @@ export default function StaffLeave({ staffUser = {} }) {
                   />
                 </div>
               </div>
+
+              {fromDate && toDate && (
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                  <span className="text-slate-600 font-medium">Calculated Leave Duration:</span>
+                  <span className="font-extrabold text-blue-600">{selectedDays} Day{selectedDays > 1 ? 's' : ''}</span>
+                </div>
+              )}
+
+              {isOverQuota && (
+                <div className="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-[11px] font-semibold">
+                  <Info className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>Notice: Applying for {selectedDays} days will exceed your remaining annual quota ({summary.remainingDays} days).</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Reason for Leave</label>

@@ -1023,7 +1023,7 @@ export default function DepartmentManagement() {
                                   type="text"
                                   value={sub}
                                   onChange={(e) => handleUpdateSubjectInEditCurriculum(activeEditYear, 2, idx, e.target.value)}
-                                  placeholder="e.g. Database Management Systems (4 Credits)"
+                                  placeholder="e.g. Cloud Computing & DevOps (4 Credits)"
                                   className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
                                 />
                                 <button
@@ -1057,7 +1057,7 @@ export default function DepartmentManagement() {
                                 type="text"
                                 value={lab}
                                 onChange={(e) => handleUpdateLabInEditCurriculum(activeEditYear, 2, idx, e.target.value)}
-                                placeholder="e.g. Database Management Lab (2 Credits)"
+                                placeholder="e.g. Advanced Software Lab (2 Credits)"
                                 className="flex-1 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:border-indigo-500 focus:outline-none"
                               />
                               <button

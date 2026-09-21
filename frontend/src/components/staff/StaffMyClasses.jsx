@@ -178,7 +178,7 @@ export default function StaffMyClasses({ staffUser }) {
   // Handle Delete Class
   const handleDeleteClass = async (classCode, e) => {
     e.stopPropagation();
-    if (!window.confirm(`Are you sure you want to delete class ${classCode}? This will remove it from the database.`)) {
+    if (!window.confirm(`Are you sure you want to delete class ${classCode}? This will remove it from your class list.`)) {
       return;
     }
 
@@ -505,7 +505,7 @@ export default function StaffMyClasses({ staffUser }) {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-base">Add New Subject</h3>
-                  <p className="text-xs text-slate-500">Saves directly to your MongoDB Atlas class collection</p>
+                  <p className="text-xs text-slate-500">Saves directly to your academic class records</p>
                 </div>
               </div>
               <button

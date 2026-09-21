@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   BookMarked,
   Plus,
@@ -13,6 +13,18 @@ import {
   RefreshCw,
   Edit,
   Save,
+  FileText,
+  UploadCloud,
+  Download,
+  Paperclip,
+  Eye,
+  File,
+  FileCheck,
+  Users,
+  Search,
+  UserPlus,
+  CheckSquare,
+  Sparkles
 } from "lucide-react";
 
 const API = "http://localhost:5000/api";
@@ -29,8 +41,20 @@ export default function StaffAssignments({ staffUser }) {
   const [errorMsg, setErrorMsg]           = useState("");
   const [saving, setSaving]               = useState(false);
 
-  // Edit mode state
-  const [editingId, setEditingId]         = useState(null); // _id of assignment being edited
+  const [editingId, setEditingId]         = useState(null);
+  const [viewingDoc, setViewingDoc]       = useState(null);
+
+  // Submissions & Students Management Modal state
+  const [submissionsModalAsgt, setSubmissionsModalAsgt] = useState(null);
+  const [submissionsSearch, setSubmissionsSearch]       = useState("");
+  const [submissionsFilter, setSubmissionsFilter]       = useState("ALL");
+  const [showAddStudentForm, setShowAddStudentForm]     = useState(false);
+  const [newStudentRoll, setNewStudentRoll]             = useState("");
+  const [newStudentName, setNewStudentName]             = useState("");
+  const [newStudentReg, setNewStudentReg]               = useState("");
+  const [newStudentStatus, setNewStudentStatus]         = useState("Not Submitted");
+  const [quickCountInput, setQuickCountInput]           = useState("");
+  const [isUpdatingSubmissions, setIsUpdatingSubmissions] = useState(false);
 
   // Form state (shared for create + edit)
   const [newTitle, setNewTitle]               = useState("");
@@ -40,8 +64,20 @@ export default function StaffAssignments({ staffUser }) {
   const [newMarks, setNewMarks]               = useState("20");
   const [newDescription, setNewDescription]   = useState("");
 
+  // Attachment state
+  const [attachmentName, setAttachmentName]   = useState("");
+  const [attachmentData, setAttachmentData]   = useState("");
+  const [attachmentSize, setAttachmentSize]   = useState("");
+  const [attachmentType, setAttachmentType]   = useState("");
+  const [isDragging, setIsDragging]           = useState(false);
+
+  const fileInputRef = useRef(null);
+
   const fetchAssignments = async () => {
-    if (!staffId) return;
+    if (!staffId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const res  = await fetch(`${API}/assignments/${staffId}`);
@@ -71,11 +107,112 @@ export default function StaffAssignments({ staffUser }) {
     return true;
   });
 
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return "0 KB";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  const handleFileSelect = (file) => {
+    if (!file) return;
+
+    // Check size limit: 15MB
+    if (file.size > 15 * 1024 * 1024) {
+      toast("File size exceeds 15MB limit. Please upload a smaller document.", true);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachmentName(file.name);
+      setAttachmentData(reader.result);
+      setAttachmentSize(formatFileSize(file.size));
+      setAttachmentType(file.type || "application/octet-stream");
+      toast(`File "${file.name}" attached successfully!`);
+    };
+    reader.onerror = () => {
+      toast("Error reading file. Please try again.", true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileInputChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const removeAttachment = () => {
+    setAttachmentName("");
+    setAttachmentData("");
+    setAttachmentSize("");
+    setAttachmentType("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Lock background scroll when any modal is open
+  useEffect(() => {
+    const isAnyModalOpen = Boolean(showModal || viewingDoc || submissionsModalAsgt);
+    const scrollContainer = document.getElementById('main-content-scroll-container');
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      if (scrollContainer) scrollContainer.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+      if (scrollContainer) scrollContainer.style.overflow = 'auto';
+    };
+  }, [showModal, viewingDoc, submissionsModalAsgt]);
+
+  const handleDownloadAttachment = (asgt) => {
+    if (!asgt?.attachmentData) return;
+    const link = document.createElement("a");
+    link.href = asgt.attachmentData;
+    link.download = asgt.attachmentName || "assignment_brief.pdf";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleViewDocument = (asgt) => {
+    if (!asgt?.attachmentData) {
+      toast("No document data attached to view.", true);
+      return;
+    }
+    setViewingDoc({
+      name: asgt.attachmentName || "Assignment Document.pdf",
+      data: asgt.attachmentData,
+      size: asgt.attachmentSize || "",
+      type: asgt.attachmentType || ""
+    });
+  };
+
   // Open modal for creating
   const openCreateModal = () => {
     setEditingId(null);
     setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
     setNewDescription(""); setNewDueDate(""); setNewMarks("20");
+    setAttachmentName(""); setAttachmentData(""); setAttachmentSize(""); setAttachmentType("");
     setErrorMsg("");
     setShowModal(true);
   };
@@ -89,6 +226,10 @@ export default function StaffAssignments({ staffUser }) {
     setNewDueDate(asgt.dueDate || "");
     setNewMarks(String(asgt.totalMarks || "20"));
     setNewDescription(asgt.description || "");
+    setAttachmentName(asgt.attachmentName || "");
+    setAttachmentData(asgt.attachmentData || "");
+    setAttachmentSize(asgt.attachmentSize || "");
+    setAttachmentType(asgt.attachmentType || "");
     setErrorMsg("");
     setShowModal(true);
   };
@@ -98,6 +239,7 @@ export default function StaffAssignments({ staffUser }) {
     setEditingId(null);
     setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
     setNewDescription(""); setNewDueDate(""); setNewMarks("20");
+    setAttachmentName(""); setAttachmentData(""); setAttachmentSize(""); setAttachmentType("");
   };
 
   const handleCreateAssignment = async (e) => {
@@ -117,6 +259,10 @@ export default function StaffAssignments({ staffUser }) {
           description: newDescription.trim(),
           dueDate:     newDueDate,
           totalMarks:  Number(newMarks) || 20,
+          attachmentName,
+          attachmentData,
+          attachmentSize,
+          attachmentType,
         }),
       });
       const json = await res.json();
@@ -149,6 +295,10 @@ export default function StaffAssignments({ staffUser }) {
           description: newDescription.trim(),
           dueDate:     newDueDate,
           totalMarks:  Number(newMarks) || 20,
+          attachmentName,
+          attachmentData,
+          attachmentSize,
+          attachmentType,
         }),
       });
       const json = await res.json();
@@ -185,6 +335,164 @@ export default function StaffAssignments({ staffUser }) {
     } catch { toast("Failed to delete. Please try again.", true); }
   };
 
+  // Open Submissions & Students Modal
+  const openSubmissionsModal = (asgt) => {
+    setSubmissionsModalAsgt(asgt);
+    setQuickCountInput(String(asgt.submissions || 0));
+    setSubmissionsSearch("");
+    setSubmissionsFilter("ALL");
+    setShowAddStudentForm(false);
+  };
+
+  // Add a student to the assignment
+  const handleAddStudent = async (e) => {
+    e.preventDefault();
+    if (!newStudentRoll.trim() || !newStudentName.trim() || !submissionsModalAsgt) return;
+    setIsUpdatingSubmissions(true);
+    try {
+      const res = await fetch(`${API}/assignments/${submissionsModalAsgt._id}/students`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rollNo: newStudentRoll.trim(),
+          studentName: newStudentName.trim(),
+          regNo: newStudentReg.trim() || newStudentRoll.trim(),
+          status: newStudentStatus
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        toast(data.message || "Student added successfully!");
+        setSubmissionsModalAsgt(data.data);
+        setAssignments(prev => prev.map(a => a._id === data.data._id ? data.data : a));
+        setNewStudentRoll("");
+        setNewStudentName("");
+        setNewStudentReg("");
+        setShowAddStudentForm(false);
+      } else {
+        toast(data.message || "Failed to add student.", true);
+      }
+    } catch (err) {
+      toast("Error adding student: " + err.message, true);
+    } finally {
+      setIsUpdatingSubmissions(false);
+    }
+  };
+
+  // Toggle or set a student's submission status
+  const handleToggleStudentStatus = async (studentId, currentStatus) => {
+    if (!submissionsModalAsgt) return;
+    const newStatus = currentStatus === "Submitted" || currentStatus === "Graded" ? "Not Submitted" : "Submitted";
+    setIsUpdatingSubmissions(true);
+    try {
+      const res = await fetch(`${API}/assignments/${submissionsModalAsgt._id}/students/${studentId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setSubmissionsModalAsgt(data.data);
+        setAssignments(prev => prev.map(a => a._id === data.data._id ? data.data : a));
+        toast(data.message || "Status updated.");
+      } else {
+        toast(data.message || "Failed to update status.", true);
+      }
+    } catch (err) {
+      toast("Error updating status: " + err.message, true);
+    } finally {
+      setIsUpdatingSubmissions(false);
+    }
+  };
+
+  // Quick set submission count (e.g., set 18 of 25 submitted)
+  const handleQuickSetCount = async (targetCount, allSubmitted = null) => {
+    if (!submissionsModalAsgt) return;
+    setIsUpdatingSubmissions(true);
+    try {
+      const payload = allSubmitted !== null ? { allSubmitted } : { count: Number(targetCount) };
+      const res = await fetch(`${API}/assignments/${submissionsModalAsgt._id}/submissions/quick-set`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setSubmissionsModalAsgt(data.data);
+        setAssignments(prev => prev.map(a => a._id === data.data._id ? data.data : a));
+        toast(data.message || "Submissions count updated!");
+      } else {
+        toast(data.message || "Failed to update submissions count.", true);
+      }
+    } catch (err) {
+      toast("Error setting submissions: " + err.message, true);
+    } finally {
+      setIsUpdatingSubmissions(false);
+    }
+  };
+
+  // Remove a student from this assignment
+  const handleRemoveStudent = async (studentId, studentName) => {
+    if (!window.confirm(`Remove ${studentName} from this assignment?`)) return;
+    if (!submissionsModalAsgt) return;
+    setIsUpdatingSubmissions(true);
+    try {
+      const res = await fetch(`${API}/assignments/${submissionsModalAsgt._id}/students/${studentId}`, {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setSubmissionsModalAsgt(data.data);
+        setAssignments(prev => prev.map(a => a._id === data.data._id ? data.data : a));
+        toast("Student removed from assignment.");
+      } else {
+        toast(data.message || "Failed to remove student.", true);
+      }
+    } catch (err) {
+      toast("Error removing student: " + err.message, true);
+    } finally {
+      setIsUpdatingSubmissions(false);
+    }
+  };
+
+  // Import registered class students into assignment
+  const handleImportClassRoster = async () => {
+    if (!submissionsModalAsgt) return;
+    setIsUpdatingSubmissions(true);
+    try {
+      const res = await fetch(`${API}/assignments/${submissionsModalAsgt._id}/students/import-class`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setSubmissionsModalAsgt(data.data);
+        setAssignments(prev => prev.map(a => a._id === data.data._id ? data.data : a));
+        toast(data.message);
+      } else {
+        toast(data.message || "No class roster found for this subject.", true);
+      }
+    } catch (err) {
+      toast("Error importing class: " + err.message, true);
+    } finally {
+      setIsUpdatingSubmissions(false);
+    }
+  };
+
+  // Filtered submissions list for the active assignment modal
+  const filteredSubmissionsList = useMemo(() => {
+    if (!submissionsModalAsgt) return [];
+    const list = Array.isArray(submissionsModalAsgt.studentSubmissions) ? submissionsModalAsgt.studentSubmissions : [];
+    return list.filter(std => {
+      if (submissionsFilter === "Submitted" && std.status !== "Submitted" && std.status !== "Graded") return false;
+      if (submissionsFilter === "Not Submitted" && (std.status === "Submitted" || std.status === "Graded")) return false;
+      if (submissionsSearch.trim()) {
+        const q = submissionsSearch.toLowerCase();
+        return std.studentName?.toLowerCase().includes(q) || std.rollNo?.toLowerCase().includes(q) || std.regNo?.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [submissionsModalAsgt, submissionsFilter, submissionsSearch]);
+
   return (
     <div className="p-5 sm:p-7 space-y-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -192,7 +500,7 @@ export default function StaffAssignments({ staffUser }) {
         <div>
           <h2 className="text-xl font-extrabold text-slate-900">Assignments Management</h2>
           <p className="text-sm text-slate-500 mt-0.5">
-            Create homework, track submissions, and manage assignments for your subjects
+            Create homework, attach question PDFs / docs, and manage assignments for your classes
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -206,12 +514,12 @@ export default function StaffAssignments({ staffUser }) {
       </div>
 
       {successMsg && (
-        <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold">
+        <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />{successMsg}
         </div>
       )}
       {errorMsg && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-semibold">
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-semibold animate-in fade-in">
           <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />{errorMsg}
         </div>
       )}
@@ -245,8 +553,11 @@ export default function StaffAssignments({ staffUser }) {
             {filteredAssignments.map((asgt) => {
               const isActive  = asgt.status === "Active";
               const isOverdue = isActive && new Date(asgt.dueDate) < new Date();
+              const isPdf = asgt.attachmentName?.toLowerCase().endsWith(".pdf");
+              const isDoc = asgt.attachmentName?.toLowerCase().match(/\.(doc|docx)$/i);
+
               return (
-                <div key={asgt._id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition-all">
+                <div key={asgt._id} className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 flex flex-col justify-between hover:shadow-md transition-all">
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">{asgt.subjectCode}</span>
@@ -255,31 +566,90 @@ export default function StaffAssignments({ staffUser }) {
                       </span>
                     </div>
                     <h3 className="font-extrabold text-slate-900 text-sm leading-snug">{asgt.title}</h3>
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{asgt.description || "No detailed instructions provided."}</p>
+                    {asgt.subjectName && (
+                      <p className="text-[11px] text-slate-400 font-medium mt-0.5">{asgt.subjectName}</p>
+                    )}
+                    <p className="text-xs text-slate-500 mt-2 line-clamp-2">{asgt.description || "No detailed instructions provided."}</p>
+
+                    {/* Attached Document or PDF Badge */}
+                    {asgt.attachmentName && (
+                      <div className="mt-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2 hover:bg-slate-100/70 transition-colors">
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          {isPdf ? (
+                            <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 font-black text-[10px] shrink-0">
+                              PDF
+                            </div>
+                          ) : isDoc ? (
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 font-black text-[10px] shrink-0">
+                              DOC
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 font-black text-[10px] shrink-0">
+                              FILE
+                            </div>
+                          )}
+                          <div className="truncate">
+                            <p className="text-xs font-bold text-slate-800 truncate" title={asgt.attachmentName}>
+                              {asgt.attachmentName}
+                            </p>
+                            {asgt.attachmentSize && (
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                {asgt.attachmentSize}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleViewDocument(asgt)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 bg-white border border-blue-200 rounded-lg shadow-2xs transition-all shrink-0 active:scale-95 cursor-pointer"
+                          title="View document on screen"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Doc</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 text-slate-600 font-medium text-[11px]">
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2.5 text-xs">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-1.5 text-slate-600 font-medium">
                         <Calendar className="w-3.5 h-3.5 text-slate-400" /><span>Due: {asgt.dueDate}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" /><span>Max Marks: {asgt.totalMarks} | Submissions: <b>{asgt.submissions}</b></span>
+                      <div className="flex items-center gap-1.5 text-slate-500">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" /><span>Max Marks: {asgt.totalMarks}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-50">
                       <button
-                        onClick={() => openEditModal(asgt)}
-                        className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-all"
-                        title="Edit Assignment"
+                        onClick={() => openSubmissionsModal(asgt)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200/80 transition-all cursor-pointer shadow-2xs"
+                        title="Manage students and set submission status"
                       >
-                        <Edit className="w-3.5 h-3.5" />
+                        <Users className="w-3.5 h-3.5" />
+                        <span>
+                          {asgt.submissions} / {asgt.studentSubmissions?.length || asgt.submissions} Submitted
+                          {asgt.studentSubmissions?.length ? ` (${Math.round((asgt.submissions / asgt.studentSubmissions.length) * 100)}%)` : ''}
+                        </span>
                       </button>
-                      <button onClick={() => toggleStatus(asgt._id)} className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">
-                        {isActive ? "Mark Closed" : "Reopen"}
-                      </button>
-                      <button onClick={() => handleDelete(asgt._id)} className="p-1 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50" title="Delete">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => openEditModal(asgt)}
+                          className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-all cursor-pointer"
+                          title="Edit Assignment & Attachment"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => toggleStatus(asgt._id)} className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
+                          {isActive ? "Mark Closed" : "Reopen"}
+                        </button>
+                        <button onClick={() => handleDelete(asgt._id)} className="p-1 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer" title="Delete">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -291,7 +661,7 @@ export default function StaffAssignments({ staffUser }) {
             <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center text-slate-400">
               <BookMarked className="w-10 h-10 mx-auto mb-2 text-slate-200" />
               <p className="text-sm font-medium">
-                {assignments.length === 0 ? "No assignments yet. Create your first assignment!" : "No assignments match the current filter."}
+                {assignments.length === 0 ? "No assignments yet. Create your first assignment with question brief or PDF!" : "No assignments match the current filter."}
               </p>
             </div>
           )}
@@ -302,19 +672,25 @@ export default function StaffAssignments({ staffUser }) {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={closeModal} />
-          <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg z-10 animate-in fade-in zoom-in-95">
+          <div className="relative bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-lg z-10 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <div className="flex items-center gap-2.5">
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${editingId ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
                   {editingId ? <Edit className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 </div>
-                <h3 className="font-extrabold text-slate-900 text-base">
-                  {editingId ? "Edit Assignment" : "Create New Assignment"}
-                </h3>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">
+                    {editingId ? "Edit Assignment" : "Create New Assignment"}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Provide instructions and attach question papers, problem sheets, or notes
+                  </p>
+                </div>
               </div>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 p-1"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={editingId ? handleUpdateAssignment : handleCreateAssignment} className="space-y-3.5">
+
+            <form onSubmit={editingId ? handleUpdateAssignment : handleCreateAssignment} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
@@ -325,10 +701,12 @@ export default function StaffAssignments({ staffUser }) {
                   <input type="text" placeholder="e.g., Data Structures" value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                 </div>
               </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Assignment Title *</label>
-                <input type="text" required placeholder="e.g., Unit 3 Case Study" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                <input type="text" required placeholder="e.g., Unit 3 Case Study & Lab Exercise" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Submission Deadline *</label>
@@ -339,10 +717,106 @@ export default function StaffAssignments({ staffUser }) {
                   <input type="number" min="5" max="100" value={newMarks} onChange={(e) => setNewMarks(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                 </div>
               </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Instructions / Description</label>
-                <textarea rows="3" placeholder="Provide assignment guidelines, expected format, deliverables..." value={newDescription} onChange={(e) => setNewDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"></textarea>
+                <textarea rows="3" placeholder="Provide assignment guidelines, questions, or deliverables..." value={newDescription} onChange={(e) => setNewDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"></textarea>
               </div>
+
+              {/* Upload Document / PDF Section */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                    Attach Document / PDF (Optional)
+                  </span>
+                  {attachmentName && (
+                    <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Document Ready
+                    </span>
+                  )}
+                </label>
+
+                {attachmentName ? (
+                  /* Attached File Card */
+                  <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-2xl flex items-center justify-between gap-3 animate-in fade-in">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      {attachmentName.toLowerCase().endsWith('.pdf') ? (
+                        <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 font-black text-xs flex items-center justify-center shrink-0 border border-rose-200">
+                          PDF
+                        </div>
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center shrink-0 border border-blue-200">
+                          DOC
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <p className="text-xs font-extrabold text-slate-900 truncate" title={attachmentName}>
+                          {attachmentName}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          {attachmentSize || "Uploaded"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {attachmentData && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = document.createElement("a");
+                            link.href = attachmentData;
+                            link.download = attachmentName;
+                            link.click();
+                          }}
+                          className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-100/60 rounded-lg transition-colors"
+                          title="Download / Preview"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={removeAttachment}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove file"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Dropzone / Upload Trigger */
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? "border-blue-500 bg-blue-50/60"
+                        : "border-slate-200 bg-slate-50/60 hover:bg-slate-50 hover:border-blue-400"
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileInputChange}
+                      accept=".pdf,.doc,.docx,.txt,.ppt,.pptx"
+                      className="hidden"
+                    />
+                    <UploadCloud className={`w-7 h-7 mx-auto mb-1 ${isDragging ? "text-blue-600 scale-110" : "text-slate-400"} transition-all`} />
+                    <p className="text-xs font-bold text-slate-700">
+                      Click to upload or drag & drop document
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Supported: PDF, Word (DOC / DOCX), Text (Max 15MB)
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
                 <button
@@ -355,6 +829,445 @@ export default function StaffAssignments({ staffUser }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Document Viewer Modal */}
+      {viewingDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-xs" onClick={() => setViewingDoc(null)} />
+          <div className="relative bg-white rounded-3xl shadow-2xl p-5 sm:p-6 w-full max-w-4xl z-10 animate-in fade-in zoom-in-95 flex flex-col h-[88vh] max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                  viewingDoc.name?.toLowerCase().endsWith('.pdf')
+                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                    : 'bg-blue-100 text-blue-700 border border-blue-200'
+                }`}>
+                  {viewingDoc.name?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'DOC'}
+                </div>
+                <div className="truncate">
+                  <h3 className="font-extrabold text-slate-900 text-sm truncate" title={viewingDoc.name}>
+                    {viewingDoc.name}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    {viewingDoc.size && `${viewingDoc.size} • `}Assignment Document Viewer
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const link = document.createElement("a");
+                    link.href = viewingDoc.data;
+                    link.download = viewingDoc.name || "assignment_document.pdf";
+                    link.click();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  title="Download a copy"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Download</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingDoc(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Embedded Document Frame */}
+            <div className="flex-1 min-h-0 bg-slate-50 rounded-2xl overflow-hidden border border-slate-200 relative flex flex-col">
+              {viewingDoc.name?.toLowerCase().endsWith('.pdf') || viewingDoc.data?.startsWith('data:application/pdf') ? (
+                <iframe
+                  src={viewingDoc.data}
+                  className="w-full h-full border-0 rounded-2xl"
+                  title={viewingDoc.name}
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-slate-50">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mb-3">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-800 text-base">{viewingDoc.name}</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                    {viewingDoc.size && `File Size: ${viewingDoc.size}. `}
+                    This document format is best viewed with your device's word processor.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const link = document.createElement("a");
+                      link.href = viewingDoc.data;
+                      link.download = viewingDoc.name || "document.docx";
+                      link.click();
+                    }}
+                    className="mt-4 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    Open / Download Document
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 4. MODAL: MANAGE STUDENTS & SUBMISSIONS                     */}
+      {/* ============================================================ */}
+      {submissionsModalAsgt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 font-bold shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md font-mono text-[10px] font-extrabold bg-blue-100 text-blue-800">
+                      {submissionsModalAsgt.subjectCode}
+                    </span>
+                    <h3 className="font-extrabold text-slate-900 text-base leading-tight">
+                      {submissionsModalAsgt.title}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Manage enrolled students, set submission status, and track completion progress
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSubmissionsModalAsgt(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
+              {/* Stat Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Students</span>
+                    <p className="text-xl font-black text-slate-900 mt-0.5">
+                      {submissionsModalAsgt.studentSubmissions?.length || 0}
+                    </p>
+                  </div>
+                  <Users className="w-4 h-4 text-slate-400" />
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Submitted</span>
+                    <p className="text-xl font-black text-emerald-700 mt-0.5">
+                      {submissionsModalAsgt.submissions || 0}
+                    </p>
+                  </div>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Not Submitted</span>
+                    <p className="text-xl font-black text-rose-700 mt-0.5">
+                      {Math.max(0, (submissionsModalAsgt.studentSubmissions?.length || 0) - (submissionsModalAsgt.submissions || 0))}
+                    </p>
+                  </div>
+                  <Clock className="w-4 h-4 text-rose-600" />
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Submission Rate</span>
+                    <p className="text-xl font-black text-blue-700 mt-0.5">
+                      {submissionsModalAsgt.studentSubmissions?.length
+                        ? Math.round((submissionsModalAsgt.submissions / submissionsModalAsgt.studentSubmissions.length) * 100)
+                        : 0}%
+                    </p>
+                  </div>
+                  <BookMarked className="w-4 h-4 text-blue-600" />
+                </div>
+              </div>
+
+              {/* Action Bar: Quick Set Submissions + Add Student */}
+              <div className="bg-slate-50/80 rounded-2xl border border-slate-200/90 p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  {/* Left: Quick count setter */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-700">Quick Set Submissions:</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        max={submissionsModalAsgt.studentSubmissions?.length || 0}
+                        value={quickCountInput}
+                        onChange={(e) => setQuickCountInput(e.target.value)}
+                        placeholder="Count"
+                        className="w-16 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-800 text-center focus:outline-none focus:border-blue-500"
+                      />
+                      <span className="text-xs text-slate-400 font-bold">/ {submissionsModalAsgt.studentSubmissions?.length || 0}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickSetCount(quickCountInput)}
+                        disabled={isUpdatingSubmissions}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Set Count
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 ml-0 sm:ml-2">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickSetCount(0, true)}
+                        disabled={isUpdatingSubmissions}
+                        className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-[11px] rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        All Submitted
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickSetCount(0, false)}
+                        disabled={isUpdatingSubmissions}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 font-bold text-[11px] rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        All Pending
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right: Add Student & Import */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleImportClassRoster}
+                      disabled={isUpdatingSubmissions}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                      title="Import students from registered class roster"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Sync Class Roster</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAddStudentForm(prev => !prev)}
+                      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 font-bold text-xs rounded-xl transition-all cursor-pointer ${
+                        showAddStudentForm
+                          ? 'bg-slate-200 text-slate-700'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs shadow-blue-500/20'
+                      }`}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{showAddStudentForm ? 'Cancel' : 'Add Student'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inline Add Student Form */}
+                {showAddStudentForm && (
+                  <form onSubmit={handleAddStudent} className="pt-3 border-t border-slate-200/70 grid grid-cols-1 sm:grid-cols-4 gap-2.5 animate-in fade-in duration-150">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Roll No *</label>
+                      <input
+                        type="text"
+                        value={newStudentRoll}
+                        onChange={(e) => setNewStudentRoll(e.target.value)}
+                        placeholder="e.g. CS105"
+                        required
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold uppercase focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Student Name *</label>
+                      <input
+                        type="text"
+                        value={newStudentName}
+                        onChange={(e) => setNewStudentName(e.target.value)}
+                        placeholder="e.g. Priya Nair"
+                        required
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Register No (Optional)</label>
+                      <input
+                        type="text"
+                        value={newStudentReg}
+                        onChange={(e) => setNewStudentReg(e.target.value)}
+                        placeholder="e.g. 2026CS105"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Initial Status</label>
+                        <select
+                          value={newStudentStatus}
+                          onChange={(e) => setNewStudentStatus(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="Not Submitted">Not Submitted</option>
+                          <option value="Submitted">Submitted</option>
+                        </select>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isUpdatingSubmissions}
+                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
+              {/* Filters & Search */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={submissionsSearch}
+                    onChange={(e) => setSubmissionsSearch(e.target.value)}
+                    placeholder="Search by student name or roll no..."
+                    className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Status:</span>
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl text-xs">
+                    {['ALL', 'Submitted', 'Not Submitted'].map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setSubmissionsFilter(f)}
+                        className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                          submissionsFilter === f
+                            ? 'bg-white text-blue-600 shadow-2xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Student Submissions List Table */}
+              <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold text-[10px] uppercase tracking-wider">
+                        <th className="py-3 px-4">Student</th>
+                        <th className="py-3 px-3">Register No</th>
+                        <th className="py-3 px-3 text-center">Submission Status</th>
+                        <th className="py-3 px-3">Date</th>
+                        <th className="py-3 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredSubmissionsList.map(std => {
+                        const isSubmitted = std.status === 'Submitted' || std.status === 'Graded';
+                        return (
+                          <tr key={std._id || std.rollNo} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="py-3 px-4 font-bold text-slate-800">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-[11px] px-2 py-0.5 bg-slate-100 rounded-md text-slate-700 font-extrabold">
+                                  {std.rollNo}
+                                </span>
+                                <span>{std.studentName}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 font-mono text-[11px]">
+                              {std.regNo || std.rollNo}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black ${
+                                std.status === 'Graded'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                  : isSubmitted
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}>
+                                {isSubmitted ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                <span>{std.status}</span>
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 text-[11px]">
+                              {std.submittedAt || '--'}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleStudentStatus(std._id || std.rollNo, std.status)}
+                                  disabled={isUpdatingSubmissions}
+                                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    isSubmitted
+                                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+                                  }`}
+                                >
+                                  {isSubmitted ? 'Mark Unsubmitted' : 'Mark Submitted'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStudent(std._id || std.rollNo, std.studentName)}
+                                  disabled={isUpdatingSubmissions}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Remove student from assignment"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredSubmissionsList.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-slate-400">
+                            No students found. Click "Add Student" or "Sync Class Roster" above.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+              <span className="text-xs text-slate-500 font-medium">
+                Showing {filteredSubmissionsList.length} of {submissionsModalAsgt.studentSubmissions?.length || 0} students
+              </span>
+              <button
+                type="button"
+                onClick={() => setSubmissionsModalAsgt(null)}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

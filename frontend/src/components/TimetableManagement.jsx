@@ -52,6 +52,17 @@ const FACULTY_PERIODS = [
 
 const INITIAL_SCHEDULES = {};
 
+const DEFAULT_CLASS_METRICS = {
+  weeklyPeriods: '36 Hours',
+  weeklyPeriodsSub: '6 Periods / Day × 6 Days',
+  smartClassrooms: '18 Rooms',
+  smartClassroomsSub: 'Projector Enabled',
+  activeLabs: '8 Labs',
+  activeLabsSub: 'Hardware & Software',
+  facultyConflicts: '0 Clashes',
+  facultyConflictsSub: '100% Conflict-Free'
+};
+
 const COLOR_MAP = {
   theory: 'blue',
   lab: 'emerald',
@@ -63,7 +74,7 @@ const COLOR_MAP = {
 };
 
 export default function TimetableManagement() {
-  // Navigation: 'faculty' (Assigned Faculty Timetable in DB) vs 'class' (Class / Section View)
+  // Navigation: 'faculty' (Assigned Faculty Timetable) vs 'class' (Class / Section View)
   const [viewMode, setViewMode] = useState('faculty');
 
   // Live Database Timetables & Staff State
@@ -81,6 +92,18 @@ export default function TimetableManagement() {
   const [selectedSem, setSelectedSem] = useState('Sem 5');
   const [selectedSection, setSelectedSection] = useState('Section A');
 
+  // Class Metrics State (Admin Editable)
+  const [classMetrics, setClassMetrics] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vcas_class_schedule_metrics');
+      return saved ? JSON.parse(saved) : DEFAULT_CLASS_METRICS;
+    } catch {
+      return DEFAULT_CLASS_METRICS;
+    }
+  });
+  const [isEditMetricsOpen, setIsEditMetricsOpen] = useState(false);
+  const [tempMetrics, setTempMetrics] = useState(DEFAULT_CLASS_METRICS);
+
   // Modals & Notifications
   const [isEditSlotOpen, setIsEditSlotOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -91,7 +114,7 @@ export default function TimetableManagement() {
     day: 'Monday',
     period: 1,
     code: 'CS401',
-    name: 'Database Management Systems',
+    name: 'Cloud Computing & DevOps',
     faculty: '',
     room: 'LH-101',
     type: 'theory'
@@ -104,7 +127,7 @@ export default function TimetableManagement() {
 
   // Lock background scroll when modal is open
   useEffect(() => {
-    const isAnyModalOpen = Boolean(isEditSlotOpen || isPrintModalOpen);
+    const isAnyModalOpen = Boolean(isEditSlotOpen || isPrintModalOpen || isEditMetricsOpen);
     const scrollContainer = document.getElementById('main-content-scroll-container');
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
@@ -117,7 +140,7 @@ export default function TimetableManagement() {
       document.body.style.overflow = 'unset';
       if (scrollContainer) scrollContainer.style.overflow = 'auto';
     };
-  }, [isEditSlotOpen, isPrintModalOpen]);
+  }, [isEditSlotOpen, isPrintModalOpen, isEditMetricsOpen]);
 
   // Fetch all staff members & live timetables on mount
   const fetchStaffAndTimetables = async () => {
@@ -223,7 +246,7 @@ export default function TimetableManagement() {
       day,
       period: periodNum,
       code: currentSlot?.code || 'CS2005',
-      name: currentSlot?.name || 'Database Management Systems',
+      name: currentSlot?.name || 'Cloud Computing & DevOps',
       faculty: currentSlot?.faculty || defaultFaculty,
       room: currentSlot?.room || 'LH-101',
       type: currentSlot?.type || 'theory'
@@ -436,14 +459,14 @@ export default function TimetableManagement() {
               Academic Schedule Planner
             </span>
             <span className="text-slate-400 text-xs">•</span>
-            <span className="text-xs text-slate-500 font-semibold">Live Database Timetable System</span>
+            <span className="text-xs text-slate-500 font-semibold">Live Timetable System</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <span>{viewMode === 'faculty' ? 'Assigned Faculty Timetable' : 'Class Weekly Timetable'}</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
             {viewMode === 'faculty'
-              ? 'View and manage real-time weekly timetable assigned to faculty members in MongoDB.'
+              ? 'View and manage real-time weekly timetable assigned to faculty members.'
               : 'Master weekly classroom schedule matrix, period timings, subject allocations, and faculty assignments.'}
           </p>
         </div>
@@ -453,10 +476,10 @@ export default function TimetableManagement() {
             onClick={() => {
               fetchStaffAndTimetables();
               if (selectedStaffId) fetchSelectedStaffTimetable(selectedStaffId);
-              showToast('Refreshed timetable data from database.');
+              showToast('Refreshed timetable data.');
             }}
-            title="Reload from Database"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs"
+            title="Refresh Timetable"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
             <span className="hidden sm:inline">Sync</span>
@@ -465,7 +488,7 @@ export default function TimetableManagement() {
           <button
             onClick={handleExportCSV}
             title="Download CSV Timetable"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs cursor-pointer"
           >
             <Download className="w-4 h-4 text-slate-600" />
             <span>Export CSV</span>
@@ -473,7 +496,7 @@ export default function TimetableManagement() {
 
           <button
             onClick={() => setIsPrintModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs shadow-indigo-500/20 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs shadow-indigo-500/20 transition-all cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>Print Timetable</span>
@@ -485,7 +508,7 @@ export default function TimetableManagement() {
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
         <button
           onClick={() => setViewMode('faculty')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
             viewMode === 'faculty'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -496,13 +519,13 @@ export default function TimetableManagement() {
           <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
             viewMode === 'faculty' ? 'bg-indigo-500 text-white' : 'bg-indigo-100 text-indigo-700'
           }`}>
-            {allTimetables.length} in DB
+            {allTimetables.length} Assigned
           </span>
         </button>
 
         <button
           onClick={() => setViewMode('class')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
             viewMode === 'class'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -600,7 +623,7 @@ export default function TimetableManagement() {
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Weekly Assigned</span>
                 <p className="text-2xl font-black text-indigo-600">{totalAssignedSlots} Periods</p>
-                <p className="text-[11px] text-slate-500 font-semibold mt-1">Live from MongoDB</p>
+                <p className="text-[11px] text-slate-500 font-semibold mt-1">Live Schedule</p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
                 <Clock className="w-5 h-5" />
@@ -652,7 +675,7 @@ export default function TimetableManagement() {
                   {loadingSchedule && <span className="text-xs text-indigo-600 font-semibold animate-pulse">(Loading...)</span>}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Click any cell to edit or assign a period. Changes save directly to the database.
+                  Click any cell to edit or assign a period. Changes save automatically.
                 </p>
               </div>
               <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-200">
@@ -705,11 +728,16 @@ export default function TimetableManagement() {
                       <span>P8</span>
                       <span className="block text-[8.5px] text-slate-400 font-mono font-normal">3:25-4:15 PM</span>
                     </th>
+                    <th className="py-3 px-2 w-28 bg-slate-100/80 border-l border-slate-200 text-slate-700">
+                      <span>Daily Hours</span>
+                      <span className="block text-[8.5px] text-slate-500 font-normal">Taken</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs">
                   {DAYS.map(day => {
                     const dayData = facultySchedule[day] || {};
+                    const dayHours = Object.values(dayData).filter(s => s && s.code).length;
                     return (
                       <tr key={day} className="hover:bg-slate-50/40 transition-colors">
                         <td className="py-3 px-3 font-black text-slate-900 bg-slate-50/50 border-r border-slate-200 text-left">
@@ -760,10 +788,32 @@ export default function TimetableManagement() {
                         <td className="p-1.5 align-top">
                           <SlotCell slot={dayData['8']} onEdit={() => handleOpenEditSlot(day, 8, dayData['8'])} />
                         </td>
+
+                        {/* Daily Hours Taken */}
+                        <td className="p-2 border-l border-slate-200 bg-slate-50/50 text-center align-middle">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black ${
+                            dayHours > 0
+                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                              : 'text-slate-400 font-medium'
+                          }`}>
+                            {dayHours} {dayHours === 1 ? 'hr' : 'hrs'}
+                          </span>
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-200 bg-slate-50/80 text-xs font-bold text-slate-700">
+                    <td className="p-3 text-left">Weekly Total</td>
+                    <td colSpan={10} className="p-3 text-right text-slate-500 font-medium">
+                      Total Assigned Teaching Hours:
+                    </td>
+                    <td className="p-3 text-center border-l border-slate-200 text-indigo-700 font-black bg-indigo-50/50">
+                      {totalAssignedSlots} hrs
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
@@ -773,13 +823,29 @@ export default function TimetableManagement() {
         /* 4. CLASS / DEPARTMENT MODE VIEW                                           */
         /* ========================================================================= */
         <>
-          {/* STATS SUMMARY CARDS */}
+          {/* STATS SUMMARY CARDS HEADER & CARDS */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Schedule Metrics & Capacity</h2>
+            </div>
+            <button
+              onClick={() => {
+                setTempMetrics(classMetrics);
+                setIsEditMetricsOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 shadow-xs transition-all cursor-pointer"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Edit Metrics</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 sm:gap-4">
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Weekly Periods</span>
-                <p className="text-2xl font-black text-indigo-600">36 Hours</p>
-                <p className="text-[11px] text-slate-500 font-semibold mt-1">6 Periods / Day × 6 Days</p>
+                <p className="text-2xl font-black text-indigo-600">{classMetrics.weeklyPeriods}</p>
+                <p className="text-[11px] text-slate-500 font-semibold mt-1">{classMetrics.weeklyPeriodsSub}</p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
                 <Clock className="w-5 h-5" />
@@ -789,8 +855,8 @@ export default function TimetableManagement() {
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Smart Classrooms</span>
-                <p className="text-2xl font-black text-emerald-600">18 Rooms</p>
-                <p className="text-[11px] text-emerald-600 font-bold mt-1">Projector Enabled</p>
+                <p className="text-2xl font-black text-emerald-600">{classMetrics.smartClassrooms}</p>
+                <p className="text-[11px] text-emerald-600 font-bold mt-1">{classMetrics.smartClassroomsSub}</p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
                 <Building2 className="w-5 h-5" />
@@ -800,8 +866,8 @@ export default function TimetableManagement() {
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Active Labs</span>
-                <p className="text-2xl font-black text-blue-600">8 Labs</p>
-                <p className="text-[11px] text-slate-500 font-medium mt-1">Hardware & Software</p>
+                <p className="text-2xl font-black text-blue-600">{classMetrics.activeLabs}</p>
+                <p className="text-[11px] text-slate-500 font-medium mt-1">{classMetrics.activeLabsSub}</p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
                 <Layers className="w-5 h-5" />
@@ -811,8 +877,8 @@ export default function TimetableManagement() {
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Faculty Conflicts</span>
-                <p className="text-2xl font-black text-emerald-600">0 Clashes</p>
-                <p className="text-[11px] text-emerald-600 font-bold mt-1">100% Conflict-Free</p>
+                <p className="text-2xl font-black text-emerald-600">{classMetrics.facultyConflicts}</p>
+                <p className="text-[11px] text-emerald-600 font-bold mt-1">{classMetrics.facultyConflictsSub}</p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
                 <ShieldCheck className="w-5 h-5" />
@@ -1013,7 +1079,7 @@ export default function TimetableManagement() {
                   type="text"
                   value={slotForm.name}
                   onChange={(e) => setSlotForm({ ...slotForm, name: e.target.value })}
-                  placeholder="e.g. Database Management Systems"
+                  placeholder="e.g. Cloud Computing & DevOps"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                   required
                 />
@@ -1263,17 +1329,204 @@ export default function TimetableManagement() {
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 onClick={() => setIsPrintModalOpen(false)}
-                className="px-5 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200"
+                className="px-5 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 cursor-pointer"
               >
                 Close
               </button>
               <button
                 onClick={() => window.print()}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Timetable Sheet</span>
               </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* EDIT SCHEDULE METRICS MODAL */}
+      {isEditMetricsOpen && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                    <Pencil className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900">Edit Schedule Metrics</h3>
+                    <p className="text-xs text-slate-500 font-medium">Customize timetable capacity, classroom, lab, and clash statistics</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsEditMetricsOpen(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setClassMetrics(tempMetrics);
+                  try {
+                    localStorage.setItem('vcas_class_schedule_metrics', JSON.stringify(tempMetrics));
+                  } catch (err) {
+                    console.error(err);
+                  }
+                  setIsEditMetricsOpen(false);
+                  showToast('Schedule metrics updated successfully!');
+                }}
+                className="p-5 space-y-4"
+              >
+                {/* Metric 1 */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-indigo-600" />
+                    <span className="text-xs font-extrabold text-slate-800">Weekly Periods Metric</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Value</label>
+                      <input
+                        type="text"
+                        value={tempMetrics.weeklyPeriods}
+                        onChange={(e) => setTempMetrics(prev => ({ ...prev, weeklyPeriods: e.target.value }))}
+                        placeholder="e.g. 36 Hours"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Subtitle</label>
+                      <input
+                        type="text"
+                        value={tempMetrics.weeklyPeriodsSub}
+                        onChange={(e) => setTempMetrics(prev => ({ ...prev, weeklyPeriodsSub: e.target.value }))}
+                        placeholder="e.g. 6 Periods / Day × 6 Days"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric 2 */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-extrabold text-slate-800">Smart Classrooms Metric</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Value</label>
+                      <input
+                        type="text"
+                        value={tempMetrics.smartClassrooms}
+                        onChange={(e) => setTempMetrics(prev => ({ ...prev, smartClassrooms: e.target.value }))}
+                        placeholder="e.g. 18 Rooms"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Subtitle</label>
+                      <input
+                        type="text"
+                        value={tempMetrics.smartClassroomsSub}
+                        onChange={(e) => setTempMetrics(prev => ({ ...prev, smartClassroomsSub: e.target.value }))}
+                        placeholder="e.g. Projector Enabled"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric 3 */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-extrabold text-slate-800">Active Labs Metric</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Value</label>
+                      <input
+                        type="text"
+                        value={tempMetrics.activeLabs}
+                        onChange={(e) => setTempMetrics(prev => ({ ...prev, activeLabs: e.target.value }))}
+                        placeholder="e.g. 8 Labs"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Subtitle</label>
+                      <input
+                        type="text"
+                        value={tempMetrics.activeLabsSub}
+                        onChange={(e) => setTempMetrics(prev => ({ ...prev, activeLabsSub: e.target.value }))}
+                        placeholder="e.g. Hardware & Software"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric 4 */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-extrabold text-slate-800">Faculty Conflicts Metric</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Value</label>
+                      <input
+                        type="text"
+                        value={tempMetrics.facultyConflicts}
+                        onChange={(e) => setTempMetrics(prev => ({ ...prev, facultyConflicts: e.target.value }))}
+                        placeholder="e.g. 0 Clashes"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Subtitle</label>
+                      <input
+                        type="text"
+                        value={tempMetrics.facultyConflictsSub}
+                        onChange={(e) => setTempMetrics(prev => ({ ...prev, facultyConflictsSub: e.target.value }))}
+                        placeholder="e.g. 100% Conflict-Free"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditMetricsOpen(false)}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Save Metrics</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </ModalPortal>
