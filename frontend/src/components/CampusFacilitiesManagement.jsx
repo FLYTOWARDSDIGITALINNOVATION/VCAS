@@ -21,10 +21,10 @@ export default function CampusFacilitiesManagement({ initialTab = 'library' }) {
 
   // Books List
   const books = [
-    { isbn: '978-0134685991', title: 'Effective Java (3rd Edition)', author: 'Joshua Bloch', copies: '12 / 15 Available', category: 'CS & IT', rack: 'Rack B-4' },
-    { isbn: '978-0262033848', title: 'Introduction to Algorithms (CLRS)', author: 'Thomas H. Cormen', copies: '8 / 10 Available', category: 'CS & IT', rack: 'Rack A-2' },
-    { isbn: '978-0131873254', title: 'Digital Design & Computer Architecture', author: 'David Harris', copies: '14 / 20 Available', category: 'ECE', rack: 'Rack C-1' },
-    { isbn: '978-0073398204', title: 'Thermodynamics: An Engineering Approach', author: 'Yunus A. Cengel', copies: '5 / 8 Available', category: 'Mechanical', rack: 'Rack D-3' }
+    { isbn: '978-0199535897', title: 'The Oxford Shakespeare: The Complete Works', author: 'W.J. Craig', copies: '18 / 20 Available', category: 'English Literature', rack: 'Rack L-1' },
+    { isbn: '978-9352718719', title: 'Advanced Accountancy & Corporate Reporting', author: 'M.C. Shukla & T.S. Grewal', copies: '15 / 18 Available', category: 'Commerce', rack: 'Rack C-3' },
+    { isbn: '978-0262033848', title: 'Introduction to Algorithms & Data Structures', author: 'Thomas H. Cormen', copies: '12 / 15 Available', category: 'Computer Science', rack: 'Rack S-2' },
+    { isbn: '978-0070542358', title: 'Principles of Mathematical Analysis', author: 'Walter Rudin', copies: '10 / 12 Available', category: 'Mathematics', rack: 'Rack M-4' }
   ];
 
   // Hostel Rooms

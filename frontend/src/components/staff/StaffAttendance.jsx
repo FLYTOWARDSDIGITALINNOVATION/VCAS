@@ -81,16 +81,54 @@ export default function StaffAttendance({ staffUser }) {
     return currentClass.students || currentClass.enrolledStudents || [];
   }, [currentClass]);
 
-  // Reset attendance state when selected class changes
+  // Check if an existing session is in historyList
+  const existingSession = useMemo(() => {
+    if (!selectedClassCode || !selectedDate || !sessionSlot) return null;
+    const cleanSlot = (sessionSlot || '').trim().toLowerCase();
+    return historyList.find(s =>
+      s.classCode === selectedClassCode &&
+      s.date === selectedDate &&
+      ((s.slot || '').trim().toLowerCase() === cleanSlot || cleanSlot.includes((s.slot || '').trim().toLowerCase()))
+    ) || null;
+  }, [historyList, selectedClassCode, selectedDate, sessionSlot]);
+
+  // Sync attendance state whenever class, date, slot, classStudents, or historyList changes
   useEffect(() => {
-    const initialMap = {};
-    classStudents.forEach(s => {
-      initialMap[s.rollNo] = 'Present';
-    });
-    setAttendanceState(initialMap);
+    if (classStudents.length === 0) {
+      setAttendanceState({});
+      return;
+    }
+
+    const cleanSlot = (sessionSlot || '').trim().toLowerCase();
+    const existing = historyList.find(s =>
+      s.classCode === selectedClassCode &&
+      s.date === selectedDate &&
+      ((s.slot || '').trim().toLowerCase() === cleanSlot || cleanSlot.includes((s.slot || '').trim().toLowerCase()))
+    );
+
+    const newMap = {};
+    if (existing && Array.isArray(existing.records) && existing.records.length > 0) {
+      const savedMap = {};
+      existing.records.forEach(r => {
+        if (r && r.rollNo) {
+          savedMap[r.rollNo.toUpperCase()] = r.status || 'Present';
+        }
+      });
+
+      classStudents.forEach(s => {
+        const rollUpper = (s.rollNo || '').toUpperCase();
+        newMap[s.rollNo] = savedMap[rollUpper] || 'Present';
+      });
+    } else {
+      classStudents.forEach(s => {
+        newMap[s.rollNo] = 'Present';
+      });
+    }
+
+    setAttendanceState(newMap);
     setSavedSuccessMsg('');
     setSubmitError('');
-  }, [selectedClassCode, classStudents]);
+  }, [selectedClassCode, selectedDate, sessionSlot, classStudents, historyList]);
 
   // Filter students based on search query
   const displayedStudents = useMemo(() => {
@@ -130,7 +168,16 @@ export default function StaffAttendance({ staffUser }) {
     }));
   };
 
-  // Submit session attendance to MongoDB Atlas
+  const handleLoadSession = (record) => {
+    setSelectedClassCode(record.classCode);
+    setSelectedDate(record.date);
+    if (record.slot) {
+      setSessionSlot(record.slot);
+    }
+    setActiveTab('mark');
+  };
+
+  // Submit or update session attendance
   const handleSaveAttendance = async (e) => {
     e.preventDefault();
     setSubmitError('');
@@ -176,7 +223,25 @@ export default function StaffAttendance({ staffUser }) {
         return;
       }
 
-      setSavedSuccessMsg(`Attendance for ${currentClass.code} on ${selectedDate} (${sessionSlot}) recorded successfully!`);
+      const saved = data.session;
+      setSavedSuccessMsg(`Attendance for ${currentClass.code} on ${selectedDate} (${sessionSlot}) recorded successfully! (Present: ${saved?.presentCount ?? presentCount}, Absent: ${saved?.absentCount ?? absentCount})`);
+      
+      // Update local historyList immediately so existingSession is immediately recognized
+      if (saved) {
+        setHistoryList(prev => {
+          const idx = prev.findIndex(s =>
+            s._id === saved._id ||
+            (s.classCode === saved.classCode && s.date === saved.date && (s.slot || '').trim().toLowerCase() === (saved.slot || '').trim().toLowerCase())
+          );
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = saved;
+            return copy;
+          }
+          return [saved, ...prev];
+        });
+      }
+
       fetchHistory();
       setTimeout(() => setSavedSuccessMsg(''), 6000);
     } catch (err) {
@@ -305,6 +370,31 @@ export default function StaffAttendance({ staffUser }) {
                 </div>
               </div>
             </div>
+
+            {/* Active Session Status Banner */}
+            {existingSession ? (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-emerald-50/90 border border-emerald-200 text-emerald-900 rounded-2xl text-xs shadow-xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="font-bold">
+                    Saved Session Active: <span className="font-semibold text-emerald-700">{existingSession.presentCount} Present, {existingSession.absentCount} Absent{existingSession.lateCount ? `, ${existingSession.lateCount} Late` : ''}</span>
+                  </span>
+                </div>
+                <span className="text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-200 shadow-xs self-start sm:self-auto">
+                  Saved Record Loaded
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 border border-slate-200 text-slate-600 rounded-2xl text-xs">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>No attendance record saved yet for this session slot. Mark students and save to record.</span>
+                </div>
+                <span className="text-[11px] font-bold text-slate-500 bg-white px-2.5 py-0.5 rounded-lg border border-slate-200 shadow-xs self-start sm:self-auto">
+                  New Session
+                </span>
+              </div>
+            )}
 
             {/* Quick Metrics & Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
@@ -441,7 +531,11 @@ export default function StaffAttendance({ staffUser }) {
                       className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all"
                     >
                       <Save className="w-4 h-4" />
-                      {isSubmitting ? 'Saving to Atlas...' : 'Submit Session Attendance'}
+                      {isSubmitting
+                        ? 'Saving Attendance...'
+                        : existingSession
+                          ? 'Update Attendance Session'
+                          : 'Submit Session Attendance'}
                     </button>
                   </div>
                 </>
@@ -485,6 +579,7 @@ export default function StaffAttendance({ staffUser }) {
                     <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Present</th>
                     <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Absent</th>
                     <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Attendance %</th>
+                    <th className="text-right px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -519,6 +614,15 @@ export default function StaffAttendance({ staffUser }) {
                             }`}>
                             {pct}%
                           </span>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleLoadSession(record)}
+                            className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg transition-all border border-blue-200"
+                          >
+                            Load & Edit
+                          </button>
                         </td>
                       </tr>
                     );

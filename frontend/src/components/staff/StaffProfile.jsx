@@ -24,7 +24,15 @@ import {
   Plus,
   Trash2,
   X,
-  ChevronDown
+  ChevronDown,
+  Camera,
+  Upload,
+  Image as ImageIcon,
+  FileCheck,
+  Download,
+  Eye,
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
 
 const CATEGORY_CONFIG = {
@@ -40,7 +48,19 @@ const CATEGORIES = Object.keys(CATEGORY_CONFIG);
 
 const EMPTY_FORM = { title: '', category: 'Award', year: '', issuedBy: '', description: '' };
 
+const NET_SET_STATUS_OPTIONS = [
+  'Qualified UGC-NET',
+  'Qualified CSIR-NET',
+  'Qualified SET / SLET',
+  'Qualified NET & SET',
+  'Qualified NET with JRF',
+  'Appeared / Awaiting Results',
+  'Not Applicable'
+];
+
 export default function StaffProfile({ staffUser = {} }) {
+  const [profileImage, setProfileImage] = useState(staffUser?.profileImage || '');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [phone, setPhone] = useState(staffUser?.phone || '');
   const [altPhone, setAltPhone] = useState(staffUser?.altPhone || '');
   const [address, setAddress] = useState(staffUser?.address || '');
@@ -48,6 +68,14 @@ export default function StaffProfile({ staffUser = {} }) {
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [mySubjects, setMySubjects] = useState([]);
+
+  // NET / SET Certificate state
+  const [netSetExamStatus, setNetSetExamStatus] = useState(staffUser?.netSetExamStatus || 'Not Applicable');
+  const [netSetExamCertificate, setNetSetExamCertificate] = useState(staffUser?.netSetExamCertificate || '');
+  const [netSetCertificateName, setNetSetCertificateName] = useState(staffUser?.netSetCertificateName || '');
+  const [isUploadingCert, setIsUploadingCert] = useState(false);
+  const [certMsg, setCertMsg] = useState(null);
+  const [showCertPreviewModal, setShowCertPreviewModal] = useState(false);
 
   // Achievements state
   const [achievements, setAchievements] = useState([]);
@@ -59,13 +87,209 @@ export default function StaffProfile({ staffUser = {} }) {
 
   useEffect(() => {
     if (staffUser) {
+      if (staffUser.profileImage) setProfileImage(staffUser.profileImage);
       if (staffUser.phone) setPhone(staffUser.phone);
       if (staffUser.altPhone) setAltPhone(staffUser.altPhone);
       if (staffUser.address) setAddress(staffUser.address);
       if (staffUser.emergencyContact) setEmergencyContact(staffUser.emergencyContact);
+      if (staffUser.netSetExamStatus) setNetSetExamStatus(staffUser.netSetExamStatus);
+      if (staffUser.netSetExamCertificate) setNetSetExamCertificate(staffUser.netSetExamCertificate);
+      if (staffUser.netSetCertificateName) setNetSetCertificateName(staffUser.netSetCertificateName);
       if (Array.isArray(staffUser.achievements)) setAchievements(staffUser.achievements);
     }
   }, [staffUser]);
+
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, JPEG, WEBP)');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image size exceeds 10MB limit. Please choose a smaller photo.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result;
+      if (base64) {
+        setProfileImage(base64);
+        if (staffUser?.staffId) {
+          setIsUploadingPhoto(true);
+          try {
+            const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ profileImage: base64 })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              const stored = JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+              sessionStorage.setItem('vcas_user', JSON.stringify({ ...stored, profileImage: base64 }));
+              setIsSaved(true);
+              setTimeout(() => setIsSaved(false), 3000);
+            }
+          } catch (err) {
+            console.error('Error saving uploaded photo:', err);
+          } finally {
+            setIsUploadingPhoto(false);
+          }
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!window.confirm('Remove profile photo and restore initials avatar?')) return;
+    setProfileImage('');
+    if (staffUser?.staffId) {
+      setIsUploadingPhoto(true);
+      try {
+        await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profileImage: '' })
+        });
+        const stored = JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+        sessionStorage.setItem('vcas_user', JSON.stringify({ ...stored, profileImage: '' }));
+      } catch (err) {
+        console.error('Error removing photo:', err);
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    }
+  };
+
+  const handleCertificateSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(pdf|jpe?g|png|webp)$/i)) {
+      alert('Please upload a valid certificate file (PDF, PNG, JPG, or WEBP).');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Certificate size exceeds 10MB limit. Please upload a smaller file.');
+      return;
+    }
+
+    const fileName = file.name;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result;
+      if (base64) {
+        setNetSetExamCertificate(base64);
+        setNetSetCertificateName(fileName);
+        const autoStatus = netSetExamStatus === 'Not Applicable' ? 'Qualified UGC-NET' : netSetExamStatus;
+        if (netSetExamStatus === 'Not Applicable') setNetSetExamStatus('Qualified UGC-NET');
+
+        if (staffUser?.staffId) {
+          setIsUploadingCert(true);
+          try {
+            const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                netSetExamCertificate: base64,
+                netSetCertificateName: fileName,
+                netSetExamStatus: autoStatus
+              })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              const stored = JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+              sessionStorage.setItem('vcas_user', JSON.stringify({
+                ...stored,
+                netSetExamCertificate: base64,
+                netSetCertificateName: fileName,
+                netSetExamStatus: autoStatus
+              }));
+              setCertMsg({ type: 'success', text: 'NET/SET Certificate uploaded & saved successfully!' });
+              setTimeout(() => setCertMsg(null), 4000);
+            } else {
+              setCertMsg({ type: 'error', text: data.message || 'Failed to save certificate.' });
+            }
+          } catch (err) {
+            console.error('Error saving certificate:', err);
+            setCertMsg({ type: 'error', text: 'Unable to connect to server.' });
+          } finally {
+            setIsUploadingCert(false);
+          }
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveCertificate = async () => {
+    if (!window.confirm('Are you sure you want to remove your uploaded NET/SET exam certificate?')) return;
+    setNetSetExamCertificate('');
+    setNetSetCertificateName('');
+    if (staffUser?.staffId) {
+      setIsUploadingCert(true);
+      try {
+        await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            netSetExamCertificate: '',
+            netSetCertificateName: ''
+          })
+        });
+        const stored = JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+        sessionStorage.setItem('vcas_user', JSON.stringify({
+          ...stored,
+          netSetExamCertificate: '',
+          netSetCertificateName: ''
+        }));
+        setCertMsg({ type: 'success', text: 'Certificate removed successfully.' });
+        setTimeout(() => setCertMsg(null), 4000);
+      } catch (err) {
+        console.error('Error removing certificate:', err);
+      } finally {
+        setIsUploadingCert(false);
+      }
+    }
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    setNetSetExamStatus(newStatus);
+    if (staffUser?.staffId) {
+      try {
+        await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ netSetExamStatus: newStatus })
+        });
+        const stored = JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+        sessionStorage.setItem('vcas_user', JSON.stringify({ ...stored, netSetExamStatus: newStatus }));
+        setCertMsg({ type: 'success', text: 'NET/SET qualification status updated.' });
+        setTimeout(() => setCertMsg(null), 3000);
+      } catch (err) {
+        console.error('Error updating status:', err);
+      }
+    }
+  };
+
+  const handleViewCertificate = () => {
+    if (!netSetExamCertificate) return;
+    setShowCertPreviewModal(true);
+  };
+
+  const handleDownloadCertificate = () => {
+    if (!netSetExamCertificate) return;
+    const a = document.createElement('a');
+    a.href = netSetExamCertificate;
+    a.download = netSetCertificateName || 'NET_SET_Exam_Certificate';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   useEffect(() => {
     if (!staffUser?.staffId) return;
@@ -90,14 +314,33 @@ export default function StaffProfile({ staffUser = {} }) {
       const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, altPhone, address, emergencyContact })
+        body: JSON.stringify({
+          phone,
+          altPhone,
+          address,
+          emergencyContact,
+          profileImage,
+          netSetExamStatus,
+          netSetExamCertificate,
+          netSetCertificateName
+        })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setIsSaved(true);
         try {
           const stored = JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
-          sessionStorage.setItem('vcas_user', JSON.stringify({ ...stored, phone, altPhone, address, emergencyContact }));
+          sessionStorage.setItem('vcas_user', JSON.stringify({
+            ...stored,
+            phone,
+            altPhone,
+            address,
+            emergencyContact,
+            profileImage,
+            netSetExamStatus,
+            netSetExamCertificate,
+            netSetCertificateName
+          }));
         } catch (_) {}
         setTimeout(() => setIsSaved(false), 4000);
       } else {
@@ -196,9 +439,75 @@ export default function StaffProfile({ staffUser = {} }) {
 
       {/* Main Profile Card */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 pb-6 border-b border-slate-100">
-          <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${staffUser?.avatarColor || 'from-blue-600 to-indigo-700'} flex items-center justify-center text-white font-extrabold text-2xl shadow-lg shrink-0`}>
-            {staffUser?.avatarInitials || staffUser?.name?.substring(0, 2)?.toUpperCase() || 'ST'}
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 pb-6 border-b border-slate-100">
+          
+          {/* Profile Photo / Initials Avatar Box */}
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <div className="relative group">
+              <div className={`w-24 h-24 rounded-2xl overflow-hidden ${!profileImage ? `bg-gradient-to-br ${staffUser?.avatarColor || 'from-blue-600 to-indigo-700'}` : 'bg-slate-100'} flex items-center justify-center text-white font-extrabold text-2xl shadow-lg ring-4 ring-slate-100`}>
+                {profileImage ? (
+                  <img 
+                    src={profileImage} 
+                    alt={staffUser?.name || 'Staff Member'} 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  <span>{staffUser?.avatarInitials || staffUser?.avatarText || staffUser?.name?.substring(0, 2)?.toUpperCase() || 'ST'}</span>
+                )}
+              </div>
+
+              {/* Hover overlay to change photo */}
+              <label 
+                htmlFor="staff-profile-upload" 
+                className="absolute inset-0 bg-slate-900/60 rounded-2xl flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-2xs"
+                title="Click to upload profile photo"
+              >
+                <Camera className="w-6 h-6 mb-1 text-white" />
+                <span className="text-[10px] font-bold">Change</span>
+              </label>
+
+              <input 
+                id="staff-profile-upload" 
+                type="file" 
+                accept="image/*" 
+                onChange={handlePhotoSelect} 
+                className="hidden" 
+              />
+
+              {profileImage && (
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  title="Remove photo & use initials"
+                  className="absolute -top-1.5 -right-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-1 shadow-md transition-all cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Direct Upload Button for easy access */}
+            <div className="flex items-center gap-1.5">
+              <label 
+                htmlFor="staff-profile-upload" 
+                className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-lg text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1 border border-slate-200"
+              >
+                <Upload className="w-3 h-3" />
+                <span>{profileImage ? 'Change Photo' : 'Upload Photo'}</span>
+              </label>
+              {profileImage && (
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {isUploadingPhoto && (
+              <span className="text-[10px] text-blue-600 font-bold animate-pulse">Saving photo...</span>
+            )}
           </div>
           <div className="flex-1 text-center sm:text-left">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
@@ -251,6 +560,163 @@ export default function StaffProfile({ staffUser = {} }) {
                     {s.code} ({s.name})
                   </span>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* NET / SET Exam Qualification & Certificate Section */}
+        <div className="py-5 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-sm">
+                <Award className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  NET / SET Exam Qualification &amp; Certificate
+                  {netSetExamStatus && netSetExamStatus !== 'Not Applicable' && (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      {netSetExamStatus}
+                    </span>
+                  )}
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  National / State Eligibility Test qualification details and document verification
+                </p>
+              </div>
+            </div>
+            {isUploadingCert && (
+              <span className="text-xs font-bold text-indigo-600 animate-pulse flex items-center gap-1.5 self-start sm:self-auto">
+                <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+                Saving certificate...
+              </span>
+            )}
+          </div>
+
+          {/* Alert Message for Certificate Operations */}
+          {certMsg && (
+            <div className={`mb-4 flex items-center gap-2 p-3 rounded-xl text-xs font-semibold border ${
+              certMsg.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+            }`}>
+              <CheckCircle2 className={`w-4 h-4 shrink-0 ${certMsg.type === 'success' ? 'text-emerald-500' : 'text-rose-500'}`} />
+              {certMsg.text}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Qualification Status Selection */}
+            <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3">
+              <label className="block text-xs font-bold text-slate-700">
+                Exam Qualification Status
+              </label>
+              <select
+                value={netSetExamStatus}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-xs cursor-pointer"
+              >
+                {NET_SET_STATUS_OPTIONS.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Select your qualifying examination (UGC-NET, CSIR-NET, SET/SLET) for higher education faculty eligibility.
+              </p>
+            </div>
+
+            {/* Certificate Upload & Preview Area */}
+            <div className="p-4 bg-gradient-to-br from-indigo-50/40 to-purple-50/30 rounded-2xl border border-indigo-100/80 flex flex-col justify-between">
+              <div>
+                <span className="block text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                  Official Exam Certificate Document
+                </span>
+
+                {netSetExamCertificate ? (
+                  <div className="p-3 bg-white rounded-xl border border-indigo-200/80 shadow-xs space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                          <FileCheck className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">
+                            {netSetCertificateName || 'NET_SET_Certificate'}
+                          </p>
+                          <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Uploaded &amp; Available
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 shrink-0">
+                        {netSetExamCertificate.startsWith('data:application/pdf') ? 'PDF' : 'IMAGE'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleViewCertificate}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition-all cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDownloadCertificate}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition-all cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </button>
+                      <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition-all cursor-pointer">
+                        <Upload className="w-3 h-3" />
+                        Replace
+                        <input
+                          type="file"
+                          accept=".pdf,image/png,image/jpeg,image/webp"
+                          onChange={handleCertificateSelect}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRemoveCertificate}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold transition-all cursor-pointer ml-auto"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-white/70 hover:bg-white rounded-xl p-4 text-center transition-all">
+                    <input
+                      type="file"
+                      id="net-set-file-upload"
+                      accept=".pdf,image/png,image/jpeg,image/webp"
+                      onChange={handleCertificateSelect}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="net-set-file-upload"
+                      className="flex flex-col items-center justify-center cursor-pointer group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-indigo-100 group-hover:bg-indigo-200 text-indigo-600 flex items-center justify-center mb-2 transition-colors">
+                        <Upload className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                      </div>
+                      <span className="text-xs font-bold text-indigo-600 group-hover:text-indigo-700">
+                        Upload NET / SET Certificate
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">
+                        PDF or Image (PNG, JPG) up to 10MB
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -549,6 +1015,56 @@ export default function StaffProfile({ staffUser = {} }) {
           )}
         </div>
       </div>
+
+      {/* NET / SET Exam Certificate In-Page Preview Modal */}
+      {showCertPreviewModal && netSetExamCertificate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-5xl w-full h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-scaleUp">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Award className="w-5 h-5 text-amber-400" />
+                <div>
+                  <span className="font-extrabold text-sm block">Faculty NET / SET Exam Certificate</span>
+                  <span className="text-[11px] text-slate-300 font-mono">{netSetCertificateName || 'NET_SET_Certificate'}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadCertificate}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCertPreviewModal(false)}
+                  className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+                  title="Close Preview"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-slate-950 p-4 flex items-center justify-center overflow-auto">
+              {netSetExamCertificate.startsWith('data:application/pdf') ? (
+                <iframe
+                  src={netSetExamCertificate}
+                  title="Faculty NET/SET Exam Certificate Preview"
+                  className="w-full h-full rounded-xl bg-white border-0"
+                />
+              ) : (
+                <img
+                  src={netSetExamCertificate}
+                  alt={netSetCertificateName || 'NET SET Certificate'}
+                  className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

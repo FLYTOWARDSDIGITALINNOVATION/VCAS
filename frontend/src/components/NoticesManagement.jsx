@@ -51,18 +51,18 @@ const INITIAL_NOTICES = [
   {
     id: 2,
     refNo: 'CIR/2025/ACAD-114',
-    title: 'Submission of Final Year Capstone Project Reports & Demonstration',
+    title: 'Submission of Final Year UG & PG Project Dissertations & Viva Voce',
     category: 'Academic',
     priority: 'High',
     targetAudience: 'Students',
-    targetDept: 'Engineering (CS, ECE, Mech, Civil)',
+    targetDept: 'All Final Year (Commerce, CS, English, BBA, BCA, Maths)',
     publishDate: '2025-04-25',
     expiryDate: '2025-05-15',
     isPinned: true,
     author: 'Dr. Sunita Rao',
     designation: 'Dean – Academics & Research',
     viewsCount: 890,
-    content: 'All 8th Semester B.E/B.Tech students must submit three hard copies of their Final Capstone Project Report along with plagiarism clearance certificates (< 10% similarity on Turnitin) to their respective departmental project coordinators on or before May 10, 2025. Final viva-voce examinations with external examiners will be held between May 18 and May 22, 2025.',
+    content: 'All 6th Semester Undergraduate (B.Com, B.Sc, B.A, BBA, BCA) and 4th Semester Postgraduate students must submit two bound copies of their Project Dissertation along with the guide approval certificate to their respective department coordinators on or before May 10, 2025. Final viva-voce examinations with external university examiners will be scheduled shortly thereafter.',
     attachments: [
       { name: 'Project_Report_Formatting_Guidelines_2025.pdf', size: '850 KB' },
       { name: 'Plagiarism_Declaration_Form.docx', size: '120 KB' }
@@ -92,7 +92,7 @@ const INITIAL_NOTICES = [
     category: 'Placements',
     priority: 'High',
     targetAudience: 'Students',
-    targetDept: 'CS, ECE, BCA, MBA',
+    targetDept: 'CS, BCA, Commerce, BBA',
     publishDate: '2025-04-22',
     expiryDate: '2025-05-08',
     isPinned: true,
@@ -112,14 +112,14 @@ const INITIAL_NOTICES = [
     category: 'Events',
     priority: 'Normal',
     targetAudience: 'Faculty',
-    targetDept: 'Computer Science, ECE & Data Science',
+    targetDept: 'Computer Science, BCA & Mathematics',
     publishDate: '2025-04-20',
     expiryDate: '2025-05-20',
     isPinned: false,
-    author: 'Dr. Anand Swaminathan',
-    designation: 'HOD – CSE Dept',
+    author: 'Dr. Sunita Rao',
+    designation: 'HOD – Computer Science',
     viewsCount: 410,
-    content: 'A 5-day AICTE sponsored national level Faculty Development Programme on "Generative AI Foundations, Large Language Models and Edge Computing" will be organized from May 20 to May 24, 2025 in Computing Lab 4. Faculty members across all disciplines are encouraged to participate. Certificates of completion will be awarded to all registered attendees.',
+    content: 'A 5-day UGC sponsored national level Faculty Development Programme on "Generative AI Foundations, Prompt Engineering and Modern Computational Thinking" will be organized from May 20 to May 24, 2025 in Computing Lab 4. Faculty members across all disciplines are encouraged to participate. Certificates of completion will be awarded to all registered attendees.',
     attachments: [
       { name: 'FDP_GenAI_Brochure_Schedule.pdf', size: '3.2 MB' }
     ]
@@ -891,7 +891,7 @@ export default function NoticesManagement() {
                     type="text"
                     value={formData.targetDept}
                     onChange={(e) => setFormData({ ...formData, targetDept: e.target.value })}
-                    placeholder="All Departments or CS, ECE..."
+                    placeholder="All Departments or CS, B.Com, English..."
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>

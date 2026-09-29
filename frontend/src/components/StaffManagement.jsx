@@ -23,12 +23,31 @@ import {
   Heart,
   MapPin,
   ShieldCheck,
-  Award
+  Award,
+  Download,
+  Key,
+  Copy,
+  Lock,
+  FileText,
+  Printer,
+  Upload,
+  FileCheck,
+  ExternalLink
 } from 'lucide-react';
 import StaffDetailView from './StaffDetailView';
 import ModalPortal from './ModalPortal';
 
 const API_BASE = 'http://localhost:5000';
+
+const NET_SET_STATUS_OPTIONS = [
+  'Qualified UGC-NET',
+  'Qualified CSIR-NET',
+  'Qualified SET / SLET',
+  'Qualified NET & SET',
+  'Qualified NET with JRF',
+  'Appeared / Awaiting Results',
+  'Not Applicable'
+];
 
 function normalizeStaff(s) {
   if (!s) return null;
@@ -37,7 +56,11 @@ function normalizeStaff(s) {
     id: s._id || s.staffId || s.id,
     empId: s.staffId || s.empId || '',
     avatarBg: s.avatarBg || 'bg-purple-600',
-    avatarText: s.avatarText || getInitials(s.name)
+    avatarText: s.avatarText || getInitials(s.name),
+    profileImage: s.profileImage || '',
+    netSetExamStatus: s.netSetExamStatus || 'Not Applicable',
+    netSetExamCertificate: s.netSetExamCertificate || '',
+    netSetCertificateName: s.netSetCertificateName || ''
   };
 }
 
@@ -45,13 +68,12 @@ const INITIAL_STAFF = [];
 
 const DEPARTMENTS = [
   'All Departments',
+  'Commerce',
   'Computer Science',
-  'Electronics',
-  'MBA',
-  'Mechanical',
-  'Civil',
-  'BCA',
-  'Information Technology'
+  'English Literature',
+  'Business Administration (BBA)',
+  'Computer Applications (BCA)',
+  'Mathematics'
 ];
 
 const DESIGNATIONS = [
@@ -111,7 +133,11 @@ function getInitials(name) {
   return clean.substring(0, 2).toUpperCase();
 }
 
-export default function StaffManagement() {
+export default function StaffManagement({ user }) {
+  const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
+  const [credentialModalStaff, setCredentialModalStaff] = useState(null);
+  const [copiedCredential, setCopiedCredential] = useState(false);
+
   const [staffList, setStaffList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -119,9 +145,13 @@ export default function StaffManagement() {
   const [selectedDept, setSelectedDept] = useState('All Departments');
   const [selectedDesignation, setSelectedDesignation] = useState('All Designations');
   const [selectedStatus, setSelectedStatus] = useState('All Status');
+  const [selectedNetSetFilter, setSelectedNetSetFilter] = useState('All');
 
   // Selected staff for full detailed view
   const [selectedStaffForDetails, setSelectedStaffForDetails] = useState(null);
+
+  // Selected staff for direct NET/SET Certificate view modal
+  const [selectedStaffForCertModal, setSelectedStaffForCertModal] = useState(null);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -129,6 +159,192 @@ export default function StaffManagement() {
   const [deletingStaff, setDeletingStaff] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
   const [modalError, setModalError] = useState('');
+
+  // Super Admin Exclusive: Download Staff Credentials
+  const handleDownloadStaffCredentials = (staff) => {
+    const slipText = `
+================================================================================
+          VIVEKANANDA COLLEGE OF ARTS AND SCIENCE (AUTONOMOUS)
+                      VELLALANKULAM, TAMIL NADU
+                 CONFIDENTIAL STAFF CREDENTIAL SLIP
+================================================================================
+Generated On        : ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+Issued By           : Super Administrator (VCAS Master Auth Controller)
+Security Level      : RESTRICTED / LEVEL-1 ACCESS
+--------------------------------------------------------------------------------
+STAFF DETAILS:
+  Full Name         : ${staff.name}
+  Employee ID       : ${staff.empId || staff.staffId}
+  Department        : ${staff.department}
+  Designation       : ${staff.designation || 'Faculty Member'}
+  Official Email    : ${staff.email}
+  Contact Phone     : ${staff.phone || 'Pending setup'}
+  Employment Type   : ${staff.employmentType || 'Permanent / Full-Time'}
+  Status            : ${staff.status || 'Active'}
+  Joining Date      : ${staff.joiningDate || 'N/A'}
+
+PORTAL ACCESS CREDENTIALS:
+  Portal Login URL  : http://localhost:5173/login
+  Role              : Staff
+  Login Username    : ${staff.email}
+  Initial Password  : vcas@2026
+  Account Security  : ${staff.isProfileCompleted ? 'Completed by Staff' : 'Pending First Sign-in (Default Password Active)'}
+
+INSTRUCTIONS FOR STAFF:
+  1. Navigate to the VCAS Portal Login URL.
+  2. Select 'Staff' role and input the above email and default password.
+  3. You will be prompted to complete first-time profile configuration.
+  4. For any credential issues, contact the Super Administration Desk.
+--------------------------------------------------------------------------------
+CONFIDENTIALITY NOTICE:
+This document contains sensitive authentication details. Only the Super Administrator
+is authorized to export or issue this credential sheet.
+================================================================================
+`.trim();
+
+    const blob = new Blob([slipText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${(staff.empId || staff.staffId || 'STAFF')}_${staff.name.replace(/[^a-zA-Z0-9]/g, '_')}_Credentials.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setToastMessage(`Credentials downloaded for ${staff.name}`);
+    setTimeout(() => setToastMessage(''), 3500);
+  };
+
+  // Super Admin Exclusive: Print Staff Credentials Slip
+  const handlePrintStaffCredentials = (staff) => {
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!printWindow) {
+      alert('Please allow popups to print credential slips.');
+      return;
+    }
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Staff Credential Slip - ${staff.name} (${staff.empId || staff.staffId})</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #1e293b; }
+          .header { text-align: center; border-bottom: 2px solid #7c3aed; padding-bottom: 20px; margin-bottom: 25px; }
+          .title { font-size: 20px; font-weight: bold; color: #5b21b6; text-transform: uppercase; margin: 0; }
+          .subtitle { font-size: 14px; color: #475569; margin: 5px 0 0 0; }
+          .badge { display: inline-block; background: #faf5ff; color: #6b21a8; font-size: 11px; padding: 4px 10px; border-radius: 9999px; font-weight: 600; margin-top: 10px; border: 1px solid #e9d5ff; }
+          .meta-bar { display: flex; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 16px; font-size: 12px; margin-bottom: 25px; }
+          .section { margin-bottom: 25px; }
+          .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; color: #7c3aed; letter-spacing: 0.5px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; }
+          table { width: 100%; border-collapse: collapse; font-size: 13px; }
+          td { padding: 8px 12px; vertical-align: top; }
+          td.label { width: 35%; font-weight: 600; color: #64748b; }
+          td.value { width: 65%; color: #0f172a; font-weight: 500; }
+          .cred-box { background: #faf5ff; border: 1px solid #d8b4fe; border-radius: 8px; padding: 14px 18px; margin-top: 10px; }
+          .cred-title { font-size: 13px; font-weight: bold; color: #6b21a8; margin-bottom: 10px; }
+          .cred-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          .cred-item { font-size: 13px; }
+          .cred-item span { color: #64748b; font-size: 11px; display: block; font-weight: 600; }
+          .cred-item strong { color: #0f172a; font-family: monospace; font-size: 14px; }
+          .footer { margin-top: 40px; border-top: 1px dashed #cbd5e1; padding-top: 20px; font-size: 11px; color: #64748b; text-align: center; }
+          .stamp-row { display: flex; justify-content: space-between; margin-top: 50px; padding: 0 30px; font-size: 12px; font-weight: 600; }
+          @media print {
+            body { margin: 20px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title">Vivekananda College of Arts and Science</div>
+          <div class="subtitle">Autonomous Institution • Affiliated with MS University • Vellalankulam</div>
+          <div class="badge">Official Staff Access Pass & Security Credentials</div>
+        </div>
+        <div class="meta-bar">
+          <div><strong>Generated On:</strong> ${new Date().toLocaleString('en-IN')}</div>
+          <div><strong>Authorized By:</strong> Super Administrator</div>
+          <div><strong>Ref:</strong> VCAS-STAFF-${staff.empId || staff.staffId}</div>
+        </div>
+        <div class="section">
+          <div class="section-title">Staff Details</div>
+          <table>
+            <tr><td class="label">Full Name</td><td class="value"><strong>${staff.name}</strong></td></tr>
+            <tr><td class="label">Employee ID</td><td class="value">${staff.empId || staff.staffId}</td></tr>
+            <tr><td class="label">Department</td><td class="value">${staff.department}</td></tr>
+            <tr><td class="label">Designation</td><td class="value">${staff.designation || 'Faculty Member'}</td></tr>
+            <tr><td class="label">Official Email</td><td class="value">${staff.email}</td></tr>
+            <tr><td class="label">Phone</td><td class="value">${staff.phone || 'Pending setup'}</td></tr>
+            <tr><td class="label">Joining Date</td><td class="value">${staff.joiningDate || 'N/A'}</td></tr>
+          </table>
+        </div>
+        <div class="section">
+          <div class="section-title">Portal Access Credentials</div>
+          <div class="cred-box">
+            <div class="cred-title">Digital Portal Authentication Details</div>
+            <div class="cred-grid">
+              <div class="cred-item">
+                <span>LOGIN USERNAME / EMAIL</span>
+                <strong>${staff.email}</strong>
+              </div>
+              <div class="cred-item">
+                <span>INITIAL PASSWORD</span>
+                <strong>vcas@2026</strong>
+              </div>
+              <div class="cred-item">
+                <span>SECURITY STATUS</span>
+                <strong>${staff.isProfileCompleted ? 'Configured by Staff' : 'Default Password Active'}</strong>
+              </div>
+              <div class="cred-item">
+                <span>PORTAL ADDRESS</span>
+                <strong>vcas.edu/login</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stamp-row">
+          <div>Verified by HR & Admin</div>
+          <div>Authorized Signatory (Super Admin)</div>
+        </div>
+        <div class="footer">
+          Notice: This document contains confidential system credentials. Issued under authorization of Super Admin.
+        </div>
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  // Super Admin Exclusive: Bulk export CSV
+  const handleDownloadAllStaffSummary = () => {
+    const headers = ['Employee ID', 'Name', 'Email', 'Department', 'Designation', 'Phone', 'Status', 'Default Password', 'Profile Setup'];
+    const rows = staffList.map(s => [
+      `"${s.empId || s.staffId}"`,
+      `"${s.name}"`,
+      `"${s.email}"`,
+      `"${s.department}"`,
+      `"${s.designation || ''}"`,
+      `"${s.phone || ''}"`,
+      `"${s.status || 'Active'}"`,
+      `"vcas@2026"`,
+      `"${s.isProfileCompleted ? 'Completed' : 'Pending'}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `VCAS_Staff_Credentials_Master_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setToastMessage('Exported master staff credentials CSV');
+    setTimeout(() => setToastMessage(''), 3500);
+  };
 
   // Fetch staff list from MongoDB on mount
   const fetchStaffList = async () => {
@@ -187,10 +403,49 @@ export default function StaffManagement() {
     bloodGroup: 'O+',
     dob: '1985-05-15',
     address: '',
-    emergencyContact: ''
+    emergencyContact: '',
+    netSetExamStatus: 'Not Applicable',
+    netSetExamCertificate: '',
+    netSetCertificateName: ''
   });
 
   const [formErrors, setFormErrors] = useState({});
+
+  const handleModalCertificateUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(pdf|jpe?g|png|webp)$/i)) {
+      alert('Please upload a valid document or image (PDF, PNG, JPG, WEBP).');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit.');
+      return;
+    }
+    const fileName = file.name;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result;
+      if (base64) {
+        setFormData(prev => ({
+          ...prev,
+          netSetExamCertificate: base64,
+          netSetCertificateName: fileName,
+          netSetExamStatus: prev.netSetExamStatus === 'Not Applicable' ? 'Qualified UGC-NET' : prev.netSetExamStatus
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleModalRemoveCertificate = () => {
+    setFormData(prev => ({
+      ...prev,
+      netSetExamCertificate: '',
+      netSetCertificateName: ''
+    }));
+  };
 
   // Reset form
   const resetForm = () => {
@@ -212,7 +467,10 @@ export default function StaffManagement() {
       bloodGroup: 'O+',
       dob: '1988-06-20',
       address: '',
-      emergencyContact: ''
+      emergencyContact: '',
+      netSetExamStatus: 'Not Applicable',
+      netSetExamCertificate: '',
+      netSetCertificateName: ''
     });
     setFormErrors({});
     setModalError('');
@@ -243,7 +501,10 @@ export default function StaffManagement() {
       bloodGroup: staff.bloodGroup || 'O+',
       dob: staff.dob || '1984-05-18',
       address: staff.address || '',
-      emergencyContact: staff.emergencyContact || ''
+      emergencyContact: staff.emergencyContact || '',
+      netSetExamStatus: staff.netSetExamStatus || 'Not Applicable',
+      netSetExamCertificate: staff.netSetExamCertificate || '',
+      netSetCertificateName: staff.netSetCertificateName || ''
     });
     setFormErrors({});
     setModalError('');
@@ -407,10 +668,13 @@ export default function StaffManagement() {
       const matchesDept = selectedDept === 'All Departments' || item.department === selectedDept;
       const matchesDesignation = selectedDesignation === 'All Designations' || item.designation === selectedDesignation;
       const matchesStatus = selectedStatus === 'All Status' || item.status === selectedStatus;
+      const matchesNetSet = selectedNetSetFilter === 'All'
+        || (selectedNetSetFilter === 'Uploaded' && Boolean(item.netSetExamCertificate))
+        || (selectedNetSetFilter === 'Pending' && !item.netSetExamCertificate);
 
-      return matchesSearch && matchesDept && matchesDesignation && matchesStatus;
+      return matchesSearch && matchesDept && matchesDesignation && matchesStatus && matchesNetSet;
     });
-  }, [staffList, searchQuery, selectedDept, selectedDesignation, selectedStatus]);
+  }, [staffList, searchQuery, selectedDept, selectedDesignation, selectedStatus, selectedNetSetFilter]);
 
   return (
     <>
@@ -434,6 +698,9 @@ export default function StaffManagement() {
           staff={selectedStaffForDetails}
           onBack={() => setSelectedStaffForDetails(null)}
           onEdit={(staff) => handleOpenEditModal(staff)}
+          user={user}
+          onDownloadCredentials={handleDownloadStaffCredentials}
+          onPrintCredentials={handlePrintStaffCredentials}
         />
       ) : (
         <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full font-sans animate-fadeIn">
@@ -445,7 +712,30 @@ export default function StaffManagement() {
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                   Staff Management
                 </h1>
+                {isSuperAdmin && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200 shadow-2xs">
+                    <Key className="w-3.5 h-3.5" />
+                    <span>Super Admin Credentials Access</span>
+                  </span>
+                )}
               </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {isSuperAdmin 
+                  ? 'Master Directory: Manage faculty records and download individual or master login credentials.' 
+                  : 'Institutional faculty records, course allocations, and profile verifications.'}
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2.5">
+              {isSuperAdmin && (
+                <button
+                  onClick={handleDownloadAllStaffSummary}
+                  className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition-all shadow-xs"
+                >
+                  <Download className="w-4 h-4 text-purple-600" />
+                  <span>Export Staff CSV</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -472,7 +762,7 @@ export default function StaffManagement() {
             </div>
 
             {/* Dropdown Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 shrink-0">
 
               {/* Department */}
               <div className="relative">
@@ -516,6 +806,20 @@ export default function StaffManagement() {
                 <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
 
+              {/* NET / SET Certificate Filter */}
+              <div className="relative">
+                <select
+                  value={selectedNetSetFilter}
+                  onChange={(e) => setSelectedNetSetFilter(e.target.value)}
+                  className="w-full appearance-none bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-semibold text-indigo-900 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none cursor-pointer transition-all"
+                >
+                  <option value="All">All NET/SET Status</option>
+                  <option value="Uploaded">📜 Certificate Uploaded</option>
+                  <option value="Pending">⏳ Pending Certificate</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-indigo-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
             </div>
           </div>
 
@@ -535,7 +839,9 @@ export default function StaffManagement() {
                     <th className="py-4 px-4">PHONE</th>
                     <th className="py-4 px-4">JOINING</th>
                     <th className="py-4 px-4">STATUS</th>
+                    <th className="py-4 px-4 text-center">NET / SET CERTIFICATE</th>
                     <th className="py-4 px-4">PROFILE SETUP</th>
+                    {isSuperAdmin && <th className="py-4 px-4 text-center">CREDENTIALS</th>}
                     <th className="py-4 px-6 text-right">ACTIONS</th>
                   </tr>
                 </thead>
@@ -550,8 +856,12 @@ export default function StaffManagement() {
                         {/* STAFF (Avatar + Name) */}
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
-                            <div className={`w-9 h-9 rounded-xl ${staff.avatarBg || 'bg-purple-600'} text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform`}>
-                              {staff.avatarText || getInitials(staff.name)}
+                            <div className={`w-9 h-9 rounded-xl ${!staff.profileImage ? (staff.avatarBg || 'bg-purple-600') : 'bg-slate-100'} overflow-hidden text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform`}>
+                              {staff.profileImage ? (
+                                <img src={staff.profileImage} alt={staff.name} className="w-full h-full object-cover" />
+                              ) : (
+                                staff.avatarText || getInitials(staff.name)
+                              )}
                             </div>
                             <div>
                               <p className="font-bold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
@@ -606,6 +916,24 @@ export default function StaffManagement() {
                           </span>
                         </td>
 
+                        {/* NET / SET CERTIFICATE */}
+                        <td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                          {staff.netSetExamCertificate ? (
+                            <button
+                              onClick={() => setSelectedStaffForCertModal(staff)}
+                              title="Click to View & Verify NET/SET Certificate"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all shadow-2xs hover:scale-105 cursor-pointer"
+                            >
+                              <Award className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>View Certificate</span>
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold text-slate-400 bg-slate-50 border border-slate-200">
+                              {staff.netSetExamStatus && staff.netSetExamStatus !== 'Not Applicable' ? staff.netSetExamStatus : 'Not Uploaded'}
+                            </span>
+                          )}
+                        </td>
+
                         {/* PROFILE SETUP STATUS */}
                         <td className="py-4 px-4">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${staff.isProfileCompleted
@@ -617,9 +945,59 @@ export default function StaffManagement() {
                           </span>
                         </td>
 
+                        {/* CREDENTIALS COLUMN (Super Admin Exclusive) */}
+                        {isSuperAdmin && (
+                          <td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => setCredentialModalStaff(staff)}
+                              title="Download & View Staff Credentials Slip"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all shadow-2xs"
+                            >
+                              <Key className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Download Slip</span>
+                            </button>
+                          </td>
+                        )}
+
                         {/* ACTIONS */}
                         <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5 text-slate-400">
+                            {staff.netSetExamCertificate && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedStaffForCertModal(staff);
+                                }}
+                                title="View NET / SET Certificate"
+                                className="p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all"
+                              >
+                                <Award className="w-4 h-4" />
+                              </button>
+                            )}
+                            {isSuperAdmin && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownloadStaffCredentials(staff);
+                                  }}
+                                  title="Quick Download Credentials File"
+                                  className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePrintStaffCredentials(staff);
+                                  }}
+                                  title="Print Staff Credentials Slip"
+                                  className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all"
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -656,7 +1034,7 @@ export default function StaffManagement() {
                     ))
                   ) : isLoading ? (
                     <tr>
-                      <td colSpan={10} className="py-16 text-center text-slate-400">
+                      <td colSpan={11} className="py-16 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center space-y-3">
                           <div className="w-8 h-8 border-3 border-blue-600/30 border-t-blue-600 rounded-full animate-spin"></div>
                           <p className="text-xs font-semibold text-slate-600">Loading staff members...</p>
@@ -665,7 +1043,7 @@ export default function StaffManagement() {
                     </tr>
                   ) : staffList.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-16 text-center text-slate-400">
+                      <td colSpan={11} className="py-16 text-center text-slate-400">
                         <div className="max-w-sm mx-auto space-y-3">
                           <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
                             <User className="w-6 h-6" />
@@ -679,7 +1057,7 @@ export default function StaffManagement() {
                     </tr>
                   ) : (
                     <tr>
-                      <td colSpan={10} className="py-12 text-center text-slate-400">
+                      <td colSpan={11} className="py-12 text-center text-slate-400">
                         <div className="max-w-xs mx-auto space-y-2">
                           <User className="w-8 h-8 mx-auto text-slate-300" />
                           <p className="text-sm font-semibold text-slate-600">No matching staff found</p>
@@ -702,8 +1080,12 @@ export default function StaffManagement() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl ${staff.avatarBg || 'bg-purple-600'} text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs`}>
-                        {staff.avatarText || getInitials(staff.name)}
+                      <div className={`w-10 h-10 rounded-xl ${!staff.profileImage ? (staff.avatarBg || 'bg-purple-600') : 'bg-slate-100'} overflow-hidden text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs`}>
+                        {staff.profileImage ? (
+                          <img src={staff.profileImage} alt={staff.name} className="w-full h-full object-cover" />
+                        ) : (
+                          staff.avatarText || getInitials(staff.name)
+                        )}
                       </div>
                       <div>
                         <h4 className="font-bold text-slate-900 text-sm leading-tight">{staff.name}</h4>
@@ -735,11 +1117,40 @@ export default function StaffManagement() {
                     </div>
                   </div>
 
+                  {staff.netSetExamCertificate && (
+                    <div className="flex items-center justify-between p-2.5 bg-indigo-50/70 rounded-xl border border-indigo-100" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-[11px] font-bold text-indigo-900 flex items-center gap-1.5">
+                        <Award className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>NET / SET Certificate</span>
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedStaffForCertModal(staff);
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs"
+                      >
+                        View Certificate
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
                     <span className="text-[11px] font-bold text-blue-600">
                       Tap to view profile →
                     </span>
                     <div className="flex items-center gap-1.5">
+                      {isSuperAdmin && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadStaffCredentials(staff);
+                          }}
+                          className="px-2.5 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg flex items-center gap-1 border border-purple-200 transition-all"
+                        >
+                          <Key className="w-3.5 h-3.5" /> Credentials
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -928,7 +1339,7 @@ export default function StaffManagement() {
                       type="text"
                       value={formData.qualification}
                       onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
-                      placeholder="e.g. Ph.D. in Computer Science, M.Tech"
+                      placeholder="e.g. Ph.D. in Commerce, M.Phil, NET/SET"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
                     />
                   </div>
@@ -952,6 +1363,55 @@ export default function StaffManagement() {
                       onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      NET / SET Exam Qualification
+                    </label>
+                    <select
+                      value={formData.netSetExamStatus}
+                      onChange={(e) => setFormData({ ...formData, netSetExamStatus: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    >
+                      {NET_SET_STATUS_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      NET / SET Exam Certificate Upload
+                    </label>
+                    {formData.netSetExamCertificate ? (
+                      <div className="flex items-center justify-between p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FileCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <span className="text-xs font-bold text-indigo-900 truncate">
+                            {formData.netSetCertificateName || 'Certificate Attached'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleModalRemoveCertificate}
+                          className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50 hover:bg-indigo-50/30 rounded-xl text-xs font-bold text-slate-600 hover:text-indigo-600 transition-all cursor-pointer">
+                        <Upload className="w-4 h-4 text-slate-400" />
+                        <span>Upload Certificate (PDF / Image up to 10MB)</span>
+                        <input
+                          type="file"
+                          accept=".pdf,image/png,image/jpeg,image/webp"
+                          onChange={handleModalCertificateUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1228,7 +1688,7 @@ export default function StaffManagement() {
                       type="text"
                       value={formData.qualification}
                       onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
-                      placeholder="e.g. Ph.D. in Computer Science (IIT Madras), M.Tech"
+                      placeholder="e.g. Ph.D. in English Literature (Madras University), M.Phil"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
                     />
                   </div>
@@ -1252,6 +1712,55 @@ export default function StaffManagement() {
                       onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      NET / SET Exam Qualification
+                    </label>
+                    <select
+                      value={formData.netSetExamStatus}
+                      onChange={(e) => setFormData({ ...formData, netSetExamStatus: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    >
+                      {NET_SET_STATUS_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      NET / SET Exam Certificate Upload
+                    </label>
+                    {formData.netSetExamCertificate ? (
+                      <div className="flex items-center justify-between p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FileCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <span className="text-xs font-bold text-indigo-900 truncate">
+                            {formData.netSetCertificateName || 'Certificate Attached'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleModalRemoveCertificate}
+                          className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50 hover:bg-indigo-50/30 rounded-xl text-xs font-bold text-slate-600 hover:text-indigo-600 transition-all cursor-pointer">
+                        <Upload className="w-4 h-4 text-slate-400" />
+                        <span>Upload Certificate (PDF / Image up to 10MB)</span>
+                        <input
+                          type="file"
+                          accept=".pdf,image/png,image/jpeg,image/webp"
+                          onChange={handleModalCertificateUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1381,6 +1890,250 @@ export default function StaffManagement() {
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Yes, Delete</span>
               </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* SUPER ADMIN CREDENTIAL PREVIEW & DOWNLOAD MODAL */}
+      {credentialModalStaff && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn" onClick={() => setCredentialModalStaff(null)}>
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden animate-scaleUp" onClick={(e) => e.stopPropagation()}>
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-purple-700 to-indigo-700 text-white p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white">
+                      <Key className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-extrabold">Confidential Staff Credentials</h3>
+                      <p className="text-xs text-purple-200">Super Administrator Authorization</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setCredentialModalStaff(null)}
+                    className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body: Credential Card */}
+              <div className="p-6 space-y-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5 font-mono text-xs">
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">Staff Member:</span>
+                    <span className="font-bold text-slate-800 font-sans">{credentialModalStaff.name}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">Employee ID:</span>
+                    <span className="font-bold text-purple-700">{credentialModalStaff.empId || credentialModalStaff.staffId}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">Department:</span>
+                    <span className="font-semibold text-slate-700 font-sans">{credentialModalStaff.department}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">Login Username:</span>
+                    <span className="font-bold text-slate-900">{credentialModalStaff.email}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">Default Password:</span>
+                    <span className="font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-300">vcas@2026</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-sans">Portal URL:</span>
+                    <span className="text-blue-600 font-sans text-[11px]">http://localhost:5173/login</span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  🛡️ <strong>Master Authorization:</strong> As Super Administrator, you are exclusively authorized to download or issue this security pass.
+                </p>
+
+                {/* Modal Actions */}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`VCAS Staff Credentials\nName: ${credentialModalStaff.name}\nEmp ID: ${credentialModalStaff.empId || credentialModalStaff.staffId}\nEmail: ${credentialModalStaff.email}\nPassword: vcas@2026\nPortal: http://localhost:5173/login`);
+                      setCopiedCredential(true);
+                      setTimeout(() => setCopiedCredential(false), 2000);
+                    }}
+                    className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5"
+                  >
+                    <Check className={`w-3.5 h-3.5 ${copiedCredential ? 'text-emerald-600' : 'hidden'}`} />
+                    <span>{copiedCredential ? 'Copied!' : 'Copy Info'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handlePrintStaffCredentials(credentialModalStaff);
+                    }}
+                    className="px-4 py-2.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-all flex items-center gap-1.5"
+                  >
+                    <Printer className="w-4 h-4 text-purple-600" />
+                    <span>Print Slip</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDownloadStaffCredentials(credentialModalStaff);
+                      setCredentialModalStaff(null);
+                    }}
+                    className="px-5 py-2.5 text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download Credential Slip</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* 8. NET / SET CERTIFICATE VERIFICATION MODAL FOR ADMIN */}
+      {selectedStaffForCertModal && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-5 bg-slate-900/75 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-scaleUp">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-slate-900 text-base leading-tight truncate">
+                        {selectedStaffForCertModal.name}
+                      </h3>
+                      <span className="text-xs font-mono font-bold bg-slate-200/80 text-slate-700 px-2 py-0.5 rounded-md shrink-0">
+                        {selectedStaffForCertModal.empId}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                      {selectedStaffForCertModal.department} • {selectedStaffForCertModal.designation} • <span className="font-semibold text-indigo-600">{selectedStaffForCertModal.netSetExamStatus}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {selectedStaffForCertModal.netSetExamCertificate && (
+                    <button
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = selectedStaffForCertModal.netSetExamCertificate;
+                        link.download = selectedStaffForCertModal.netSetCertificateName || `${selectedStaffForCertModal.empId}_NET_SET_Certificate`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      title="Download Certificate File"
+                      className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSelectedStaffForCertModal(null)}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body / Certificate Preview */}
+              <div className="p-4 sm:p-6 bg-slate-100 flex-1 overflow-auto flex items-center justify-center min-h-[420px]">
+                {selectedStaffForCertModal.netSetExamCertificate ? (
+                  selectedStaffForCertModal.netSetExamCertificate.startsWith('data:application/pdf') || selectedStaffForCertModal.netSetCertificateName?.toLowerCase().endsWith('.pdf') ? (
+                    <iframe
+                      src={selectedStaffForCertModal.netSetExamCertificate}
+                      title="NET/SET Certificate"
+                      className="w-full h-[65vh] rounded-2xl border border-slate-300 bg-white shadow-inner"
+                    />
+                  ) : (
+                    <div className="max-w-full max-h-[65vh] flex items-center justify-center p-2 bg-slate-900 rounded-2xl overflow-hidden shadow-lg">
+                      <img
+                        src={selectedStaffForCertModal.netSetExamCertificate}
+                        alt="NET/SET Certificate"
+                        className="max-w-full max-h-[60vh] object-contain rounded-lg"
+                      />
+                    </div>
+                  )
+                ) : (
+                  <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 text-slate-500">
+                    <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                    <p className="font-bold text-sm">No Certificate Document Found</p>
+                    <p className="text-xs text-slate-400 mt-1">This faculty member has not uploaded their certificate file.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-3.5 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2 text-xs text-slate-500 min-w-0">
+                  <FileCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span className="font-semibold text-slate-700 truncate">
+                    {selectedStaffForCertModal.netSetCertificateName || 'NET / SET Exam Certificate'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                  {selectedStaffForCertModal.netSetExamCertificate && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const w = window.open();
+                          if (w) {
+                            if (selectedStaffForCertModal.netSetExamCertificate.startsWith('data:application/pdf')) {
+                              w.document.write(`<html><head><title>${selectedStaffForCertModal.netSetCertificateName || 'NET/SET Certificate'}</title><style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#1e293b;}</style></head><body><iframe src="${selectedStaffForCertModal.netSetExamCertificate}" frameborder="0" style="width:100%;height:100%;border:none;" allowfullscreen></iframe></body></html>`);
+                            } else {
+                              w.document.write(`<html><head><title>${selectedStaffForCertModal.netSetCertificateName || 'NET/SET Certificate'}</title><style>html,body{margin:0;padding:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#0f172a;}</style></head><body><img src="${selectedStaffForCertModal.netSetExamCertificate}" style="max-width:92%;max-height:92vh;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.6);" /></body></html>`);
+                            }
+                          }
+                        }}
+                        className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Open in New Tab</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = selectedStaffForCertModal.netSetExamCertificate;
+                          link.download = selectedStaffForCertModal.netSetCertificateName || `${selectedStaffForCertModal.empId}_NET_SET_Certificate`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download</span>
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStaffForCertModal(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </ModalPortal>

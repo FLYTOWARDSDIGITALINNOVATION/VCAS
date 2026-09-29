@@ -97,11 +97,12 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     noticesCount: 0,
     attendanceBreakdown: { presentPct: 79, absentPct: 15, leavePct: 6 },
     deptEnrollments: [
-      { dept: 'Computer Science', count: 340, width: '90%' },
-      { dept: 'Electronics', count: 270, width: '75%' },
-      { dept: 'MBA', count: 220, width: '60%' },
-      { dept: 'Mechanical', count: 180, width: '50%' },
-      { dept: 'BCA', count: 150, width: '40%' }
+      { dept: 'Commerce', count: 360, width: '92%' },
+      { dept: 'Computer Science', count: 320, width: '82%' },
+      { dept: 'English Literature', count: 240, width: '65%' },
+      { dept: 'Business Admin (BBA)', count: 210, width: '58%' },
+      { dept: 'Computer Apps (BCA)', count: 180, width: '48%' },
+      { dept: 'Mathematics', count: 140, width: '38%' }
     ],
     recentActivities: [],
     loading: true
@@ -197,11 +198,12 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       }));
       if (deptEnrollments.length === 0) {
         deptEnrollments = [
-          { dept: 'Computer Science', count: 340, width: '90%' },
-          { dept: 'Electronics', count: 270, width: '75%' },
-          { dept: 'MBA', count: 220, width: '60%' },
-          { dept: 'Mechanical', count: 180, width: '50%' },
-          { dept: 'BCA', count: 150, width: '40%' }
+          { dept: 'Commerce', count: 360, width: '95%' },
+          { dept: 'Computer Science', count: 320, width: '85%' },
+          { dept: 'English Literature', count: 240, width: '65%' },
+          { dept: 'Business Administration (BBA)', count: 210, width: '55%' },
+          { dept: 'Computer Applications (BCA)', count: 180, width: '48%' },
+          { dept: 'Mathematics', count: 140, width: '38%' }
         ];
       }
 
@@ -317,9 +319,9 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         attendanceBreakdown: { presentPct, absentPct, leavePct },
         deptEnrollments,
         recentActivities: activities.length > 0 ? activities.slice(0, 6) : [
-          { title: 'New student registered', detail: 'Aditya Kapoor – CS Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus, navTarget: 'Students' },
+          { title: 'New student registered', detail: 'Aditya Kapoor – B.Com Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus, navTarget: 'Students' },
           { title: 'Leave request submitted', detail: 'Prof. Ramesh Kumar – Casual Leave', time: '1 hr ago', bg: 'bg-amber-100 text-amber-600', icon: Calendar, navTarget: 'Leave Management' },
-          { title: 'Staff member added', detail: 'Dr. Neeraj Gupta – ECE', time: '2 hr ago', bg: 'bg-purple-100 text-purple-600', icon: Users, navTarget: 'Staff' }
+          { title: 'Faculty member added', detail: 'Dr. K. Meenakshi Sundaram – English Lit', time: '2 hr ago', bg: 'bg-purple-100 text-purple-600', icon: Users, navTarget: 'Staff' }
         ],
         loading: false
       });
@@ -364,6 +366,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     setMobileMenuOpen(false);
   };
 
+  // Fees visibility is strictly restricted to Accountant and Office Staff only
+  const canViewFees = user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.canViewFees === true;
+  const isFinanceOrOffice = user?.role === 'Accountant' || user?.role === 'Office Staff';
+
   // Nav categories
   const navSections = [
     {
@@ -372,7 +378,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         { name: 'Dashboard', icon: LayoutDashboard }
       ]
     },
-    {
+    ...(!isFinanceOrOffice ? [{
       title: 'ACADEMIC',
       items: [
         { name: 'Students', icon: GraduationCap },
@@ -384,23 +390,23 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         { name: 'Timetable', icon: Calendar },
         { name: 'Assignments', icon: BookMarked }
       ]
-    },
-    {
+    }] : []),
+    ...(canViewFees ? [{
       title: 'FINANCE',
       items: [
         { 
           name: 'Fees', 
           icon: IndianRupee,
-          subItems: ['Exam Fees', 'Tuition Fees', 'Transport Fees']
+          subItems: ['Fee Structure', 'Tuition Fees', 'Exam Fees', 'Transport Fees']
         }
       ]
-    },
-    {
+    }] : []),
+    ...(!isFinanceOrOffice ? [{
       title: 'HR',
       items: [
         { name: 'Leave Management', icon: UserCheck }
       ]
-    },
+    }] : []),
     {
       title: 'COMMUNICATION',
       items: [
@@ -408,18 +414,59 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         { name: 'Events', icon: Sparkles }
       ]
     },
-    {
+    ...(!isFinanceOrOffice ? [{
       title: 'ADMINISTRATION',
       items: [
         { name: 'Reports', icon: BarChart3 },
         { name: 'Users & Roles', icon: ShieldCheck },
         { name: 'Settings', icon: Settings }
       ]
-    }
+    }] : [])
   ];
 
-  // 8 Dynamic Metric cards with real loaded values
-  const metricCards = [
+  // Dynamic Metric cards
+  const metricCards = isFinanceOrOffice ? [
+    { 
+      title: 'PENDING FEES', 
+      value: dashboardStats.pendingFees, 
+      change: 'Outstanding balance', 
+      isUp: false, 
+      icon: IndianRupee, 
+      bg: 'bg-amber-500', 
+      textColor: 'text-amber-600', 
+      navTarget: 'Fees' 
+    },
+    { 
+      title: 'FEE MODULES', 
+      value: '4 Modules', 
+      change: 'Tuition, Exam, Transport, Structure', 
+      isUp: true, 
+      icon: DollarSign, 
+      bg: 'bg-emerald-500', 
+      textColor: 'text-emerald-600', 
+      navTarget: 'Fees' 
+    },
+    { 
+      title: 'NOTICES & CIRCULARS', 
+      value: String(dashboardStats.noticesCount !== undefined ? dashboardStats.noticesCount : 0), 
+      change: `${dashboardStats.noticesCount || 0} published notice(s)`, 
+      isUp: true, 
+      icon: Bell, 
+      bg: 'bg-indigo-500', 
+      textColor: 'text-indigo-600', 
+      navTarget: 'Notices' 
+    },
+    { 
+      title: 'COLLEGE EVENTS', 
+      value: 'Active', 
+      change: 'Institutional schedules', 
+      isUp: true, 
+      icon: Sparkles, 
+      bg: 'bg-purple-500', 
+      textColor: 'text-purple-600', 
+      navTarget: 'Events' 
+    }
+  ] : [
     { 
       title: 'TOTAL STUDENTS', 
       value: Number(dashboardStats.totalStudents).toLocaleString('en-IN'), 
@@ -470,7 +517,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       textColor: 'text-teal-600', 
       navTarget: 'Attendance' 
     },
-    { 
+    ...(canViewFees ? [{ 
       title: 'PENDING FEES', 
       value: dashboardStats.pendingFees, 
       change: '-8% vs last month', 
@@ -479,7 +526,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       bg: 'bg-amber-500', 
       textColor: 'text-amber-600', 
       navTarget: 'Fees' 
-    },
+    }] : []),
     { 
       title: 'LEAVE REQUESTS', 
       value: String(dashboardStats.leaveDisplayCount !== undefined ? dashboardStats.leaveDisplayCount : (dashboardStats.pendingLeaves || dashboardStats.totalLeaves || 0)), 
@@ -505,12 +552,19 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   ];
 
   // Quick actions grid
-  const quickActions = [
+  const quickActions = isFinanceOrOffice ? [
+    { label: 'Fee Structure', icon: IndianRupee, bg: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700', navTarget: 'Fees', feeType: 'Fee Structure' },
+    { label: 'Tuition Fees', icon: DollarSign, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Fees', feeType: 'Tuition Fees' },
+    { label: 'Exam Fees', icon: FileSpreadsheet, bg: 'bg-purple-50 hover:bg-purple-100 text-purple-700', navTarget: 'Fees', feeType: 'Exam Fees' },
+    { label: 'Transport Fees', icon: IndianRupee, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Fees', feeType: 'Transport Fees' },
+    { label: 'Notices & Circulars', icon: Bell, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Notices' },
+    { label: 'College Events', icon: Sparkles, bg: 'bg-rose-50 hover:bg-rose-100 text-rose-700', navTarget: 'Events' }
+  ] : [
     { label: 'Add Student', icon: UserPlus, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Students' },
     { label: 'Staff Directory', icon: Users, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Staff' },
     { label: 'Leave Requests', icon: UserCheck, bg: 'bg-orange-50 hover:bg-orange-100 text-orange-700', navTarget: 'Leave Management' },
     { label: 'Mark Attendance', icon: CheckSquare, bg: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700', navTarget: 'Attendance' },
-    { label: 'Collect Fee', icon: DollarSign, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Fees' },
+    ...(canViewFees ? [{ label: 'Collect Fee', icon: DollarSign, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Fees' }] : []),
     { label: 'Post Notice', icon: Bell, bg: 'bg-purple-50 hover:bg-purple-100 text-purple-700', navTarget: 'Notices' },
     { label: 'Assignments', icon: BookMarked, bg: 'bg-rose-50 hover:bg-rose-100 text-rose-700', navTarget: 'Assignments' },
     { label: 'View Reports', icon: BarChart3, bg: 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700', navTarget: 'Reports' }
@@ -681,7 +735,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search students, staff, courses..."
+                placeholder={isFinanceOrOffice ? "Search fee records, notices..." : "Search students, staff, courses..."}
                 className="w-full pl-10 pr-4 py-2 bg-slate-100 border border-transparent rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
               />
             </div>
@@ -690,14 +744,36 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           {/* Right Header Items */}
           <div className="flex items-center gap-3 sm:gap-6">
 
-            {/* User Avatar */}
+            {/* User Avatar & Role Badge */}
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs border border-slate-300 shadow-xs">
-                A
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center font-extrabold text-xs shadow-xs ${
+                user?.role === 'Super Admin'
+                  ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white ring-2 ring-purple-300'
+                  : user?.role === 'Accountant'
+                  ? 'bg-gradient-to-tr from-emerald-600 to-teal-600 text-white ring-2 ring-emerald-300'
+                  : user?.role === 'Office Staff'
+                  ? 'bg-gradient-to-tr from-amber-600 to-orange-600 text-white ring-2 ring-amber-300'
+                  : 'bg-gradient-to-tr from-blue-600 to-slate-700 text-white ring-2 ring-blue-300'
+              }`}>
+                {user?.role === 'Super Admin' ? 'SA' : user?.role === 'Accountant' ? 'ACC' : user?.role === 'Office Staff' ? 'OS' : 'P'}
               </div>
               <div className="text-left hidden sm:block">
-                <p className="text-xs font-bold text-slate-900 leading-tight">Admin User</p>
-                <p className="text-[10px] font-medium text-slate-500">Admin</p>
+                <p className="text-xs font-bold text-slate-900 leading-tight">
+                  {user?.name || (user?.role === 'Super Admin' ? 'Super Administrator' : user?.role === 'Accountant' ? 'Accountant' : user?.role === 'Office Staff' ? 'Office Staff' : 'Principal')}
+                </p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                    user?.role === 'Super Admin'
+                      ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                      : user?.role === 'Accountant'
+                      ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                      : user?.role === 'Office Staff'
+                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                      : 'bg-blue-100 text-blue-700 border border-blue-200'
+                  }`}>
+                    {user?.role === 'Super Admin' ? '🛡️ Super Admin' : user?.role === 'Accountant' ? '💰 Accountant' : user?.role === 'Office Staff' ? '📋 Office Staff' : '🏛️ Principal (Admin)'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -707,11 +783,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         {/* CONDITIONALLY RENDER CONTENT BASED ON ACTIVE NAV */}
         {activeNav === 'Students' ? (
           <main className="flex-1">
-            <StudentsPage />
+            <StudentsPage user={user} canViewFees={canViewFees} />
           </main>
         ) : activeNav === 'Staff' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            <StaffManagement />
+            <StaffManagement user={user} />
           </main>
         ) : activeNav === 'Departments' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
@@ -755,26 +831,80 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           </main>
         ) : activeNav === 'Users & Roles' ? (
           <main className="flex-1">
-            <UsersRolesManagement />
+            <UsersRolesManagement user={user} />
           </main>
         ) : activeNav === 'Settings' ? (
           <main className="flex-1">
             <SettingsManagement />
           </main>
         ) : activeNav === 'Fees' ? (
-          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            <FeeManagement defaultFeeType={selectedFeeType} />
-          </main>
+          canViewFees ? (
+            <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
+              <FeeManagement defaultFeeType={selectedFeeType} />
+            </main>
+          ) : (
+            <main className="flex-1 p-6 flex items-center justify-center">
+              <div className="max-w-md bg-white border border-rose-200 rounded-3xl p-8 text-center shadow-lg space-y-4">
+                <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+                  <ShieldCheck className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Fee details and collection records are strictly restricted to <strong>Accountant</strong> and <strong>Office Staff</strong> personnel only.
+                </p>
+                <button
+                  onClick={() => setActiveNav('Dashboard')}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            </main>
+          )
         ) : (
           /* DEFAULT DASHBOARD VIEW */
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             
+            {/* Super Admin Access Banner */}
+            {user?.role === 'Super Admin' && (
+              <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-sm">
+                    🛡️
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-extrabold text-purple-900 flex items-center gap-2">
+                      Super Administrator Authorization Active
+                      <span className="text-[10px] bg-purple-200/80 text-purple-800 px-2 py-0.5 rounded-full font-bold">Exclusive Access</span>
+                    </h3>
+                    <p className="text-[11px] text-purple-700 font-medium mt-0.5">
+                      You hold master authority to download and manage confidential login credentials for both Staff and Students.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button 
+                    onClick={() => setActiveNav('Staff')}
+                    className="px-3 py-1.5 bg-white hover:bg-purple-50 text-purple-700 text-xs font-bold rounded-xl border border-purple-200 shadow-xs transition-all"
+                  >
+                    Staff Credentials →
+                  </button>
+                  <button 
+                    onClick={() => setActiveNav('Students')}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all"
+                  >
+                    Student Credentials →
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Dashboard Title Header & Live Refresh */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard</h1>
                 <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
-                  Welcome back, Admin. Here is your live institutional overview today.
+                  Welcome back, {user?.name || (user?.role === 'Super Admin' ? 'Super Administrator' : user?.role === 'Accountant' ? 'Accountant' : user?.role === 'Office Staff' ? 'Office Staff' : 'Principal')}. Here is your live institutional overview today.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -823,206 +953,275 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
               })}
             </div>
 
-            {/* CHARTS ROW 1: Enrollment Trend Line Chart + Attendance Donut */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Left 2 Cols: Student Enrollment Trend */}
-              <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Student Enrollment Trend</h3>
-                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">Active semester registration trajectory</p>
-                  </div>
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
-                    Total: {Number(dashboardStats.totalStudents).toLocaleString('en-IN')}
-                  </span>
-                </div>
+            {/* CHARTS ROW 1: Enrollment Trend Line Chart + Attendance Donut (Only for Academic/Admin roles) */}
+            {!isFinanceOrOffice && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                <div className="h-64 w-full relative">
-                  {/* SVG Line Chart */}
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 700 200" preserveAspectRatio="none">
-                    {/* Grid Lines */}
-                    <line x1="0" y1="0" x2="700" y2="0" stroke="#f1f5f9" strokeDasharray="4 4" />
-                    <line x1="0" y1="50" x2="700" y2="50" stroke="#f1f5f9" strokeDasharray="4 4" />
-                    <line x1="0" y1="100" x2="700" y2="100" stroke="#f1f5f9" strokeDasharray="4 4" />
-                    <line x1="0" y1="150" x2="700" y2="150" stroke="#f1f5f9" strokeDasharray="4 4" />
-
-                    {/* Gradient Area under curve */}
-                    <defs>
-                      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
-
-                    <path 
-                      d="M 0 110 Q 100 80, 200 70 T 400 90 T 600 60 T 700 50 L 700 200 L 0 200 Z" 
-                      fill="url(#areaGradient)" 
-                    />
-
-                    {/* Main Line */}
-                    <path 
-                      d="M 0 110 Q 100 80, 200 70 T 400 90 T 600 60 T 700 50" 
-                      fill="none" 
-                      stroke="#3b82f6" 
-                      strokeWidth="3" 
-                      strokeLinecap="round" 
-                    />
-                  </svg>
-
-                  {/* X Axis Labels */}
-                  <div className="flex justify-between text-xs font-semibold text-slate-400 mt-4 border-t border-slate-100 pt-2">
-                    <span>Aug</span>
-                    <span>Sep</span>
-                    <span>Oct</span>
-                    <span>Nov</span>
-                    <span>Dec</span>
-                    <span>Jan</span>
-                    <span>Feb</span>
-                    <span>Mar</span>
+                {/* Left 2 Cols: Student Enrollment Trend */}
+                <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Student Enrollment Trend</h3>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">Active semester registration trajectory</p>
+                    </div>
+                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
+                      Total: {Number(dashboardStats.totalStudents).toLocaleString('en-IN')}
+                    </span>
                   </div>
-                </div>
-              </div>
-
-              {/* Right 1 Col: Attendance Overview Donut Chart */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-slate-900">Attendance Overview</h3>
-                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                    Live
-                  </span>
-                </div>
-                
-                <div className="relative w-44 h-44 sm:w-48 sm:h-48 mx-auto flex items-center justify-center">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    {/* Background Circle */}
-                    <path
-                      className="text-slate-100"
-                      strokeWidth="4"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    {/* Present % (Blue) */}
-                    <path
-                      className="text-blue-600"
-                      strokeDasharray={`${dashboardStats.attendanceBreakdown.presentPct}, 100`}
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    {/* Absent % (Red) */}
-                    <path
-                      className="text-rose-500"
-                      strokeDasharray={`${dashboardStats.attendanceBreakdown.absentPct}, 100`}
-                      strokeDashoffset={`-${dashboardStats.attendanceBreakdown.presentPct}`}
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    {/* On Leave % (Amber) */}
-                    <path
-                      className="text-amber-500"
-                      strokeDasharray={`${dashboardStats.attendanceBreakdown.leavePct}, 100`}
-                      strokeDashoffset={`-${dashboardStats.attendanceBreakdown.presentPct + dashboardStats.attendanceBreakdown.absentPct}`}
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                  </svg>
                   
-                  <div className="absolute text-center">
-                    <span className="text-2xl font-black text-slate-900">{dashboardStats.attendanceBreakdown.presentPct}%</span>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Present Rate</p>
+                  <div className="h-64 w-full relative">
+                    {/* SVG Line Chart */}
+                    <svg className="w-full h-full overflow-visible" viewBox="0 0 700 200" preserveAspectRatio="none">
+                      {/* Grid Lines */}
+                      <line x1="0" y1="0" x2="700" y2="0" stroke="#f1f5f9" strokeDasharray="4 4" />
+                      <line x1="0" y1="50" x2="700" y2="50" stroke="#f1f5f9" strokeDasharray="4 4" />
+                      <line x1="0" y1="100" x2="700" y2="100" stroke="#f1f5f9" strokeDasharray="4 4" />
+                      <line x1="0" y1="150" x2="700" y2="150" stroke="#f1f5f9" strokeDasharray="4 4" />
+
+                      {/* Gradient Area under curve */}
+                      <defs>
+                        <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+
+                      <path 
+                        d="M 0 110 Q 100 80, 200 70 T 400 90 T 600 60 T 700 50 L 700 200 L 0 200 Z" 
+                        fill="url(#areaGradient)" 
+                      />
+
+                      {/* Main Line */}
+                      <path 
+                        d="M 0 110 Q 100 80, 200 70 T 400 90 T 600 60 T 700 50" 
+                        fill="none" 
+                        stroke="#3b82f6" 
+                        strokeWidth="3" 
+                        strokeLinecap="round" 
+                      />
+                    </svg>
+
+                    {/* X Axis Labels */}
+                    <div className="flex justify-between text-xs font-semibold text-slate-400 mt-4 border-t border-slate-100 pt-2">
+                      <span>Aug</span>
+                      <span>Sep</span>
+                      <span>Oct</span>
+                      <span>Nov</span>
+                      <span>Dec</span>
+                      <span>Jan</span>
+                      <span>Feb</span>
+                      <span>Mar</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Legend */}
-                <div className="flex justify-around text-xs font-semibold text-slate-600 border-t border-slate-100 pt-4 mt-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Present ({dashboardStats.attendanceBreakdown.presentPct}%)
+                {/* Right 1 Col: Attendance Overview Donut Chart */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-slate-900">Attendance Overview</h3>
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Live
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Absent ({dashboardStats.attendanceBreakdown.absentPct}%)
+                  
+                  <div className="relative w-44 h-44 sm:w-48 sm:h-48 mx-auto flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                      {/* Background Circle */}
+                      <path
+                        className="text-slate-100"
+                        strokeWidth="4"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      {/* Present % (Blue) */}
+                      <path
+                        className="text-blue-600"
+                        strokeDasharray={`${dashboardStats.attendanceBreakdown.presentPct}, 100`}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      {/* Absent % (Red) */}
+                      <path
+                        className="text-rose-500"
+                        strokeDasharray={`${dashboardStats.attendanceBreakdown.absentPct}, 100`}
+                        strokeDashoffset={`-${dashboardStats.attendanceBreakdown.presentPct}`}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      {/* On Leave % (Amber) */}
+                      <path
+                        className="text-amber-500"
+                        strokeDasharray={`${dashboardStats.attendanceBreakdown.leavePct}, 100`}
+                        strokeDashoffset={`-${dashboardStats.attendanceBreakdown.presentPct + dashboardStats.attendanceBreakdown.absentPct}`}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                    </svg>
+                    
+                    <div className="absolute text-center">
+                      <span className="text-2xl font-black text-slate-900">{dashboardStats.attendanceBreakdown.presentPct}%</span>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Present Rate</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Leave ({dashboardStats.attendanceBreakdown.leavePct}%)
+
+                  {/* Legend */}
+                  <div className="flex justify-around text-xs font-semibold text-slate-600 border-t border-slate-100 pt-4 mt-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Present ({dashboardStats.attendanceBreakdown.presentPct}%)
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Absent ({dashboardStats.attendanceBreakdown.absentPct}%)
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Leave ({dashboardStats.attendanceBreakdown.leavePct}%)
+                    </div>
                   </div>
                 </div>
+
               </div>
-
-            </div>
+            )}
 
             {/* CHARTS ROW 2: Horizontal Bar + Monthly Fees + Subject Attendance */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* Department Students Horizontal Bar */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900">Department Enrolments</h3>
-                  <span className="text-[11px] font-bold text-slate-500">Students</span>
-                </div>
-                <div className="space-y-3 text-xs">
-                  {dashboardStats.deptEnrollments.map((d, i) => (
-                    <div key={i}>
-                      <div className="flex justify-between font-semibold text-slate-700 mb-1">
-                        <span>{d.dept}</span>
-                        <span className="font-bold text-slate-900">{d.count}</span>
+            {!isFinanceOrOffice ? (
+              <div className={`grid grid-cols-1 ${canViewFees ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
+                
+                {/* Department Students Horizontal Bar */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">Department Enrolments</h3>
+                    <span className="text-[11px] font-bold text-slate-500">Students</span>
+                  </div>
+                  <div className="space-y-3 text-xs">
+                    {dashboardStats.deptEnrollments.map((d, i) => (
+                      <div key={i}>
+                        <div className="flex justify-between font-semibold text-slate-700 mb-1">
+                          <span>{d.dept}</span>
+                          <span className="font-bold text-slate-900">{d.count}</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-600 rounded-full transition-all duration-500" style={{ width: d.width }}></div>
+                        </div>
                       </div>
-                      <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-600 rounded-full transition-all duration-500" style={{ width: d.width }}></div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Monthly Fee Collection Vertical Bar (Accountant & Office Staff Only) */}
+                {canViewFees && (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 mb-4">Monthly Fee Collection</h3>
+                    <div className="flex items-end justify-between h-40 gap-2 px-2">
+                      {[
+                        { month: 'Aug', height: '60%' },
+                        { month: 'Sep', height: '75%' },
+                        { month: 'Oct', height: '70%' },
+                        { month: 'Nov', height: '85%' },
+                        { month: 'Dec', height: '50%' },
+                        { month: 'Jan', height: '95%' }
+                      ].map((m, i) => (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                          <div className="w-full bg-amber-500 rounded-t-lg transition-all" style={{ height: m.height }}></div>
+                          <span className="text-[11px] font-semibold text-slate-400">{m.month}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Subject Attendance Vertical Bar */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                  <h3 className="text-sm font-bold text-slate-900 mb-4">Subject Attendance</h3>
+                  <div className="flex items-end justify-between h-40 gap-2 px-2">
+                    {[
+                      { subj: 'Math', height: '85%' },
+                      { subj: 'Physics', height: '78%' },
+                      { subj: 'CS', height: '95%' },
+                      { subj: 'English', height: '90%' },
+                      { subj: 'Chem', height: '75%' }
+                    ].map((s, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                        <div className="w-full bg-purple-600 rounded-t-lg transition-all" style={{ height: s.height }}></div>
+                        <span className="text-[11px] font-semibold text-slate-400">{s.subj}</span>
                       </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              /* For Office Staff & Accountant: Show Fee Management Quick Portal & Monthly Collection Cards */
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Monthly Fee Collection Trend</h3>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">Overview of monthly revenue receipts</p>
                     </div>
-                  ))}
+                    <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                      Live Collections
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between h-52 gap-3 px-2 pt-4">
+                    {[
+                      { month: 'Aug', height: '60%', amount: '₹14.2L' },
+                      { month: 'Sep', height: '75%', amount: '₹18.5L' },
+                      { month: 'Oct', height: '70%', amount: '₹16.8L' },
+                      { month: 'Nov', height: '85%', amount: '₹21.0L' },
+                      { month: 'Dec', height: '50%', amount: '₹12.4L' },
+                      { month: 'Jan', height: '95%', amount: '₹24.6L' }
+                    ].map((m, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
+                        <span className="text-[10px] font-bold text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">{m.amount}</span>
+                        <div className="w-full bg-gradient-to-t from-amber-600 to-amber-400 rounded-t-lg transition-all group-hover:from-amber-700 group-hover:to-amber-500 shadow-xs" style={{ height: m.height }}></div>
+                        <span className="text-xs font-semibold text-slate-600">{m.month}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 mb-1">Fee Modules Quick Access</h3>
+                    <p className="text-[11px] text-slate-500 font-medium mb-4">Direct access to manage fee accounts</p>
+                  </div>
+                  <div className="space-y-2.5">
+                    {[
+                      { name: 'Fee Structure', desc: 'Define & update class fee tiers', feeType: 'Fee Structure', color: 'text-blue-600 bg-blue-50 border-blue-100' },
+                      { name: 'Tuition Fees', desc: 'Term & semester tuition collection', feeType: 'Tuition Fees', color: 'text-amber-600 bg-amber-50 border-amber-100' },
+                      { name: 'Exam Fees', desc: 'Semester examination fee receipts', feeType: 'Exam Fees', color: 'text-purple-600 bg-purple-50 border-purple-100' },
+                      { name: 'Transport Fees', desc: 'Bus route fees & passes', feeType: 'Transport Fees', color: 'text-emerald-600 bg-emerald-50 border-emerald-100' }
+                    ].map((mod, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setActiveNav('Fees');
+                          setSelectedFeeType(mod.feeType);
+                        }}
+                        className="w-full p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 flex items-center justify-between text-left transition-all cursor-pointer"
+                      >
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">{mod.name}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">{mod.desc}</p>
+                        </div>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${mod.color}`}>
+                          Open →
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-
-              {/* Monthly Fee Collection Vertical Bar */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-                <h3 className="text-sm font-bold text-slate-900 mb-4">Monthly Fee Collection</h3>
-                <div className="flex items-end justify-between h-40 gap-2 px-2">
-                  {[
-                    { month: 'Aug', height: '60%' },
-                    { month: 'Sep', height: '75%' },
-                    { month: 'Oct', height: '70%' },
-                    { month: 'Nov', height: '85%' },
-                    { month: 'Dec', height: '50%' },
-                    { month: 'Jan', height: '95%' }
-                  ].map((m, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                      <div className="w-full bg-amber-500 rounded-t-lg transition-all" style={{ height: m.height }}></div>
-                      <span className="text-[11px] font-semibold text-slate-400">{m.month}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Subject Attendance Vertical Bar */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-                <h3 className="text-sm font-bold text-slate-900 mb-4">Subject Attendance</h3>
-                <div className="flex items-end justify-between h-40 gap-2 px-2">
-                  {[
-                    { subj: 'Math', height: '85%' },
-                    { subj: 'Physics', height: '78%' },
-                    { subj: 'CS', height: '95%' },
-                    { subj: 'English', height: '90%' },
-                    { subj: 'Chem', height: '75%' }
-                  ].map((s, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                      <div className="w-full bg-purple-600 rounded-t-lg transition-all" style={{ height: s.height }}></div>
-                      <span className="text-[11px] font-semibold text-slate-400">{s.subj}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
+            )}
 
             {/* BOTTOM ROW: Recent Activity + Quick Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1077,6 +1276,9 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                       <button 
                         key={i}
                         onClick={() => {
+                          if (action.feeType) {
+                            setSelectedFeeType(action.feeType);
+                          }
                           if (action.navTarget) {
                             handleNavClick(action.navTarget);
                           } else {

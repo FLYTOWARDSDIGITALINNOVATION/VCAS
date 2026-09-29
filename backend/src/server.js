@@ -13,6 +13,7 @@ const assignmentRoutes       = require('./routes/assignmentRoutes');
 const noticeRoutes           = require('./routes/noticeRoutes');
 const leaveRoutes            = require('./routes/leaveRoutes');
 const questionPaperRoutes    = require('./routes/questionPaperRoutes');
+const hallTicketRoutes       = require('./routes/hallTicketRoutes');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -43,16 +44,17 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth',       authRoutes);
-app.use('/api/staff',      staffRoutes);
-app.use('/api/classes',    classRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api/timetable',        timetableRoutes);
-app.use('/api/internal-marks',   internalMarksRoutes);
-app.use('/api/assignments',      assignmentRoutes);
-app.use('/api/notices',          noticeRoutes);
-app.use('/api/leave',            leaveRoutes);
-app.use('/api/question-papers',  questionPaperRoutes);
+app.use('/api/auth',            authRoutes);
+app.use('/api/staff',           staffRoutes);
+app.use('/api/classes',         classRoutes);
+app.use('/api/attendance',      attendanceRoutes);
+app.use('/api/timetable',       timetableRoutes);
+app.use('/api/internal-marks',  internalMarksRoutes);
+app.use('/api/assignments',     assignmentRoutes);
+app.use('/api/notices',         noticeRoutes);
+app.use('/api/leave',           leaveRoutes);
+app.use('/api/question-papers', questionPaperRoutes);
+app.use('/api/hall-tickets',    hallTicketRoutes);
 
 // 404
 app.use((req, res) => {

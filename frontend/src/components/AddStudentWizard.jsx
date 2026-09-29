@@ -30,11 +30,11 @@ export default function AddStudentWizard({ onBack, onComplete }) {
     address: '',
 
     // Step 2: Academic Info
-    department: 'Computer Science',
-    course: 'B.Tech',
+    department: 'Commerce',
+    course: 'B.Com',
     semester: '1st Sem',
     academicYear: '2026-2027',
-    rollNo: '24CS008',
+    rollNo: '24CM008',
 
     // Step 3: Parent Info
     fatherName: '',
@@ -312,11 +312,12 @@ export default function AddStudentWizard({ onBack, onComplete }) {
                   onChange={(e) => handleInputChange('department', e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
                 >
+                  <option value="Commerce">Commerce</option>
                   <option value="Computer Science">Computer Science</option>
-                  <option value="Electronics">Electronics</option>
-                  <option value="MBA">MBA</option>
-                  <option value="Mechanical">Mechanical</option>
-                  <option value="Civil">Civil</option>
+                  <option value="English Literature">English Literature</option>
+                  <option value="Business Administration (BBA)">Business Administration (BBA)</option>
+                  <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
+                  <option value="Mathematics">Mathematics</option>
                 </select>
               </div>
 
@@ -327,9 +328,13 @@ export default function AddStudentWizard({ onBack, onComplete }) {
                   onChange={(e) => handleInputChange('course', e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
                 >
-                  <option value="B.Tech">B.Tech</option>
-                  <option value="MBA">MBA</option>
-                  <option value="MCA">MCA</option>
+                  <option value="B.Com">B.Com</option>
+                  <option value="B.Sc CS">B.Sc CS</option>
+                  <option value="B.A. English">B.A. English</option>
+                  <option value="BBA">BBA</option>
+                  <option value="BCA">BCA</option>
+                  <option value="B.Sc Maths">B.Sc Maths</option>
+                  <option value="M.Com">M.Com</option>
                 </select>
               </div>
 
@@ -346,8 +351,6 @@ export default function AddStudentWizard({ onBack, onComplete }) {
                   <option value="4th Sem">4th Sem</option>
                   <option value="5th Sem">5th Sem</option>
                   <option value="6th Sem">6th Sem</option>
-                  <option value="7th Sem">7th Sem</option>
-                  <option value="8th Sem">8th Sem</option>
                 </select>
               </div>
 

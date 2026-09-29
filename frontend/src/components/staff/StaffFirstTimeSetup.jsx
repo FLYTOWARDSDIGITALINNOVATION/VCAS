@@ -14,14 +14,34 @@ import {
   UserCheck, 
   LogOut,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Camera,
+  Upload,
+  X,
+  FileCheck,
+  Award
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000';
 
 const BLOOD_GROUPS = ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'];
 
+const NET_SET_STATUS_OPTIONS = [
+  'Qualified UGC-NET',
+  'Qualified CSIR-NET',
+  'Qualified SET / SLET',
+  'Qualified NET & SET',
+  'Qualified NET with JRF',
+  'Appeared / Awaiting Results',
+  'Not Applicable'
+];
+
 export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout }) {
+  const [profileImage, setProfileImage] = useState(staffUser.profileImage || '');
+  const [netSetExamStatus, setNetSetExamStatus] = useState(staffUser.netSetExamStatus || 'Not Applicable');
+  const [netSetExamCertificate, setNetSetExamCertificate] = useState(staffUser.netSetExamCertificate || '');
+  const [netSetCertificateName, setNetSetCertificateName] = useState(staffUser.netSetCertificateName || '');
+
   const [formData, setFormData] = useState({
     phone: staffUser.phone || '',
     qualification: staffUser.qualification || '',
@@ -34,6 +54,48 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
     confirmPassword: ''
   });
 
+  const handleCertSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(pdf|jpe?g|png|webp)$/i)) {
+      alert('Please upload a valid document or image (PDF, PNG, JPG, WEBP).');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit.');
+      return;
+    }
+    const fileName = file.name;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result;
+      if (base64) {
+        setNetSetExamCertificate(base64);
+        setNetSetCertificateName(fileName);
+        if (netSetExamStatus === 'Not Applicable') {
+          setNetSetExamStatus('Qualified UGC-NET');
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, WEBP)');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result;
+      if (base64) setProfileImage(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -44,7 +106,7 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
       errs.phone = 'Mobile phone number is required';
     }
     if (!formData.qualification.trim()) {
-      errs.qualification = 'Please enter your academic qualifications (e.g. M.Tech, Ph.D.)';
+      errs.qualification = 'Please enter your academic qualifications (e.g. M.Phil, M.Com, M.Sc, Ph.D., NET/SET)';
     }
     if (!formData.experience.trim()) {
       errs.experience = 'Please enter your teaching / professional experience';
@@ -82,6 +144,10 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
         dob: formData.dob,
         address: formData.address.trim(),
         emergencyContact: formData.emergencyContact.trim(),
+        profileImage: profileImage || undefined,
+        netSetExamStatus,
+        netSetExamCertificate: netSetExamCertificate || undefined,
+        netSetCertificateName: netSetCertificateName || undefined,
         newPassword: formData.newPassword ? formData.newPassword.trim() : undefined
       };
 
@@ -172,6 +238,50 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
 
           <form onSubmit={handleSubmit} className="space-y-6">
             
+            {/* OPTIONAL PROFILE PHOTO UPLOAD */}
+            <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative group shrink-0">
+                <div className={`w-16 h-16 rounded-2xl overflow-hidden ${!profileImage ? 'bg-gradient-to-tr from-blue-600 to-indigo-600' : 'bg-slate-100'} flex items-center justify-center text-white font-extrabold text-xl shadow-md ring-2 ring-blue-100`}>
+                  {profileImage ? (
+                    <img src={profileImage} alt={staffUser.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{staffUser.avatarInitials || staffUser.avatarText || staffUser.name?.substring(0, 2)?.toUpperCase() || 'ST'}</span>
+                  )}
+                </div>
+                {profileImage && (
+                  <button
+                    type="button"
+                    onClick={() => setProfileImage('')}
+                    className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 shadow-sm hover:bg-rose-600 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 text-center sm:text-left">
+                <h4 className="text-xs font-bold text-slate-800">Profile Photo (Optional)</h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Upload your formal staff photograph. If not uploaded, your initials will be displayed across both administrator and staff dashboards.
+                </p>
+                <div className="mt-2">
+                  <label 
+                    htmlFor="setup-photo-upload"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-blue-600 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{profileImage ? 'Change Photo' : 'Upload Profile Photo'}</span>
+                  </label>
+                  <input 
+                    id="setup-photo-upload" 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handlePhotoSelect} 
+                    className="hidden" 
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* SECTION 1: ACADEMIC & QUALIFICATIONS */}
             <div className="space-y-3.5">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -190,7 +300,7 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
                     type="text"
                     value={formData.qualification}
                     onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
-                    placeholder="e.g. Ph.D. in Computer Science (IIT Madras), M.Tech in AI"
+                    placeholder="e.g. Ph.D. in Computer Science (Madras University), M.Sc, NET/SET"
                     className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none transition-all ${
                       formErrors.qualification ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
                     }`}
@@ -243,6 +353,58 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
                     onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    NET / SET Exam Qualification
+                  </label>
+                  <select
+                    value={netSetExamStatus}
+                    onChange={(e) => setNetSetExamStatus(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                  >
+                    {NET_SET_STATUS_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    NET / SET Exam Certificate Upload
+                  </label>
+                  {netSetExamCertificate ? (
+                    <div className="flex items-center justify-between p-3 bg-blue-50/70 border border-blue-200 rounded-xl">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <FileCheck className="w-5 h-5 text-blue-600 shrink-0" />
+                        <span className="text-xs font-bold text-blue-950 truncate">
+                          {netSetCertificateName || 'Certificate Attached'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNetSetExamCertificate('');
+                          setNetSetCertificateName('');
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-blue-50/30 rounded-xl text-xs font-bold text-slate-600 hover:text-blue-600 transition-all cursor-pointer">
+                      <Upload className="w-4 h-4 text-slate-400" />
+                      <span>Upload Certificate (PDF / Image up to 10MB)</span>
+                      <input
+                        type="file"
+                        accept=".pdf,image/png,image/jpeg,image/webp"
+                        onChange={handleCertSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
             </div>

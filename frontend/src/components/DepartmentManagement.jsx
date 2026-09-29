@@ -36,189 +36,196 @@ function formatHodEmail(name) {
 const INITIAL_DEPARTMENTS = [
   {
     id: 1,
-    code: 'CS',
-    name: 'Computer Science & Engineering',
-    hod: 'Dr. Sunita Rao',
-    hodEmail: 'sunita.rao@college.edu',
-    hodPhone: '9811223344',
-    totalYears: 4,
-    totalSemesters: 8,
-    facultyCount: 24,
-    studentCount: 340,
+    code: 'COMM',
+    name: 'Commerce',
+    hod: 'Dr. S. Rajagopalan',
+    hodEmail: 'rajagopalan.s@college.edu',
+    hodPhone: '9840122331',
+    totalYears: 3,
+    totalSemesters: 6,
+    facultyCount: 22,
+    studentCount: 360,
     courseCount: 12,
-    establishedYear: '2008',
-    description: 'Premier department focusing on Artificial Intelligence, Software Engineering, Systems, and Data Science.',
-    labs: ['AI & Robotics Lab', 'Cloud Computing Lab', 'Advanced Algorithms Lab', 'IoT & Networks Lab'],
+    establishedYear: '2005',
+    description: 'Premier department providing specialized training in Financial Accounting, Corporate Law, Banking, Auditing, and Taxation.',
+    labs: ['Tally ERP & Accounting Lab', 'Commerce Practical Simulation Cell', 'Stock Trading & Finance Lab'],
     yearBreakdown: [
-      { year: 1, label: '1st Year', students: 90, semesters: ['Sem 1', 'Sem 2'] },
-      { year: 2, label: '2nd Year', students: 88, semesters: ['Sem 3', 'Sem 4'] },
-      { year: 3, label: '3rd Year', students: 82, semesters: ['Sem 5', 'Sem 6'] },
-      { year: 4, label: '4th Year', students: 80, semesters: ['Sem 7', 'Sem 8'] }
+      { year: 1, label: '1st Year', students: 125, semesters: ['Sem 1', 'Sem 2'] },
+      { year: 2, label: '2nd Year', students: 120, semesters: ['Sem 3', 'Sem 4'] },
+      { year: 3, label: '3rd Year', students: 115, semesters: ['Sem 5', 'Sem 6'] }
     ],
     coursesList: [
-      { code: 'CS101', name: 'Python Programming', credits: 4, year: 1, sem: 'Sem 1' },
-      { code: 'MA101', name: 'Engineering Mathematics I', credits: 4, year: 1, sem: 'Sem 1' },
-      { code: 'CS102', name: 'C Programming & Data Structures', credits: 4, year: 1, sem: 'Sem 2' },
-      { code: 'CS103', name: 'Digital Logic & Microprocessors', credits: 3, year: 1, sem: 'Sem 2' },
-      { code: 'CS201', name: 'Object Oriented Java', credits: 4, year: 2, sem: 'Sem 3' },
-      { code: 'CS202', name: 'Computer Architecture & Org', credits: 3, year: 2, sem: 'Sem 3' },
-      { code: 'CS301', name: 'Data Structures & Algorithms', credits: 4, year: 2, sem: 'Sem 4' },
-      { code: 'CS302', name: 'Operating Systems & Linux', credits: 4, year: 2, sem: 'Sem 4' },
-      { code: 'CS401', name: 'Database Management Systems', credits: 4, year: 3, sem: 'Sem 5' },
-      { code: 'CS502', name: 'Artificial Intelligence & ML', credits: 3, year: 3, sem: 'Sem 6' },
-      { code: 'CS601', name: 'Cyber Security & Cryptography', credits: 3, year: 4, sem: 'Sem 7' },
-      { code: 'CS701', name: 'Final Year Capstone Project', credits: 6, year: 4, sem: 'Sem 8' }
+      { code: 'CM101', name: 'Financial Accounting & Book-keeping', credits: 4, year: 1, sem: 'Sem 1' },
+      { code: 'CM102', name: 'Business Economics & Commercial Law', credits: 4, year: 1, sem: 'Sem 1' },
+      { code: 'CM103', name: 'Advanced Financial Accounting', credits: 4, year: 1, sem: 'Sem 2' },
+      { code: 'CM104', name: 'Principles of Marketing', credits: 3, year: 1, sem: 'Sem 2' },
+      { code: 'CM201', name: 'Corporate Accounting & Reporting', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'CM202', name: 'Company Law & Secretarial Practice', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'CM203', name: 'Banking Theory, Law & Practice', credits: 4, year: 2, sem: 'Sem 4' },
+      { code: 'CM204', name: 'Business Statistics & Mathematics', credits: 4, year: 2, sem: 'Sem 4' },
+      { code: 'CM301', name: 'Cost Accounting & Management Analysis', credits: 4, year: 3, sem: 'Sem 5' },
+      { code: 'CM302', name: 'Income Tax Law & Practice', credits: 4, year: 3, sem: 'Sem 5' },
+      { code: 'CM303', name: 'GST & Customs Law', credits: 3, year: 3, sem: 'Sem 6' },
+      { code: 'CM304', name: 'Auditing & Corporate Governance', credits: 4, year: 3, sem: 'Sem 6' }
     ]
   },
   {
     id: 2,
-    code: 'ECE',
-    name: 'Electronics & Communication',
-    hod: 'Prof. Ramesh Kumar',
-    hodEmail: 'ramesh.k@college.edu',
-    hodPhone: '9811223345',
-    totalYears: 4,
-    totalSemesters: 8,
+    code: 'CS',
+    name: 'Computer Science',
+    hod: 'Dr. Sunita Rao',
+    hodEmail: 'sunita.rao@college.edu',
+    hodPhone: '9811223344',
+    totalYears: 3,
+    totalSemesters: 6,
     facultyCount: 18,
-    studentCount: 280,
-    courseCount: 8,
-    establishedYear: '2010',
-    description: 'Specializing in VLSI design, Digital Signal Processing, Embedded Systems, and Wireless Communication.',
-    labs: ['VLSI & Microelectronics Lab', 'DSP Lab', 'IoT & Embedded Lab'],
+    studentCount: 320,
+    courseCount: 12,
+    establishedYear: '2008',
+    description: 'Undergraduate science program focusing on Python, Algorithms, Web Technologies, Database Systems, and Cloud Data Analytics.',
+    labs: ['Advanced Software Computing Lab', 'Open Source Technologies Lab', 'Data Analytics Lab'],
     yearBreakdown: [
-      { year: 1, label: '1st Year', students: 75, semesters: ['Sem 1', 'Sem 2'] },
-      { year: 2, label: '2nd Year', students: 72, semesters: ['Sem 3', 'Sem 4'] },
-      { year: 3, label: '3rd Year', students: 68, semesters: ['Sem 5', 'Sem 6'] },
-      { year: 4, label: '4th Year', students: 65, semesters: ['Sem 7', 'Sem 8'] }
+      { year: 1, label: '1st Year', students: 110, semesters: ['Sem 1', 'Sem 2'] },
+      { year: 2, label: '2nd Year', students: 108, semesters: ['Sem 3', 'Sem 4'] },
+      { year: 3, label: '3rd Year', students: 102, semesters: ['Sem 5', 'Sem 6'] }
     ],
     coursesList: [
-      { code: 'EC101', name: 'Basic Circuit Analysis', credits: 4, year: 1, sem: 'Sem 1' },
-      { code: 'EC102', name: 'Semiconductor Devices', credits: 4, year: 1, sem: 'Sem 2' },
-      { code: 'EC201', name: 'Electronic Circuits & Design', credits: 4, year: 2, sem: 'Sem 3' },
-      { code: 'EC301', name: 'Digital Electronics & Logic', credits: 4, year: 2, sem: 'Sem 4' },
-      { code: 'EC401', name: 'Digital Signal Processing', credits: 4, year: 3, sem: 'Sem 5' },
-      { code: 'EC501', name: 'Wireless & Cellular Communication', credits: 3, year: 3, sem: 'Sem 6' },
-      { code: 'EC601', name: 'VLSI Chip Architecture', credits: 3, year: 4, sem: 'Sem 7' },
-      { code: 'EC701', name: 'Embedded Systems Capstone', credits: 6, year: 4, sem: 'Sem 8' }
+      { code: 'CS101', name: 'Programming in C & Problem Solving', credits: 4, year: 1, sem: 'Sem 1' },
+      { code: 'CS102', name: 'Digital Logic Fundamentals', credits: 3, year: 1, sem: 'Sem 1' },
+      { code: 'CS103', name: 'Data Structures & Algorithms', credits: 4, year: 1, sem: 'Sem 2' },
+      { code: 'CS104', name: 'Python Programming Lab', credits: 2, year: 1, sem: 'Sem 2' },
+      { code: 'CS201', name: 'Object Oriented Programming with Java', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'CS202', name: 'Relational Database Management Systems', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'CS203', name: 'Operating Systems & System Architecture', credits: 4, year: 2, sem: 'Sem 4' },
+      { code: 'CS204', name: 'Computer Networks & Internet Protocols', credits: 4, year: 2, sem: 'Sem 4' },
+      { code: 'CS301', name: 'Web Technologies & Scripting (React/Node)', credits: 4, year: 3, sem: 'Sem 5' },
+      { code: 'CS302', name: 'Artificial Intelligence & Machine Learning', credits: 3, year: 3, sem: 'Sem 5' },
+      { code: 'CS303', name: 'Cyber Security & Network Forensics', credits: 3, year: 3, sem: 'Sem 6' },
+      { code: 'CS304', name: 'Major Software Project & Viva', credits: 6, year: 3, sem: 'Sem 6' }
     ]
   },
   {
     id: 3,
-    code: 'MBA',
-    name: 'Business Administration',
-    hod: 'Dr. Anita Desai',
-    hodEmail: 'anita.d@college.edu',
-    hodPhone: '9811223346',
-    totalYears: 2,
-    totalSemesters: 4,
+    code: 'ENG',
+    name: 'English Literature',
+    hod: 'Dr. K. Meenakshi Sundaram',
+    hodEmail: 'meenakshi.s@college.edu',
+    hodPhone: '9840133445',
+    totalYears: 3,
+    totalSemesters: 6,
     facultyCount: 14,
-    studentCount: 210,
-    courseCount: 6,
-    establishedYear: '2012',
-    description: 'Fostering future leaders in Finance, Marketing, Human Resources, and Business Analytics.',
-    labs: ['Business Analytics Lab', 'Finance Simulation Center'],
+    studentCount: 240,
+    courseCount: 12,
+    establishedYear: '2006',
+    description: 'Cultivating literary criticism, British & World literature, creative writing, linguistics, and professional communication skills.',
+    labs: ['Digital Language Laboratory', 'Phonetics & Audio-Visual Studio'],
     yearBreakdown: [
-      { year: 1, label: '1st Year', students: 110, semesters: ['Sem 1', 'Sem 2'] },
-      { year: 2, label: '2nd Year', students: 100, semesters: ['Sem 3', 'Sem 4'] }
+      { year: 1, label: '1st Year', students: 85, semesters: ['Sem 1', 'Sem 2'] },
+      { year: 2, label: '2nd Year', students: 80, semesters: ['Sem 3', 'Sem 4'] },
+      { year: 3, label: '3rd Year', students: 75, semesters: ['Sem 5', 'Sem 6'] }
     ],
     coursesList: [
-      { code: 'MB101', name: 'Principles of Management', credits: 3, year: 1, sem: 'Sem 1' },
-      { code: 'MB102', name: 'Organizational Behavior', credits: 3, year: 1, sem: 'Sem 1' },
-      { code: 'MB201', name: 'Financial Management & Markets', credits: 4, year: 1, sem: 'Sem 2' },
-      { code: 'MB301', name: 'Marketing Management & CRM', credits: 4, year: 2, sem: 'Sem 3' },
-      { code: 'MB304', name: 'Strategic Decision Making', credits: 3, year: 2, sem: 'Sem 3' },
-      { code: 'MB401', name: 'Corporate Project & Thesis', credits: 6, year: 2, sem: 'Sem 4' }
+      { code: 'EN101', name: 'Social History of England & Literature', credits: 4, year: 1, sem: 'Sem 1' },
+      { code: 'EN102', name: 'Poetry & Prose of the Elizabethan Age', credits: 4, year: 1, sem: 'Sem 1' },
+      { code: 'EN103', name: 'Romantic & Victorian Literature', credits: 4, year: 1, sem: 'Sem 2' },
+      { code: 'EN104', name: 'Phonetics & Spoken English Lab', credits: 2, year: 1, sem: 'Sem 2' },
+      { code: 'EN201', name: 'Shakespearean Comedies & Tragedies', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'EN202', name: 'Indian Writing in English', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'EN203', name: 'American Literature & Modernism', credits: 4, year: 2, sem: 'Sem 4' },
+      { code: 'EN204', name: 'Journalism, Mass Media & Copywriting', credits: 3, year: 2, sem: 'Sem 4' },
+      { code: 'EN301', name: 'Literary Criticism & Contemporary Theory', credits: 4, year: 3, sem: 'Sem 5' },
+      { code: 'EN302', name: 'Post-Colonial & Commonwealth Literature', credits: 4, year: 3, sem: 'Sem 5' },
+      { code: 'EN303', name: 'English Language Teaching (ELT) & Translation', credits: 3, year: 3, sem: 'Sem 6' },
+      { code: 'EN304', name: 'Literary Research Project & Dissertation', credits: 6, year: 3, sem: 'Sem 6' }
     ]
   },
   {
     id: 4,
-    code: 'MECH',
-    name: 'Mechanical Engineering',
-    hod: 'Dr. Pradeep Joshi',
-    hodEmail: 'pradeep.j@college.edu',
-    hodPhone: '9811223349',
-    totalYears: 4,
-    totalSemesters: 8,
-    facultyCount: 16,
-    studentCount: 220,
+    code: 'BBA',
+    name: 'Business Administration (BBA)',
+    hod: 'Dr. Anita Desai',
+    hodEmail: 'anita.d@college.edu',
+    hodPhone: '9811223346',
+    totalYears: 3,
+    totalSemesters: 6,
+    facultyCount: 14,
+    studentCount: 210,
     courseCount: 8,
-    establishedYear: '2009',
-    description: 'Excellence in Thermodynamics, CAD/CAM Modeling, Robotics, and Materials Engineering.',
-    labs: ['Thermal Engineering Lab', 'CAD/CAM Simulation Lab', 'Manufacturing Workshop'],
+    establishedYear: '2012',
+    description: 'Developing managerial leaders in Corporate Finance, Brand Marketing, Human Resources, and Business Analytics.',
+    labs: ['Business Analytics Lab', 'Case Study & Discussion Center'],
     yearBreakdown: [
-      { year: 1, label: '1st Year', students: 60, semesters: ['Sem 1', 'Sem 2'] },
-      { year: 2, label: '2nd Year', students: 58, semesters: ['Sem 3', 'Sem 4'] },
-      { year: 3, label: '3rd Year', students: 52, semesters: ['Sem 5', 'Sem 6'] },
-      { year: 4, label: '4th Year', students: 50, semesters: ['Sem 7', 'Sem 8'] }
+      { year: 1, label: '1st Year', students: 75, semesters: ['Sem 1', 'Sem 2'] },
+      { year: 2, label: '2nd Year', students: 70, semesters: ['Sem 3', 'Sem 4'] },
+      { year: 3, label: '3rd Year', students: 65, semesters: ['Sem 5', 'Sem 6'] }
     ],
     coursesList: [
-      { code: 'ME101', name: 'Engineering Mechanics', credits: 4, year: 1, sem: 'Sem 1' },
-      { code: 'ME102', name: 'Materials Science & Metallurgy', credits: 4, year: 1, sem: 'Sem 2' },
-      { code: 'ME201', name: 'Thermodynamics & Heat Transfer', credits: 4, year: 2, sem: 'Sem 3' },
-      { code: 'ME301', name: 'Fluid Mechanics & Machinery', credits: 4, year: 2, sem: 'Sem 4' },
-      { code: 'ME401', name: 'CAD/CAM & Automation Systems', credits: 3, year: 3, sem: 'Sem 5' },
-      { code: 'ME501', name: 'Design of Machine Elements', credits: 4, year: 3, sem: 'Sem 6' },
-      { code: 'ME601', name: 'Automobile Engineering & EV', credits: 3, year: 4, sem: 'Sem 7' },
-      { code: 'ME701', name: 'Major Industrial Fabrication Project', credits: 6, year: 4, sem: 'Sem 8' }
+      { code: 'BB101', name: 'Principles of Management & Leadership', credits: 3, year: 1, sem: 'Sem 1' },
+      { code: 'BB102', name: 'Business Communication & Presentation', credits: 3, year: 1, sem: 'Sem 1' },
+      { code: 'BB103', name: 'Managerial Economics', credits: 3, year: 1, sem: 'Sem 2' },
+      { code: 'BB201', name: 'Marketing Management & CRM', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'BB202', name: 'Financial Management & Corporate Finance', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'BB203', name: 'Human Resource Management', credits: 4, year: 2, sem: 'Sem 4' },
+      { code: 'BB301', name: 'Operations & Supply Chain Management', credits: 4, year: 3, sem: 'Sem 5' },
+      { code: 'BB302', name: 'Entrepreneurship & Startup Incubation', credits: 6, year: 3, sem: 'Sem 6' }
     ]
   },
   {
     id: 5,
-    code: 'CIVIL',
-    name: 'Civil Engineering',
-    hod: 'Dr. Kavitha Singh',
-    hodEmail: 'kavitha.s@college.edu',
-    hodPhone: '9811223350',
-    totalYears: 4,
-    totalSemesters: 8,
-    facultyCount: 12,
-    studentCount: 180,
-    courseCount: 6,
-    establishedYear: '2011',
-    description: 'Focusing on Structural Analysis, Environmental Engineering, Geo-technics, and Smart Urban Design.',
-    labs: ['Structural Testing Lab', 'Soil Mechanics Lab', 'Surveying Lab'],
-    yearBreakdown: [
-      { year: 1, label: '1st Year', students: 50, semesters: ['Sem 1', 'Sem 2'] },
-      { year: 2, label: '2nd Year', students: 48, semesters: ['Sem 3', 'Sem 4'] },
-      { year: 3, label: '3rd Year', students: 42, semesters: ['Sem 5', 'Sem 6'] },
-      { year: 4, label: '4th Year', students: 40, semesters: ['Sem 7', 'Sem 8'] }
-    ],
-    coursesList: [
-      { code: 'CE101', name: 'Surveying & Geomatics', credits: 4, year: 1, sem: 'Sem 1' },
-      { code: 'CE201', name: 'Building Materials & Construction', credits: 4, year: 1, sem: 'Sem 2' },
-      { code: 'CE301', name: 'Structural Analysis & Design', credits: 4, year: 2, sem: 'Sem 3' },
-      { code: 'CE401', name: 'Environmental & Sanitary Engg', credits: 3, year: 2, sem: 'Sem 4' },
-      { code: 'CE501', name: 'Soil Mechanics & Foundations', credits: 4, year: 3, sem: 'Sem 5' },
-      { code: 'CE701', name: 'Structural Design Capstone', credits: 6, year: 4, sem: 'Sem 8' }
-    ]
-  },
-  {
-    id: 6,
     code: 'BCA',
-    name: 'Bachelor of Computer Applications',
+    name: 'Bachelor of Computer Applications (BCA)',
     hod: 'Prof. Meena Iyer',
     hodEmail: 'meena.i@college.edu',
     hodPhone: '9811223351',
     totalYears: 3,
     totalSemesters: 6,
-    facultyCount: 10,
-    studentCount: 150,
+    facultyCount: 12,
+    studentCount: 180,
     courseCount: 6,
     establishedYear: '2015',
     description: 'Undergraduate applications development program focusing on Web, Mobile, and Cloud Technologies.',
     labs: ['Web & App Development Lab', 'Open Source Software Lab'],
     yearBreakdown: [
-      { year: 1, label: '1st Year', students: 55, semesters: ['Sem 1', 'Sem 2'] },
-      { year: 2, label: '2nd Year', students: 50, semesters: ['Sem 3', 'Sem 4'] },
-      { year: 3, label: '3rd Year', students: 45, semesters: ['Sem 5', 'Sem 6'] }
+      { year: 1, label: '1st Year', students: 65, semesters: ['Sem 1', 'Sem 2'] },
+      { year: 2, label: '2nd Year', students: 60, semesters: ['Sem 3', 'Sem 4'] },
+      { year: 3, label: '3rd Year', students: 55, semesters: ['Sem 5', 'Sem 6'] }
     ],
     coursesList: [
-      { code: 'BC101', name: 'Introduction to Web Technologies', credits: 4, year: 1, sem: 'Sem 1' },
+      { code: 'BC101', name: 'Fundamentals of Computing & C Programming', credits: 4, year: 1, sem: 'Sem 1' },
       { code: 'BC102', name: 'Programming in C & C++', credits: 4, year: 1, sem: 'Sem 2' },
       { code: 'BC201', name: 'Database & SQL Programming', credits: 4, year: 2, sem: 'Sem 3' },
-      { code: 'BC202', name: 'Java & Android App Dev', credits: 4, year: 2, sem: 'Sem 4' },
+      { code: 'BC202', name: 'Java & Android App Development', credits: 4, year: 2, sem: 'Sem 4' },
       { code: 'BC301', name: 'Cloud Computing Fundamentals', credits: 3, year: 3, sem: 'Sem 5' },
       { code: 'BC302', name: 'Full-Stack Web Development Project', credits: 6, year: 3, sem: 'Sem 6' }
+    ]
+  },
+  {
+    id: 6,
+    code: 'MATH',
+    name: 'Mathematics',
+    hod: 'Dr. R. Ramanujam',
+    hodEmail: 'ramanujam.r@college.edu',
+    hodPhone: '9840144556',
+    totalYears: 3,
+    totalSemesters: 6,
+    facultyCount: 10,
+    studentCount: 140,
+    courseCount: 6,
+    establishedYear: '2010',
+    description: 'Pure and Applied Mathematics curriculum covering Classical Algebra, Calculus, Differential Equations, and Operations Research.',
+    labs: ['Computational Mathematics Lab (R/Python)', 'Statistical Computing Center'],
+    yearBreakdown: [
+      { year: 1, label: '1st Year', students: 50, semesters: ['Sem 1', 'Sem 2'] },
+      { year: 2, label: '2nd Year', students: 48, semesters: ['Sem 3', 'Sem 4'] },
+      { year: 3, label: '3rd Year', students: 42, semesters: ['Sem 5', 'Sem 6'] }
+    ],
+    coursesList: [
+      { code: 'MA101', name: 'Classical Algebra & Trigonometry', credits: 4, year: 1, sem: 'Sem 1' },
+      { code: 'MA102', name: 'Differential & Integral Calculus', credits: 4, year: 1, sem: 'Sem 2' },
+      { code: 'MA201', name: 'Differential Equations & Vector Analysis', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'MA202', name: 'Modern Algebra & Linear Transformations', credits: 4, year: 2, sem: 'Sem 4' },
+      { code: 'MA301', name: 'Real & Complex Analysis', credits: 4, year: 3, sem: 'Sem 5' },
+      { code: 'MA302', name: 'Operations Research & Applied Statistics', credits: 6, year: 3, sem: 'Sem 6' }
     ]
   }
 ];
@@ -263,10 +270,10 @@ export default function DepartmentManagement() {
     name: '',
     code: '',
     hod: '',
-    totalYears: 4,
-    totalSemesters: 8,
-    facultyCount: 10,
-    studentCount: 100,
+    totalYears: 3,
+    totalSemesters: 6,
+    facultyCount: 12,
+    studentCount: 120,
     description: ''
   });
 
@@ -285,10 +292,10 @@ export default function DepartmentManagement() {
       name: '',
       code: '',
       hod: '',
-      totalYears: 4,
-      totalSemesters: 8,
+      totalYears: 3,
+      totalSemesters: 6,
       facultyCount: 12,
-      studentCount: 150,
+      studentCount: 120,
       description: ''
     });
     setFormErrors({});
@@ -728,9 +735,9 @@ export default function DepartmentManagement() {
                     onChange={(e) => setFormData({ ...formData, totalYears: Number(e.target.value) })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
-                    <option value={2}>2 Years (4 Sems - MBA/PG)</option>
-                    <option value={3}>3 Years (6 Sems - BCA/B.Sc)</option>
-                    <option value={4}>4 Years (8 Sems - B.Tech/BE)</option>
+                    <option value={3}>3 Years (6 Sems - UG: B.A. / B.Sc / B.Com / BCA / BBA)</option>
+                    <option value={2}>2 Years (4 Sems - PG: M.A. / M.Sc / M.Com / MBA)</option>
+                    <option value={4}>4 Years (8 Sems - Professional / Honors Program)</option>
                   </select>
                 </div>
                 <div>

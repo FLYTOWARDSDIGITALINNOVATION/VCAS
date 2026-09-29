@@ -36,6 +36,7 @@ const staffSchema = new mongoose.Schema({
   phone:              { type: String, default: '' },
   department:         { type: String, required: true, trim: true },
   designation:        { type: String, default: 'Assistant Professor' },
+  role:               { type: String, default: 'Staff', enum: ['Staff', 'Accountant', 'Office Staff'] },
   employmentType:     { type: String, default: 'Permanent / Full-Time' },
   status:             { type: String, default: 'Active' },
   joiningDate:        { type: String, default: '' },
@@ -47,8 +48,12 @@ const staffSchema = new mongoose.Schema({
   emergencyContact:   { type: String, default: '' },
   avatarBg:           { type: String, default: 'bg-purple-600' },
   avatarText:         { type: String, default: '' },
+  profileImage:       { type: String, default: '' },
   classTeacherOf:     { type: String, default: '' },
   isProfileCompleted: { type: Boolean, default: false },
+  netSetExamStatus:      { type: String, default: 'Not Applicable' },
+  netSetExamCertificate: { type: String, default: '' },
+  netSetCertificateName: { type: String, default: '' },
   classes:            [classSubjectSchema],
   achievements:       [achievementSchema]
 }, {

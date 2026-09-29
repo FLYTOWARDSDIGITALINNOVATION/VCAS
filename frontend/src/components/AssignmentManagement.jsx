@@ -44,12 +44,12 @@ const API_BASE = 'http://localhost:5000/api';
 
 const DEPARTMENTS = [
   'All Departments',
+  'Commerce',
   'Computer Science',
-  'Electronics',
-  'MBA',
-  'Mechanical',
-  'Civil',
-  'BCA'
+  'English Literature',
+  'Business Administration (BBA)',
+  'Computer Applications (BCA)',
+  'Mathematics'
 ];
 
 const INITIAL_ASSIGNMENTS = [];
@@ -80,6 +80,7 @@ export default function AssignmentManagement() {
   const [adminStudentName, setAdminStudentName] = useState('');
   const [adminStudentReg, setAdminStudentReg] = useState('');
   const [adminStudentStatus, setAdminStudentStatus] = useState('Submitted');
+  const [adminStudentMarks, setAdminStudentMarks] = useState('');
   const [adminQuickCount, setAdminQuickCount] = useState('');
   const [isUpdatingAdminSubs, setIsUpdatingAdminSubs] = useState(false);
   const [adminSubFilter, setAdminSubFilter] = useState('ALL');
@@ -104,6 +105,20 @@ export default function AssignmentManagement() {
       size: a.attachmentSize || '',
       type: a.attachmentType || ''
     });
+  };
+
+  const handleViewSubmissionDoc = (sub) => {
+    if (sub.fileData) {
+      setViewingDoc({
+        name: sub.fileName || `${sub.rollNo}_Submission.pdf`,
+        data: sub.fileData,
+        size: sub.fileSize || '',
+        type: sub.fileType || 'application/pdf'
+      });
+    } else {
+      setToastMessage(`Viewing submission info for ${sub.studentName}: ${sub.fileName || 'Submission.pdf'}`);
+      setTimeout(() => setToastMessage(null), 3000);
+    }
   };
 
   // Normalize DB assignment to component format
@@ -208,6 +223,8 @@ export default function AssignmentManagement() {
                 submittedAt: sub.submittedAt || '--',
                 fileName: sub.fileName || '--',
                 fileSize: sub.fileSize || '--',
+                fileData: sub.fileData || sub.attachmentData || null,
+                fileType: sub.fileType || sub.attachmentType || '',
                 status: sub.status || 'Pending Submission',
                 marksAwarded: sub.marksAwarded,
                 maxMarks: asgt.maxMarks,
@@ -316,6 +333,13 @@ export default function AssignmentManagement() {
   const currentAssignment = useMemo(() => {
     return assignmentsList.find(a => String(a.id) === String(selectedAssignmentId)) || assignmentsList[0];
   }, [assignmentsList, selectedAssignmentId]);
+
+  // Check if current assignment was created by staff (view-only mode for Admin)
+  const isStaffAssigned = useMemo(() => {
+    if (!currentAssignment) return false;
+    const sId = currentAssignment.staffId;
+    return Boolean(sId && String(sId).trim() !== '' && String(sId).toUpperCase() !== 'ADMIN');
+  }, [currentAssignment]);
 
   // Submissions for Selected Assignment
   const currentSubmissions = useMemo(() => {
@@ -541,6 +565,10 @@ export default function AssignmentManagement() {
 
   // Open Grading Modal
   const handleOpenGrading = (sub) => {
+    if (isStaffAssigned) {
+      showToast('Marks for staff-assigned assignments are view-only and evaluated by faculty.');
+      return;
+    }
     setGradingSubmission(sub);
     setGradeInput(sub.marksAwarded || 20);
     setFeedbackInput(sub.feedback || 'Good attempt. Check comments on code efficiency.');
@@ -649,6 +677,10 @@ export default function AssignmentManagement() {
   const handleAdminAddStudent = async (e) => {
     e?.preventDefault();
     if (!currentAssignment) return;
+    if (isStaffAssigned) {
+      showToast('Roster and student records for staff-assigned coursework are managed by faculty.');
+      return;
+    }
     if (!adminStudentRoll.trim() || !adminStudentName.trim()) {
       showToast('Please enter both Roll No and Student Name');
       return;
@@ -656,6 +688,7 @@ export default function AssignmentManagement() {
     setIsUpdatingAdminSubs(true);
     try {
       const asgtId = currentAssignment._id || currentAssignment.id;
+      const parsedMarks = adminStudentMarks.trim() !== '' ? Number(adminStudentMarks) : null;
       const res = await fetch(`${API_BASE}/assignments/${asgtId}/students`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -663,7 +696,8 @@ export default function AssignmentManagement() {
           rollNo: adminStudentRoll.trim(),
           studentName: adminStudentName.trim(),
           regNo: adminStudentReg.trim() || adminStudentRoll.trim(),
-          status: adminStudentStatus,
+          status: parsedMarks !== null ? 'Graded' : adminStudentStatus,
+          marksAwarded: parsedMarks,
           department: currentAssignment.department || 'Computer Science'
         })
       });
@@ -673,6 +707,7 @@ export default function AssignmentManagement() {
         setAdminStudentRoll('');
         setAdminStudentName('');
         setAdminStudentReg('');
+        setAdminStudentMarks('');
         setShowAdminAddStudentForm(false);
         await fetchAssignments();
       } else {
@@ -688,6 +723,10 @@ export default function AssignmentManagement() {
   // Admin: Toggle Submission Status
   const handleAdminToggleStatus = async (sub) => {
     if (!currentAssignment) return;
+    if (isStaffAssigned) {
+      showToast('Submission status for staff-assigned coursework is view-only.');
+      return;
+    }
     const isSubmitted = sub.status === 'Submitted' || sub.status === 'Graded';
     const newStatus = isSubmitted ? 'Pending Submission' : 'Submitted';
     setIsUpdatingAdminSubs(true);
@@ -716,6 +755,10 @@ export default function AssignmentManagement() {
   // Admin: Quick Set Submissions Count
   const handleAdminQuickSet = async (countVal) => {
     if (!currentAssignment) return;
+    if (isStaffAssigned) {
+      showToast('Submissions for staff-assigned coursework are managed by faculty in Staff Portal.');
+      return;
+    }
     const num = parseInt(countVal, 10);
     if (isNaN(num) || num < 0) {
       showToast('Please enter a valid non-negative number');
@@ -747,6 +790,10 @@ export default function AssignmentManagement() {
   // Admin: 1-Click Import Class Roster
   const handleAdminImportClass = async () => {
     if (!currentAssignment) return;
+    if (isStaffAssigned) {
+      showToast('Class roster for staff coursework is managed by faculty.');
+      return;
+    }
     setIsUpdatingAdminSubs(true);
     try {
       const asgtId = currentAssignment._id || currentAssignment.id;
@@ -770,6 +817,10 @@ export default function AssignmentManagement() {
   // Admin: Remove Student from Roster
   const handleAdminRemoveStudent = async (sub) => {
     if (!currentAssignment) return;
+    if (isStaffAssigned) {
+      showToast('Cannot remove student from staff-assigned coursework.');
+      return;
+    }
     if (!window.confirm(`Remove ${sub.studentName} (${sub.rollNo}) from this assignment?`)) return;
     setIsUpdatingAdminSubs(true);
     try {
@@ -1196,8 +1247,17 @@ export default function AssignmentManagement() {
                           }}
                           className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
                         >
-                          <FileCheck className="w-3.5 h-3.5" />
-                          <span>Grade Submissions</span>
+                          {isAdminCreated ? (
+                            <>
+                              <FileCheck className="w-3.5 h-3.5" />
+                              <span>Grade Submissions</span>
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3.5 h-3.5 text-purple-600" />
+                              <span>View Submissions</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -1221,9 +1281,16 @@ export default function AssignmentManagement() {
           {/* Assignment Selector Banner */}
           <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1 flex-1">
-              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-md uppercase tracking-wider">
-                Currently Selected Task:
-              </span>
+              {isStaffAssigned ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-md border border-purple-200 uppercase tracking-wider">
+                  <Eye className="w-3 h-3 text-purple-600" />
+                  Staff Assigned Coursework (View-Only Mode)
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-md uppercase tracking-wider">
+                  Currently Selected Task:
+                </span>
+              )}
               <h3 className="font-extrabold text-base sm:text-lg text-slate-900">
                 {currentAssignment?.code} — {currentAssignment?.title}
               </h3>
@@ -1293,150 +1360,197 @@ export default function AssignmentManagement() {
             </div>
           </div>
 
-          {/* Quick-Set Submissions & Roster Controls */}
-          <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-slate-50 border border-blue-200/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div>
-                <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-600" />
-                  <span>Submission Count & Roster Controls</span>
-                </h4>
-                <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                  Directly set how many students submitted, sync from registered classes, or add individual students.
-                </p>
+          {/* Quick-Set Submissions & Roster Controls (Admin Created) OR Read-Only Banner (Staff Assigned) */}
+          {isStaffAssigned ? (
+            <div className="bg-gradient-to-r from-purple-50/90 via-indigo-50/70 to-slate-50 border border-purple-200/90 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-700 shrink-0 mt-0.5 sm:mt-0">
+                  <Eye className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-extrabold text-purple-950 flex flex-wrap items-center gap-2">
+                    <span>Staff Assigned Coursework — View-Only Mode</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-200/60 text-purple-800 rounded-md border border-purple-300/60">
+                      Faculty: {currentAssignment?.staffName || currentAssignment?.faculty} {currentAssignment?.staffId ? `(${currentAssignment.staffId})` : ''}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-purple-800/80 font-medium mt-0.5">
+                    Student roster, submission status, and awarded marks are evaluated directly by the course faculty in the Staff Portal. Marks sync automatically with Internal Marks. In this desk, all records are strictly view-only.
+                  </p>
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleAdminImportClass}
-                  disabled={isUpdatingAdminSubs}
-                  className="px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  title="Import all registered students from the corresponding class"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingAdminSubs ? 'animate-spin' : ''}`} />
-                  <span>Sync Class Roster</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAdminAddStudentForm(!showAdminAddStudentForm)}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>{showAdminAddStudentForm ? 'Cancel Add' : '+ Add Student'}</span>
-                </button>
+              <div className="shrink-0 flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-purple-700 text-xs font-bold rounded-xl border border-purple-200 shadow-2xs">
+                  <Eye className="w-3.5 h-3.5 text-purple-600" />
+                  <span>View Mode Active</span>
+                </span>
               </div>
             </div>
+          ) : (
+            <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-slate-50 border border-blue-200/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600" />
+                    <span>Submission Count & Roster Controls</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    Directly set how many students submitted, sync from registered classes, or add individual students.
+                  </p>
+                </div>
 
-            {/* Quick Set Submissions Bar */}
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-blue-100/70">
-              <span className="text-xs font-bold text-slate-700">Quick Set Submitted Count:</span>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min="0"
-                  max={currentAssignment?.totalStudents || 100}
-                  value={adminQuickCount}
-                  onChange={(e) => setAdminQuickCount(e.target.value)}
-                  placeholder={`0 - ${currentAssignment?.totalStudents || 60}`}
-                  className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleAdminQuickSet(adminQuickCount)}
-                  disabled={isUpdatingAdminSubs || adminQuickCount === ''}
-                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-all cursor-pointer disabled:opacity-40"
-                >
-                  Set Count
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 ml-auto">
-                <button
-                  type="button"
-                  onClick={() => handleAdminQuickSet(currentSubmissions.length || currentAssignment?.totalStudents || 0)}
-                  disabled={isUpdatingAdminSubs}
-                  className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold text-[11px] rounded-lg border border-emerald-200 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  All Submitted ({currentSubmissions.length || currentAssignment?.totalStudents || 0})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAdminQuickSet(0)}
-                  disabled={isUpdatingAdminSubs}
-                  className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px] rounded-lg border border-rose-200 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  All Pending (0)
-                </button>
-              </div>
-            </div>
-
-            {/* Inline Add Student Form */}
-            {showAdminAddStudentForm && (
-              <form onSubmit={handleAdminAddStudent} className="pt-3 border-t border-blue-200/80 mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 bg-white p-3.5 rounded-xl border border-blue-200 animate-fadeIn">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Roll No *</label>
-                  <input
-                    type="text"
-                    value={adminStudentRoll}
-                    onChange={(e) => setAdminStudentRoll(e.target.value)}
-                    placeholder="e.g. 21CS045"
-                    className="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Student Name *</label>
-                  <input
-                    type="text"
-                    value={adminStudentName}
-                    onChange={(e) => setAdminStudentName(e.target.value)}
-                    placeholder="e.g. Priya Sharma"
-                    className="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Register No</label>
-                  <input
-                    type="text"
-                    value={adminStudentReg}
-                    onChange={(e) => setAdminStudentReg(e.target.value)}
-                    placeholder="Optional (defaults to Roll)"
-                    className="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Initial Status</label>
-                  <select
-                    value={adminStudentStatus}
-                    onChange={(e) => setAdminStudentStatus(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                  >
-                    <option value="Submitted">Submitted</option>
-                    <option value="Pending Submission">Pending Submission</option>
-                  </select>
-                </div>
-                <div className="flex items-end gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleAdminImportClass}
                     disabled={isUpdatingAdminSubs}
-                    className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                    className="px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Import all registered students from the corresponding class"
                   >
-                    {isUpdatingAdminSubs ? 'Adding...' : 'Add Student'}
+                    <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingAdminSubs ? 'animate-spin' : ''}`} />
+                    <span>Sync Class Roster</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminAddStudentForm(!showAdminAddStudentForm)}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>{showAdminAddStudentForm ? 'Cancel Add' : '+ Add Student'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Set Submissions Bar */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-blue-100/70">
+                <span className="text-xs font-bold text-slate-700">Quick Set Submitted Count:</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min="0"
+                    max={currentAssignment?.totalStudents || 100}
+                    value={adminQuickCount}
+                    onChange={(e) => setAdminQuickCount(e.target.value)}
+                    placeholder={`0 - ${currentAssignment?.totalStudents || 60}`}
+                    className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAdminQuickSet(adminQuickCount)}
+                    disabled={isUpdatingAdminSubs || adminQuickCount === ''}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    Set Count
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleAdminQuickSet(currentSubmissions.length || currentAssignment?.totalStudents || 0)}
+                    disabled={isUpdatingAdminSubs}
+                    className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold text-[11px] rounded-lg border border-emerald-200 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    All Submitted ({currentSubmissions.length || currentAssignment?.totalStudents || 0})
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowAdminAddStudentForm(false)}
-                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-lg transition-all cursor-pointer"
+                    onClick={() => handleAdminQuickSet(0)}
+                    disabled={isUpdatingAdminSubs}
+                    className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px] rounded-lg border border-rose-200 transition-all cursor-pointer disabled:opacity-50"
                   >
-                    Cancel
+                    All Pending (0)
                   </button>
                 </div>
-              </form>
-            )}
-          </div>
+              </div>
+
+              {/* Inline Add Student Form */}
+              {showAdminAddStudentForm && (
+                <form onSubmit={handleAdminAddStudent} className="pt-3 border-t border-blue-200/80 mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5 bg-white p-3.5 rounded-xl border border-blue-200 animate-fadeIn">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Roll No *</label>
+                    <input
+                      type="text"
+                      value={adminStudentRoll}
+                      onChange={(e) => setAdminStudentRoll(e.target.value)}
+                      placeholder="e.g. 21CS045"
+                      className="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Student Name *</label>
+                    <input
+                      type="text"
+                      value={adminStudentName}
+                      onChange={(e) => setAdminStudentName(e.target.value)}
+                      placeholder="e.g. Priya Sharma"
+                      className="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Register No</label>
+                    <input
+                      type="text"
+                      value={adminStudentReg}
+                      onChange={(e) => setAdminStudentReg(e.target.value)}
+                      placeholder="Optional (defaults to Roll)"
+                      className="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-1">
+                      Marks (Max {currentAssignment?.maxMarks || 20})
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={currentAssignment?.maxMarks || 20}
+                      value={adminStudentMarks}
+                      onChange={(e) => {
+                        setAdminStudentMarks(e.target.value);
+                        if (e.target.value !== '' && adminStudentStatus === 'Pending Submission') {
+                          setAdminStudentStatus('Submitted');
+                        }
+                      }}
+                      placeholder={`0-${currentAssignment?.maxMarks || 20}`}
+                      className="w-full px-2.5 py-1.5 text-xs font-bold text-indigo-900 bg-indigo-50/40 border border-indigo-200 rounded-lg focus:bg-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Initial Status</label>
+                    <select
+                      value={adminStudentStatus}
+                      onChange={(e) => setAdminStudentStatus(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="Submitted">Submitted</option>
+                      <option value="Pending Submission">Pending Submission</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end gap-1.5">
+                    <button
+                      type="submit"
+                      disabled={isUpdatingAdminSubs}
+                      className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {isUpdatingAdminSubs ? 'Adding...' : 'Add Student'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminAddStudentForm(false)}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-lg transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Submissions Search, Filter & Actions Bar */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -1493,7 +1607,6 @@ export default function AssignmentManagement() {
                   <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     <th className="py-4 px-6">STUDENT ROLL & NAME</th>
                     <th className="py-4 px-4">SUBMISSION STATUS</th>
-                    <th className="py-4 px-4">ATTACHMENT</th>
                     <th className="py-4 px-4 text-center">MARKS AWARDED</th>
                     <th className="py-4 px-6 text-right">ACTION</th>
                   </tr>
@@ -1501,7 +1614,7 @@ export default function AssignmentManagement() {
                 <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                   {displayedSubmissions.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="py-12 text-center text-slate-400 text-xs font-semibold">
+                      <td colSpan="4" className="py-12 text-center text-slate-400 text-xs font-semibold">
                         {currentSubmissions.length === 0
                           ? 'No students found on this assignment roster. Click "Sync Class Roster" or "+ Add Student" to populate students.'
                           : 'No students match the selected filter or search.'}
@@ -1544,26 +1657,19 @@ export default function AssignmentManagement() {
                             </div>
                           </td>
 
-                          <td className="py-4 px-4">
-                            {sub.fileName !== '--' ? (
-                              <div className="flex items-center gap-1.5 text-xs text-slate-800 font-mono font-semibold">
-                                <FileText className="w-4 h-4 text-rose-500 shrink-0" />
-                                <span className="truncate max-w-[180px]">{sub.fileName}</span>
-                                <span className="text-[10px] text-slate-400">({sub.fileSize})</span>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-slate-400 font-medium italic">No file attached</span>
-                            )}
-                          </td>
-
                           <td className="py-4 px-4 text-center">
-                            {sub.status === 'Graded' ? (
-                              <span className="font-black text-sm text-emerald-600 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
-                                {sub.marksAwarded} / {sub.maxMarks}
-                              </span>
+                            {sub.status === 'Graded' || (sub.marksAwarded !== null && sub.marksAwarded !== undefined && sub.marksAwarded !== '') ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="font-black text-sm text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                                  {sub.marksAwarded} / {sub.maxMarks || currentAssignment?.maxMarks || 25}
+                                </span>
+                                {isStaffAssigned && (
+                                  <span className="text-[9px] font-bold text-slate-400 mt-0.5">Faculty Graded</span>
+                                )}
+                              </div>
                             ) : isSubmitted ? (
-                              <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
-                                Needs Grading
+                              <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                                {isStaffAssigned ? 'Pending Faculty Grading' : 'Needs Grading'}
                               </span>
                             ) : (
                               <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
@@ -1573,55 +1679,54 @@ export default function AssignmentManagement() {
                           </td>
 
                           <td className="py-4 px-6 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {/* Quick Toggle Submission Status Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleAdminToggleStatus(sub)}
-                                disabled={isUpdatingAdminSubs}
-                                className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                                  isSubmitted
-                                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
-                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
-                                }`}
-                                title={isSubmitted ? 'Mark as Not Submitted / Pending' : 'Mark as Submitted'}
-                              >
-                                {isSubmitted ? 'Mark Pending' : 'Mark Submitted'}
-                              </button>
-
-                              {/* Grade Button */}
-                              {isSubmitted ? (
+                            {isStaffAssigned ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 font-bold text-xs rounded-lg border border-slate-200" title="Marks and submissions are view-only for staff assignments">
+                                  <Eye className="w-3.5 h-3.5 text-purple-600" />
+                                  <span>View Only</span>
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1.5">
+                                {/* Quick Toggle Submission Status Button */}
                                 <button
                                   type="button"
-                                  onClick={() => handleOpenGrading(sub)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer"
+                                  onClick={() => handleAdminToggleStatus(sub)}
+                                  disabled={isUpdatingAdminSubs}
+                                  className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                                    isSubmitted
+                                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+                                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                  }`}
+                                  title={isSubmitted ? 'Mark as Not Submitted / Pending' : 'Mark as Submitted'}
                                 >
-                                  <Edit className="w-3 h-3" />
-                                  <span>{sub.status === 'Graded' ? 'Edit Grade' : 'Grade'}</span>
+                                  {isSubmitted ? 'Mark Pending' : 'Mark Submitted'}
                                 </button>
-                              ) : (
+
+                                {/* Grade Button */}
+                                {isSubmitted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenGrading(sub)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                    <span>{sub.status === 'Graded' ? 'Edit Grade' : 'Grade'}</span>
+                                  </button>
+                                )}
+
+                                {/* Delete Student Button */}
                                 <button
                                   type="button"
-                                  onClick={() => showToast(`SMS Reminder sent to ${sub.studentName}!`)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg transition-all border border-rose-200 cursor-pointer"
-                                  title="Send notification reminder"
+                                  onClick={() => handleAdminRemoveStudent(sub)}
+                                  disabled={isUpdatingAdminSubs}
+                                  className="p-1.5 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition-all cursor-pointer"
+                                  title="Remove student from assignment"
                                 >
-                                  <Send className="w-3 h-3" />
-                                  <span>Remind</span>
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
-                              )}
-
-                              {/* Delete Student Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleAdminRemoveStudent(sub)}
-                                disabled={isUpdatingAdminSubs}
-                                className="p-1.5 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition-all cursor-pointer"
-                                title="Remove student from assignment"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );

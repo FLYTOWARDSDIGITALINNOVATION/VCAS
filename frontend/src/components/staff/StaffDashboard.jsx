@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, BookOpen, CheckSquare, Calendar, BookMarked,
   Bell, UserCheck, User, LogOut, Menu, X, GraduationCap,
-  ChevronRight, Shield, FileSpreadsheet, ClipboardList
+  ChevronRight, Shield, FileSpreadsheet, ClipboardList, Ticket, Award
 } from 'lucide-react';
 import StaffHome from './StaffHome';
 import StaffMyClasses from './StaffMyClasses';
@@ -14,6 +14,8 @@ import StaffNotices from './StaffNotices';
 import StaffLeave from './StaffLeave';
 import StaffProfile from './StaffProfile';
 import StaffQuestionPaper from './StaffQuestionPaper';
+import StaffHallTicket from './StaffHallTicket';
+import StaffNetCertificateView from './StaffNetCertificateView';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, section: 'MAIN' },
@@ -23,9 +25,11 @@ const NAV_ITEMS = [
   { name: 'Timetable', icon: Calendar, section: 'ACADEMIC' },
   { name: 'Assignments', icon: BookMarked, section: 'ACADEMIC' },
   { name: 'Question Papers', icon: ClipboardList, section: 'ACADEMIC' },
+  { name: 'Hall Tickets', icon: Ticket, section: 'ACADEMIC' },
+  { name: 'NET / SET Certificate', icon: Award, section: 'FACULTY PROFILE' },
+  { name: 'My Profile', icon: User, section: 'FACULTY PROFILE' },
   { name: 'Notices', icon: Bell, section: 'COMMUNICATION' },
   { name: 'Leave', icon: UserCheck, section: 'HOD' },
-  { name: 'My Profile', icon: User, section: 'ACCOUNT' },
 ];
 
 export default function StaffDashboard({ staffUser, onLogout }) {
@@ -49,17 +53,19 @@ export default function StaffDashboard({ staffUser, onLogout }) {
 
   const renderPage = () => {
     switch (activeNav) {
-      case 'Dashboard':      return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
-      case 'My Classes':     return <StaffMyClasses staffUser={staffUser} />;
-      case 'Attendance':     return <StaffAttendance staffUser={staffUser} />;
-      case 'Internal Marks': return <StaffInternalMarks staffUser={staffUser} />;
-      case 'Timetable':      return <StaffTimetable staffUser={staffUser} />;
-      case 'Assignments':    return <StaffAssignments staffUser={staffUser} />;
-      case 'Question Papers': return <StaffQuestionPaper staffUser={staffUser} />;
-      case 'Notices':        return <StaffNotices staffUser={staffUser} />;
-      case 'Leave':          return <StaffLeave staffUser={staffUser} />;
-      case 'My Profile':     return <StaffProfile staffUser={staffUser} />;
-      default:               return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
+      case 'Dashboard':            return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
+      case 'My Classes':           return <StaffMyClasses staffUser={staffUser} />;
+      case 'Attendance':           return <StaffAttendance staffUser={staffUser} />;
+      case 'Internal Marks':       return <StaffInternalMarks staffUser={staffUser} />;
+      case 'Timetable':            return <StaffTimetable staffUser={staffUser} />;
+      case 'Assignments':          return <StaffAssignments staffUser={staffUser} />;
+      case 'Question Papers':      return <StaffQuestionPaper staffUser={staffUser} />;
+      case 'Hall Tickets':         return <StaffHallTicket staffUser={staffUser} onNavigate={setActiveNav} />;
+      case 'NET / SET Certificate': return <StaffNetCertificateView staffUser={staffUser} />;
+      case 'My Profile':           return <StaffProfile staffUser={staffUser} />;
+      case 'Notices':              return <StaffNotices staffUser={staffUser} />;
+      case 'Leave':                return <StaffLeave staffUser={staffUser} />;
+      default:                     return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
     }
   };
 
@@ -80,12 +86,25 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       </div>
 
       {/* Staff Identity Card */}
-      <div className="mx-4 my-4 p-4 rounded-2xl bg-white/5 border border-white/10">
-        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${staffUser.avatarColor || 'from-blue-600 to-indigo-600'} flex items-center justify-center text-white font-bold text-base shadow-lg mb-3`}>
-          {staffUser.avatarInitials || staffUser.avatarText || 'ST'}
+      <div 
+        onClick={() => { setActiveNav('NET / SET Certificate'); setMobileOpen(false); }}
+        className="mx-4 my-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer group"
+        title="View Faculty Profile & NET/SET Certificate"
+      >
+        <div className={`w-12 h-12 rounded-2xl overflow-hidden ${!staffUser?.profileImage ? `bg-gradient-to-br ${staffUser.avatarColor || 'from-blue-600 to-indigo-600'}` : 'bg-slate-800'} flex items-center justify-center text-white font-bold text-base shadow-lg mb-3 shrink-0 group-hover:scale-105 transition-transform`}>
+          {staffUser?.profileImage ? (
+            <img src={staffUser.profileImage} alt={staffUser.name} className="w-full h-full object-cover" />
+          ) : (
+            staffUser.avatarInitials || staffUser.avatarText || 'ST'
+          )}
         </div>
-        <p className="text-white font-bold text-sm leading-tight">{staffUser.name}</p>
-        <p className="text-blue-300 text-[11px] font-medium mt-0.5">{staffUser.designation}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-white font-bold text-sm leading-tight group-hover:text-blue-300 transition-colors">{staffUser.name}</p>
+            <p className="text-blue-300 text-[11px] font-medium mt-0.5">{staffUser.designation}</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
+        </div>
         <div className="flex items-center gap-1.5 mt-2">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
           <p className="text-slate-400 text-[10px]">{staffUser.department} · {staffUser.staffId}</p>
@@ -165,12 +184,20 @@ export default function StaffDashboard({ staffUser, onLogout }) {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${staffUser?.avatarColor || 'from-blue-600 to-indigo-600'} flex items-center justify-center text-white text-xs font-bold`}>
-                {staffUser?.avatarInitials || staffUser?.avatarText || staffUser?.name?.substring(0, 2)?.toUpperCase() || 'ST'}
+            <div 
+              onClick={() => setActiveNav('NET / SET Certificate')}
+              className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer group"
+              title="View NET/SET Certificate & Profile"
+            >
+              <div className={`w-8 h-8 rounded-xl overflow-hidden ${!staffUser?.profileImage ? `bg-gradient-to-br ${staffUser?.avatarColor || 'from-blue-600 to-indigo-600'}` : 'bg-slate-100'} flex items-center justify-center text-white text-xs font-bold shrink-0 group-hover:scale-105 transition-transform`}>
+                {staffUser?.profileImage ? (
+                  <img src={staffUser.profileImage} alt={staffUser.name} className="w-full h-full object-cover" />
+                ) : (
+                  staffUser?.avatarInitials || staffUser?.avatarText || staffUser?.name?.substring(0, 2)?.toUpperCase() || 'ST'
+                )}
               </div>
-              <div className="hidden sm:block">
-                <p className="text-xs font-bold text-slate-800 leading-tight">{staffUser?.name ? staffUser.name.split(' ').slice(0, 2).join(' ') : 'Staff Member'}</p>
+              <div className="hidden sm:block text-left">
+                <p className="text-xs font-bold text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{staffUser?.name ? staffUser.name.split(' ').slice(0, 2).join(' ') : 'Staff Member'}</p>
                 <p className="text-[10px] text-slate-400">{staffUser?.department || 'Department'}</p>
               </div>
             </div>

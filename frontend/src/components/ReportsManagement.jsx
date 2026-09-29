@@ -94,21 +94,21 @@ export default function ReportsManagement() {
 
   // Mock Data for Academic Results
   const academicDeptResults = [
-    { dept: 'Computer Science', students: 340, passRate: 96.2, avgGpa: 8.4, distinctions: 112, backlogs: 13, topper: 'Aditya Kapoor (9.82 CGPA)' },
-    { dept: 'Electronics & Comm', students: 280, passRate: 92.8, avgGpa: 7.9, distinctions: 78, backlogs: 20, topper: 'Ananya Deshmukh (9.75 CGPA)' },
-    { dept: 'Mechanical Engg', students: 220, passRate: 88.5, avgGpa: 7.5, distinctions: 54, backlogs: 25, topper: 'Rohan Verma (9.60 CGPA)' },
-    { dept: 'Civil Engineering', students: 180, passRate: 86.4, avgGpa: 7.3, distinctions: 38, backlogs: 24, topper: 'Siddharth Nair (9.48 CGPA)' },
-    { dept: 'Business Admin (MBA)', students: 270, passRate: 98.1, avgGpa: 8.7, distinctions: 135, backlogs: 5, topper: 'Sneha Patel (9.90 CGPA)' },
-    { dept: 'Computer Apps (BCA)', students: 150, passRate: 94.0, avgGpa: 8.1, distinctions: 45, backlogs: 9, topper: 'Karthik Raja (9.65 CGPA)' }
+    { dept: 'Commerce', students: 360, passRate: 97.4, avgGpa: 8.6, distinctions: 142, backlogs: 8, topper: 'Sneha Nair (9.92 CGPA)' },
+    { dept: 'Computer Science', students: 320, passRate: 96.2, avgGpa: 8.4, distinctions: 112, backlogs: 13, topper: 'Aditya Kapoor (9.82 CGPA)' },
+    { dept: 'English Literature', students: 240, passRate: 95.8, avgGpa: 8.2, distinctions: 88, backlogs: 10, topper: 'Ananya Deshmukh (9.85 CGPA)' },
+    { dept: 'Business Admin (BBA)', students: 210, passRate: 94.5, avgGpa: 8.0, distinctions: 72, backlogs: 12, topper: 'Rahul Verma (9.65 CGPA)' },
+    { dept: 'Computer Apps (BCA)', students: 180, passRate: 94.0, avgGpa: 8.1, distinctions: 60, backlogs: 9, topper: 'Karthik Raja (9.68 CGPA)' },
+    { dept: 'Mathematics', students: 140, passRate: 93.1, avgGpa: 8.5, distinctions: 52, backlogs: 11, topper: 'Divya Krishnan (9.95 CGPA)' }
   ];
 
   // Mock Data for Attendance Defaulters (< 75%)
   const defaultersList = [
     { rollNo: 'VCAS23CS045', name: 'Vikramaditya Rao', dept: 'CS', year: '3rd Year', att: '64.2%', missedClasses: 42, parentContact: '98401 99001', status: 'Warning Issued' },
-    { rollNo: 'VCAS23EC019', name: 'Deepak Chandran', dept: 'ECE', year: '2nd Year', att: '68.0%', missedClasses: 38, parentContact: '98401 99002', status: 'Parent Called' },
-    { rollNo: 'VCAS22ME088', name: 'Gautam Singhania', dept: 'Mech', year: '4th Year', att: '61.5%', missedClasses: 48, parentContact: '98401 99003', status: 'Notice Sent' },
-    { rollNo: 'VCAS24CS102', name: 'Pooja Sundaram', dept: 'CS', year: '1st Year', att: '71.4%', missedClasses: 28, parentContact: '98401 99004', status: 'Counseled' },
-    { rollNo: 'VCAS23CV031', name: 'Harish Krishnamurthy', dept: 'Civil', year: '2nd Year', att: '59.8%', missedClasses: 52, parentContact: '98401 99005', status: 'Exam Blocked' }
+    { rollNo: 'VCAS23CM019', name: 'Deepak Chandran', dept: 'Commerce', year: '2nd Year', att: '68.0%', missedClasses: 38, parentContact: '98401 99002', status: 'Parent Called' },
+    { rollNo: 'VCAS22EN088', name: 'Gautam Singhania', dept: 'English', year: '3rd Year', att: '61.5%', missedClasses: 48, parentContact: '98401 99003', status: 'Notice Sent' },
+    { rollNo: 'VCAS24BB102', name: 'Pooja Sundaram', dept: 'BBA', year: '1st Year', att: '71.4%', missedClasses: 28, parentContact: '98401 99004', status: 'Counseled' },
+    { rollNo: 'VCAS23BC031', name: 'Harish Krishnamurthy', dept: 'BCA', year: '2nd Year', att: '59.8%', missedClasses: 52, parentContact: '98401 99005', status: 'Exam Blocked' }
   ];
 
   // Filtered Academic Results
@@ -217,8 +217,8 @@ export default function ReportsManagement() {
             className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
           >
             <option value="All Semesters">All Semesters</option>
-            <option value="Odd Sem (Sem 1, 3, 5, 7)">Odd Semester Cycle</option>
-            <option value="Even Sem (Sem 2, 4, 6, 8)">Even Semester Cycle</option>
+            <option value="Odd Sem (Sem 1, 3, 5)">Odd Semester Cycle (Sem 1, 3, 5)</option>
+            <option value="Even Sem (Sem 2, 4, 6)">Even Semester Cycle (Sem 2, 4, 6)</option>
           </select>
 
           {/* Department */}
@@ -228,11 +228,12 @@ export default function ReportsManagement() {
             className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
           >
             <option value="All Departments">All Departments</option>
+            <option value="Commerce">Commerce</option>
             <option value="Computer Science">Computer Science</option>
-            <option value="Electronics & Comm">Electronics & Comm</option>
-            <option value="Mechanical Engg">Mechanical Engg</option>
-            <option value="Civil Engineering">Civil Engineering</option>
-            <option value="Business Admin">Business Admin (MBA)</option>
+            <option value="English Literature">English Literature</option>
+            <option value="Business Administration (BBA)">Business Administration (BBA)</option>
+            <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
+            <option value="Mathematics">Mathematics</option>
           </select>
         </div>
 

@@ -39,122 +39,122 @@ import ModalPortal from './ModalPortal';
 const INITIAL_PROGRAMS = [
   {
     id: 1,
-    code: 'BTECH-CSE',
-    name: 'B.Tech in Computer Science & Engineering',
+    code: 'BCOM-GEN',
+    name: 'Bachelor of Commerce (B.Com)',
     degreeLevel: 'Undergraduate (UG)',
-    department: 'Computer Science',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 4,
-    totalSemesters: 8,
-    totalCredits: 160,
-    enrolledStudents: 340,
-    totalSubjects: 42,
-    coordinator: 'Dr. Sunita Rao',
-    coordinatorEmail: 'sunita.rao@vcas.edu',
-    establishedYear: '2008',
-    description: 'Comprehensive 4-year engineering program covering Software Systems, AI/ML, Algorithms, Cloud Computing, and Cyber Security.'
-  },
-  {
-    id: 2,
-    code: 'BTECH-ECE',
-    name: 'B.Tech in Electronics & Communication',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Electronics',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 4,
-    totalSemesters: 8,
-    totalCredits: 160,
-    enrolledStudents: 280,
-    totalSubjects: 40,
-    coordinator: 'Prof. Ramesh Kumar',
-    coordinatorEmail: 'ramesh.kumar@vcas.edu',
-    establishedYear: '2010',
-    description: 'Specialized 4-year program in VLSI Chip Design, Digital Signal Processing, Embedded IoT Systems, and Telecommunications.'
-  },
-  {
-    id: 3,
-    code: 'MBA-MGMT',
-    name: 'Master of Business Administration (MBA)',
-    degreeLevel: 'Postgraduate (PG)',
-    department: 'MBA',
-    regulation: 'Regulation 2023 (R23)',
-    durationYears: 2,
-    totalSemesters: 4,
-    totalCredits: 90,
-    enrolledStudents: 210,
-    totalSubjects: 24,
-    coordinator: 'Dr. Anita Desai',
-    coordinatorEmail: 'anita.desai@vcas.edu',
-    establishedYear: '2012',
-    description: 'Industry-driven 2-year leadership program specializing in Financial Management, Marketing Analytics, and HR Operations.'
-  },
-  {
-    id: 4,
-    code: 'BTECH-ME',
-    name: 'B.Tech in Mechanical Engineering',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Mechanical',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 4,
-    totalSemesters: 8,
-    totalCredits: 160,
-    enrolledStudents: 220,
-    totalSubjects: 40,
-    coordinator: 'Dr. Pradeep Joshi',
-    coordinatorEmail: 'pradeep.joshi@vcas.edu',
-    establishedYear: '2009',
-    description: 'Core 4-year program in Thermal Engineering, CAD/CAM Modeling, Robotics, and Automobile Manufacturing.'
-  },
-  {
-    id: 5,
-    code: 'BTECH-CE',
-    name: 'B.Tech in Civil Engineering',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Civil',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 4,
-    totalSemesters: 8,
-    totalCredits: 160,
-    enrolledStudents: 180,
-    totalSubjects: 38,
-    coordinator: 'Dr. Kavitha Singh',
-    coordinatorEmail: 'kavitha.singh@vcas.edu',
-    establishedYear: '2011',
-    description: 'Infrastructure and smart city design curriculum covering Structural Analysis, Geo-technics, and Environmental Engineering.'
-  },
-  {
-    id: 6,
-    code: 'BCA-APP',
-    name: 'Bachelor of Computer Applications (BCA)',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'BCA',
+    department: 'Commerce',
     regulation: 'Regulation 2024 (R24)',
     durationYears: 3,
     totalSemesters: 6,
-    totalCredits: 120,
-    enrolledStudents: 150,
+    totalCredits: 140,
+    enrolledStudents: 360,
+    totalSubjects: 36,
+    coordinator: 'Dr. S. Rajagopalan',
+    coordinatorEmail: 'rajagopalan.s@vcas.edu',
+    establishedYear: '2005',
+    description: 'Comprehensive 3-year commerce program covering Corporate Accounting, Taxation, Banking Law, Auditing, and Financial Management.'
+  },
+  {
+    id: 2,
+    code: 'BSC-CS',
+    name: 'B.Sc in Computer Science',
+    degreeLevel: 'Undergraduate (UG)',
+    department: 'Computer Science',
+    regulation: 'Regulation 2024 (R24)',
+    durationYears: 3,
+    totalSemesters: 6,
+    totalCredits: 140,
+    enrolledStudents: 320,
+    totalSubjects: 36,
+    coordinator: 'Dr. Sunita Rao',
+    coordinatorEmail: 'sunita.rao@vcas.edu',
+    establishedYear: '2008',
+    description: 'Foundational 3-year science program specializing in Algorithms, Python, Java Systems, DBMS, and Web Technologies.'
+  },
+  {
+    id: 3,
+    code: 'BA-ENG',
+    name: 'B.A. in English Literature',
+    degreeLevel: 'Undergraduate (UG)',
+    department: 'English Literature',
+    regulation: 'Regulation 2024 (R24)',
+    durationYears: 3,
+    totalSemesters: 6,
+    totalCredits: 140,
+    enrolledStudents: 240,
+    totalSubjects: 34,
+    coordinator: 'Dr. K. Meenakshi Sundaram',
+    coordinatorEmail: 'meenakshi.s@vcas.edu',
+    establishedYear: '2006',
+    description: 'Enriching 3-year liberal arts curriculum in British, American, and World Literature, Literary Theory, and Communication.'
+  },
+  {
+    id: 4,
+    code: 'BBA-MGMT',
+    name: 'Bachelor of Business Administration (BBA)',
+    degreeLevel: 'Undergraduate (UG)',
+    department: 'Business Administration (BBA)',
+    regulation: 'Regulation 2024 (R24)',
+    durationYears: 3,
+    totalSemesters: 6,
+    totalCredits: 140,
+    enrolledStudents: 210,
+    totalSubjects: 32,
+    coordinator: 'Dr. Anita Desai',
+    coordinatorEmail: 'anita.desai@vcas.edu',
+    establishedYear: '2012',
+    description: 'Practical 3-year executive management degree in Marketing, HR Management, Business Finance, and Entrepreneurship.'
+  },
+  {
+    id: 5,
+    code: 'BCA-APP',
+    name: 'Bachelor of Computer Applications (BCA)',
+    degreeLevel: 'Undergraduate (UG)',
+    department: 'Computer Applications (BCA)',
+    regulation: 'Regulation 2024 (R24)',
+    durationYears: 3,
+    totalSemesters: 6,
+    totalCredits: 140,
+    enrolledStudents: 180,
     totalSubjects: 32,
     coordinator: 'Prof. Meena Iyer',
     coordinatorEmail: 'meena.iyer@vcas.edu',
     establishedYear: '2015',
-    description: '3-year applied computer science program in Web Development, Database Architecture, Mobile Apps, and Cloud Computing.'
+    description: 'Applied computing 3-year curriculum focusing on Full-Stack Web Development, Mobile Apps, Database Architecture, and Cloud.'
+  },
+  {
+    id: 6,
+    code: 'BSC-MATH',
+    name: 'B.Sc in Mathematics',
+    degreeLevel: 'Undergraduate (UG)',
+    department: 'Mathematics',
+    regulation: 'Regulation 2024 (R24)',
+    durationYears: 3,
+    totalSemesters: 6,
+    totalCredits: 140,
+    enrolledStudents: 140,
+    totalSubjects: 30,
+    coordinator: 'Dr. R. Ramanujam',
+    coordinatorEmail: 'ramanujam.r@vcas.edu',
+    establishedYear: '2010',
+    description: 'Pure and Applied Mathematics degree emphasizing Calculus, Linear Algebra, Real Analysis, and Statistical Operations Research.'
   },
   {
     id: 7,
-    code: 'BTECH-AIDS',
-    name: 'B.Tech in AI & Data Science',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Computer Science',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 4,
-    totalSemesters: 8,
-    totalCredits: 160,
-    enrolledStudents: 120,
-    totalSubjects: 42,
-    coordinator: 'Dr. Neeraj Gupta',
-    coordinatorEmail: 'neeraj.gupta@vcas.edu',
-    establishedYear: '2022',
-    description: 'Cutting-edge specialization in Deep Learning, Large Language Models, Big Data Pipelines, and Computer Vision.'
+    code: 'MCOM-PG',
+    name: 'Master of Commerce (M.Com)',
+    degreeLevel: 'Postgraduate (PG)',
+    department: 'Commerce',
+    regulation: 'Regulation 2023 (R23)',
+    durationYears: 2,
+    totalSemesters: 4,
+    totalCredits: 90,
+    enrolledStudents: 90,
+    totalSubjects: 20,
+    coordinator: 'Dr. S. Rajagopalan',
+    coordinatorEmail: 'rajagopalan.s@vcas.edu',
+    establishedYear: '2014',
+    description: 'Advanced 2-year postgraduate program in Corporate Accounting, Financial Markets, International Taxation, and Business Research.'
   }
 ];
 
@@ -304,13 +304,13 @@ const INITIAL_SUBJECTS = [
   },
   {
     id: 107,
-    code: 'CS601',
-    name: 'Cyber Security & Cryptography',
+    code: 'CS303',
+    name: 'Cyber Security & Network Forensics',
     department: 'Computer Science',
-    year: 4,
-    sem: 'Sem 7',
+    year: 3,
+    sem: 'Sem 6',
     credits: 3,
-    type: 'Core Theory',
+    type: 'Skill-Based Elective (SBE)',
     faculty: 'Dr. Neeraj Gupta',
     ltp: '3-0-0',
     hours: '3 hrs/wk',
@@ -328,207 +328,231 @@ const INITIAL_SUBJECTS = [
   },
   {
     id: 108,
-    code: 'CS701',
-    name: 'Final Year Capstone Project',
+    code: 'CS304',
+    name: 'Major Software Project & Viva Voce',
     department: 'Computer Science',
-    year: 4,
-    sem: 'Sem 8',
+    year: 3,
+    sem: 'Sem 6',
     credits: 6,
-    type: 'Capstone / Project',
+    type: 'Project / Dissertation',
     faculty: 'Dr. Sunita Rao',
     ltp: '0-0-12',
     hours: '12 hrs/wk Project Lab',
     studentsEnrolled: 95,
-    prerequisite: 'All Core Courses (Sem 1 to 7)',
+    prerequisite: 'All Core Courses (Sem 1 to 5)',
     units: [
       { unit: 'Phase 1', title: 'Problem Formulation, Literature Survey & Feasibility', hours: 24 },
       { unit: 'Phase 2', title: 'Architecture Design, Prototyping & Mid-term Review', hours: 36 },
-      { unit: 'Phase 3', title: 'Implementation, Benchmarking, IEEE Paper & Viva Voce', hours: 48 }
+      { unit: 'Phase 3', title: 'Implementation, Benchmarking, Project Report & Viva', hours: 48 }
     ],
-    textbooks: 'Project Guidelines & IEEE Research Papers',
+    textbooks: 'Project Guidelines & Institutional Research Manual',
     evaluation: { internal: 60, external: 40 }
   },
 
-  // Electronics & Communication
+  // Commerce
   {
     id: 201,
-    code: 'EC201',
-    name: 'Electronic Circuits & Analog Design',
-    department: 'Electronics',
-    year: 2,
-    sem: 'Sem 3',
+    code: 'CM101',
+    name: 'Financial Accounting & Book-keeping',
+    department: 'Commerce',
+    year: 1,
+    sem: 'Sem 1',
     credits: 4,
     type: 'Core Theory',
-    faculty: 'Prof. Ramesh Kumar',
+    faculty: 'Dr. S. Rajagopalan',
     ltp: '3-1-0',
     hours: '4 hrs/wk',
-    studentsEnrolled: 90,
-    prerequisite: 'Basic Electrical Engg',
+    studentsEnrolled: 120,
+    prerequisite: 'None',
     units: [
-      { unit: 'Unit 1', title: 'BJT & MOSFET Small Signal Amplifiers', hours: 9 },
-      { unit: 'Unit 2', title: 'Feedback Amplifiers & Oscillator Circuits', hours: 9 },
-      { unit: 'Unit 3', title: 'Operational Amplifiers & Linear Integrated Circuits', hours: 9 },
-      { unit: 'Unit 4', title: 'Active Filter Design & Waveform Generators', hours: 9 },
-      { unit: 'Unit 5', title: 'Power Amplifiers, Regulators & Thermal Design', hours: 9 }
+      { unit: 'Unit 1', title: 'Accounting Concepts, Conventions & Journal Entries', hours: 9 },
+      { unit: 'Unit 2', title: 'Trial Balance & Final Accounts of Sole Proprietors', hours: 9 },
+      { unit: 'Unit 3', title: 'Bank Reconciliation Statements (BRS) & Errors', hours: 9 },
+      { unit: 'Unit 4', title: 'Depreciation Accounting: Straight Line & WDV', hours: 9 },
+      { unit: 'Unit 5', title: 'Hire Purchase & Installment Purchase Systems', hours: 9 }
     ],
-    textbooks: 'Microelectronic Circuits by Sedra and Smith',
+    textbooks: 'Financial Accounting by T.S. Reddy and A. Murthy',
     evaluation: { internal: 40, external: 60 }
   },
   {
     id: 202,
-    code: 'EC401',
-    name: 'Digital Signal Processing',
-    department: 'Electronics',
-    year: 3,
-    sem: 'Sem 5',
+    code: 'CM201',
+    name: 'Corporate Accounting & Company Law',
+    department: 'Commerce',
+    year: 2,
+    sem: 'Sem 3',
     credits: 4,
     type: 'Core Theory',
-    faculty: 'Prof. Ramesh Kumar',
+    faculty: 'Dr. S. Rajagopalan',
     ltp: '3-1-0',
     hours: '4 hrs/wk',
-    studentsEnrolled: 85,
-    prerequisite: 'Signals and Systems',
+    studentsEnrolled: 115,
+    prerequisite: 'CM101',
     units: [
-      { unit: 'Unit 1', title: 'Discrete-Time Signals & Z-Transform Analysis', hours: 9 },
-      { unit: 'Unit 2', title: 'Discrete Fourier Transform (DFT) & FFT Algorithms', hours: 9 },
-      { unit: 'Unit 3', title: 'IIR Digital Filter Design (Butterworth, Chebyshev)', hours: 9 },
-      { unit: 'Unit 4', title: 'FIR Digital Filter Design & Windowing Techniques', hours: 9 },
-      { unit: 'Unit 5', title: 'Multirate DSP & Architecture of TMS320 Processors', hours: 9 }
+      { unit: 'Unit 1', title: 'Issue, Forfeiture & Reissue of Equity Shares', hours: 9 },
+      { unit: 'Unit 2', title: 'Redemption of Preference Shares & Debentures', hours: 9 },
+      { unit: 'Unit 3', title: 'Preparation of Company Final Accounts (Schedule III)', hours: 9 },
+      { unit: 'Unit 4', title: 'Amalgamation, Absorption & External Reconstruction', hours: 9 },
+      { unit: 'Unit 5', title: 'Liquidation of Companies & Statement of Affairs', hours: 9 }
     ],
-    textbooks: 'Digital Signal Processing by Proakis and Manolakis',
+    textbooks: 'Corporate Accounting by M.A. Arulanandam & K.S. Raman',
     evaluation: { internal: 40, external: 60 }
   },
   {
     id: 203,
-    code: 'EC601',
-    name: 'Embedded IoT Systems & Wireless Sensors',
-    department: 'Electronics',
-    year: 4,
-    sem: 'Sem 7',
-    credits: 3,
+    code: 'CM301',
+    name: 'Cost Accounting & Management Analysis',
+    department: 'Commerce',
+    year: 3,
+    sem: 'Sem 5',
+    credits: 4,
     type: 'Core Theory',
-    faculty: 'Prof. Ramesh Kumar',
-    ltp: '3-0-0',
-    hours: '3 hrs/wk',
-    studentsEnrolled: 80,
-    prerequisite: 'Microprocessors & Microcontrollers',
+    faculty: 'Prof. V. Sivakumar',
+    ltp: '3-1-0',
+    hours: '4 hrs/wk',
+    studentsEnrolled: 110,
+    prerequisite: 'CM201',
     units: [
-      { unit: 'Unit 1', title: 'ARM Cortex-M Architecture & Peripherals', hours: 8 },
-      { unit: 'Unit 2', title: 'IoT Protocols: MQTT, CoAP, BLE, LoRaWAN', hours: 8 },
-      { unit: 'Unit 3', title: 'Sensor Interfacing & ADC Calibration', hours: 8 },
-      { unit: 'Unit 4', title: 'FreeRTOS Task Scheduling & Inter-process Comm.', hours: 8 },
-      { unit: 'Unit 5', title: 'Edge AI on Microcontrollers (TinyML)', hours: 8 }
+      { unit: 'Unit 1', title: 'Elements of Cost, Cost Sheet Preparation', hours: 9 },
+      { unit: 'Unit 2', title: 'Material Costing: EOQ, FIFO, LIFO, Weighted Avg', hours: 9 },
+      { unit: 'Unit 3', title: 'Labour & Overhead Allocation / Absorption', hours: 9 },
+      { unit: 'Unit 4', title: 'Marginal Costing, CVP Analysis & Break-Even Point', hours: 9 },
+      { unit: 'Unit 5', title: 'Budgetary Control & Standard Costing Variances', hours: 9 }
     ],
-    textbooks: 'Embedded Systems: Real-Time Interfacing by Jonathan Valvano',
+    textbooks: 'Cost Accounting by S.P. Jain and K.L. Narang',
     evaluation: { internal: 40, external: 60 }
   },
 
-  // Mechanical Engineering
+  // English Literature
   {
-    id: 401,
-    code: 'ME201',
-    name: 'Thermodynamics & Thermal Power',
-    department: 'Mechanical',
+    id: 301,
+    code: 'EN101',
+    name: 'Social History of England & British Poetry',
+    department: 'English Literature',
+    year: 1,
+    sem: 'Sem 1',
+    credits: 4,
+    type: 'Core Theory',
+    faculty: 'Dr. K. Meenakshi Sundaram',
+    ltp: '3-1-0',
+    hours: '4 hrs/wk',
+    studentsEnrolled: 85,
+    prerequisite: 'None',
+    units: [
+      { unit: 'Unit 1', title: 'Renaissance, Reformation & Elizabethan Drama', hours: 9 },
+      { unit: 'Unit 2', title: 'Milton, Donne & Metaphysical Poetry Analysis', hours: 9 },
+      { unit: 'Unit 3', title: 'Neo-Classical Age, Dryden & Alexander Pope', hours: 9 },
+      { unit: 'Unit 4', title: 'Romantic Revival: Wordsworth, Coleridge, Keats', hours: 9 },
+      { unit: 'Unit 5', title: 'Victorian Society, Industrial Revolution & Tennyson', hours: 9 }
+    ],
+    textbooks: 'An Introduction to English Literature by W.H. Hudson',
+    evaluation: { internal: 40, external: 60 }
+  },
+  {
+    id: 302,
+    code: 'EN201',
+    name: 'Shakespearean Comedies & Tragedies',
+    department: 'English Literature',
     year: 2,
     sem: 'Sem 3',
     credits: 4,
     type: 'Core Theory',
-    faculty: 'Dr. Pradeep Joshi',
+    faculty: 'Dr. K. Meenakshi Sundaram',
+    ltp: '3-1-0',
+    hours: '4 hrs/wk',
+    studentsEnrolled: 80,
+    prerequisite: 'EN101',
+    units: [
+      { unit: 'Unit 1', title: 'Elizabethan Theatre, Folios & Shakespearean Stage', hours: 9 },
+      { unit: 'Unit 2', title: 'Tragedy Analysis: Macbeth & Hamlet', hours: 10 },
+      { unit: 'Unit 3', title: 'Romantic Comedy: As You Like It & Twelfth Night', hours: 9 },
+      { unit: 'Unit 4', title: 'Roman & Historical Plays: Julius Caesar', hours: 9 },
+      { unit: 'Unit 5', title: 'Shakespearean Sonnets & Dramatic Soliloquies', hours: 8 }
+    ],
+    textbooks: 'Shakespeare: The Complete Works (Arden Shakespeare Edition)',
+    evaluation: { internal: 40, external: 60 }
+  },
+  {
+    id: 303,
+    code: 'EN301',
+    name: 'Literary Criticism & Contemporary Theory',
+    department: 'English Literature',
+    year: 3,
+    sem: 'Sem 5',
+    credits: 4,
+    type: 'Core Theory',
+    faculty: 'Prof. David Williams',
     ltp: '3-1-0',
     hours: '4 hrs/wk',
     studentsEnrolled: 75,
-    prerequisite: 'Engineering Physics',
+    prerequisite: 'EN201',
     units: [
-      { unit: 'Unit 1', title: 'First and Second Laws of Thermodynamics', hours: 9 },
-      { unit: 'Unit 2', title: 'Properties of Pure Substances & Steam Tables', hours: 9 },
-      { unit: 'Unit 3', title: 'Gas Power Cycles: Otto, Diesel, Dual & Brayton', hours: 9 },
-      { unit: 'Unit 4', title: 'Rankine Cycle, Reheat & Regenerative Cycles', hours: 9 },
-      { unit: 'Unit 5', title: 'Refrigeration Cycles & Psychrometrics', hours: 9 }
+      { unit: 'Unit 1', title: 'Classical Criticism: Aristotle Poetics & Longinus', hours: 9 },
+      { unit: 'Unit 2', title: 'Romantic Criticism: Wordsworth & Coleridge', hours: 9 },
+      { unit: 'Unit 3', title: 'New Criticism & Russian Formalism (T.S. Eliot, Brooks)', hours: 9 },
+      { unit: 'Unit 4', title: 'Structuralism, Post-Structuralism & Deconstruction', hours: 9 },
+      { unit: 'Unit 5', title: 'Feminist Criticism, Eco-criticism & Post-colonialism', hours: 9 }
     ],
-    textbooks: 'Engineering Thermodynamics by P.K. Nag',
+    textbooks: 'Beginning Theory by Peter Barry',
+    evaluation: { internal: 40, external: 60 }
+  },
+
+  // Mathematics
+  {
+    id: 401,
+    code: 'MA101',
+    name: 'Classical Algebra & Trigonometry',
+    department: 'Mathematics',
+    year: 1,
+    sem: 'Sem 1',
+    credits: 4,
+    type: 'Core Theory',
+    faculty: 'Dr. R. Ramanujam',
+    ltp: '3-1-0',
+    hours: '4 hrs/wk',
+    studentsEnrolled: 60,
+    prerequisite: 'Higher Secondary Mathematics',
+    units: [
+      { unit: 'Unit 1', title: 'Theory of Equations, Relations Between Roots & Coefficients', hours: 9 },
+      { unit: 'Unit 2', title: 'Matrices, Rank of a Matrix, Cayley-Hamilton Theorem', hours: 9 },
+      { unit: 'Unit 3', title: 'Expansion of sin(nx), cos(nx), tan(nx) Powers', hours: 9 },
+      { unit: 'Unit 4', title: 'Hyperbolic Functions & Inverse Hyperbolic Functions', hours: 9 },
+      { unit: 'Unit 5', title: 'Summation of Trigonometric Series', hours: 9 }
+    ],
+    textbooks: 'Algebra by T.K. Manicavachagom Pillay',
     evaluation: { internal: 40, external: 60 }
   },
   {
     id: 402,
-    code: 'ME401',
-    name: 'CAD / CAM Modeling & Industrial Robotics',
-    department: 'Mechanical',
-    year: 3,
-    sem: 'Sem 5',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. Pradeep Joshi',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 70,
-    prerequisite: 'ME201',
-    units: [
-      { unit: 'Unit 1', title: 'Geometric Modeling: Wireframe, Surface & Solid', hours: 9 },
-      { unit: 'Unit 2', title: 'CNC Programming: G-Codes, M-Codes & Tool Path Gen', hours: 9 },
-      { unit: 'Unit 3', title: 'Finite Element Analysis (FEA) Formulations', hours: 9 },
-      { unit: 'Unit 4', title: 'Robotics Kinematics: DH Parameters & Trajectory', hours: 9 },
-      { unit: 'Unit 5', title: 'Flexible Manufacturing Systems (FMS) & Additive 3D', hours: 9 }
-    ],
-    textbooks: 'CAD/CAM: Principles and Applications by P.N. Rao',
-    evaluation: { internal: 40, external: 60 }
-  },
-
-  // Civil Engineering
-  {
-    id: 501,
-    code: 'CE201',
-    name: 'Structural Analysis & Mechanics of Solids',
-    department: 'Civil',
+    code: 'MA201',
+    name: 'Differential Equations & Vector Analysis',
+    department: 'Mathematics',
     year: 2,
     sem: 'Sem 3',
     credits: 4,
     type: 'Core Theory',
-    faculty: 'Dr. Kavitha Singh',
+    faculty: 'Dr. R. Ramanujam',
     ltp: '3-1-0',
     hours: '4 hrs/wk',
-    studentsEnrolled: 60,
-    prerequisite: 'Engineering Mechanics',
+    studentsEnrolled: 55,
+    prerequisite: 'MA101',
     units: [
-      { unit: 'Unit 1', title: 'Shear Force & Bending Moment Diagrams in Beams', hours: 9 },
-      { unit: 'Unit 2', title: 'Deflection of Beams: Double Integration & Conjugate', hours: 9 },
-      { unit: 'Unit 3', title: 'Analysis of Determinate and Indeterminate Trusses', hours: 9 },
-      { unit: 'Unit 4', title: 'Moment Distribution Method & Slope Deflection Method', hours: 9 },
-      { unit: 'Unit 5', title: 'Matrix Stiffness Method for Frame Structures', hours: 9 }
+      { unit: 'Unit 1', title: 'Linear Equations of Second Order with Constant Coeffs', hours: 9 },
+      { unit: 'Unit 2', title: 'Partial Differential Equations & Lagrange Method', hours: 9 },
+      { unit: 'Unit 3', title: 'Laplace Transforms & Inverse Transform Solutions', hours: 9 },
+      { unit: 'Unit 4', title: 'Vector Differentiation, Gradient, Divergence, Curl', hours: 9 },
+      { unit: 'Unit 5', title: 'Gauss Divergence, Green and Stokes Theorems', hours: 9 }
     ],
-    textbooks: 'Theory of Structures by S. Ramamrutham',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 502,
-    code: 'CE401',
-    name: 'Transportation & Smart Highway Design',
-    department: 'Civil',
-    year: 3,
-    sem: 'Sem 5',
-    credits: 3,
-    type: 'Core Theory',
-    faculty: 'Dr. Kavitha Singh',
-    ltp: '3-0-0',
-    hours: '3 hrs/wk',
-    studentsEnrolled: 58,
-    prerequisite: 'CE201',
-    units: [
-      { unit: 'Unit 1', title: 'Highway Alignment, Sight Distance & Geometric Design', hours: 8 },
-      { unit: 'Unit 2', title: 'Pavement Design: Flexible (CBR) and Rigid (IRC)', hours: 8 },
-      { unit: 'Unit 3', title: 'Traffic Engineering, Flow Studies & Signal Design', hours: 8 },
-      { unit: 'Unit 4', title: 'Highway Materials: Bitumen, Aggregates & Quality', hours: 8 },
-      { unit: 'Unit 5', title: 'Intelligent Transportation Systems (ITS) & Smart Tolls', hours: 8 }
-    ],
-    textbooks: 'Highway Engineering by S.K. Khanna and C.E.G. Justo',
+    textbooks: 'Differential Equations and Its Applications by S. Narayanan',
     evaluation: { internal: 40, external: 60 }
   },
 
-  // MBA
+  // Business Administration (BBA)
   {
-    id: 301,
-    code: 'MB101',
+    id: 501,
+    code: 'BB101',
     name: 'Principles of Management & Leadership',
-    department: 'MBA',
+    department: 'Business Administration (BBA)',
     year: 1,
     sem: 'Sem 1',
     credits: 3,
@@ -536,41 +560,41 @@ const INITIAL_SUBJECTS = [
     faculty: 'Dr. Anita Desai',
     ltp: '3-0-0',
     hours: '3 hrs/wk',
-    studentsEnrolled: 110,
+    studentsEnrolled: 75,
     prerequisite: 'None',
     units: [
-      { unit: 'Unit 1', title: 'Evolution of Management Thought & Systems View', hours: 8 },
-      { unit: 'Unit 2', title: 'Planning, Strategic Decision Making & Goal Setting', hours: 8 },
-      { unit: 'Unit 3', title: 'Organizational Structuring & Delegation of Authority', hours: 8 },
-      { unit: 'Unit 4', title: 'Motivation Theories, Transformational Leadership', hours: 8 },
-      { unit: 'Unit 5', title: 'Managerial Control Systems & Business Ethics', hours: 8 }
+      { unit: 'Unit 1', title: 'Evolution of Management Thought & Planning Systems', hours: 8 },
+      { unit: 'Unit 2', title: 'Organizational Structuring & Span of Control', hours: 8 },
+      { unit: 'Unit 3', title: 'Staffing, Selection & Performance Appraisal', hours: 8 },
+      { unit: 'Unit 4', title: 'Motivation Theories & Leadership Styles', hours: 8 },
+      { unit: 'Unit 5', title: 'Managerial Controlling & Corporate Ethics', hours: 8 }
     ],
-    textbooks: 'Management by Stephen P. Robbins and Mary Coulter',
-    evaluation: { internal: 50, external: 50 }
+    textbooks: 'Principles of Management by P.C. Tripathi and P.N. Reddy',
+    evaluation: { internal: 40, external: 60 }
   },
   {
-    id: 302,
-    code: 'MB304',
-    name: 'Strategic Decision Making & Governance',
-    department: 'MBA',
+    id: 502,
+    code: 'BB201',
+    name: 'Marketing Management & Consumer Behaviour',
+    department: 'Business Administration (BBA)',
     year: 2,
     sem: 'Sem 3',
-    credits: 3,
+    credits: 4,
     type: 'Core Theory',
     faculty: 'Dr. Anita Desai',
-    ltp: '3-0-0',
-    hours: '3 hrs/wk',
-    studentsEnrolled: 100,
-    prerequisite: 'MB101',
+    ltp: '3-1-0',
+    hours: '4 hrs/wk',
+    studentsEnrolled: 70,
+    prerequisite: 'BB101',
     units: [
-      { unit: 'Unit 1', title: 'Industry Environment & Five Forces Analysis', hours: 8 },
-      { unit: 'Unit 2', title: 'Competitive Strategies & Blue Ocean Value Innovation', hours: 8 },
-      { unit: 'Unit 3', title: 'Corporate M&A, Diversification & Strategic Alliances', hours: 8 },
-      { unit: 'Unit 4', title: 'Strategy Execution, Balance Scorecard & KPIs', hours: 8 },
-      { unit: 'Unit 5', title: 'Corporate Governance, ESG & Board Accountability', hours: 8 }
+      { unit: 'Unit 1', title: 'Marketing Concepts, Marketing Mix (4Ps & 7Ps)', hours: 9 },
+      { unit: 'Unit 2', title: 'Market Segmentation, Targeting & Positioning (STP)', hours: 9 },
+      { unit: 'Unit 3', title: 'Consumer Decision Making Process & Buyer Psychology', hours: 9 },
+      { unit: 'Unit 4', title: 'Product Life Cycle (PLC) & Brand Strategy', hours: 9 },
+      { unit: 'Unit 5', title: 'Digital Marketing & Social Media Brand Campaigns', hours: 9 }
     ],
-    textbooks: 'Strategic Management by Fred R. David',
-    evaluation: { internal: 50, external: 50 }
+    textbooks: 'Marketing Management by Philip Kotler and Kevin Lane Keller',
+    evaluation: { internal: 40, external: 60 }
   },
 
   // BCA
@@ -578,7 +602,7 @@ const INITIAL_SUBJECTS = [
     id: 601,
     code: 'BCA101',
     name: 'Fundamentals of Computing & C Programming',
-    department: 'BCA',
+    department: 'Computer Applications (BCA)',
     year: 1,
     sem: 'Sem 1',
     credits: 4,
@@ -602,7 +626,7 @@ const INITIAL_SUBJECTS = [
     id: 602,
     code: 'BCA201',
     name: 'Web Technologies & Full-Stack Development',
-    department: 'BCA',
+    department: 'Computer Applications (BCA)',
     year: 2,
     sem: 'Sem 3',
     credits: 4,
@@ -626,54 +650,54 @@ const INITIAL_SUBJECTS = [
 
 const DEPARTMENTS = [
   'All Departments',
+  'Commerce',
   'Computer Science',
-  'Electronics',
-  'MBA',
-  'Mechanical',
-  'Civil',
-  'BCA'
+  'English Literature',
+  'Business Administration (BBA)',
+  'Computer Applications (BCA)',
+  'Mathematics'
 ];
 
 export const DEPARTMENT_HEADS = {
+  'Commerce': 'Dr. S. Rajagopalan',
   'Computer Science': 'Dr. Sunita Rao',
-  'Electronics': 'Prof. Ramesh Kumar',
-  'MBA': 'Dr. Anita Desai',
-  'Mechanical': 'Dr. Pradeep Joshi',
-  'Civil': 'Dr. Kavitha Singh',
-  'BCA': 'Prof. Meena Iyer'
+  'English Literature': 'Dr. K. Meenakshi Sundaram',
+  'Business Administration (BBA)': 'Dr. Anita Desai',
+  'Computer Applications (BCA)': 'Prof. Meena Iyer',
+  'Mathematics': 'Dr. R. Ramanujam'
 };
 
 export const DEPARTMENT_FACULTY_MEMBERS = {
+  'Commerce': [
+    { name: 'Dr. S. Rajagopalan', isHod: true, role: 'HOD / Associate Professor' },
+    { name: 'Prof. V. Sivakumar', isHod: false, role: 'Assistant Professor' },
+    { name: 'Dr. R. Jayasree', isHod: false, role: 'Assistant Professor' }
+  ],
   'Computer Science': [
     { name: 'Dr. Sunita Rao', isHod: true, role: 'HOD / Professor' },
     { name: 'Dr. Neeraj Gupta', isHod: false, role: 'Associate Professor' },
     { name: 'Prof. Arvind Menon', isHod: false, role: 'Assistant Professor' },
     { name: 'Dr. Priya Sharma', isHod: false, role: 'Assistant Professor' }
   ],
-  'Electronics': [
-    { name: 'Prof. Ramesh Kumar', isHod: true, role: 'HOD / Associate Professor' },
-    { name: 'Dr. Sneha Patel', isHod: false, role: 'Associate Professor' },
-    { name: 'Prof. Vikram Sethi', isHod: false, role: 'Assistant Professor' }
+  'English Literature': [
+    { name: 'Dr. K. Meenakshi Sundaram', isHod: true, role: 'HOD / Professor' },
+    { name: 'Prof. David Williams', isHod: false, role: 'Associate Professor' },
+    { name: 'Dr. Shalini George', isHod: false, role: 'Assistant Professor' }
   ],
-  'MBA': [
+  'Business Administration (BBA)': [
     { name: 'Dr. Anita Desai', isHod: true, role: 'HOD / Professor' },
     { name: 'Prof. Rajesh Khanna', isHod: false, role: 'Associate Professor' },
     { name: 'Dr. Sandeep Roy', isHod: false, role: 'Assistant Professor' }
   ],
-  'Mechanical': [
-    { name: 'Dr. Pradeep Joshi', isHod: true, role: 'HOD / Professor' },
-    { name: 'Prof. Amit Verma', isHod: false, role: 'Associate Professor' },
-    { name: 'Dr. Suresh Nair', isHod: false, role: 'Assistant Professor' }
-  ],
-  'Civil': [
-    { name: 'Dr. Kavitha Singh', isHod: true, role: 'HOD / Professor' },
-    { name: 'Prof. Harish Chandra', isHod: false, role: 'Associate Professor' },
-    { name: 'Dr. Deepa Reddy', isHod: false, role: 'Assistant Professor' }
-  ],
-  'BCA': [
+  'Computer Applications (BCA)': [
     { name: 'Prof. Meena Iyer', isHod: true, role: 'HOD / Associate Professor' },
     { name: 'Dr. Sunita Rao', isHod: false, role: 'Visiting Professor' },
     { name: 'Prof. Akash Gupta', isHod: false, role: 'Assistant Professor' }
+  ],
+  'Mathematics': [
+    { name: 'Dr. R. Ramanujam', isHod: true, role: 'HOD / Professor' },
+    { name: 'Prof. S. Srinivasan', isHod: false, role: 'Associate Professor' },
+    { name: 'Dr. N. Geetha', isHod: false, role: 'Assistant Professor' }
   ]
 };
 
@@ -681,9 +705,10 @@ const SUBJECT_TYPES = [
   'All Types',
   'Core Theory',
   'Practical / Lab',
-  'Professional Elective',
-  'Open Elective',
-  'Capstone / Project'
+  'Allied / Ancillary',
+  'Skill-Based Elective (SBE)',
+  'Non-Major Elective (NME)',
+  'Project / Dissertation'
 ];
 
 const SEMESTERS = [
@@ -693,9 +718,7 @@ const SEMESTERS = [
   'Sem 3',
   'Sem 4',
   'Sem 5',
-  'Sem 6',
-  'Sem 7',
-  'Sem 8'
+  'Sem 6'
 ];
 
 export default function CourseSubjectManagement() {
@@ -707,7 +730,7 @@ export default function CourseSubjectManagement() {
   const [subjectsList, setSubjectsList] = useState(INITIAL_SUBJECTS);
 
   // Selected Program for Curriculum Matrix View
-  const [matrixSelectedProgramCode, setMatrixSelectedProgramCode] = useState('BTECH-CSE');
+  const [matrixSelectedProgramCode, setMatrixSelectedProgramCode] = useState('BSC-CS');
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -913,12 +936,12 @@ export default function CourseSubjectManagement() {
     const initialDept = selectedDept !== 'All Departments' ? selectedDept : 'Computer Science';
     const initialHod = DEPARTMENT_HEADS[initialDept] || 'Dr. Sunita Rao';
     const deptPrefixes = {
+      'Commerce': 'CM',
       'Computer Science': 'CS',
-      'Electronics': 'EC',
-      'MBA': 'MB',
-      'Mechanical': 'ME',
-      'Civil': 'CE',
-      'BCA': 'BCA'
+      'English Literature': 'EN',
+      'Business Administration (BBA)': 'BB',
+      'Computer Applications (BCA)': 'BC',
+      'Mathematics': 'MA'
     };
     const prefix = deptPrefixes[initialDept] || 'CS';
     const initialYear = selectedYear !== 'ALL' ? Number(selectedYear) : 1;
@@ -948,12 +971,12 @@ export default function CourseSubjectManagement() {
     let newCode = subjectForm.code;
     if (!editingSubject) {
       const deptPrefixes = {
+        'Commerce': 'CM',
         'Computer Science': 'CS',
-        'Electronics': 'EC',
-        'MBA': 'MB',
-        'Mechanical': 'ME',
-        'Civil': 'CE',
-        'BCA': 'BCA'
+        'English Literature': 'EN',
+        'Business Administration (BBA)': 'BB',
+        'Computer Applications (BCA)': 'BC',
+        'Mathematics': 'MA'
       };
       const prefix = deptPrefixes[newDept] || 'CS';
       const year = subjectForm.year || 1;
@@ -971,12 +994,12 @@ export default function CourseSubjectManagement() {
   const handleSubjectYearChange = (newYear) => {
     const yearNum = Number(newYear);
     const deptPrefixes = {
+      'Commerce': 'CM',
       'Computer Science': 'CS',
-      'Electronics': 'EC',
-      'MBA': 'MB',
-      'Mechanical': 'ME',
-      'Civil': 'CE',
-      'BCA': 'BCA'
+      'English Literature': 'EN',
+      'Business Administration (BBA)': 'BB',
+      'Computer Applications (BCA)': 'BC',
+      'Mathematics': 'MA'
     };
     const prefix = deptPrefixes[subjectForm.department] || 'CS';
     
@@ -1068,13 +1091,13 @@ export default function CourseSubjectManagement() {
   // -------------------------------------------------------------
   const handleOpenAddProgram = () => {
     setProgramForm({
-      code: 'BTECH-AI',
+      code: 'BSC-DATA',
       name: '',
       degreeLevel: 'Undergraduate (UG)',
       department: 'Computer Science',
       regulation: 'Regulation 2024 (R24)',
-      durationYears: 4,
-      totalCredits: 160,
+      durationYears: 3,
+      totalCredits: 140,
       coordinator: 'Dr. Sunita Rao',
       coordinatorEmail: 'sunita.rao@vcas.edu',
       description: ''
@@ -1237,7 +1260,7 @@ export default function CourseSubjectManagement() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Active Subjects</span>
             <p className="text-2xl font-black text-indigo-600">{subjectsList.length}</p>
-            <p className="text-[11px] text-slate-500 font-medium mt-1">Across 8 Semesters</p>
+            <p className="text-[11px] text-slate-500 font-medium mt-1">Across 6 Semesters</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
             <BookOpen className="w-5 h-5" />
@@ -2406,7 +2429,7 @@ export default function CourseSubjectManagement() {
                   required
                   value={programFormData.name}
                   onChange={(e) => setProgramFormData({ ...programFormData, name: e.target.value })}
-                  placeholder="e.g. B.Tech Computer Science & Engineering"
+                  placeholder="e.g. B.Sc Computer Science or B.Com Professional"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                 />
               </div>
@@ -2420,7 +2443,7 @@ export default function CourseSubjectManagement() {
                     required
                     value={programFormData.code}
                     onChange={(e) => setProgramFormData({ ...programFormData, code: e.target.value.toUpperCase() })}
-                    placeholder="e.g. BTECH-CSE"
+                    placeholder="e.g. BSC-CS or BCOM-GEN"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold font-mono focus:bg-white focus:border-purple-500 focus:outline-none uppercase transition-all"
                   />
                 </div>
@@ -2466,9 +2489,10 @@ export default function CourseSubjectManagement() {
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
-                    <option value={2}>2 Years (4 Semesters - MBA/MCA)</option>
-                    <option value={3}>3 Years (6 Semesters - BCA/B.Sc)</option>
-                    <option value={4}>4 Years (8 Semesters - B.Tech/B.E)</option>
+                    <option value={3}>3 Years (6 Semesters - B.A. / B.Sc / B.Com / BBA / BCA)</option>
+                    <option value={2}>2 Years (4 Semesters - M.A. / M.Sc / M.Com / MCA)</option>
+                    <option value={1}>1 Year (2 Semesters - PG Diploma / Certificate)</option>
+                    <option value={4}>4 Years (8 Semesters - NEP Honors Degree)</option>
                   </select>
                 </div>
               </div>

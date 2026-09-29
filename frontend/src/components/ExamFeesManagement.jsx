@@ -72,11 +72,12 @@ export default function ExamFeesManagement({
               required
             >
               <option value="">Select course...</option>
-              <option value="B.Tech ECE">B.Tech ECE</option>
-              <option value="B.Tech CS">B.Tech CS</option>
-              <option value="MBA">MBA</option>
-              <option value="MCA">MCA</option>
-              <option value="B.Tech Mech">B.Tech Mech</option>
+              <option value="B.Com">B.Com</option>
+              <option value="B.Sc CS">B.Sc CS</option>
+              <option value="B.A. English">B.A. English</option>
+              <option value="BBA">BBA</option>
+              <option value="BCA">BCA</option>
+              <option value="M.Com">M.Com</option>
             </select>
           </div>
 

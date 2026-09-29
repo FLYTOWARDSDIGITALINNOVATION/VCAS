@@ -29,17 +29,17 @@ const API_BASE = 'http://localhost:5000/api';
 
 const DEPARTMENTS = [
   'All Departments',
+  'Commerce',
   'Computer Science',
-  'Electronics',
-  'MBA',
-  'Mechanical',
-  'Civil',
-  'BCA'
+  'English Literature',
+  'Business Administration (BBA)',
+  'Computer Applications (BCA)',
+  'Mathematics'
 ];
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-const FACULTY_PERIODS = [
+const DEFAULT_FACULTY_PERIODS = [
   { slot: 1, time: '8:30 – 9:20 AM' },
   { slot: 2, time: '9:20 – 10:10 AM' },
   { slot: 3, time: '10:10 – 11:00 AM' },
@@ -49,6 +49,22 @@ const FACULTY_PERIODS = [
   { slot: 7, time: '2:35 – 3:25 PM' },
   { slot: 8, time: '3:25 – 4:15 PM' },
 ];
+
+const DEFAULT_CLASS_PERIODS = [
+  { slot: 1, time: '09:00 - 10:00 AM' },
+  { slot: 2, time: '10:00 - 11:00 AM' },
+  { slot: 3, time: '11:15 - 12:15 PM' },
+  { slot: 4, time: '01:15 - 02:15 PM' },
+  { slot: 5, time: '02:15 - 03:15 PM' },
+  { slot: 6, time: '03:15 - 04:15 PM' },
+];
+
+const DEFAULT_BREAK_TIMINGS = {
+  tea: '11:00 - 11:15 AM (15m)',
+  lunch: '12:55 - 1:45 PM (50m)'
+};
+
+const FACULTY_PERIODS = DEFAULT_FACULTY_PERIODS;
 
 const INITIAL_SCHEDULES = {};
 
@@ -76,6 +92,91 @@ const COLOR_MAP = {
 export default function TimetableManagement() {
   // Navigation: 'faculty' (Assigned Faculty Timetable) vs 'class' (Class / Section View)
   const [viewMode, setViewMode] = useState('faculty');
+
+  // Period Timings State (Admin Configurable & Persistent in localStorage)
+  const [facultyPeriods, setFacultyPeriods] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vcas_faculty_period_timings');
+      return saved ? JSON.parse(saved) : DEFAULT_FACULTY_PERIODS;
+    } catch {
+      return DEFAULT_FACULTY_PERIODS;
+    }
+  });
+
+  const [classPeriods, setClassPeriods] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vcas_class_period_timings');
+      return saved ? JSON.parse(saved) : DEFAULT_CLASS_PERIODS;
+    } catch {
+      return DEFAULT_CLASS_PERIODS;
+    }
+  });
+
+  const [breakTimings, setBreakTimings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vcas_break_timings');
+      return saved ? JSON.parse(saved) : DEFAULT_BREAK_TIMINGS;
+    } catch {
+      return DEFAULT_BREAK_TIMINGS;
+    }
+  });
+
+  // Modal State for Editing Period Timings
+  const [isEditTimingsOpen, setIsEditTimingsOpen] = useState(false);
+  const [activeTimingTab, setActiveTimingTab] = useState('faculty'); // 'faculty' | 'class' | 'breaks'
+  const [tempFacultyPeriods, setTempFacultyPeriods] = useState(DEFAULT_FACULTY_PERIODS);
+  const [tempClassPeriods, setTempClassPeriods] = useState(DEFAULT_CLASS_PERIODS);
+  const [tempBreakTimings, setTempBreakTimings] = useState(DEFAULT_BREAK_TIMINGS);
+
+  const handleOpenEditTimings = (tab) => {
+    setActiveTimingTab(tab || (viewMode === 'faculty' ? 'faculty' : 'class'));
+    setTempFacultyPeriods(facultyPeriods);
+    setTempClassPeriods(classPeriods);
+    setTempBreakTimings(breakTimings);
+    setIsEditTimingsOpen(true);
+  };
+
+  const handleSavePeriodTimings = (e) => {
+    if (e) e.preventDefault();
+    setFacultyPeriods(tempFacultyPeriods);
+    setClassPeriods(tempClassPeriods);
+    setBreakTimings(tempBreakTimings);
+    try {
+      localStorage.setItem('vcas_faculty_period_timings', JSON.stringify(tempFacultyPeriods));
+      localStorage.setItem('vcas_class_period_timings', JSON.stringify(tempClassPeriods));
+      localStorage.setItem('vcas_break_timings', JSON.stringify(tempBreakTimings));
+    } catch (err) {
+      console.error('Failed to save period timings:', err);
+    }
+    setIsEditTimingsOpen(false);
+    showToast('✓ Period timings updated successfully!');
+  };
+
+  const handleResetPeriodTimings = () => {
+    if (window.confirm('Reset all period timings to college defaults?')) {
+      setTempFacultyPeriods(DEFAULT_FACULTY_PERIODS);
+      setTempClassPeriods(DEFAULT_CLASS_PERIODS);
+      setTempBreakTimings(DEFAULT_BREAK_TIMINGS);
+      setFacultyPeriods(DEFAULT_FACULTY_PERIODS);
+      setClassPeriods(DEFAULT_CLASS_PERIODS);
+      setBreakTimings(DEFAULT_BREAK_TIMINGS);
+      localStorage.removeItem('vcas_faculty_period_timings');
+      localStorage.removeItem('vcas_class_period_timings');
+      localStorage.removeItem('vcas_break_timings');
+      setIsEditTimingsOpen(false);
+      showToast('Period timings restored to defaults.');
+    }
+  };
+
+  const getPeriodTime = (slotNum, mode = viewMode) => {
+    if (mode === 'faculty') {
+      const p = facultyPeriods.find(item => item.slot === Number(slotNum));
+      return p ? p.time : '';
+    } else {
+      const p = classPeriods.find(item => item.slot === Number(slotNum));
+      return p ? p.time : '';
+    }
+  };
 
   // Live Database Timetables & Staff State
   const [staffList, setStaffList] = useState([]);
@@ -378,12 +479,12 @@ export default function TimetableManagement() {
   // Export Timetable CSV
   const handleExportCSV = () => {
     if (viewMode === 'faculty') {
-      const headers = ['Day', ...FACULTY_PERIODS.map(p => `P${p.slot} (${p.time})`)];
+      const headers = ['Day', ...facultyPeriods.map(p => `P${p.slot} (${p.time})`)];
       const rows = DAYS.map(day => {
         const d = facultySchedule[day] || {};
         return [
           `"${day}"`,
-          ...FACULTY_PERIODS.map(p => {
+          ...facultyPeriods.map(p => {
             const slot = d[p.slot];
             return slot ? `"${slot.code}: ${slot.name} (${slot.room})"` : `"--"` ;
           })
@@ -400,17 +501,15 @@ export default function TimetableManagement() {
       document.body.removeChild(link);
       showToast(`Timetable for ${currentStaff?.name || selectedStaffId} exported as CSV!`);
     } else {
-      const headers = ['Day', 'Period 1 (9-10 AM)', 'Period 2 (10-11 AM)', 'Period 3 (11:15-12:15)', 'Period 4 (1:15-2:15)', 'Period 5 (2:15-3:15)', 'Period 6 (3:15-4:15)'];
+      const headers = ['Day', ...classPeriods.map(p => `Period ${p.slot} (${p.time})`)];
       const rows = DAYS.map(day => {
         const d = activeClassSchedule[day] || {};
         return [
           `"${day}"`,
-          `"${d[1]?.name || '--'} (${d[1]?.faculty || ''})"`,
-          `"${d[2]?.name || '--'} (${d[2]?.faculty || ''})"`,
-          `"${d[3]?.name || '--'} (${d[3]?.faculty || ''})"`,
-          `"${d[4]?.name || '--'} (${d[4]?.faculty || ''})"`,
-          `"${d[5]?.name || '--'} (${d[5]?.faculty || ''})"`,
-          `"${d[6]?.name || '--'} (${d[6]?.faculty || ''})"`
+          ...classPeriods.map(p => {
+            const slot = d[p.slot];
+            return slot ? `"${slot.name || '--'} (${slot.faculty || ''})"` : `"--"`;
+          })
         ];
       });
 
@@ -472,6 +571,15 @@ export default function TimetableManagement() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => handleOpenEditTimings()}
+            title="Edit Period Timings"
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all border border-indigo-200 shadow-xs cursor-pointer"
+          >
+            <Clock className="w-4 h-4 text-indigo-600" />
+            <span>Edit Period Timings</span>
+          </button>
+
           <button
             onClick={() => {
               fetchStaffAndTimetables();
@@ -670,17 +778,21 @@ export default function TimetableManagement() {
           <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 flex items-center gap-2">
-                  <span>Weekly Matrix: {currentStaff?.name || selectedStaffId || 'Faculty'}</span>
-                  {loadingSchedule && <span className="text-xs text-indigo-600 font-semibold animate-pulse">(Loading...)</span>}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Click any cell to edit or assign a period. Changes save automatically.
-                </p>
+                <h3 className="font-extrabold text-slate-900 text-base">Weekly Period Matrix</h3>
+                <p className="text-xs text-slate-500">Live active classroom hours for {currentStaff?.name || selectedStaffId}</p>
               </div>
-              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-200">
-                Periods 1 to 8
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenEditTimings('faculty')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 shadow-xs transition-all cursor-pointer"
+                >
+                  <Pencil className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Change Period Timings</span>
+                </button>
+                <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-200">
+                  Periods 1 to {facultyPeriods.length}
+                </span>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -688,45 +800,71 @@ export default function TimetableManagement() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider text-center">
                     <th className="py-3 px-3 text-left w-24 bg-slate-100/70 border-r border-slate-200">DAY</th>
-                    <th className="py-3 px-2 w-32">
-                      <span>P1</span>
-                      <span className="block text-[8.5px] text-slate-400 font-mono font-normal">8:30-9:20 AM</span>
+                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P1</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(1, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-2 w-32">
-                      <span>P2</span>
-                      <span className="block text-[8.5px] text-slate-400 font-mono font-normal">9:20-10:10 AM</span>
+                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P2</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(2, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-2 w-32">
-                      <span>P3</span>
-                      <span className="block text-[8.5px] text-slate-400 font-mono font-normal">10:10-11:00 AM</span>
+                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P3</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(3, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-1 w-8 bg-amber-50/60 text-amber-800 border-x border-amber-100 text-[9px]">
+                    <th className="py-3 px-1 w-10 bg-amber-50/60 text-amber-800 border-x border-amber-100 text-[9px] group hover:bg-amber-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
                       <Coffee className="w-3 h-3 mx-auto mb-0.5 text-amber-600" />
                       <span>TEA</span>
+                      <span className="block text-[8px] text-amber-700 font-mono font-normal">{breakTimings.tea.split('(')[0].trim()}</span>
                     </th>
-                    <th className="py-3 px-2 w-32">
-                      <span>P4</span>
-                      <span className="block text-[8.5px] text-slate-400 font-mono font-normal">11:15-12:05 PM</span>
+                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P4</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(4, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-2 w-32">
-                      <span>P5</span>
-                      <span className="block text-[8.5px] text-slate-400 font-mono font-normal">12:05-12:55 PM</span>
+                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P5</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(5, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-1 w-8 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[9px]">
+                    <th className="py-3 px-1 w-10 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[9px] group hover:bg-emerald-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
                       <Utensils className="w-3 h-3 mx-auto mb-0.5 text-emerald-600" />
                       <span>LUNCH</span>
+                      <span className="block text-[8px] text-emerald-700 font-mono font-normal">{breakTimings.lunch.split('(')[0].trim()}</span>
                     </th>
-                    <th className="py-3 px-2 w-32">
-                      <span>P6</span>
-                      <span className="block text-[8.5px] text-slate-400 font-mono font-normal">1:45-2:35 PM</span>
+                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P6</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(6, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-2 w-32">
-                      <span>P7</span>
-                      <span className="block text-[8.5px] text-slate-400 font-mono font-normal">2:35-3:25 PM</span>
+                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P7</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(7, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-2 w-32">
-                      <span>P8</span>
-                      <span className="block text-[8.5px] text-slate-400 font-mono font-normal">3:25-4:15 PM</span>
+                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P8</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(8, 'faculty')}</span>
                     </th>
                     <th className="py-3 px-2 w-28 bg-slate-100/80 border-l border-slate-200 text-slate-700">
                       <span>Daily Hours</span>
@@ -913,10 +1051,9 @@ export default function TimetableManagement() {
                   }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
                 >
-                  <option value={1}>1st Year (Sem 1)</option>
-                  <option value={2}>2nd Year (Sem 3)</option>
-                  <option value={3}>3rd Year (Sem 5)</option>
-                  <option value={4}>4th Year (Sem 7)</option>
+                  <option value={1}>1st Year (Sem 1 & 2)</option>
+                  <option value={2}>2nd Year (Sem 3 & 4)</option>
+                  <option value={3}>3rd Year (Sem 5 & 6)</option>
                 </select>
               </div>
 
@@ -947,37 +1084,57 @@ export default function TimetableManagement() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider text-center">
                     <th className="py-4 px-4 text-left w-28 bg-slate-100/70 border-r border-slate-200">DAY / PERIOD</th>
-                    <th className="py-4 px-3 w-40">
-                      <span>P1</span>
-                      <span className="block text-[9px] text-slate-400 font-mono font-normal">09:00 - 10:00 AM</span>
+                    <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P1</span>
+                        <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(1, 'class')}</span>
                     </th>
-                    <th className="py-4 px-3 w-40">
-                      <span>P2</span>
-                      <span className="block text-[9px] text-slate-400 font-mono font-normal">10:00 - 11:00 AM</span>
+                    <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P2</span>
+                        <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(2, 'class')}</span>
                     </th>
-                    <th className="py-4 px-1.5 w-10 bg-amber-50/60 text-amber-800 border-x border-amber-100 text-[10px]">
+                    <th className="py-4 px-1.5 w-10 bg-amber-50/60 text-amber-800 border-x border-amber-100 text-[10px] group hover:bg-amber-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
                       <Coffee className="w-3.5 h-3.5 mx-auto mb-0.5 text-amber-600" />
                       <span>TEA</span>
+                      <span className="block text-[8px] text-amber-700 font-mono">{breakTimings.tea.split('(')[0].trim()}</span>
                     </th>
-                    <th className="py-4 px-3 w-40">
-                      <span>P3</span>
-                      <span className="block text-[9px] text-slate-400 font-mono font-normal">11:15 - 12:15 PM</span>
+                    <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P3</span>
+                        <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(3, 'class')}</span>
                     </th>
-                    <th className="py-4 px-1.5 w-10 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[10px]">
+                    <th className="py-4 px-1.5 w-10 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[10px] group hover:bg-emerald-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
                       <Utensils className="w-3.5 h-3.5 mx-auto mb-0.5 text-emerald-600" />
                       <span>LUNCH</span>
+                      <span className="block text-[8px] text-emerald-700 font-mono">{breakTimings.lunch.split('(')[0].trim()}</span>
                     </th>
-                    <th className="py-4 px-3 w-40">
-                      <span>P4</span>
-                      <span className="block text-[9px] text-slate-400 font-mono font-normal">01:15 - 02:15 PM</span>
+                    <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P4</span>
+                        <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(4, 'class')}</span>
                     </th>
-                    <th className="py-4 px-3 w-40">
-                      <span>P5</span>
-                      <span className="block text-[9px] text-slate-400 font-mono font-normal">02:15 - 03:15 PM</span>
+                    <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P5</span>
+                        <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(5, 'class')}</span>
                     </th>
-                    <th className="py-4 px-3 w-40">
-                      <span>P6</span>
-                      <span className="block text-[9px] text-slate-400 font-mono font-normal">03:15 - 04:15 PM</span>
+                    <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P6</span>
+                        <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(6, 'class')}</span>
                     </th>
                   </tr>
                 </thead>
@@ -1063,7 +1220,7 @@ export default function TimetableManagement() {
                     {viewMode === 'faculty' ? 'Assign Faculty Period' : 'Edit Class Timetable Slot'}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    {slotForm.day} • Period {slotForm.period} {viewMode === 'faculty' && currentStaff ? `• ${currentStaff.name}` : ''}
+                    {slotForm.day} • Period {slotForm.period} {getPeriodTime(slotForm.period) ? `(${getPeriodTime(slotForm.period)})` : ''} {viewMode === 'faculty' && currentStaff ? `• ${currentStaff.name}` : ''}
                   </p>
                 </div>
               </div>
@@ -1255,9 +1412,9 @@ export default function TimetableManagement() {
                     <thead>
                       <tr className="bg-slate-100 font-bold text-center border-b border-slate-300">
                         <th className="p-2 border border-slate-300">Day</th>
-                        {FACULTY_PERIODS.map(p => (
+                        {facultyPeriods.map(p => (
                           <th key={p.slot} className="p-1 border border-slate-300 text-[9.5px]">
-                            P{p.slot} ({p.time.split('–')[0]})
+                            P{p.slot} ({p.time})
                           </th>
                         ))}
                       </tr>
@@ -1268,7 +1425,7 @@ export default function TimetableManagement() {
                         return (
                           <tr key={day} className="border-b border-slate-200 text-center">
                             <td className="p-2 font-bold bg-slate-50 border border-slate-300">{day}</td>
-                            {FACULTY_PERIODS.map(p => {
+                            {facultyPeriods.map(p => {
                               const s = d[p.slot];
                               return (
                                 <td key={p.slot} className="p-1 border border-slate-300 text-[9px]">
@@ -1293,12 +1450,11 @@ export default function TimetableManagement() {
                     <thead>
                       <tr className="bg-slate-100 font-bold text-center border-b border-slate-300">
                         <th className="p-2 border border-slate-300">Day</th>
-                        <th className="p-2 border border-slate-300">P1 (9-10)</th>
-                        <th className="p-2 border border-slate-300">P2 (10-11)</th>
-                        <th className="p-2 border border-slate-300">P3 (11:15-12:15)</th>
-                        <th className="p-2 border border-slate-300">P4 (1:15-2:15)</th>
-                        <th className="p-2 border border-slate-300">P5 (2:15-3:15)</th>
-                        <th className="p-2 border border-slate-300">P6 (3:15-4:15)</th>
+                        {classPeriods.map(p => (
+                          <th key={p.slot} className="p-2 border border-slate-300">
+                            P{p.slot} ({p.time})
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -1528,6 +1684,215 @@ export default function TimetableManagement() {
                 </div>
               </form>
             </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 7. MODAL: EDIT PERIOD TIMINGS (ADMIN CUSTOMIZABLE)                       */}
+      {/* ========================================================================= */}
+      {isEditTimingsOpen && (
+        <ModalPortal isOpen={isEditTimingsOpen} onClose={() => setIsEditTimingsOpen(false)}>
+          <div className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col my-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">Customize Period Timings</h3>
+                  <p className="text-xs text-slate-500 font-medium">Set period hours and bell timings for classroom timetables</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditTimingsOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Tabs inside modal */}
+            <div className="px-5 pt-3 border-b border-slate-100 flex items-center gap-2 bg-slate-50/30 shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveTimingTab('faculty')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeTimingTab === 'faculty'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Faculty Periods (P1 – P8)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTimingTab('class')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeTimingTab === 'class'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Class Periods (P1 – P6)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTimingTab('breaks')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeTimingTab === 'breaks'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Break & Recess Timings
+              </button>
+            </div>
+
+            {/* Form Content */}
+            <form onSubmit={handleSavePeriodTimings} className="p-5 space-y-4 overflow-y-auto flex-1">
+              {activeTimingTab === 'faculty' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-700">8-Period Matrix Timings</span>
+                    <span className="text-[11px] text-indigo-600 font-semibold">Reflected across faculty schedule</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {tempFacultyPeriods.map((p) => (
+                      <div key={p.slot} className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1.5 focus-within:bg-white focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-md">
+                            Period {p.slot}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">P{p.slot} Slot</span>
+                        </div>
+                        <input
+                          type="text"
+                          value={p.time}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTempFacultyPeriods(prev => prev.map(item => item.slot === p.slot ? { ...item, time: val } : item));
+                          }}
+                          placeholder="e.g. 8:30 – 9:20 AM"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                          required
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTimingTab === 'class' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-700">6-Period Class Schedule Timings</span>
+                    <span className="text-[11px] text-indigo-600 font-semibold">Reflected across department matrix</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {tempClassPeriods.map((p) => (
+                      <div key={p.slot} className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1.5 focus-within:bg-white focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-md">
+                            Period {p.slot}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">P{p.slot} Slot</span>
+                        </div>
+                        <input
+                          type="text"
+                          value={p.time}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTempClassPeriods(prev => prev.map(item => item.slot === p.slot ? { ...item, time: val } : item));
+                          }}
+                          placeholder="e.g. 09:00 - 10:00 AM"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                          required
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTimingTab === 'breaks' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-700">Break & Lunch Intervals</span>
+                    <span className="text-[11px] text-amber-600 font-semibold">Displayed in timetable columns</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3.5 bg-amber-50/50 rounded-2xl border border-amber-200 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Coffee className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs font-extrabold text-slate-800">Tea Break</span>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Timing Description</label>
+                        <input
+                          type="text"
+                          value={tempBreakTimings.tea}
+                          onChange={(e) => setTempBreakTimings(prev => ({ ...prev, tea: e.target.value }))}
+                          placeholder="e.g. 11:00 - 11:15 AM (15m)"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-200 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Utensils className="w-4 h-4 text-emerald-600" />
+                        <span className="text-xs font-extrabold text-slate-800">Lunch Break</span>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Timing Description</label>
+                        <input
+                          type="text"
+                          value={tempBreakTimings.lunch}
+                          onChange={(e) => setTempBreakTimings(prev => ({ ...prev, lunch: e.target.value }))}
+                          placeholder="e.g. 12:55 - 1:45 PM (50m)"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleResetPeriodTimings}
+                  className="px-3.5 py-2 text-rose-600 hover:bg-rose-50 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Reset Defaults
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditTimingsOpen(false)}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Save Period Timings</span>
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </ModalPortal>
       )}

@@ -43,12 +43,14 @@ import ModalPortal from './ModalPortal';
 
 const DEPARTMENTS = [
   'All Departments',
+  'Commerce',
   'Computer Science',
-  'Electronics',
-  'MBA',
-  'Mechanical',
-  'Civil',
-  'BCA'
+  'English Literature',
+  'Business Administration (BBA)',
+  'Computer Applications (BCA)',
+  'Mathematics',
+  'Administrative Office',
+  'Accounts & Finance'
 ];
 
 const MONTH_NAMES = [
@@ -348,13 +350,13 @@ const INITIAL_STUDENTS = [
     ]
   },
 
-  // Mechanical - 3rd Year
+  // Commerce - 3rd Year
   {
     id: 12,
-    rollNo: '22ME009',
+    rollNo: '22CM009',
     regNo: '710022114009',
     name: 'Saravanan Muthu',
-    department: 'Mechanical',
+    department: 'Commerce',
     year: 3,
     sem: 'Sem 5',
     section: 'A',
@@ -369,10 +371,10 @@ const INITIAL_STUDENTS = [
     periodsAttended: 6,
     totalPeriodsToday: 6,
     subjectWise: [
-      { code: 'ME401', name: 'CAD/CAM Modeling & Robotics', total: 35, attended: 33, percent: 94.2 },
-      { code: 'ME402', name: 'Thermal Engineering Lab', total: 20, attended: 19, percent: 95.0 },
-      { code: 'ME403', name: 'Fluid Machinery & Dynamics', total: 35, attended: 31, percent: 88.5 },
-      { code: 'ME404', name: 'Design of Machine Elements', total: 25, attended: 23, percent: 92.0 }
+      { code: 'CM301', name: 'Cost Accounting & Management Analysis', total: 35, attended: 33, percent: 94.2 },
+      { code: 'CM302', name: 'Income Tax Law & Practice', total: 20, attended: 19, percent: 95.0 },
+      { code: 'CM303', name: 'Corporate Auditing & Secretarial Practice', total: 35, attended: 31, percent: 88.5 },
+      { code: 'CM304', name: 'Commercial Banking Operations', total: 25, attended: 23, percent: 92.0 }
     ]
   }
 ];
@@ -393,8 +395,8 @@ const INITIAL_STAFF_ATTENDANCE = [
   {
     id: 2,
     empId: 'EMP002',
-    name: 'Prof. Ramesh Kumar',
-    department: 'Electronics',
+    name: 'Dr. S. Rajagopalan',
+    department: 'Commerce',
     designation: 'Assoc. Professor & HOD',
     inTime: '08:55 AM',
     outTime: '05:02 PM',
@@ -406,7 +408,7 @@ const INITIAL_STAFF_ATTENDANCE = [
     id: 3,
     empId: 'EMP003',
     name: 'Dr. Anita Desai',
-    department: 'MBA',
+    department: 'Business Administration (BBA)',
     designation: 'Professor & HOD',
     inTime: '08:50 AM',
     outTime: '05:10 PM',
@@ -417,8 +419,8 @@ const INITIAL_STAFF_ATTENDANCE = [
   {
     id: 4,
     empId: 'EMP004',
-    name: 'Dr. Pradeep Joshi',
-    department: 'Mechanical',
+    name: 'Dr. K. Meenakshi Sundaram',
+    department: 'English Literature',
     designation: 'Professor & HOD',
     inTime: '09:12 AM',
     outTime: '05:00 PM',
@@ -429,8 +431,8 @@ const INITIAL_STAFF_ATTENDANCE = [
   {
     id: 5,
     empId: 'EMP005',
-    name: 'Dr. Kavitha Singh',
-    department: 'Civil',
+    name: 'Dr. R. Ramanujam',
+    department: 'Mathematics',
     designation: 'Professor & HOD',
     inTime: '08:45 AM',
     outTime: '05:30 PM',
@@ -442,7 +444,7 @@ const INITIAL_STAFF_ATTENDANCE = [
     id: 6,
     empId: 'EMP006',
     name: 'Prof. Meena Iyer',
-    department: 'BCA',
+    department: 'Computer Applications (BCA)',
     designation: 'Assoc. Professor & HOD',
     inTime: '--',
     outTime: '--',
@@ -456,11 +458,77 @@ const INITIAL_STAFF_ATTENDANCE = [
     name: 'Dr. Neeraj Gupta',
     department: 'Computer Science',
     designation: 'Associate Professor',
+    category: 'Faculty',
     inTime: '08:52 AM',
     outTime: '05:05 PM',
     status: 'Present',
     workHours: '8h 13m',
     mode: 'Biometric Fingerprint'
+  },
+  {
+    id: 8,
+    empId: 'OFF001',
+    name: 'Office Staff',
+    department: 'Administrative Office',
+    designation: 'Office Administrator',
+    category: 'Office Staff',
+    inTime: '08:30 AM',
+    outTime: '05:30 PM',
+    status: 'Present',
+    workHours: '9h 00m',
+    mode: 'Biometric Fingerprint'
+  },
+  {
+    id: 9,
+    empId: 'OFF002',
+    name: 'Senior Assistant (Office)',
+    department: 'Administrative Office',
+    designation: 'Senior Assistant',
+    category: 'Office Staff',
+    inTime: '08:40 AM',
+    outTime: '05:15 PM',
+    status: 'Present',
+    workHours: '8h 35m',
+    mode: 'RFID Card'
+  },
+  {
+    id: 10,
+    empId: 'OFF003',
+    name: 'Junior Assistant (Records)',
+    department: 'Administrative Office',
+    designation: 'Junior Assistant',
+    category: 'Office Staff',
+    inTime: '08:58 AM',
+    outTime: '05:10 PM',
+    status: 'Present',
+    workHours: '8h 12m',
+    mode: 'Biometric Face ID'
+  },
+  {
+    id: 11,
+    empId: 'ACC001',
+    name: 'Accountant',
+    department: 'Accounts & Finance',
+    designation: 'Chief Accountant',
+    category: 'Accountant',
+    inTime: '08:35 AM',
+    outTime: '05:45 PM',
+    status: 'Present',
+    workHours: '9h 10m',
+    mode: 'Biometric Face ID'
+  },
+  {
+    id: 12,
+    empId: 'ACC002',
+    name: 'Accounts Assistant',
+    department: 'Accounts & Finance',
+    designation: 'Accounts Assistant',
+    category: 'Accountant',
+    inTime: '08:45 AM',
+    outTime: '05:15 PM',
+    status: 'Present',
+    workHours: '8h 30m',
+    mode: 'RFID Card'
   }
 ];
 
@@ -567,7 +635,120 @@ export default function AttendanceManagement() {
   // Students & Staff Data State
   const [students, setStudents] = useState(INITIAL_STUDENTS);
   const [staffAttendance, setStaffAttendance] = useState(INITIAL_STAFF_ATTENDANCE);
+  const [staffCategoryFilter, setStaffCategoryFilter] = useState('ALL'); // 'ALL' | 'Faculty' | 'Office Staff' | 'Accountant'
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
   const [leaveRequests, setLeaveRequests] = useState(INITIAL_LEAVE_REQUESTS);
+  const [dbSessions, setDbSessions] = useState([]);
+
+  // Fetch real attendance sessions from backend
+  const fetchAttendanceSessions = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/attendance');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.sessions)) {
+        setDbSessions(data.sessions);
+      }
+    } catch (err) {
+      console.error('Failed to fetch attendance records:', err);
+    }
+  };
+
+  // Fetch real staff from backend to include all registered faculty, office staff, accountants
+  const fetchLiveStaff = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/staff');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setStaffAttendance(prev => {
+          const existingIds = new Set(prev.map(s => (s.empId || s.staffId || '').toUpperCase()));
+          const newEntries = [];
+          data.data.forEach((s, idx) => {
+            const sid = (s.staffId || s.empId || `STF${idx + 1}`).toUpperCase();
+            if (!existingIds.has(sid)) {
+              existingIds.add(sid);
+              const cat = (s.role === 'Office Staff' || s.designation?.toLowerCase().includes('office') || s.department?.toLowerCase().includes('office'))
+                ? 'Office Staff'
+                : (s.role === 'Accountant' || s.designation?.toLowerCase().includes('account') || s.department?.toLowerCase().includes('account'))
+                ? 'Accountant'
+                : 'Faculty';
+              newEntries.push({
+                id: s._id || `db_${sid}`,
+                empId: sid,
+                name: s.name,
+                department: s.department || (cat === 'Office Staff' ? 'Administrative Office' : cat === 'Accountant' ? 'Accounts & Finance' : 'General'),
+                designation: s.designation || cat,
+                category: cat,
+                inTime: '08:45 AM',
+                outTime: '05:15 PM',
+                status: s.status === 'Inactive' ? 'On Leave' : 'Present',
+                workHours: '8h 30m',
+                mode: 'Biometric Face ID'
+              });
+            }
+          });
+          return newEntries.length > 0 ? [...prev, ...newEntries] : prev;
+        });
+      }
+    } catch (err) {
+      console.warn('Could not fetch live staff for attendance:', err.message);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchAttendanceSessions();
+    fetchLiveStaff();
+  }, []);
+
+  const staffFacultyCount = staffAttendance.filter(s => s.category === 'Faculty').length;
+  const staffOfficeCount = staffAttendance.filter(s => s.category === 'Office Staff').length;
+  const staffAccountantCount = staffAttendance.filter(s => s.category === 'Accountant').length;
+  const staffPresentCount = staffAttendance.filter(s => s.status === 'Present').length;
+
+  const filteredStaffAttendance = useMemo(() => {
+    return staffAttendance.filter(st => {
+      if (staffCategoryFilter === 'Faculty' && st.category !== 'Faculty') return false;
+      if (staffCategoryFilter === 'Office Staff' && st.category !== 'Office Staff') return false;
+      if (staffCategoryFilter === 'Accountant' && st.category !== 'Accountant') return false;
+
+      if (staffSearchQuery.trim()) {
+        const q = staffSearchQuery.toLowerCase().trim();
+        const matchesName = (st.name || '').toLowerCase().includes(q);
+        const matchesId = (st.empId || '').toLowerCase().includes(q);
+        const matchesDept = (st.department || '').toLowerCase().includes(q);
+        const matchesDesig = (st.designation || '').toLowerCase().includes(q);
+        return matchesName || matchesId || matchesDept || matchesDesig;
+      }
+      return true;
+    });
+  }, [staffAttendance, staffCategoryFilter, staffSearchQuery]);
+
+  // Helper to resolve student status from saved sessions or fallback
+  const resolveStudentAttendanceForDate = (student, dateStr) => {
+    const match = dbSessions.find(s => {
+      if (s.date !== dateStr) return false;
+      return Array.isArray(s.records) && s.records.some(r =>
+        (r.rollNo || '').trim().toUpperCase() === (student.rollNo || '').trim().toUpperCase()
+      );
+    });
+
+    if (match) {
+      const rec = match.records.find(r =>
+        (r.rollNo || '').trim().toUpperCase() === (student.rollNo || '').trim().toUpperCase()
+      );
+      if (rec) {
+        const isAbs = rec.status === 'Absent';
+        const isLt = rec.status === 'Late';
+        return {
+          status: rec.status,
+          inTime: isAbs ? '--' : isLt ? '09:15 AM' : (match.slot || '08:45 AM'),
+          periods: isAbs ? 0 : isLt ? 5 : 6,
+          isPresent: !isAbs
+        };
+      }
+    }
+
+    return getStudentAttendanceForDate(student, dateStr);
+  };
 
   // Roll Call Selection States
   const [rollDept, setRollDept] = useState('Computer Science');
@@ -576,6 +757,26 @@ export default function AttendanceManagement() {
   const [rollSubject, setRollSubject] = useState('CS401 - Database Management Systems');
   const [rollPeriod, setRollPeriod] = useState('Period 1 (09:00 AM - 10:00 AM)');
   const [classTopic, setClassTopic] = useState('Normalization up to BCNF & Lossless Join Decomposition');
+
+  // Restore any saved session statuses for roll call
+  React.useEffect(() => {
+    const code = (rollSubject || '').split(' ')[0].trim().toUpperCase();
+    const existing = dbSessions.find(s =>
+      s.date === selectedDate &&
+      s.classCode === code
+    );
+    if (existing && Array.isArray(existing.records) && existing.records.length > 0) {
+      const statusMap = {};
+      existing.records.forEach(r => {
+        if (r.rollNo) statusMap[r.rollNo.trim().toUpperCase()] = r.status;
+      });
+      setStudents(prev => prev.map(s => {
+        const saved = statusMap[s.rollNo?.trim().toUpperCase()];
+        if (saved) return { ...s, status: saved };
+        return s;
+      }));
+    }
+  }, [selectedDate, rollSubject, dbSessions]);
 
   // Student Register Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -698,7 +899,7 @@ export default function AttendanceManagement() {
   // -------------------------------------------------------------
   const dailyDateAttendees = useMemo(() => {
     return students.map(student => {
-      const dayInfo = getStudentAttendanceForDate(student, selectedDate);
+      const dayInfo = resolveStudentAttendanceForDate(student, selectedDate);
       return {
         ...student,
         dayStatus: dayInfo.status,
@@ -731,11 +932,11 @@ export default function AttendanceManagement() {
 
       return matchesSearch && matchesDept && matchesStatus;
     });
-  }, [students, selectedDate, searchQuery, filterDept, dateStatusFilter]);
+  }, [students, selectedDate, searchQuery, filterDept, dateStatusFilter, dbSessions]);
 
   // Daily Date Tally Summary
   const dateTally = useMemo(() => {
-    const all = students.map(s => getStudentAttendanceForDate(s, selectedDate));
+    const all = students.map(s => resolveStudentAttendanceForDate(s, selectedDate));
     const total = all.length;
     const present = all.filter(a => a.status === 'Present').length;
     const absent = all.filter(a => a.status === 'Absent').length;
@@ -743,7 +944,7 @@ export default function AttendanceManagement() {
     const od = all.filter(a => a.status === 'On Duty').length;
     const percent = total > 0 ? (((present + late + od) / total) * 100).toFixed(1) : '0.0';
     return { total, present, absent, late, od, percent };
-  }, [students, selectedDate]);
+  }, [students, selectedDate, dbSessions]);
 
   // -------------------------------------------------------------
   // Handlers for Roll Call & Actions
@@ -802,8 +1003,49 @@ export default function AttendanceManagement() {
     showToast(`Marked all students as ${status} for this session.`);
   };
 
-  const handleSubmitRollCall = () => {
-    showToast(`Attendance for ${rollSubject} (${rollPeriod}) submitted successfully.`);
+  const handleSubmitRollCall = async () => {
+    try {
+      const code = (rollSubject || '').split(' ')[0].trim().toUpperCase();
+      const records = rollCallStudents.map(s => ({
+        rollNo: s.rollNo,
+        name: s.name,
+        status: s.status || 'Present'
+      }));
+
+      const payload = {
+        staffId: 'ADMIN',
+        staffName: 'Academic Administrator',
+        classCode: code,
+        className: rollSubject,
+        date: selectedDate,
+        slot: rollPeriod,
+        records
+      };
+
+      const res = await fetch('http://localhost:5000/api/attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.success && data.session) {
+        setDbSessions(prev => {
+          const idx = prev.findIndex(s => s._id === data.session._id);
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = data.session;
+            return copy;
+          }
+          return [data.session, ...prev];
+        });
+        showToast(`Attendance for ${rollSubject} saved successfully.`);
+      } else {
+        showToast(`Attendance for ${rollSubject} saved.`);
+      }
+    } catch (err) {
+      showToast(`Attendance for ${rollSubject} recorded locally.`);
+    }
   };
 
   const handleUpdateLeaveStatus = (id, newStatus) => {
@@ -1253,7 +1495,10 @@ export default function AttendanceManagement() {
               }`}
             >
               <UserCheck className="w-4 h-4" />
-              <span>Faculty Biometric</span>
+              <span>Staff Attendance (Faculty & Office)</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-extrabold">
+                {staffAttendance.length}
+              </span>
             </button>
 
             <button
@@ -1446,7 +1691,6 @@ export default function AttendanceManagement() {
                       <option value={1}>1st Year (Sem 1)</option>
                       <option value={2}>2nd Year (Sem 3)</option>
                       <option value={3}>3rd Year (Sem 5)</option>
-                      <option value={4}>4th Year (Sem 7)</option>
                     </select>
                   </div>
 
@@ -1642,41 +1886,165 @@ export default function AttendanceManagement() {
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 4: FACULTY BIOMETRIC LOG                                              */}
+          {/* TAB 4: STAFF ATTENDANCE (FACULTY, OFFICE STAFF, ACCOUNTANT)               */}
           {/* ========================================================================= */}
           {activeTab === 'staff-attendance' && (
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-              <table className="w-full text-left border-collapse min-w-[700px]">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="py-3.5 px-5">STAFF MEMBER</th>
-                    <th className="py-3.5 px-4">DEPARTMENT</th>
-                    <th className="py-3.5 px-4">PUNCH IN</th>
-                    <th className="py-3.5 px-4">WORK HOURS</th>
-                    <th className="py-3.5 px-5 text-right">STATUS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {staffAttendance.map(st => (
-                    <tr key={st.id} className="hover:bg-slate-50/50">
-                      <td className="py-3.5 px-5">
-                        <p className="font-bold text-slate-900">{st.name}</p>
-                        <span className="text-[11px] text-slate-400">{st.empId} • {st.designation}</span>
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold text-slate-700 text-xs">{st.department}</td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-800">{st.inTime}</td>
-                      <td className="py-3.5 px-4 font-bold text-blue-600">{st.workHours}</td>
-                      <td className="py-3.5 px-5 text-right">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${
-                          st.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700'
-                        }`}>
-                          {st.status}
-                        </span>
-                      </td>
+            <div className="space-y-4">
+              {/* Summary Stats Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Total Staff</p>
+                  <p className="text-xl font-extrabold text-slate-900 mt-0.5">{staffAttendance.length}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Faculty + Office + Accounts</p>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+                  <p className="text-[10px] uppercase font-bold text-blue-600">Teaching Faculty</p>
+                  <p className="text-xl font-extrabold text-blue-700 mt-0.5">{staffFacultyCount}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Academic Departments</p>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+                  <p className="text-[10px] uppercase font-bold text-amber-600">Office Staff</p>
+                  <p className="text-xl font-extrabold text-amber-700 mt-0.5">{staffOfficeCount}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Administrative Office</p>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+                  <p className="text-[10px] uppercase font-bold text-emerald-600">Accountant / Finance</p>
+                  <p className="text-xl font-extrabold text-emerald-700 mt-0.5">{staffAccountantCount}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Accounts & Cash Office</p>
+                </div>
+              </div>
+
+              {/* Filters & Search Toolbar */}
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setStaffCategoryFilter('ALL')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      staffCategoryFilter === 'ALL'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    All Staff ({staffAttendance.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStaffCategoryFilter('Faculty')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      staffCategoryFilter === 'Faculty'
+                        ? 'bg-white text-blue-600 shadow-xs'
+                        : 'text-slate-600 hover:text-blue-600'
+                    }`}
+                  >
+                    👨‍🏫 Faculty ({staffFacultyCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStaffCategoryFilter('Office Staff')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      staffCategoryFilter === 'Office Staff'
+                        ? 'bg-white text-amber-700 shadow-xs'
+                        : 'text-slate-600 hover:text-amber-700'
+                    }`}
+                  >
+                    📋 Office Staff ({staffOfficeCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStaffCategoryFilter('Accountant')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      staffCategoryFilter === 'Accountant'
+                        ? 'bg-white text-emerald-700 shadow-xs'
+                        : 'text-slate-600 hover:text-emerald-700'
+                    }`}
+                  >
+                    💰 Accountant ({staffAccountantCount})
+                  </button>
+                </div>
+
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={staffSearchQuery}
+                    onChange={(e) => setStaffSearchQuery(e.target.value)}
+                    placeholder="Search name, ID, or department..."
+                    className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 transition-all"
+                  />
+                  {staffSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setStaffSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Attendance Table */}
+              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+                <table className="w-full text-left border-collapse min-w-[750px]">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <th className="py-3.5 px-5">STAFF MEMBER</th>
+                      <th className="py-3.5 px-4">ROLE / CATEGORY</th>
+                      <th className="py-3.5 px-4">DEPARTMENT</th>
+                      <th className="py-3.5 px-4">PUNCH IN & MODE</th>
+                      <th className="py-3.5 px-4">WORK HOURS</th>
+                      <th className="py-3.5 px-5 text-right">STATUS</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {filteredStaffAttendance.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-400">
+                          No staff attendance records matching the current filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredStaffAttendance.map(st => (
+                        <tr key={st.id} className="hover:bg-slate-50/50">
+                          <td className="py-3.5 px-5">
+                            <p className="font-bold text-slate-900">{st.name}</p>
+                            <span className="text-[11px] text-slate-400 font-mono">{st.empId} • {st.designation}</span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-bold ${
+                              st.category === 'Office Staff'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : st.category === 'Accountant'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            }`}>
+                              {st.category === 'Office Staff' ? '📋 Office Staff' : st.category === 'Accountant' ? '💰 Accountant' : '👨‍🏫 Teaching Faculty'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-slate-700 text-xs">{st.department}</td>
+                          <td className="py-3.5 px-4">
+                            <p className="font-mono font-bold text-slate-800">{st.inTime}</p>
+                            <p className="text-[10px] text-slate-400">{st.mode}</p>
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-blue-600">{st.workHours}</td>
+                          <td className="py-3.5 px-5 text-right">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${
+                              st.status === 'Present'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : st.status === 'Late'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {st.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

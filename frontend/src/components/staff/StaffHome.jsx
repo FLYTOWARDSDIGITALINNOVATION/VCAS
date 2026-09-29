@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   CheckSquare, BookMarked, BookOpen, Bell, UserCheck,
   ChevronRight, TrendingUp, Clock, AlertCircle, CalendarCheck2,
-  Users, GraduationCap, Zap, Calendar, FileSpreadsheet
+  Users, GraduationCap, Zap, Calendar, FileSpreadsheet, Ticket
 } from 'lucide-react';
 
 
@@ -188,8 +188,9 @@ export default function StaffHome({ staffUser, onNavigate }) {
           </div>
           <div className="p-4 space-y-2">
             {[
+              { label: 'Hall Tickets & Allocation', icon: Ticket, color: 'text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-100', nav: 'Hall Tickets' },
               { label: 'Mark Attendance', icon: CheckSquare, color: 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-100', nav: 'Attendance' },
-              { label: 'Internal Marks', icon: FileSpreadsheet, color: 'text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-100', nav: 'Internal Marks' },
+              { label: 'Internal Marks', icon: FileSpreadsheet, color: 'text-cyan-700 bg-cyan-50 hover:bg-cyan-100 border-cyan-100', nav: 'Internal Marks' },
               { label: 'New Assignment', icon: BookMarked, color: 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-100', nav: 'Assignments' },
               { label: 'View Timetable', icon: Calendar, color: 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-100', nav: 'Timetable' },
               { label: 'Apply Leave', icon: UserCheck, color: 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-100', nav: 'Leave' },

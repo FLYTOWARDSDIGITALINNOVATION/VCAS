@@ -1,4 +1,6 @@
 const InternalMarks = require("../models/InternalMarks");
+const Class = require("../models/Class");
+const { syncSubjectAssignmentMarksToInternal } = require("../services/internalMarksSyncService");
 
 const DEFAULT_MAX_MARKS = {
   cia1: 50,
@@ -23,12 +25,74 @@ const DEFAULT_PASS_MARKS = {
 const getMarksheet = async (req, res) => {
   try {
     const { staffId, subjectCode } = req.params;
-    let record = await InternalMarks.findOne({ staffId, subjectCode });
+    if (!subjectCode) {
+      return res.status(400).json({ success: false, message: "Subject code is required." });
+    }
+
+    const cleanSub = subjectCode.trim();
+    const cleanNoSpaces = cleanSub.replace(/\s+/g, "");
+    const subRegex = new RegExp('^(?:' + cleanSub + '|' + cleanNoSpaces + ')$', 'i');
+    const nameRegex = new RegExp(cleanSub, 'i');
+    const staffRegex = (staffId && staffId !== "undefined" && staffId !== "null")
+      ? new RegExp('^' + staffId.trim() + '$', 'i')
+      : null;
+
+    // 1. Try finding by staffId + (subjectCode OR subjectName)
+    let record = null;
+    if (staffRegex) {
+      record = await InternalMarks.findOne({
+        staffId: staffRegex,
+        $or: [{ subjectCode: subRegex }, { subjectName: nameRegex }]
+      });
+    }
+    // 2. If not found by staffId, fallback to subjectCode or subjectName alone across all staff
     if (!record) {
+      record = await InternalMarks.findOne({
+        $or: [{ subjectCode: subRegex }, { subjectName: nameRegex }]
+      });
+    }
+
+    // If the found record is an empty test record (e.g. code length < 3 and 0 students), treat as null to search deeper
+    if (record && record.subjectCode && record.subjectCode.length < 3 && (!record.students || record.students.length === 0)) {
+      record = null;
+    }
+
+    // 3. If record doesn't exist or has no students, attempt to sync from assignments
+    if (!record || !record.students || record.students.length === 0) {
+      const synced = await syncSubjectAssignmentMarksToInternal(record?.staffId || staffId, cleanSub);
+      if (synced) {
+        record = synced;
+      }
+    }
+
+    if (!record) {
+      // Check if Class exists with students roster
+      const classDoc = await Class.findOne({
+        $or: [{ code: subRegex }, { name: nameRegex }]
+      });
+      const classStudents = (classDoc && Array.isArray(classDoc.students))
+        ? classDoc.students.map(s => ({
+            rollNo: s.rollNo,
+            name: s.name,
+            cia1: null,
+            cia2: null,
+            model: null,
+            assignment: null,
+            attendance: null,
+            consolidated: null
+          }))
+        : [];
+
+      const canonicalCode = classDoc ? classDoc.code : cleanSub.toUpperCase();
+      const canonicalName = classDoc ? classDoc.name : cleanSub;
+
       record = {
-        staffId,
-        subjectCode,
-        students: [],
+        staffId: classDoc?.staffId || staffId || "EMP001",
+        subjectCode: canonicalCode,
+        subjectName: canonicalName,
+        department: classDoc ? classDoc.dept : "",
+        semester: classDoc ? classDoc.semester : 1,
+        students: classStudents,
         isLocked: false,
         maxMarks: DEFAULT_MAX_MARKS,
         passMarks: DEFAULT_PASS_MARKS,
@@ -43,6 +107,35 @@ const getMarksheet = async (req, res) => {
   }
 };
 
+// POST /api/internal-marks/:staffId/:subjectCode/sync-assignments
+// Manually / explicitly sync marks from Assignment portal for this subject into InternalMarks
+const syncAssignmentsToInternalMarks = async (req, res) => {
+  try {
+    const { staffId, subjectCode } = req.params;
+    if (!subjectCode) {
+      return res.status(400).json({ success: false, message: "Subject code is required." });
+    }
+    const cleanSub = subjectCode.trim();
+    const record = await syncSubjectAssignmentMarksToInternal(staffId, cleanSub);
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        message: `No assignments or submissions found for subject "${cleanSub}".`
+      });
+    }
+
+    const studentsWithMarks = (record.students || []).filter(s => s.assignment !== null && s.assignment !== undefined);
+
+    res.json({
+      success: true,
+      data: record,
+      message: `Synced assignment marks for ${studentsWithMarks.length} student(s) for "${cleanSub}".`
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // POST /api/internal-marks/:staffId/:subjectCode/save
 // Upsert student marks array + maxMarks & passMarks
 const saveMarksheet = async (req, res) => {
@@ -50,7 +143,28 @@ const saveMarksheet = async (req, res) => {
     const { staffId, subjectCode } = req.params;
     const { staffName, subjectName, department, semester, academicYear, students, maxMarks, passMarks } = req.body;
 
+    const cleanSub = (subjectCode || "").trim().toUpperCase();
+    const cleanNoSpaces = cleanSub.replace(/\s+/g, "");
+    const subRegex = new RegExp('^(?:' + cleanSub + '|' + cleanNoSpaces + ')$', 'i');
+    const staffRegex = (staffId && staffId !== "undefined" && staffId !== "null")
+      ? new RegExp('^' + staffId.trim() + '$', 'i')
+      : null;
+
+    let targetStaffId = (staffId && staffId !== "undefined" && staffId !== "null") ? staffId.trim() : "EMP001";
+    let existing = null;
+    if (staffRegex) {
+      existing = await InternalMarks.findOne({ staffId: staffRegex, subjectCode: subRegex });
+    }
+    if (!existing) {
+      existing = await InternalMarks.findOne({ subjectCode: subRegex });
+    }
+    if (existing && existing.staffId) {
+      targetStaffId = existing.staffId;
+    }
+
     const updateFields = {
+      staffId:      targetStaffId,
+      subjectCode:  cleanSub,
       staffName:    staffName    || "",
       subjectName:  subjectName  || "",
       department:   department   || "",
@@ -81,8 +195,9 @@ const saveMarksheet = async (req, res) => {
       };
     }
 
+    const updateFilter = existing ? { _id: existing._id } : { staffId: targetStaffId, subjectCode: cleanSub };
     const record = await InternalMarks.findOneAndUpdate(
-      { staffId, subjectCode },
+      updateFilter,
       { $set: updateFields },
       { new: true, upsert: true, runValidators: true }
     );
@@ -98,6 +213,10 @@ const updateMaxMarks = async (req, res) => {
   try {
     const { staffId, subjectCode } = req.params;
     const { maxMarks, passMarks } = req.body;
+
+    const cleanSub = (subjectCode || "").trim().toUpperCase();
+    const cleanNoSpaces = cleanSub.replace(/\s+/g, "");
+    const subRegex = new RegExp('^(?:' + cleanSub + '|' + cleanNoSpaces + ')$', 'i');
 
     const $set = {};
 
@@ -123,8 +242,13 @@ const updateMaxMarks = async (req, res) => {
       };
     }
 
+    const existing = await InternalMarks.findOne({
+      $or: [{ subjectCode: subRegex }, { subjectCode: cleanSub }]
+    });
+
+    const filter = existing ? { _id: existing._id } : { subjectCode: cleanSub };
     const record = await InternalMarks.findOneAndUpdate(
-      { staffId, subjectCode },
+      filter,
       { $set },
       { new: true, upsert: true }
     );
@@ -141,12 +265,21 @@ const toggleLock = async (req, res) => {
     const { staffId, subjectCode } = req.params;
     const { lock } = req.body; // boolean
 
+    const cleanSub = (subjectCode || "").trim().toUpperCase();
+    const cleanNoSpaces = cleanSub.replace(/\s+/g, "");
+    const subRegex = new RegExp('^(?:' + cleanSub + '|' + cleanNoSpaces + ')$', 'i');
+
+    const existing = await InternalMarks.findOne({
+      $or: [{ subjectCode: subRegex }, { subjectCode: cleanSub }]
+    });
+
+    if (!existing) return res.status(404).json({ success: false, message: "Marksheet not found." });
+
     const record = await InternalMarks.findOneAndUpdate(
-      { staffId, subjectCode },
+      { _id: existing._id },
       { $set: { isLocked: lock, lockedAt: lock ? new Date() : null } },
       { new: true }
     );
-    if (!record) return res.status(404).json({ success: false, message: "Marksheet not found." });
     res.json({ success: true, data: record, message: lock ? "Marks locked & submitted." : "Marks unlocked." });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -158,11 +291,24 @@ const toggleLock = async (req, res) => {
 const listMarksheets = async (req, res) => {
   try {
     const { staffId } = req.params;
-    const records = await InternalMarks.find({ staffId }).select("-students");
+    const records = await InternalMarks.find({
+      staffId,
+      $or: [
+        { subjectCode: { $regex: /^.{3,}$/ } },
+        { "students.0": { $exists: true } }
+      ]
+    }).select("-students");
     res.json({ success: true, data: records });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-module.exports = { getMarksheet, saveMarksheet, updateMaxMarks, toggleLock, listMarksheets };
+module.exports = { 
+  getMarksheet, 
+  saveMarksheet, 
+  updateMaxMarks, 
+  toggleLock, 
+  listMarksheets,
+  syncAssignmentsToInternalMarks
+};

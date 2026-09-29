@@ -27,6 +27,8 @@ import {
 import ExamFeesManagement from './ExamFeesManagement';
 import TuitionFeesManagement from './TuitionFeesManagement';
 import TransportFeesManagement from './TransportFeesManagement';
+import FeeStructureView from './FeeStructureView';
+import { Building2 } from 'lucide-react';
 
 export default function FeeManagement({ defaultFeeType = 'All' }) {
   // Mode state: 'list' or 'form'
@@ -98,21 +100,21 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
     remarks: ''
   });
 
-  // Sample student fee records
+  // Sample student fee records aligned with 5 UG Departments & Fee Structure
   const [feeRecords, setFeeRecords] = useState([
     {
       id: 'STU001',
       name: 'Arjun Sharma',
       avatar: 'A',
-      course: 'B.Tech CS',
+      course: 'CS (B.Sc CS)',
       feeType: 'Tuition Fees',
-      totalFee: 120000,
-      totalFeeDisplay: '₹120K',
-      paidFee: 120000,
-      paidFeeDisplay: '₹120K',
+      totalFee: 28000,
+      totalFeeDisplay: '₹28K',
+      paidFee: 28000,
+      paidFeeDisplay: '₹28K',
       pendingFee: 0,
       pendingFeeDisplay: '-',
-      dueDate: '2024-12-15',
+      dueDate: '2026-11-15',
       status: 'Paid',
       phone: '9876543210',
       email: 'arjun.s@vcas.edu'
@@ -121,16 +123,16 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
       id: 'STU002',
       name: 'Priya Mehta',
       avatar: 'P',
-      course: 'B.Tech ECE',
-      feeType: 'Exam Fees',
-      totalFee: 115000,
-      totalFeeDisplay: '₹115K',
-      paidFee: 60000,
-      paidFeeDisplay: '₹60K',
-      pendingFee: 55000,
-      pendingFeeDisplay: '₹55K',
-      dueDate: '2024-11-30',
-      status: 'Pending',
+      course: 'B.Com',
+      feeType: 'Tuition Fees',
+      totalFee: 12000,
+      totalFeeDisplay: '₹12K',
+      paidFee: 12000,
+      paidFeeDisplay: '₹12K',
+      pendingFee: 0,
+      pendingFeeDisplay: '-',
+      dueDate: '2026-11-30',
+      status: 'Paid',
       phone: '9876543211',
       email: 'priya.m@vcas.edu'
     },
@@ -138,16 +140,16 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
       id: 'STU003',
       name: 'Rahul Verma',
       avatar: 'R',
-      course: 'MBA',
-      feeType: 'Transport Fees',
-      totalFee: 180000,
-      totalFeeDisplay: '₹180K',
-      paidFee: 90000,
-      paidFeeDisplay: '₹90K',
-      pendingFee: 90000,
-      pendingFeeDisplay: '₹90K',
-      dueDate: '2024-11-15',
-      status: 'Overdue',
+      course: 'BBA',
+      feeType: 'Tuition Fees',
+      totalFee: 27000,
+      totalFeeDisplay: '₹27K',
+      paidFee: 17000,
+      paidFeeDisplay: '₹17K',
+      pendingFee: 10000,
+      pendingFeeDisplay: '₹10K',
+      dueDate: '2026-12-15',
+      status: 'Pending',
       phone: '9876543212',
       email: 'rahul.v@vcas.edu'
     },
@@ -155,16 +157,16 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
       id: 'STU004',
       name: 'Sneha Nair',
       avatar: 'S',
-      course: 'MCA',
+      course: 'AI (B.Sc AI)',
       feeType: 'Tuition Fees',
-      totalFee: 95000,
-      totalFeeDisplay: '₹95K',
-      paidFee: 95000,
-      paidFeeDisplay: '₹95K',
-      pendingFee: 0,
-      pendingFeeDisplay: '-',
-      dueDate: '2024-12-20',
-      status: 'Paid',
+      totalFee: 28000,
+      totalFeeDisplay: '₹28K',
+      paidFee: 18000,
+      paidFeeDisplay: '₹18K',
+      pendingFee: 10000,
+      pendingFeeDisplay: '₹10K',
+      dueDate: '2026-12-20',
+      status: 'Pending',
       phone: '9876543213',
       email: 'sneha.n@vcas.edu'
     },
@@ -172,18 +174,35 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
       id: 'STU005',
       name: 'Karthik Rajan',
       avatar: 'K',
-      course: 'B.Tech Mech',
-      feeType: 'Exam Fees',
-      totalFee: 110000,
-      totalFeeDisplay: '₹110K',
-      paidFee: 40000,
-      paidFeeDisplay: '₹40K',
-      pendingFee: 70000,
-      pendingFeeDisplay: '₹70K',
-      dueDate: '2024-10-31',
-      status: 'Overdue',
+      course: 'CFS (Cyber Forensic)',
+      feeType: 'Tuition Fees',
+      totalFee: 23000,
+      totalFeeDisplay: '₹23K',
+      paidFee: 15500,
+      paidFeeDisplay: '₹15.5K',
+      pendingFee: 7500,
+      pendingFeeDisplay: '₹7.5K',
+      dueDate: '2026-10-31',
+      status: 'Pending',
       phone: '9876543214',
       email: 'karthik.r@vcas.edu'
+    },
+    {
+      id: 'STU006',
+      name: 'Deepa Sundaram',
+      avatar: 'D',
+      course: 'B.Com',
+      feeType: 'Tuition Fees',
+      totalFee: 7000,
+      totalFeeDisplay: '₹7K',
+      paidFee: 7000,
+      paidFeeDisplay: '₹7K',
+      pendingFee: 0,
+      pendingFeeDisplay: '-',
+      dueDate: '2026-10-15',
+      status: 'Paid',
+      phone: '9876543215',
+      email: 'deepa.s@vcas.edu'
     }
   ]);
 
@@ -211,7 +230,7 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
       message: `${feeTypeName} entry of ${formattedAmount} saved successfully!`,
       studentName: entryFormData.studentName || 'Priya Mehta',
       rollNo: entryFormData.rollNo || 'STU002',
-      course: entryFormData.course || 'B.Tech ECE',
+      course: entryFormData.course || 'B.Com',
       feeType: feeTypeName,
       amount: formattedAmount,
       date: entryFormData.dueDate || entryFormData.paymentDate || new Date().toISOString().split('T')[0],
@@ -291,40 +310,125 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            {viewMode === 'form' ? `${activeTab} Management` : 'Fee Management'}
+            {viewMode === 'form' 
+              ? (activeTab === 'Fee Structure' ? 'UG Fee Structure & Concessions' : `${activeTab} Management`) 
+              : 'Fee Management'}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 font-medium">Track and manage student fee payments</p>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 font-medium">
+            {activeTab === 'Fee Structure' && viewMode === 'form'
+              ? 'Approved fee schedules for 5 UG departments, registration, semester dues, and scholarship matrix'
+              : 'Track and manage student fee collections, dues, and payment transactions'}
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Back to List Button */}
-          {viewMode === 'form' ? (
+          {viewMode === 'form' && (
             <button 
               onClick={() => {
                 setViewMode('list');
                 setFeeTypeFilter('All');
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4 text-slate-500" />
-              <span>Back to List</span>
-            </button>
-          ) : (
-            <button 
-              onClick={() => window.print()}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition-all"
-            >
-              <Printer className="w-4 h-4 text-slate-500" />
-              <span>Print</span>
+              <span>Back to Records</span>
             </button>
           )}
+          <button 
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-slate-500" />
+            <span>Print</span>
+          </button>
         </div>
+      </div>
+
+      {/* FEE SECTIONS NAVIGATION TABS PILLS */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-1.5 shadow-2xs flex flex-wrap items-center gap-1.5">
+        <button
+          onClick={() => {
+            setViewMode('form');
+            setActiveTab('Fee Structure');
+          }}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            viewMode === 'form' && activeTab === 'Fee Structure'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>UG Fee Structure (5 Depts)</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setViewMode('list');
+            setFeeTypeFilter('All');
+          }}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            viewMode === 'list'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Collections & Records</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setViewMode('form');
+            setActiveTab('Tuition Fees');
+          }}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            viewMode === 'form' && activeTab === 'Tuition Fees'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>Tuition Fees</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setViewMode('form');
+            setActiveTab('Exam Fees');
+          }}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            viewMode === 'form' && activeTab === 'Exam Fees'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Exam Fees</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setViewMode('form');
+            setActiveTab('Transport Fees');
+          }}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            viewMode === 'form' && activeTab === 'Transport Fees'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Receipt className="w-4 h-4" />
+          <span>Transport Fees</span>
+        </button>
       </div>
 
       {/* RENDER FORM VIEW (WHEN VIEW MODE IS 'form' or FEE TAB IS CLICKED) */}
       {viewMode === 'form' ? (
         <div className="space-y-6">
-          {activeTab === 'Transport Fees' ? (
+          {activeTab === 'Fee Structure' ? (
+            <FeeStructureView />
+          ) : activeTab === 'Transport Fees' ? (
             <TransportFeesManagement 
               entryFormData={entryFormData}
               setEntryFormData={setEntryFormData}
@@ -467,9 +571,12 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
                   className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-blue-500"
                 >
                   <option value="All">All Courses</option>
-                  <option value="B.Tech">B.Tech</option>
-                  <option value="MBA">MBA</option>
-                  <option value="MCA">MCA</option>
+                  <option value="B.Com">B.Com</option>
+                  <option value="B.Sc CS">B.Sc CS</option>
+                  <option value="B.A. English">B.A. English</option>
+                  <option value="BBA">BBA</option>
+                  <option value="BCA">BCA</option>
+                  <option value="M.Com">M.Com</option>
                 </select>
               </div>
             </div>

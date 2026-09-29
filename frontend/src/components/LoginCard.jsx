@@ -13,22 +13,27 @@ import {
   LogIn,
   IdCard,
   BookOpen,
-  ChevronDown
+  ChevronDown,
+  ShieldCheck,
+  IndianRupee,
+  Briefcase
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000';
 
 const DEPARTMENTS = [
   'Computer Science',
-  'Electronics',
-  'MBA',
-  'Mechanical',
-  'Civil',
-  'BCA',
-  'Information Technology',
+  'Commerce',
+  'Business Administration (BBA)',
+  'Artificial Intelligence (AI)',
+  'Cyber Forensics & Security (CFS)',
+  'Computer Applications (BCA)',
+  'Accounts & Finance',
+  'Administrative Office',
   'Mathematics',
   'Physics',
-  'English'
+  'English Literature',
+  'Economics'
 ];
 
 const DESIGNATIONS = [
@@ -37,23 +42,28 @@ const DESIGNATIONS = [
   'Professor',
   'HOD',
   'Lecturer',
+  'Accountant',
+  'Chief Accountant',
+  'Office Staff',
+  'Administrative Officer',
   'Lab Assistant',
   'Visiting Professor'
 ];
 
 export default function LoginCard({ onLoginSuccess }) {
-  const [activeRole, setActiveRole] = useState('Admin');
+  const [activeRole, setActiveRole] = useState('SuperAdmin');
   // 'login' | 'signup'  — only relevant when activeRole === 'Staff'
   const [staffMode, setStaffMode] = useState('login');
 
   // ── Login form state ──────────────────────────────────────────
-  const [email, setEmail] = useState('admin@vcas.edu');
+  const [email, setEmail] = useState('superadmin@vcas.edu');
   const [password, setPassword] = useState('••••••••••••');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   // ── Signup form state ─────────────────────────────────────────
   const [signup, setSignup] = useState({
+    staffRole: 'Staff', // 'Staff' | 'Accountant' | 'Office Staff'
     name: '',
     staffId: '',
     email: '',
@@ -70,9 +80,32 @@ export default function LoginCard({ onLoginSuccess }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Primary portal roles — Accountant and Office Staff now register & login through Staff portal
   const roles = [
-    { id: 'Admin', label: 'Admin', icon: Building2, defaultEmail: 'admin@vcas.edu', defaultPassword: '••••••••••••' },
-    { id: 'Staff', label: 'Staff', icon: Users, defaultEmail: '', defaultPassword: '' }
+    { 
+      id: 'SuperAdmin', 
+      label: 'Super Admin', 
+      icon: ShieldCheck, 
+      defaultEmail: 'superadmin@vcas.edu', 
+      defaultPassword: '••••••••••••',
+      badge: 'All Access' 
+    },
+    { 
+      id: 'Admin', 
+      label: 'Principal', 
+      icon: Building2, 
+      defaultEmail: 'admin@vcas.edu', 
+      defaultPassword: '••••••••••••',
+      badge: 'Admin' 
+    },
+    { 
+      id: 'Staff', 
+      label: 'Staff Portal', 
+      icon: Users, 
+      defaultEmail: '', 
+      defaultPassword: '',
+      badge: 'Faculty & Office' 
+    }
   ];
 
   const handleRoleSelect = (role) => {
@@ -90,10 +123,37 @@ export default function LoginCard({ onLoginSuccess }) {
     setSuccessMsg('');
     setEmail('');
     setPassword('');
-    setSignup({ name: '', staffId: '', email: '', department: 'Computer Science', designation: 'Assistant Professor', password: '', confirmPassword: '' });
+    setSignup({ 
+      staffRole: 'Staff',
+      name: '', 
+      staffId: '', 
+      email: '', 
+      department: 'Computer Science', 
+      designation: 'Assistant Professor', 
+      password: '', 
+      confirmPassword: '' 
+    });
   };
 
-  // ── Staff Login ───────────────────────────────────────────────
+  const handleStaffRoleChange = (selectedRole) => {
+    let dept = 'Computer Science';
+    let desig = 'Assistant Professor';
+    if (selectedRole === 'Accountant') {
+      dept = 'Accounts & Finance';
+      desig = 'Accountant';
+    } else if (selectedRole === 'Office Staff') {
+      dept = 'Administrative Office';
+      desig = 'Office Staff';
+    }
+    setSignup(prev => ({
+      ...prev,
+      staffRole: selectedRole,
+      department: dept,
+      designation: desig
+    }));
+  };
+
+  // ── Login ───────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!email.trim() || !password) {
@@ -105,6 +165,39 @@ export default function LoginCard({ onLoginSuccess }) {
 
     try {
       if (activeRole === 'Staff') {
+        const cleanEmail = email.trim().toLowerCase();
+
+        // Direct demo credentials handling for effortless testing
+        if (cleanEmail === 'accountant@vcas.edu') {
+          setTimeout(() => {
+            onLoginSuccess({
+              role: 'Accountant',
+              email: 'accountant@vcas.edu',
+              name: 'Accountant',
+              title: 'Accountant',
+              department: 'Accounts & Finance',
+              designation: 'Accountant',
+              canViewFees: true
+            });
+          }, 150);
+          return;
+        }
+
+        if (cleanEmail === 'officestaff@vcas.edu') {
+          setTimeout(() => {
+            onLoginSuccess({
+              role: 'Office Staff',
+              email: 'officestaff@vcas.edu',
+              name: 'Office Staff',
+              title: 'Office Administration',
+              department: 'Administrative Office',
+              designation: 'Office Staff',
+              canViewFees: true
+            });
+          }, 150);
+          return;
+        }
+
         const response = await fetch(`${API_BASE}/api/auth/staff/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -117,25 +210,47 @@ export default function LoginCard({ onLoginSuccess }) {
           const initials = s.name
             ? s.name.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
             : 'ST';
+          
+          const resolvedRole = s.role || (
+            s.designation === 'Accountant' || s.department?.includes('Account') ? 'Accountant' :
+            s.designation === 'Office Staff' || s.department?.includes('Office') ? 'Office Staff' :
+            'Staff'
+          );
+          const isFinanceStaff = resolvedRole === 'Accountant' || resolvedRole === 'Office Staff';
+
           onLoginSuccess({
             ...s,
-            role: 'Staff',
+            role: resolvedRole,
+            canViewFees: isFinanceStaff,
             subjects: s.subjects || (s.classes ? s.classes.map(c => c.code) : []),
-            avatarColor: s.avatarBg || 'from-blue-600 to-indigo-600',
+            avatarColor: s.avatarBg || (resolvedRole === 'Accountant' ? 'from-amber-600 to-orange-600' : resolvedRole === 'Office Staff' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'),
             avatarInitials: s.avatarText || initials
           });
         } else {
           setErrorMsg(data.message || 'Invalid email or password.');
         }
+      } else if (activeRole === 'SuperAdmin') {
+        setTimeout(() => {
+          onLoginSuccess({
+            role: 'Super Admin',
+            email: email.trim() || 'superadmin@vcas.edu',
+            name: 'Super Administrator',
+            isSuperAdmin: true,
+            permissions: ['download_credentials', 'print_credentials', 'full_admin_access']
+          });
+        }, 150);
       } else {
-        // Admin — simple local auth for now
+        // Admin / Principal
         setTimeout(() => {
           onLoginSuccess({
             role: 'Admin',
-            email: email.trim(),
-            name: 'Dr. Arunkumar S (Principal)'
+            email: email.trim() || 'admin@vcas.edu',
+            name: 'Principal',
+            title: 'Principal',
+            isSuperAdmin: false,
+            canViewFees: false
           });
-        }, 300);
+        }, 150);
       }
     } catch (err) {
       setErrorMsg('Unable to connect to VCAS server. Please make sure the backend is running on port 5000.');
@@ -167,6 +282,7 @@ export default function LoginCard({ onLoginSuccess }) {
           name: signup.name.trim(),
           email: signup.email.trim().toLowerCase(),
           password: signup.password,
+          role: signup.staffRole,
           department: signup.department,
           designation: signup.designation
         })
@@ -174,17 +290,22 @@ export default function LoginCard({ onLoginSuccess }) {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Auto-login after successful registration → goes to first-time setup
+        // Auto-login after successful registration
         const s = data.staff;
         const initials = s.name
           ? s.name.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
-          : 'ST';
+          : (signup.staffRole === 'Accountant' ? 'ACC' : signup.staffRole === 'Office Staff' ? 'OS' : 'ST');
+        
+        const effectiveRole = signup.staffRole || 'Staff';
+        const isFinanceStaff = effectiveRole === 'Accountant' || effectiveRole === 'Office Staff';
+
         onLoginSuccess({
           ...s,
-          role: 'Staff',
-          isProfileCompleted: false,
+          role: effectiveRole,
+          canViewFees: isFinanceStaff,
+          isProfileCompleted: isFinanceStaff ? true : false,
           subjects: [],
-          avatarColor: s.avatarBg || 'from-blue-600 to-indigo-600',
+          avatarColor: s.avatarBg || (effectiveRole === 'Accountant' ? 'from-amber-600 to-orange-600' : effectiveRole === 'Office Staff' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'),
           avatarInitials: s.avatarText || initials
         });
       } else {
@@ -299,6 +420,36 @@ export default function LoginCard({ onLoginSuccess }) {
       {/* ── SIGN-UP FORM (Staff only) ────────────────────────────── */}
       {activeRole === 'Staff' && staffMode === 'signup' ? (
         <form onSubmit={handleSignup} className="space-y-3">
+
+          {/* Staff Category / Role Dropdown */}
+          <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 p-3 rounded-2xl border border-blue-200/80">
+            <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-blue-600" />
+                Staff Role / Category *
+              </span>
+              <span className="text-[10px] text-blue-600 font-semibold bg-white px-2 py-0.5 rounded-full border border-blue-100 shadow-2xs">
+                Select Designation
+              </span>
+            </label>
+            <div className="relative">
+              <select
+                value={signup.staffRole}
+                onChange={(e) => handleStaffRoleChange(e.target.value)}
+                className="w-full appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-blue-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shadow-xs"
+              >
+                <option value="Staff">👨‍🏫 Teaching Faculty / Academic Staff</option>
+                <option value="Accountant">💰 Accountant (Finance & Fee Management)</option>
+                <option value="Office Staff">📋 Office Staff (Administration & Records)</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+            <p className="text-[11px] text-slate-600 mt-1.5 pl-0.5 leading-snug font-medium">
+              {signup.staffRole === 'Staff' && '• Access to academic dashboard, attendance, timetable, marks, and classes.'}
+              {signup.staffRole === 'Accountant' && '• Access to fee collections, UG fee structure (5 depts), scholarship slabs, and student ledgers.'}
+              {signup.staffRole === 'Office Staff' && '• Access to administrative student admissions, fees, and office records.'}
+            </p>
+          </div>
 
           {/* Full Name */}
           <div>
@@ -523,6 +674,51 @@ export default function LoginCard({ onLoginSuccess }) {
             </a>
           </div>
 
+          {/* Quick Demo Credentials for Staff Portal */}
+          {activeRole === 'Staff' && (
+            <div className="p-2.5 bg-slate-50 border border-slate-200/90 rounded-xl space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                <span>Quick Fill Demo Staff Login:</span>
+                <span className="text-[10px] text-blue-600 font-bold">1-Click Auto Fill</span>
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('ravi.kumar@vcas.edu');
+                    setPassword('vcas@2026');
+                    setErrorMsg('');
+                  }}
+                  className="flex-1 py-1 px-1.5 bg-white border border-slate-200 rounded-lg text-[10.5px] font-semibold text-slate-700 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50 transition-all text-center"
+                >
+                  👨‍🏫 Faculty
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('accountant@vcas.edu');
+                    setPassword('vcas@2026');
+                    setErrorMsg('');
+                  }}
+                  className="flex-1 py-1 px-1.5 bg-white border border-amber-200 rounded-lg text-[10.5px] font-semibold text-amber-800 hover:bg-amber-50 transition-all text-center"
+                >
+                  💰 Accountant
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('officestaff@vcas.edu');
+                    setPassword('vcas@2026');
+                    setErrorMsg('');
+                  }}
+                  className="flex-1 py-1 px-1.5 bg-white border border-emerald-200 rounded-lg text-[10.5px] font-semibold text-emerald-800 hover:bg-emerald-50 transition-all text-center"
+                >
+                  📋 Office Staff
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Submit */}
           <button
             type="submit"
@@ -533,7 +729,7 @@ export default function LoginCard({ onLoginSuccess }) {
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
-                <span>Sign In to {activeRole} Portal</span>
+                <span>Sign In to {activeRole === 'Staff' ? 'Staff Portal' : activeRole === 'Admin' ? 'Principal Portal' : 'Super Admin Portal'}</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </>
             )}

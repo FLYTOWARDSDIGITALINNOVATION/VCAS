@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   FileSpreadsheet,
   Search,
@@ -15,6 +15,9 @@ import {
   SlidersHorizontal,
   Edit3,
   Award,
+  Sparkles,
+  BookMarked,
+  ChevronDown,
 } from "lucide-react";
 
 const API = "http://localhost:5000/api";
@@ -31,18 +34,36 @@ export const ASSESSMENT_COMPONENTS = [
 export default function StaffInternalMarks({ staffUser }) {
   const staffId   = staffUser?.staffId || staffUser?.employeeId || "";
   const staffName = staffUser?.name || "";
+  const effectiveStaffId = staffId || staffUser?.staffId || staffUser?.employeeId || "EMP001";
+
+  const getStoredSubject = () => {
+    try {
+      return (
+        localStorage.getItem('vcas_internal_subject') ||
+        sessionStorage.getItem('vcas_internal_subject') ||
+        "CS2001"
+      );
+    } catch {
+      return "CS2001";
+    }
+  };
 
   // -- State ----------------------------------------------------------
-  const [subjectCode,   setSubjectCode]   = useState("");
+  const [subjectCode,   setSubjectCode]   = useState(getStoredSubject);
+  const [searchInput,   setSearchInput]   = useState(getStoredSubject);
   const [subjectName,   setSubjectName]   = useState("");
+  const [staffSubjects, setStaffSubjects] = useState([]);
+  const [showCustomInput, setShowCustomInput] = useState(false);
   const [componentId,   setComponentId]   = useState("cia1");
   const [searchQuery,   setSearchQuery]   = useState("");
   const [students,      setStudents]      = useState([]); // raw from DB
   const [isLocked,      setIsLocked]      = useState(false);
   const [loading,       setLoading]       = useState(false);
   const [saving,        setSaving]        = useState(false);
+  const [syncingAssignments, setSyncingAssignments] = useState(false);
   const [successMsg,    setSuccessMsg]    = useState("");
   const [errorMsg,      setErrorMsg]      = useState("");
+  const reqIdRef = useRef(0);
 
   // Configurable Max & Pass Marks per component
   const [maxMarksConfig, setMaxMarksConfig] = useState({
@@ -83,9 +104,23 @@ export default function StaffInternalMarks({ staffUser }) {
   const currentMax  = maxMarksConfig[componentId]  ?? activeComp.defaultMax;
   const currentPass = passMarksConfig[componentId] ?? activeComp.defaultPass;
 
+  const dropdownSubjects = useMemo(() => {
+    const list = [...staffSubjects];
+    if (subjectCode && !list.some((s) => s.code === subjectCode)) {
+      list.unshift({ code: subjectCode, name: subjectName || subjectCode });
+    }
+    if (list.length === 0) {
+      list.push(
+        { code: "CS2001", name: "Cloud Database" },
+        { code: "CS2005", name: "DBMS" }
+      );
+    }
+    return list;
+  }, [staffSubjects, subjectCode, subjectName]);
+
   const filteredStudents = useMemo(() => {
     if (!searchQuery.trim()) return students;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
     return students.filter(
       (s) => s.name?.toLowerCase().includes(q) || s.rollNo?.toLowerCase().includes(q)
     );
@@ -124,15 +159,30 @@ export default function StaffInternalMarks({ staffUser }) {
 
   // -- Fetch marksheet -------------------------------------------------
   const fetchMarksheet = useCallback(async (code) => {
-    if (!code) return;
+    if (!code || !code.trim()) return;
+    const cleanCode = code.trim().toUpperCase();
+    const currentReqId = ++reqIdRef.current;
     setLoading(true);
     try {
-      const res  = await fetch(`${API}/internal-marks/${staffId}/${encodeURIComponent(code)}`);
+      const res  = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(cleanCode)}`);
       const json = await res.json();
+      if (currentReqId !== reqIdRef.current) {
+        // Discard outdated request
+        return;
+      }
       if (json.success && json.data) {
+        const canonicalCode = (json.data.subjectCode || cleanCode).toUpperCase();
         setStudents(json.data.students || []);
         setIsLocked(json.data.isLocked || false);
         setSubjectName(json.data.subjectName || "");
+        setSubjectCode(canonicalCode);
+        setSearchInput(canonicalCode);
+        try {
+          localStorage.setItem('vcas_internal_subject', canonicalCode);
+          sessionStorage.setItem('vcas_internal_subject', canonicalCode);
+        } catch {
+          // ignore
+        }
         if (json.data.maxMarks) {
           const loadedMax = {
             cia1:         Number(json.data.maxMarks.cia1) || 50,
@@ -158,16 +208,79 @@ export default function StaffInternalMarks({ staffUser }) {
           setTempPassConfig(loadedPass);
         }
       } else {
-        setStudents([]); setIsLocked(false);
+        setStudents([]);
+        setIsLocked(false);
       }
     } catch {
-      toast("Could not reach server.", true);
+      if (currentReqId === reqIdRef.current) {
+        toast("Could not reach server.", true);
+      }
     } finally {
-      setLoading(false);
+      if (currentReqId === reqIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [staffId, toast]);
+  }, [effectiveStaffId, toast]);
 
-  useEffect(() => { if (subjectCode) fetchMarksheet(subjectCode); }, [subjectCode, fetchMarksheet]);
+  // Load available staff subjects on mount
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API}/classes/staff/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+      fetch(`${API}/assignments/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+      fetch(`${API}/internal-marks/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+    ]).then(([clsData, asgtsData, marksData]) => {
+      const subs = [];
+      const seen = new Set();
+      const classesList = Array.isArray(clsData?.classes)
+        ? clsData.classes
+        : (Array.isArray(clsData?.data) ? clsData.data : []);
+
+      if (classesList.length > 0) {
+        classesList.forEach(c => {
+          const code = (c.code || "").trim().toUpperCase();
+          if (code && code.length >= 3 && !seen.has(code)) {
+            seen.add(code);
+            subs.push({ code, name: c.name || code });
+          }
+        });
+      }
+      if (asgtsData?.success && Array.isArray(asgtsData.data)) {
+        asgtsData.data.forEach(a => {
+          const code = (a.subjectCode || "").trim().toUpperCase();
+          if (code && code.length >= 3 && !seen.has(code)) {
+            seen.add(code);
+            subs.push({ code, name: a.subjectName || a.title || code });
+          }
+        });
+      }
+      if (marksData?.success && Array.isArray(marksData.data)) {
+        marksData.data.forEach(m => {
+          const code = (m.subjectCode || "").trim().toUpperCase();
+          if (code && code.length >= 3 && !seen.has(code)) {
+            seen.add(code);
+            subs.push({ code, name: m.subjectName || code });
+          }
+        });
+      }
+      setStaffSubjects(subs);
+    });
+  }, [effectiveStaffId]);
+
+  // Always load initial/stored subject on mount
+  useEffect(() => {
+    const target = getStoredSubject();
+    if (target) {
+      fetchMarksheet(target);
+    }
+  }, [fetchMarksheet]);
+
+  const handleLoadSubject = (codeToLoad) => {
+    const target = (codeToLoad !== undefined ? codeToLoad : searchInput).trim().toUpperCase();
+    if (!target) return;
+    setSubjectCode(target);
+    setSearchInput(target);
+    fetchMarksheet(target);
+  };
 
   // Recalculate consolidated marks for a student based on current/given config
   const calculateConsolidated = (student, config = maxMarksConfig) => {
@@ -202,7 +315,7 @@ export default function StaffInternalMarks({ staffUser }) {
     if (!subjectCode) return;
     setSaving(true);
     try {
-      const res  = await fetch(`${API}/internal-marks/${staffId}/${encodeURIComponent(subjectCode)}/save`, {
+      const res  = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/save`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
@@ -221,6 +334,29 @@ export default function StaffInternalMarks({ staffUser }) {
       toast("Server error while saving.", true);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // -- Sync assignment marks from Assignments portal ------------------
+  const handleSyncAssignments = async () => {
+    if (!subjectCode) return;
+    setSyncingAssignments(true);
+    try {
+      const res = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/sync-assignments`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setStudents(json.data.students || []);
+        if (json.data.subjectName && !subjectName) setSubjectName(json.data.subjectName);
+        toast(json.message || "Assignment marks synchronized successfully!");
+      } else {
+        toast(json.message || "Could not sync assignment marks.", true);
+      }
+    } catch {
+      toast("Error syncing assignment marks. Make sure backend is running.", true);
+    } finally {
+      setSyncingAssignments(false);
     }
   };
 
@@ -263,7 +399,7 @@ export default function StaffInternalMarks({ staffUser }) {
       setStudents(updatedStudents);
 
       // Save to backend
-      const res = await fetch(`${API}/internal-marks/${staffId}/${encodeURIComponent(subjectCode)}/save`, {
+      const res = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -280,6 +416,7 @@ export default function StaffInternalMarks({ staffUser }) {
       if (json.success) {
         toast("Max & Pass Marks updated! Student pass/fail statuses and grades refreshed.");
         setShowConfigModal(false);
+        handleSyncAssignments();
       } else {
         toast(json.message || "Failed to update criteria.", true);
       }
@@ -295,7 +432,7 @@ export default function StaffInternalMarks({ staffUser }) {
     if (!isLocked && !window.confirm(`Freeze and submit marks for ${subjectCode}? Modifications will be restricted.`)) return;
     if (!isLocked) await handleSave();
     try {
-      const res  = await fetch(`${API}/internal-marks/${staffId}/${encodeURIComponent(subjectCode)}/lock`, {
+      const res  = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/lock`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ lock: !isLocked }),
@@ -391,6 +528,20 @@ export default function StaffInternalMarks({ staffUser }) {
           {subjectCode && (
             <>
               <button
+                onClick={handleSyncAssignments}
+                disabled={syncingAssignments || isLocked}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 disabled:opacity-50 rounded-xl text-xs font-bold text-blue-700 shadow-xs transition-all cursor-pointer"
+                title="Pull latest graded marks from the Assignments portal for this subject"
+              >
+                {syncingAssignments ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                )}
+                <span>{syncingAssignments ? "Syncing..." : "Sync from Assignments"}</span>
+              </button>
+
+              <button
                 onClick={openConfigModal}
                 disabled={isLocked}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50 rounded-xl text-xs font-bold text-indigo-700 shadow-xs transition-all"
@@ -432,36 +583,100 @@ export default function StaffInternalMarks({ staffUser }) {
 
       {/* Subject Input & Component Selector */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="e.g., CS401"
-                value={subjectCode}
-                onChange={(e) => setSubjectCode(e.target.value.toUpperCase())}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-              />
+        {/* Course Code Dropdown Selector */}
+        <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <BookMarked className="w-4 h-4 text-blue-600" />
+              <span>Select Course Code</span>
+              {loading && (
+                <span className="text-[11px] text-blue-600 font-medium flex items-center gap-1 ml-2">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Loading...
+                </span>
+              )}
+            </label>
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => fetchMarksheet(subjectCode)}
-                disabled={!subjectCode || loading}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1"
+                type="button"
+                onClick={() => setShowCustomInput(!showCustomInput)}
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
               >
-                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Load
+                {showCustomInput ? "Switch to Course Dropdown" : "+ Enter Custom Course Code"}
               </button>
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name (optional)</label>
-            <input
-              type="text"
-              placeholder="e.g., Data Structures"
-              value={subjectName}
-              onChange={(e) => setSubjectName(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
+
+          {!showCustomInput ? (
+            <div className="relative">
+              <select
+                value={subjectCode}
+                onChange={(e) => {
+                  if (e.target.value) handleLoadSubject(e.target.value);
+                }}
+                className="w-full bg-slate-50 hover:bg-slate-100/90 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer appearance-none pr-10 shadow-xs"
+              >
+                <option value="" disabled>-- Select Course Code --</option>
+                {dropdownSubjects.map((sub) => (
+                  <option key={sub.code} value={sub.code}>
+                    {sub.code} — {sub.name && sub.name !== sub.code ? sub.name : "Course"}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Enter course code, e.g. CS2001..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleLoadSubject(); }}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 uppercase shadow-xs"
+              />
+              <button
+                type="button"
+                onClick={() => handleLoadSubject()}
+                disabled={!searchInput.trim() || loading}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm shadow-blue-500/20 shrink-0"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                <span>Load Course</span>
+              </button>
+            </div>
+          )}
+
+          {/* Quick Clickable Pills */}
+          {dropdownSubjects.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+                Quick Select:
+              </span>
+              {dropdownSubjects.map((sub) => {
+                const isSelected = subjectCode === sub.code;
+                return (
+                  <button
+                    key={sub.code}
+                    type="button"
+                    onClick={() => {
+                      setShowCustomInput(false);
+                      handleLoadSubject(sub.code);
+                    }}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 scale-[1.02]"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                    }`}
+                  >
+                    <span>{sub.code}</span>
+                    {sub.name && sub.name !== sub.code && (
+                      <span className="text-[10px] font-medium opacity-80">• {sub.name}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {subjectCode && (
@@ -549,7 +764,30 @@ export default function StaffInternalMarks({ staffUser }) {
           </div>
 
           {/* Marksheet Table */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden space-y-0">
+            {componentId === "assignment" && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3.5 bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-blue-50/40 border-b border-blue-200/60 text-xs">
+                <div className="flex items-center gap-2">
+                  <BookMarked className="w-4 h-4 text-blue-600 shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-blue-900">Assignment Component:</span>
+                    <span className="text-blue-800 ml-1 font-medium">
+                      Marks awarded in the Assignments section automatically sync here. You can also edit them directly below.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncAssignments}
+                  disabled={syncingAssignments || isLocked}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-blue-50 text-blue-700 font-extrabold text-[11px] rounded-lg border border-blue-200 shadow-2xs transition-all cursor-pointer self-start sm:self-auto disabled:opacity-50 shrink-0"
+                >
+                  {syncingAssignments ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  <span>{syncingAssignments ? "Syncing..." : "Re-sync from Assignments"}</span>
+                </button>
+              </div>
+            )}
+
             <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div>
@@ -631,6 +869,26 @@ export default function StaffInternalMarks({ staffUser }) {
                         </tr>
                       );
                     })}
+                    {filteredStudents.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="py-12 text-center text-slate-500 text-xs">
+                          {searchQuery ? (
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">No students match "{searchQuery}"</p>
+                              <p className="text-slate-400 mt-1">Check the roll number or name spelling.</p>
+                              <button onClick={() => setSearchQuery("")} className="mt-3 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold border border-blue-200">
+                                Clear Search Filter
+                              </button>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">No students in marksheet for {subjectCode}</p>
+                              <p className="text-slate-400 mt-1">Use "Sync from Assignments" or "Add Student" above to populate the student list.</p>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               ) : (
@@ -690,6 +948,26 @@ export default function StaffInternalMarks({ staffUser }) {
                         </tr>
                       );
                     })}
+                    {filteredStudents.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-slate-500 text-xs">
+                          {searchQuery ? (
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">No students match "{searchQuery}"</p>
+                              <p className="text-slate-400 mt-1">Check the roll number or name spelling.</p>
+                              <button onClick={() => setSearchQuery("")} className="mt-3 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold border border-blue-200">
+                                Clear Search Filter
+                              </button>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">No students in marksheet for {subjectCode}</p>
+                              <p className="text-slate-400 mt-1">Click "Sync from Assignments" or "Add Student" above to populate the student list.</p>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               )}

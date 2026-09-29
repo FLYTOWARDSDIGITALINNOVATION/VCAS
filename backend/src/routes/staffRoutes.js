@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getAllStaff,
   getStaffById,
+  getStaffCredentials,
   createStaff,
   updateStaff,
   deleteStaff
@@ -11,6 +12,9 @@ const {
 router.route('/')
   .get(getAllStaff)
   .post(createStaff);
+
+router.route('/:id/credentials')
+  .get(getStaffCredentials);
 
 router.route('/:id')
   .get(getStaffById)

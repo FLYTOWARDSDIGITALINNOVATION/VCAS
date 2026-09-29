@@ -44,6 +44,29 @@ export default function StaffTimetable({ staffUser }) {
   const currentDayName = DAYS[new Date().getDay() - 1] || 'Monday';
   const [selectedDay, setSelectedDay] = useState(currentDayName);
 
+  // Sync period timings with admin custom timings if configured
+  const slotTimes = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('vcas_faculty_period_timings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const map = {};
+          parsed.forEach(p => { map[p.slot] = p.time; });
+          return SLOT_TIMES.map(s => {
+            if (map[s.slot]) {
+              return { ...s, time: map[s.slot] };
+            }
+            return s;
+          });
+        }
+      }
+    } catch {
+      // fallback to defaults
+    }
+    return SLOT_TIMES;
+  }, []);
+
   // Timetable schedule & classes from database
   const [schedule, setSchedule] = useState({});
   const [classes, setClasses] = useState([]);
@@ -403,7 +426,7 @@ export default function StaffTimetable({ staffUser }) {
           </div>
 
           <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-[520px]">
-            {SLOT_TIMES.map((slotItem, idx) => {
+            {slotTimes.map((slotItem, idx) => {
               if (slotItem.isBreak) {
                 return (
                   <div key={idx} className="flex items-center gap-3 py-1.5 px-3 rounded-lg bg-slate-50 border border-slate-100 text-slate-400 text-xs font-medium">

@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router  = express.Router();
 const {
   getMarksheet,
@@ -6,6 +6,7 @@ const {
   updateMaxMarks,
   toggleLock,
   listMarksheets,
+  syncAssignmentsToInternalMarks,
 } = require("../controllers/internalMarksController");
 
 // GET  /api/internal-marks/:staffId                     - list all marksheets (no students)
@@ -13,6 +14,9 @@ router.get("/:staffId",                           listMarksheets);
 
 // GET  /api/internal-marks/:staffId/:subjectCode        - get full marksheet
 router.get("/:staffId/:subjectCode",              getMarksheet);
+
+// POST /api/internal-marks/:staffId/:subjectCode/sync-assignments - pull & sync marks from assignments
+router.post("/:staffId/:subjectCode/sync-assignments", syncAssignmentsToInternalMarks);
 
 // POST /api/internal-marks/:staffId/:subjectCode/save   - upsert marks & max marks
 router.post("/:staffId/:subjectCode/save",        saveMarksheet);

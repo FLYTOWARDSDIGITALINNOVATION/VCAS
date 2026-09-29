@@ -9,9 +9,10 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     const savedUser = sessionStorage.getItem('vcas_user');
     return savedUser ? JSON.parse(savedUser) : {
-      name: 'Admin User',
-      role: 'Admin',
-      email: 'admin@vcas.edu'
+      name: 'Super Administrator',
+      role: 'Super Admin',
+      email: 'superadmin@vcas.edu',
+      isSuperAdmin: true
     };
   });
 

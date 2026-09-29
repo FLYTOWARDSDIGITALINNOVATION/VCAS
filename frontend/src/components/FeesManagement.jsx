@@ -20,11 +20,11 @@ import ModalPortal from './ModalPortal';
 
 const INITIAL_TRANSACTIONS = [
   { id: 1, receiptNo: 'REC-2025-0891', studentName: 'Aditya Kapoor', rollNo: 'VCAS22CS001', dept: 'CS', amount: 45000, feeType: 'Semester Tuition Fee', mode: 'Online UPI', date: '2025-04-28', status: 'Paid' },
-  { id: 2, receiptNo: 'REC-2025-0892', studentName: 'Priya Mehta', rollNo: 'VCAS23EC014', dept: 'ECE', amount: 45000, feeType: 'Semester Tuition Fee', mode: 'NetBanking', date: '2025-04-28', status: 'Paid' },
-  { id: 3, receiptNo: 'REC-2025-0893', studentName: 'Rahul Dravid K', rollNo: 'VCAS22ME045', dept: 'Mech', amount: 22500, feeType: 'Hostel & Mess Fee', mode: 'Demand Draft', date: '2025-04-27', status: 'Paid' },
-  { id: 4, receiptNo: 'REC-2025-0894', studentName: 'Sneha Patel', rollNo: 'VCAS24MB002', dept: 'MBA', amount: 65000, feeType: 'MBA Trimester Fee', mode: 'Credit Card', date: '2025-04-26', status: 'Paid' },
+  { id: 2, receiptNo: 'REC-2025-0892', studentName: 'Priya Mehta', rollNo: 'VCAS23CM014', dept: 'Commerce', amount: 35000, feeType: 'Semester Tuition Fee', mode: 'NetBanking', date: '2025-04-28', status: 'Paid' },
+  { id: 3, receiptNo: 'REC-2025-0893', studentName: 'Rahul Dravid K', rollNo: 'VCAS22EN045', dept: 'English', amount: 22500, feeType: 'Hostel & Mess Fee', mode: 'Demand Draft', date: '2025-04-27', status: 'Paid' },
+  { id: 4, receiptNo: 'REC-2025-0894', studentName: 'Sneha Patel', rollNo: 'VCAS24BB002', dept: 'BBA', amount: 40000, feeType: 'Semester Tuition Fee', mode: 'Credit Card', date: '2025-04-26', status: 'Paid' },
   { id: 5, receiptNo: 'DUE-2025-0102', studentName: 'Vikramaditya Rao', rollNo: 'VCAS23CS045', dept: 'CS', amount: 35000, feeType: 'Tuition Fee Balance', mode: 'Pending', date: 'Due May 10', status: 'Pending' },
-  { id: 6, receiptNo: 'DUE-2025-0103', studentName: 'Harish K', rollNo: 'VCAS23CV031', dept: 'Civil', amount: 45000, feeType: 'Semester Tuition Fee', mode: 'Overdue', date: 'Overdue (Apr 15)', status: 'Overdue' }
+  { id: 6, receiptNo: 'DUE-2025-0103', studentName: 'Harish K', rollNo: 'VCAS23BC031', dept: 'BCA', amount: 30000, feeType: 'Semester Tuition Fee', mode: 'Overdue', date: 'Overdue (Apr 15)', status: 'Overdue' }
 ];
 
 export default function FeesManagement() {
@@ -262,10 +262,12 @@ export default function FeesManagement() {
                     onChange={(e) => setCollectForm({ ...collectForm, dept: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
                   >
-                    <option value="CS">CS</option>
-                    <option value="ECE">ECE</option>
-                    <option value="Mech">Mech</option>
-                    <option value="MBA">MBA</option>
+                    <option value="Commerce">Commerce</option>
+                    <option value="CS">Computer Science</option>
+                    <option value="English">English</option>
+                    <option value="BBA">BBA</option>
+                    <option value="BCA">BCA</option>
+                    <option value="Maths">Mathematics</option>
                   </select>
                 </div>
               </div>

@@ -82,6 +82,7 @@ export default function UsersRolesManagement() {
             role: s.role || 'Faculty',
             department: s.department || '',
             status: s.status || 'Active',
+            profileImage: s.profileImage || '',
             twoFactorEnabled: false,
             lastLogin: '—',
             createdDate: s.createdAt ? s.createdAt.split('T')[0] : '—'
@@ -397,8 +398,12 @@ export default function UsersRolesManagement() {
                     <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs shrink-0">
-                            {u.name.charAt(0)}
+                          <div className="w-8 h-8 rounded-full overflow-hidden bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs shrink-0">
+                            {u.profileImage ? (
+                              <img src={u.profileImage} alt={u.name} className="w-full h-full object-cover" />
+                            ) : (
+                              u.name.charAt(0)
+                            )}
                           </div>
                           <div>
                             <p className="font-extrabold text-slate-900 text-xs">{u.name}</p>
@@ -678,11 +683,12 @@ export default function UsersRolesManagement() {
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
                   >
+                    <option value="Commerce">Commerce</option>
                     <option value="Computer Science">Computer Science</option>
-                    <option value="Electronics & Comm">Electronics & Comm</option>
-                    <option value="Mechanical Engg">Mechanical Engg</option>
-                    <option value="Civil Engineering">Civil Engineering</option>
-                    <option value="Business Admin">Business Admin (MBA)</option>
+                    <option value="English Literature">English Literature</option>
+                    <option value="Business Administration (BBA)">Business Administration (BBA)</option>
+                    <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
+                    <option value="Mathematics">Mathematics</option>
                     <option value="Administration">Administration</option>
                     <option value="Finance & Accounts">Finance & Accounts</option>
                   </select>

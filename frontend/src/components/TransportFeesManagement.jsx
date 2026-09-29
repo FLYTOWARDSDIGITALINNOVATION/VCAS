@@ -7,10 +7,10 @@ export default function TransportFeesManagement({
   handleSaveEntrySubmit 
 }) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+    <div className="w-full">
       
-      {/* LEFT 3 COLS: TRANSPORT FEE ENTRY FORM */}
-      <div className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+      {/* TRANSPORT FEE ENTRY FORM */}
+      <div className="w-full bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
         
         {/* Header */}
         <div className="flex items-start gap-4">
@@ -70,12 +70,12 @@ export default function TransportFeesManagement({
                 required
               >
                 <option value="">Select course...</option>
+                <option value="B.Com">B.Com</option>
                 <option value="B.Sc CS">B.Sc CS</option>
-                <option value="B.Tech Mech">B.Tech Mech</option>
-                <option value="B.Tech ECE">B.Tech ECE</option>
-                <option value="B.Tech CS">B.Tech CS</option>
-                <option value="MBA">MBA</option>
-                <option value="MCA">MCA</option>
+                <option value="B.A. English">B.A. English</option>
+                <option value="BBA">BBA</option>
+                <option value="BCA">BCA</option>
+                <option value="M.Com">M.Com</option>
               </select>
             </div>
 
@@ -260,52 +260,6 @@ export default function TransportFeesManagement({
         </div>
 
       </div>
-
-      {/* RIGHT 1 COL: FIELD EXPLANATION SIDEBAR PANEL FOR TRANSPORT */}
-      <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-6 space-y-4 shadow-xs">
-        <h3 className="text-xs font-extrabold text-blue-600 uppercase tracking-wider border-b border-blue-100 pb-3">
-          FIELD EXPLANATION
-        </h3>
-        
-        <ul className="space-y-2.5 text-[11px] text-slate-600 leading-relaxed">
-          <li>
-            <strong className="text-slate-900 font-bold">• Student <span className="text-rose-500">*</span></strong>: Select the student.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Roll No. <span className="text-rose-500">*</span></strong>: Enter student roll number.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Course <span className="text-rose-500">*</span></strong>: Select the student's course.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Academic Year <span className="text-rose-500">*</span></strong>: Enter the academic year.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Route / Stop <span className="text-rose-500">*</span></strong>: Enter route or bus stop.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Transport Vehicle <span className="text-rose-500">*</span></strong>: Select assigned vehicle.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Amount (₹) <span className="text-rose-500">*</span></strong>: Enter transport fee amount.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Fine (₹)</strong>: Enter late fee if any.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Total Amount (₹)</strong>: Auto calculated total amount.
-          </li>
-          <li>
-            <strong className="text-slate-900 font-bold">• Payment Mode <span className="text-rose-500">*</span></strong>: Cash / UPI / Online / Bank / Card
-          </li>
-        </ul>
-
-        <div className="pt-4 border-t border-blue-100 flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-          <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-          <span><strong>Note:</strong> Fields marked with <span className="text-rose-500 font-bold">*</span> are mandatory.</span>
-        </div>
-      </div>
-
     </div>
   );
 }

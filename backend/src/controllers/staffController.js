@@ -62,6 +62,7 @@ exports.createStaff = async (req, res) => {
       phone,
       department,
       designation,
+      role,
       employmentType,
       status,
       joiningDate,
@@ -73,7 +74,11 @@ exports.createStaff = async (req, res) => {
       emergencyContact,
       avatarBg,
       password,
-      classTeacherOf
+      classTeacherOf,
+      profileImage,
+      netSetExamStatus,
+      netSetExamCertificate,
+      netSetCertificateName
     } = req.body;
 
     let finalStaffId = (empId || staffId || '').trim().toUpperCase();
@@ -113,6 +118,8 @@ exports.createStaff = async (req, res) => {
       });
     }
 
+    const finalRole = role || (designation === 'Accountant' ? 'Accountant' : designation === 'Office Staff' ? 'Office Staff' : 'Staff');
+
     const newStaff = new Staff({
       staffId: finalStaffId,
       name: name.trim(),
@@ -120,7 +127,8 @@ exports.createStaff = async (req, res) => {
       password: password || 'vcas@2026',
       phone: phone ? phone.trim() : '',
       department: department.trim(),
-      designation: designation || 'Assistant Professor',
+      designation: designation || (finalRole === 'Accountant' ? 'Accountant' : finalRole === 'Office Staff' ? 'Office Staff' : 'Assistant Professor'),
+      role: finalRole,
       employmentType: employmentType || 'Permanent / Full-Time',
       status: status || 'Active',
       joiningDate: joiningDate || new Date().toISOString().split('T')[0],
@@ -132,6 +140,10 @@ exports.createStaff = async (req, res) => {
       emergencyContact: emergencyContact || '',
       avatarBg: avatarBg || 'bg-purple-600',
       avatarText: getInitials(name),
+      profileImage: profileImage || '',
+      netSetExamStatus: netSetExamStatus || 'Not Applicable',
+      netSetExamCertificate: netSetExamCertificate || '',
+      netSetCertificateName: netSetCertificateName || '',
       classTeacherOf: classTeacherOf || '',
       classes: []
     });
@@ -169,9 +181,10 @@ exports.updateStaff = async (req, res) => {
     }
 
     const allowedUpdates = [
-      'name', 'phone', 'department', 'designation', 'employmentType', 
+      'name', 'phone', 'department', 'designation', 'role', 'employmentType', 
       'status', 'joiningDate', 'qualification', 'experience', 'bloodGroup', 
-      'dob', 'address', 'emergencyContact', 'avatarBg', 'classTeacherOf', 'password'
+      'dob', 'address', 'emergencyContact', 'avatarBg', 'classTeacherOf', 'password', 'profileImage',
+      'netSetExamStatus', 'netSetExamCertificate', 'netSetCertificateName'
     ];
 
     allowedUpdates.forEach(field => {
@@ -219,6 +232,45 @@ exports.deleteStaff = async (req, res) => {
     res.status(200).json({
       success: true,
       message: `Staff member "${deleted.name}" deleted successfully.`
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc   Get staff credentials (Super Admin exclusive)
+// @route  GET /api/staff/:id/credentials
+exports.getStaffCredentials = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let staff = null;
+
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      staff = await Staff.findById(id);
+    }
+    if (!staff) {
+      staff = await Staff.findOne({ staffId: id });
+    }
+
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Staff member not found.' });
+    }
+
+    res.status(200).json({
+      success: true,
+      credentials: {
+        staffId: staff.staffId,
+        name: staff.name,
+        email: staff.email,
+        department: staff.department,
+        designation: staff.designation,
+        phone: staff.phone || '',
+        employmentType: staff.employmentType || 'Permanent / Full-Time',
+        status: staff.status || 'Active',
+        defaultPassword: 'vcas@2026',
+        isProfileCompleted: Boolean(staff.isProfileCompleted),
+        joiningDate: staff.joiningDate || ''
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

@@ -1,5 +1,6 @@
 const Assignment = require("../models/Assignment");
 const Class = require("../models/Class");
+const { syncSubjectAssignmentMarksToInternal } = require("../services/internalMarksSyncService");
 
 // Helper to ensure an assignment has student submissions initialized from its class
 const ensureSubmissionsForAssignment = async (assignment) => {
@@ -247,7 +248,10 @@ const gradeSubmission = async (req, res) => {
     assignment.submissions = assignment.studentSubmissions.filter(s => s.status === "Graded" || s.status === "Submitted").length;
     await assignment.save();
 
-    res.json({ success: true, data: assignment, message: "Grade saved successfully." });
+    // Automatically sync updated assignment marks to InternalMarks
+    await syncSubjectAssignmentMarksToInternal(assignment.staffId, assignment.subjectCode);
+
+    res.json({ success: true, data: assignment, message: "Grade saved successfully and synced to Internal Marks." });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -257,7 +261,7 @@ const gradeSubmission = async (req, res) => {
 const addStudentToAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { rollNo, studentName, regNo, department, status } = req.body;
+    const { rollNo, studentName, regNo, department, status, marksAwarded, feedback } = req.body;
     if (!rollNo || !studentName) {
       return res.status(400).json({ success: false, message: "Roll No and Student Name are required." });
     }
@@ -274,7 +278,12 @@ const addStudentToAssignment = async (req, res) => {
       return res.status(400).json({ success: false, message: `Student ${rollNo} is already in this assignment.` });
     }
 
-    const isSubmitted = status === "Submitted";
+    const parsedMarks = (marksAwarded !== undefined && marksAwarded !== null && marksAwarded !== "")
+      ? Math.max(0, Number(marksAwarded))
+      : null;
+    const isSubmitted = status === "Submitted" || status === "Graded" || parsedMarks !== null;
+    const finalStatus = parsedMarks !== null ? "Graded" : (isSubmitted ? "Submitted" : "Not Submitted");
+
     assignment.studentSubmissions.push({
       rollNo: rollNo.trim().toUpperCase(),
       studentName: studentName.trim(),
@@ -283,9 +292,9 @@ const addStudentToAssignment = async (req, res) => {
       submittedAt: isSubmitted ? new Date().toLocaleDateString() : "--",
       fileName: isSubmitted ? `${assignment.subjectCode}_${rollNo.trim().toUpperCase()}_Submission.pdf` : "--",
       fileSize: isSubmitted ? "1.2 MB" : "--",
-      status: isSubmitted ? "Submitted" : "Not Submitted",
-      marksAwarded: null,
-      feedback: ""
+      status: finalStatus,
+      marksAwarded: parsedMarks,
+      feedback: feedback || ""
     });
 
     assignment.submissions = assignment.studentSubmissions.filter(
@@ -293,10 +302,13 @@ const addStudentToAssignment = async (req, res) => {
     ).length;
     await assignment.save();
 
+    // Automatically sync updated assignment marks to InternalMarks
+    await syncSubjectAssignmentMarksToInternal(assignment.staffId, assignment.subjectCode);
+
     res.status(201).json({ 
       success: true, 
       data: assignment, 
-      message: `Student ${studentName} (${rollNo}) added to assignment.` 
+      message: `Student ${studentName} (${rollNo}) added to assignment${parsedMarks !== null ? ` with ${parsedMarks} marks (synced to Internal Marks)` : ""}.` 
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -339,8 +351,17 @@ const updateStudentSubmissionStatus = async (req, res) => {
     }
 
     if (marksAwarded !== undefined) {
-      sub.marksAwarded = marksAwarded === null || marksAwarded === "" ? null : Number(marksAwarded);
-      if (sub.marksAwarded !== null) sub.status = "Graded";
+      sub.marksAwarded = marksAwarded === null || marksAwarded === "" ? null : Math.max(0, Number(marksAwarded));
+      if (sub.marksAwarded !== null) {
+        sub.status = "Graded";
+        if (!sub.submittedAt || sub.submittedAt === "--") {
+          sub.submittedAt = new Date().toLocaleDateString();
+        }
+        if (!sub.fileName || sub.fileName === "--") {
+          sub.fileName = `${assignment.subjectCode}_${sub.rollNo}_Submission.pdf`;
+          sub.fileSize = "1.2 MB";
+        }
+      }
     }
     if (feedback !== undefined) sub.feedback = feedback;
 
@@ -349,10 +370,13 @@ const updateStudentSubmissionStatus = async (req, res) => {
     ).length;
     await assignment.save();
 
+    // Automatically sync updated assignment marks to InternalMarks
+    await syncSubjectAssignmentMarksToInternal(assignment.staffId, assignment.subjectCode);
+
     res.json({ 
       success: true, 
       data: assignment, 
-      message: `Submission status for ${sub.studentName} updated to "${sub.status}".` 
+      message: `Submission status for ${sub.studentName} updated to "${sub.status}"${sub.marksAwarded !== null ? ` with ${sub.marksAwarded} marks` : ""}.` 
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -406,6 +430,8 @@ const quickSetSubmissionsCount = async (req, res) => {
     ).length;
     await assignment.save();
 
+    await syncSubjectAssignmentMarksToInternal(assignment.staffId, assignment.subjectCode);
+
     res.json({ 
       success: true, 
       data: assignment, 
@@ -430,6 +456,8 @@ const removeStudentFromAssignment = async (req, res) => {
       s => s.status === "Submitted" || s.status === "Graded"
     ).length;
     await assignment.save();
+
+    await syncSubjectAssignmentMarksToInternal(assignment.staffId, assignment.subjectCode);
 
     res.json({ success: true, data: assignment, message: "Student removed from assignment." });
   } catch (err) {

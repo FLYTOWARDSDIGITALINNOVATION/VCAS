@@ -29,8 +29,14 @@ import {
   FlaskConical,
   Sparkles,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Key,
+  Printer,
+  FileCheck,
+  Eye,
+  X
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 const CATEGORY_CONFIG = {
   Award:         { label: 'Award',         color: 'bg-amber-50 text-amber-700 border-amber-200',     badge: 'bg-amber-100 text-amber-800',  icon: Trophy },
@@ -41,7 +47,8 @@ const CATEGORY_CONFIG = {
   Other:         { label: 'Other',         color: 'bg-slate-50 text-slate-600 border-slate-200',     badge: 'bg-slate-100 text-slate-700',  icon: Sparkles },
 };
 
-export default function StaffDetailView({ staff, onBack, onEdit }) {
+export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloadCredentials, onPrintCredentials }) {
+  const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'classes', 'timetable', 'leaves'
   const [selectedMonth, setSelectedMonth] = useState('August 2026');
   const [markedToday, setMarkedToday] = useState(false);
@@ -49,6 +56,7 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
   const [staffLeaveSummary, setStaffLeaveSummary] = useState({ totalQuota: 15, approvedDays: 0, pendingCount: 0, remainingDays: 15 });
   const [staffSchedule, setStaffSchedule] = useState(null);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [showCertModal, setShowCertModal] = useState(false);
 
   const staffId = staff.staffId || staff.empId || staff.id || '';
 
@@ -172,6 +180,24 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
   const dob = staff.dob || 'Not specified';
   const address = staff.address || 'Pending staff first-time setup';
   const emergencyContact = staff.emergencyContact || 'Pending staff first-time setup';
+  const netSetExamStatus = staff.netSetExamStatus || 'Not Applicable';
+  const netSetExamCertificate = staff.netSetExamCertificate || '';
+  const netSetCertificateName = staff.netSetCertificateName || '';
+
+  const handleViewCertificate = () => {
+    if (!netSetExamCertificate) return;
+    setShowCertModal(true);
+  };
+
+  const handleDownloadCertificate = () => {
+    if (!netSetExamCertificate) return;
+    const a = document.createElement('a');
+    a.href = netSetExamCertificate;
+    a.download = netSetCertificateName || 'NET_SET_Exam_Certificate';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // Map real staff courses/classes
   const courses = staffCourses.map(c => ({
@@ -238,6 +264,28 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
         </button>
 
         <div className="flex items-center gap-2.5">
+          {isSuperAdmin && (
+            <>
+              <button
+                onClick={() => {
+                  if (onDownloadCredentials) onDownloadCredentials(staff);
+                }}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-sm shadow-purple-500/20 transition-all cursor-pointer"
+              >
+                <Key className="w-4 h-4" />
+                <span>Download Credentials Slip</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (onPrintCredentials) onPrintCredentials(staff);
+                }}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-purple-700 bg-white hover:bg-purple-50 border border-purple-200 shadow-xs transition-all cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-purple-600" />
+                <span>Print Slip</span>
+              </button>
+            </>
+          )}
           <button
             onClick={() => {
               setMarkedToday(true);
@@ -262,8 +310,12 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
           
           {/* Avatar and Basic Details */}
           <div className="flex items-center gap-4 sm:gap-6">
-            <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl ${staff.avatarBg || 'bg-purple-600'} text-white font-black text-2xl sm:text-3xl flex items-center justify-center shrink-0 shadow-md ring-4 ring-slate-50`}>
-              {staff.avatarText}
+            <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl ${!staff.profileImage ? (staff.avatarBg || 'bg-purple-600') : 'bg-slate-100'} overflow-hidden text-white font-black text-2xl sm:text-3xl flex items-center justify-center shrink-0 shadow-md ring-4 ring-slate-50`}>
+              {staff.profileImage ? (
+                <img src={staff.profileImage} alt={staff.name} className="w-full h-full object-cover" />
+              ) : (
+                staff.avatarText || staff.name?.substring(0, 2)?.toUpperCase() || 'ST'
+              )}
             </div>
 
             <div className="space-y-1">
@@ -388,6 +440,65 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Joining Date</span>
                   <span className="font-semibold text-slate-800">{staff.joiningDate}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* NET / SET Exam Qualification & Certificate Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-indigo-600" /> NET / SET Exam Qualification &amp; Certificate
+                </h3>
+                <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full border self-start sm:self-auto ${
+                  netSetExamStatus && netSetExamStatus !== 'Not Applicable' && !netSetExamStatus.includes('Awaiting')
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : netSetExamStatus.includes('Awaiting')
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-slate-50 text-slate-500 border-slate-200'
+                }`}>
+                  {netSetExamStatus}
+                </span>
+              </div>
+
+              <div className="p-4 bg-gradient-to-r from-slate-50 to-indigo-50/30 rounded-xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                    netSetExamCertificate ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
+                  }`}>
+                    {netSetExamCertificate ? <FileCheck className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-800 truncate">
+                      {netSetExamCertificate
+                        ? (netSetCertificateName || 'NET / SET Exam Certificate')
+                        : 'No Certificate Uploaded Yet'}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {netSetExamCertificate
+                        ? 'Official qualification document is uploaded and verified'
+                        : 'Faculty member has not uploaded an exam certificate'}
+                    </p>
+                  </div>
+                </div>
+
+                {netSetExamCertificate && (
+                  <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                    <button
+                      onClick={handleViewCertificate}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View
+                    </button>
+                    <button
+                      onClick={handleDownloadCertificate}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1117,6 +1228,119 @@ export default function StaffDetailView({ staff, onBack, onEdit }) {
             </div>
           )}
         </div>
+      )}
+
+      {/* NET / SET CERTIFICATE MODAL PREVIEW */}
+      {showCertModal && netSetExamCertificate && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-5 bg-slate-900/75 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-scaleUp">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-slate-900 text-base leading-tight truncate">
+                        {staff.name}
+                      </h3>
+                      <span className="text-xs font-mono font-bold bg-slate-200/80 text-slate-700 px-2 py-0.5 rounded-md shrink-0">
+                        {staff.empId || staff.staffId}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                      {staff.department} • {staff.designation} • <span className="font-semibold text-indigo-600">{netSetExamStatus}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleDownloadCertificate}
+                    title="Download Certificate File"
+                    className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setShowCertModal(false)}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 sm:p-6 bg-slate-100 flex-1 overflow-auto flex items-center justify-center min-h-[420px]">
+                {netSetExamCertificate.startsWith('data:application/pdf') || netSetCertificateName?.toLowerCase().endsWith('.pdf') ? (
+                  <iframe
+                    src={netSetExamCertificate}
+                    title="NET/SET Certificate"
+                    className="w-full h-[65vh] rounded-2xl border border-slate-300 bg-white shadow-inner"
+                  />
+                ) : (
+                  <div className="max-w-full max-h-[65vh] flex items-center justify-center p-2 bg-slate-900 rounded-2xl overflow-hidden shadow-lg">
+                    <img
+                      src={netSetExamCertificate}
+                      alt="NET/SET Certificate"
+                      className="max-w-full max-h-[60vh] object-contain rounded-lg"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-3.5 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2 text-xs text-slate-500 min-w-0">
+                  <FileCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span className="font-semibold text-slate-700 truncate">
+                    {netSetCertificateName || 'NET / SET Exam Certificate'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const w = window.open();
+                      if (w) {
+                        if (netSetExamCertificate.startsWith('data:application/pdf')) {
+                          w.document.write(`<html><head><title>${netSetCertificateName || 'NET/SET Certificate'}</title><style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#1e293b;}</style></head><body><iframe src="${netSetExamCertificate}" frameborder="0" style="width:100%;height:100%;border:none;" allowfullscreen></iframe></body></html>`);
+                        } else {
+                          w.document.write(`<html><head><title>${netSetCertificateName || 'NET/SET Certificate'}</title><style>html,body{margin:0;padding:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#0f172a;}</style></head><body><img src="${netSetExamCertificate}" style="max-width:92%;max-height:92vh;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.6);" /></body></html>`);
+                        }
+                      }
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open in New Tab</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadCertificate}
+                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCertModal(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
     </div>

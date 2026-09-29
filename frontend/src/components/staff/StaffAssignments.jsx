@@ -53,6 +53,7 @@ export default function StaffAssignments({ staffUser }) {
   const [newStudentName, setNewStudentName]             = useState("");
   const [newStudentReg, setNewStudentReg]               = useState("");
   const [newStudentStatus, setNewStudentStatus]         = useState("Not Submitted");
+  const [newStudentMarks, setNewStudentMarks]           = useState("");
   const [quickCountInput, setQuickCountInput]           = useState("");
   const [isUpdatingSubmissions, setIsUpdatingSubmissions] = useState(false);
 
@@ -342,6 +343,7 @@ export default function StaffAssignments({ staffUser }) {
     setSubmissionsSearch("");
     setSubmissionsFilter("ALL");
     setShowAddStudentForm(false);
+    setNewStudentMarks("");
   };
 
   // Add a student to the assignment
@@ -350,6 +352,7 @@ export default function StaffAssignments({ staffUser }) {
     if (!newStudentRoll.trim() || !newStudentName.trim() || !submissionsModalAsgt) return;
     setIsUpdatingSubmissions(true);
     try {
+      const parsedMarks = newStudentMarks.trim() !== "" ? Number(newStudentMarks) : null;
       const res = await fetch(`${API}/assignments/${submissionsModalAsgt._id}/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -357,7 +360,8 @@ export default function StaffAssignments({ staffUser }) {
           rollNo: newStudentRoll.trim(),
           studentName: newStudentName.trim(),
           regNo: newStudentReg.trim() || newStudentRoll.trim(),
-          status: newStudentStatus
+          status: parsedMarks !== null ? "Graded" : newStudentStatus,
+          marksAwarded: parsedMarks
         })
       });
       const data = await res.json();
@@ -368,12 +372,70 @@ export default function StaffAssignments({ staffUser }) {
         setNewStudentRoll("");
         setNewStudentName("");
         setNewStudentReg("");
+        setNewStudentMarks("");
         setShowAddStudentForm(false);
       } else {
         toast(data.message || "Failed to add student.", true);
       }
     } catch (err) {
       toast("Error adding student: " + err.message, true);
+    } finally {
+      setIsUpdatingSubmissions(false);
+    }
+  };
+
+  // Directly update or award marks for a student in this assignment
+  const handleUpdateStudentMarks = async (studentId, rawMarks) => {
+    if (!submissionsModalAsgt) return;
+    const maxAllowed = submissionsModalAsgt.totalMarks || 20;
+    if (rawMarks === "" || rawMarks === null || rawMarks === undefined) {
+      setIsUpdatingSubmissions(true);
+      try {
+        const res = await fetch(`${API}/assignments/${submissionsModalAsgt._id}/students/${studentId}/status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ marksAwarded: null })
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setSubmissionsModalAsgt(data.data);
+          setAssignments(prev => prev.map(a => a._id === data.data._id ? data.data : a));
+          toast("Marks cleared and synced to Internal Marks.");
+        }
+      } catch (err) {
+        toast("Error clearing marks: " + err.message, true);
+      } finally {
+        setIsUpdatingSubmissions(false);
+      }
+      return;
+    }
+
+    const num = Number(rawMarks);
+    if (isNaN(num) || num < 0 || num > maxAllowed) {
+      toast(`Marks must be between 0 and ${maxAllowed}.`, true);
+      return;
+    }
+
+    setIsUpdatingSubmissions(true);
+    try {
+      const res = await fetch(`${API}/assignments/${submissionsModalAsgt._id}/students/${studentId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          marksAwarded: num,
+          status: "Graded"
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setSubmissionsModalAsgt(data.data);
+        setAssignments(prev => prev.map(a => a._id === data.data._id ? data.data : a));
+        toast(`Awarded ${num}/${maxAllowed} marks (synced to Internal Marks)!`);
+      } else {
+        toast(data.message || "Failed to update marks.", true);
+      }
+    } catch (err) {
+      toast("Error updating marks: " + err.message, true);
     } finally {
       setIsUpdatingSubmissions(false);
     }
@@ -941,9 +1003,13 @@ export default function StaffAssignments({ staffUser }) {
                     <h3 className="font-extrabold text-slate-900 text-base leading-tight">
                       {submissionsModalAsgt.title}
                     </h3>
+                    <div className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-bold ml-1">
+                      <Sparkles className="w-3 h-3 text-indigo-500 shrink-0" />
+                      <span>Syncs with Internal Marks ({submissionsModalAsgt.subjectCode})</span>
+                    </div>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Manage enrolled students, set submission status, and track completion progress
+                    Manage enrolled students, record assignment marks, and synchronize grades directly to Internal Marks
                   </p>
                 </div>
               </div>
@@ -1078,9 +1144,9 @@ export default function StaffAssignments({ staffUser }) {
                   </div>
                 </div>
 
-                {/* Inline Add Student Form */}
+                {/* Inline Add Student Form with Marks */}
                 {showAddStudentForm && (
-                  <form onSubmit={handleAddStudent} className="pt-3 border-t border-slate-200/70 grid grid-cols-1 sm:grid-cols-4 gap-2.5 animate-in fade-in duration-150">
+                  <form onSubmit={handleAddStudent} className="pt-3 border-t border-slate-200/70 grid grid-cols-1 sm:grid-cols-5 gap-2.5 animate-in fade-in duration-150">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Roll No *</label>
                       <input
@@ -1113,13 +1179,32 @@ export default function StaffAssignments({ staffUser }) {
                         className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500"
                       />
                     </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-1">
+                        Marks (Max {submissionsModalAsgt.totalMarks || 20})
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={submissionsModalAsgt.totalMarks || 20}
+                        value={newStudentMarks}
+                        onChange={(e) => {
+                          setNewStudentMarks(e.target.value);
+                          if (e.target.value !== "" && newStudentStatus === "Not Submitted") {
+                            setNewStudentStatus("Submitted");
+                          }
+                        }}
+                        placeholder={`0-${submissionsModalAsgt.totalMarks || 20}`}
+                        className="w-full bg-indigo-50/40 border border-indigo-200 rounded-xl px-3 py-1.5 text-xs font-bold text-indigo-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                     <div className="flex items-end gap-2">
                       <div className="flex-1">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Initial Status</label>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Status</label>
                         <select
                           value={newStudentStatus}
                           onChange={(e) => setNewStudentStatus(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-blue-500"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold focus:outline-none focus:border-blue-500"
                         >
                           <option value="Not Submitted">Not Submitted</option>
                           <option value="Submitted">Submitted</option>
@@ -1179,6 +1264,7 @@ export default function StaffAssignments({ staffUser }) {
                         <th className="py-3 px-4">Student</th>
                         <th className="py-3 px-3">Register No</th>
                         <th className="py-3 px-3 text-center">Submission Status</th>
+                        <th className="py-3 px-3 text-center">Marks (Max: {submissionsModalAsgt.totalMarks || 20})</th>
                         <th className="py-3 px-3">Date</th>
                         <th className="py-3 px-4 text-right">Action</th>
                       </tr>
@@ -1186,6 +1272,7 @@ export default function StaffAssignments({ staffUser }) {
                     <tbody className="divide-y divide-slate-100">
                       {filteredSubmissionsList.map(std => {
                         const isSubmitted = std.status === 'Submitted' || std.status === 'Graded';
+                        const hasMarks = std.marksAwarded !== null && std.marksAwarded !== undefined;
                         return (
                           <tr key={std._id || std.rollNo} className="hover:bg-slate-50/60 transition-colors">
                             <td className="py-3 px-4 font-bold text-slate-800">
@@ -1210,6 +1297,39 @@ export default function StaffAssignments({ staffUser }) {
                                 {isSubmitted ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
                                 <span>{std.status}</span>
                               </span>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <div className="inline-flex items-center justify-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={submissionsModalAsgt.totalMarks || 20}
+                                  disabled={isUpdatingSubmissions}
+                                  defaultValue={hasMarks ? std.marksAwarded : ""}
+                                  key={`${std._id || std.rollNo}-${std.marksAwarded}`}
+                                  placeholder="--"
+                                  onBlur={(e) => {
+                                    const val = e.target.value.trim();
+                                    if (val !== String(std.marksAwarded ?? "")) {
+                                      handleUpdateStudentMarks(std._id || std.rollNo, val);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.target.blur();
+                                    }
+                                  }}
+                                  title="Enter marks and press Enter or click away to save"
+                                  className={`w-14 text-center py-1 px-1.5 rounded-lg text-xs font-black border transition-all ${
+                                    hasMarks
+                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                      : "bg-slate-50 text-slate-800 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                  }`}
+                                />
+                                <span className="text-[10px] text-slate-400 font-bold">
+                                  / {submissionsModalAsgt.totalMarks || 20}
+                                </span>
+                              </div>
                             </td>
                             <td className="py-3 px-3 text-slate-500 text-[11px]">
                               {std.submittedAt || '--'}
@@ -1244,7 +1364,7 @@ export default function StaffAssignments({ staffUser }) {
                       })}
                       {filteredSubmissionsList.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="py-8 text-center text-slate-400">
+                          <td colSpan={6} className="py-8 text-center text-slate-400">
                             No students found. Click "Add Student" or "Sync Class Roster" above.
                           </td>
                         </tr>
