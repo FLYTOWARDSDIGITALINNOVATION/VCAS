@@ -126,17 +126,22 @@ export default function TransportFeesManagement({
               <label className="block text-slate-700 font-bold mb-1.5">
                 Transport Vehicle / No. <span className="text-rose-500">*</span>
               </label>
-              <select
+              <input
+                type="text"
+                list="vehicle-no-options"
                 value={entryFormData.vehicleNo}
-                onChange={(e) => setEntryFormData({...entryFormData, vehicleNo: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                onChange={(e) => setEntryFormData({...entryFormData, vehicleNo: e.target.value.toUpperCase()})}
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs uppercase font-mono"
+                placeholder="e.g., TN 09 AB 1234 or Bus 04"
                 required
-              >
-                <option value="">Select vehicle...</option>
-                <option value="TN 09 AB 1234">TN 09 AB 1234</option>
-                <option value="TN 09 AB 5678">TN 09 AB 5678</option>
-                <option value="TN 09 AB 9012">TN 09 AB 9012</option>
-              </select>
+              />
+              <datalist id="vehicle-no-options">
+                <option value="TN 09 AB 1234" />
+                <option value="TN 09 AB 5678" />
+                <option value="TN 09 AB 9012" />
+                <option value="Bus No. 01" />
+                <option value="Bus No. 02" />
+              </datalist>
             </div>
 
             <div>

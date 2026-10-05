@@ -9,10 +9,11 @@ import {
   GraduationCap, 
   Users, 
   FileText,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 
-export default function AddStudentWizard({ onBack, onComplete }) {
+export default function AddStudentWizard({ onBack, onComplete, isSaving = false }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [photoPreview, setPhotoPreview] = useState(null);
 
@@ -478,13 +479,20 @@ export default function AddStudentWizard({ onBack, onComplete }) {
 
             <button 
               type="button"
+              disabled={isSaving}
               onClick={handleNext}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all"
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
             >
               {currentStep === 4 ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" /> Register Student
-                </>
+                isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Registering Student...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" /> Register Student
+                  </>
+                )
               ) : (
                 <>
                   Next Step <ChevronRight className="w-4 h-4" />

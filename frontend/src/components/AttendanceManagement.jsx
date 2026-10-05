@@ -58,648 +58,193 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const INITIAL_STUDENTS = [
-  // Computer Science - 3rd Year (Sem 5)
-  {
-    id: 1,
-    rollNo: '22CS001',
-    regNo: '710022104001',
-    name: 'Aadhavan Kumar',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 120,
-    attendedClasses: 112,
-    attendancePercent: 93.3,
-    parentName: 'M. Kumar',
-    parentPhone: '9840112233',
-    parentEmail: 'kumar.m@gmail.com',
-    status: 'Present',
-    inTime: '08:42 AM',
-    periodsAttended: 6,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CS401', name: 'Database Management Systems', total: 30, attended: 29, percent: 96.6 },
-      { code: 'CS402', name: 'DBMS & SQL Laboratory', total: 20, attended: 20, percent: 100.0 },
-      { code: 'CS501', name: 'Operating Systems', total: 35, attended: 32, percent: 91.4 },
-      { code: 'CS502', name: 'AI & Machine Learning', total: 35, attended: 31, percent: 88.5 }
-    ]
-  },
-  {
-    id: 2,
-    rollNo: '22CS002',
-    regNo: '710022104002',
-    name: 'Abinaya Sundaram',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 120,
-    attendedClasses: 108,
-    attendancePercent: 90.0,
-    parentName: 'S. Sundaram',
-    parentPhone: '9840112234',
-    parentEmail: 'sundaram.s@gmail.com',
-    status: 'Present',
-    inTime: '08:45 AM',
-    periodsAttended: 6,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CS401', name: 'Database Management Systems', total: 30, attended: 28, percent: 93.3 },
-      { code: 'CS402', name: 'DBMS & SQL Laboratory', total: 20, attended: 19, percent: 95.0 },
-      { code: 'CS501', name: 'Operating Systems', total: 35, attended: 31, percent: 88.5 },
-      { code: 'CS502', name: 'AI & Machine Learning', total: 35, attended: 30, percent: 85.7 }
-    ]
-  },
-  {
-    id: 3,
-    rollNo: '22CS003',
-    regNo: '710022104003',
-    name: 'Balaji Venkatesh',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 120,
-    attendedClasses: 84,
-    attendancePercent: 70.0, // SHORTAGE ALERT
-    parentName: 'V. Venkatesh',
-    parentPhone: '9840112235',
-    parentEmail: 'venkatesh.v@gmail.com',
-    status: 'Absent',
-    inTime: '--',
-    periodsAttended: 0,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CS401', name: 'Database Management Systems', total: 30, attended: 20, percent: 66.6 },
-      { code: 'CS402', name: 'DBMS & SQL Laboratory', total: 20, attended: 15, percent: 75.0 },
-      { code: 'CS501', name: 'Operating Systems', total: 35, attended: 24, percent: 68.5 },
-      { code: 'CS502', name: 'AI & Machine Learning', total: 35, attended: 25, percent: 71.4 }
-    ]
-  },
-  {
-    id: 4,
-    rollNo: '22CS004',
-    regNo: '710022104004',
-    name: 'Deepika Ramanathan',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 120,
-    attendedClasses: 118,
-    attendancePercent: 98.3,
-    parentName: 'K. Ramanathan',
-    parentPhone: '9840112236',
-    parentEmail: 'ramanathan.k@gmail.com',
-    status: 'Present',
-    inTime: '08:35 AM',
-    periodsAttended: 6,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CS401', name: 'Database Management Systems', total: 30, attended: 30, percent: 100.0 },
-      { code: 'CS402', name: 'DBMS & SQL Laboratory', total: 20, attended: 20, percent: 100.0 },
-      { code: 'CS501', name: 'Operating Systems', total: 35, attended: 34, percent: 97.1 },
-      { code: 'CS502', name: 'AI & Machine Learning', total: 35, attended: 34, percent: 97.1 }
-    ]
-  },
-  {
-    id: 5,
-    rollNo: '22CS005',
-    regNo: '710022104005',
-    name: 'Dinesh Karthik',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 120,
-    attendedClasses: 72,
-    attendancePercent: 60.0, // CRITICAL SHORTAGE
-    parentName: 'R. Karthik',
-    parentPhone: '9840112237',
-    parentEmail: 'karthik.r@gmail.com',
-    status: 'Absent',
-    inTime: '--',
-    periodsAttended: 0,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CS401', name: 'Database Management Systems', total: 30, attended: 18, percent: 60.0 },
-      { code: 'CS402', name: 'DBMS & SQL Laboratory', total: 20, attended: 12, percent: 60.0 },
-      { code: 'CS501', name: 'Operating Systems', total: 35, attended: 21, percent: 60.0 },
-      { code: 'CS502', name: 'AI & Machine Learning', total: 35, attended: 21, percent: 60.0 }
-    ]
-  },
-  {
-    id: 6,
-    rollNo: '22CS006',
-    regNo: '710022104006',
-    name: 'Harini Jayaraman',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 120,
-    attendedClasses: 110,
-    attendancePercent: 91.6,
-    parentName: 'P. Jayaraman',
-    parentPhone: '9840112238',
-    parentEmail: 'jayaraman.p@gmail.com',
-    status: 'Present',
-    inTime: '08:48 AM',
-    periodsAttended: 6,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CS401', name: 'Database Management Systems', total: 30, attended: 28, percent: 93.3 },
-      { code: 'CS402', name: 'DBMS & SQL Laboratory', total: 20, attended: 19, percent: 95.0 },
-      { code: 'CS501', name: 'Operating Systems', total: 35, attended: 31, percent: 88.5 },
-      { code: 'CS502', name: 'AI & Machine Learning', total: 35, attended: 32, percent: 91.4 }
-    ]
-  },
-  {
-    id: 7,
-    rollNo: '22CS007',
-    regNo: '710022104007',
-    name: 'Kavitha Natarajan',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 120,
-    attendedClasses: 104,
-    attendancePercent: 86.6,
-    parentName: 'N. Natarajan',
-    parentPhone: '9840112239',
-    parentEmail: 'natarajan.n@gmail.com',
-    status: 'Late',
-    inTime: '09:12 AM',
-    periodsAttended: 5,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CS401', name: 'Database Management Systems', total: 30, attended: 26, percent: 86.6 },
-      { code: 'CS402', name: 'DBMS & SQL Laboratory', total: 20, attended: 18, percent: 90.0 },
-      { code: 'CS501', name: 'Operating Systems', total: 35, attended: 30, percent: 85.7 },
-      { code: 'CS502', name: 'AI & Machine Learning', total: 35, attended: 30, percent: 85.7 }
-    ]
-  },
-  {
-    id: 8,
-    rollNo: '22CS008',
-    regNo: '710022104008',
-    name: 'Manoj Prabhakar',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 120,
-    attendedClasses: 98,
-    attendancePercent: 81.6,
-    parentName: 'G. Prabhakar',
-    parentPhone: '9840112240',
-    parentEmail: 'prabhakar.g@gmail.com',
-    status: 'On Duty',
-    inTime: '08:50 AM',
-    periodsAttended: 6,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CS401', name: 'Database Management Systems', total: 30, attended: 24, percent: 80.0 },
-      { code: 'CS402', name: 'DBMS & SQL Laboratory', total: 20, attended: 17, percent: 85.0 },
-      { code: 'CS501', name: 'Operating Systems', total: 35, attended: 28, percent: 80.0 },
-      { code: 'CS502', name: 'AI & Machine Learning', total: 35, attended: 29, percent: 82.8 }
-    ]
-  },
+const INITIAL_STUDENTS = [];
+const INITIAL_STAFF_ATTENDANCE = [];
+const INITIAL_LEAVE_REQUESTS = [];
 
-  // Electronics - 2nd Year
-  {
-    id: 9,
-    rollNo: '23EC012',
-    regNo: '710023106012',
-    name: 'Naveen Chandran',
-    department: 'Electronics',
-    year: 2,
-    sem: 'Sem 3',
-    section: 'A',
-    totalClasses: 110,
-    attendedClasses: 102,
-    attendancePercent: 92.7,
-    parentName: 'T. Chandran',
-    parentPhone: '9840112241',
-    parentEmail: 'chandran.t@gmail.com',
-    status: 'Present',
-    inTime: '08:40 AM',
-    periodsAttended: 6,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'EC201', name: 'Electronic Circuits & Design', total: 35, attended: 33, percent: 94.2 },
-      { code: 'EC202', name: 'Analog Circuits Lab', total: 20, attended: 19, percent: 95.0 },
-      { code: 'EC301', name: 'Digital Logic & Microprocessors', total: 35, attended: 32, percent: 91.4 },
-      { code: 'MA201', name: 'Transforms & Partial Equations', total: 20, attended: 18, percent: 90.0 }
-    ]
-  },
-  {
-    id: 10,
-    rollNo: '23EC015',
-    regNo: '710023106015',
-    name: 'Pooja Subramaniam',
-    department: 'Electronics',
-    year: 2,
-    sem: 'Sem 3',
-    section: 'A',
-    totalClasses: 110,
-    attendedClasses: 76,
-    attendancePercent: 69.0, // SHORTAGE ALERT
-    parentName: 'M. Subramaniam',
-    parentPhone: '9840112242',
-    parentEmail: 'subramaniam.m@gmail.com',
-    status: 'Absent',
-    inTime: '--',
-    periodsAttended: 0,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'EC201', name: 'Electronic Circuits & Design', total: 35, attended: 24, percent: 68.5 },
-      { code: 'EC202', name: 'Analog Circuits Lab', total: 20, attended: 14, percent: 70.0 },
-      { code: 'EC301', name: 'Digital Logic & Microprocessors', total: 35, attended: 23, percent: 65.7 },
-      { code: 'MA201', name: 'Transforms & Partial Equations', total: 20, attended: 15, percent: 75.0 }
-    ]
-  },
-
-  // MBA - 1st Year
-  {
-    id: 11,
-    rollNo: '24MB005',
-    regNo: '710024631005',
-    name: 'Rahul Mukund',
-    department: 'MBA',
-    year: 1,
-    sem: 'Sem 1',
-    section: 'A',
-    totalClasses: 90,
-    attendedClasses: 85,
-    attendancePercent: 94.4,
-    parentName: 'S. Mukund',
-    parentPhone: '9840112243',
-    parentEmail: 'mukund.s@gmail.com',
-    status: 'Present',
-    inTime: '08:30 AM',
-    periodsAttended: 6,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'MB101', name: 'Principles of Management', total: 30, attended: 29, percent: 96.6 },
-      { code: 'MB102', name: 'Managerial Economics', total: 30, attended: 28, percent: 93.3 },
-      { code: 'MB103', name: 'Financial Accounting', total: 30, attended: 28, percent: 93.3 }
-    ]
-  },
-
-  // Commerce - 3rd Year
-  {
-    id: 12,
-    rollNo: '22CM009',
-    regNo: '710022114009',
-    name: 'Saravanan Muthu',
-    department: 'Commerce',
-    year: 3,
-    sem: 'Sem 5',
-    section: 'A',
-    totalClasses: 115,
-    attendedClasses: 106,
-    attendancePercent: 92.1,
-    parentName: 'A. Muthu',
-    parentPhone: '9840112244',
-    parentEmail: 'muthu.a@gmail.com',
-    status: 'Present',
-    inTime: '08:45 AM',
-    periodsAttended: 6,
-    totalPeriodsToday: 6,
-    subjectWise: [
-      { code: 'CM301', name: 'Cost Accounting & Management Analysis', total: 35, attended: 33, percent: 94.2 },
-      { code: 'CM302', name: 'Income Tax Law & Practice', total: 20, attended: 19, percent: 95.0 },
-      { code: 'CM303', name: 'Corporate Auditing & Secretarial Practice', total: 35, attended: 31, percent: 88.5 },
-      { code: 'CM304', name: 'Commercial Banking Operations', total: 25, attended: 23, percent: 92.0 }
-    ]
-  }
-];
-
-const INITIAL_STAFF_ATTENDANCE = [
-  {
-    id: 1,
-    empId: 'EMP001',
-    name: 'Dr. Sunita Rao',
-    department: 'Computer Science',
-    designation: 'Professor & HOD',
-    inTime: '08:48 AM',
-    outTime: '05:15 PM',
-    status: 'Present',
-    workHours: '8h 27m',
-    mode: 'Biometric Face ID'
-  },
-  {
-    id: 2,
-    empId: 'EMP002',
-    name: 'Dr. S. Rajagopalan',
-    department: 'Commerce',
-    designation: 'Assoc. Professor & HOD',
-    inTime: '08:55 AM',
-    outTime: '05:02 PM',
-    status: 'Present',
-    workHours: '8h 07m',
-    mode: 'RFID Card'
-  },
-  {
-    id: 3,
-    empId: 'EMP003',
-    name: 'Dr. Anita Desai',
-    department: 'Business Administration (BBA)',
-    designation: 'Professor & HOD',
-    inTime: '08:50 AM',
-    outTime: '05:10 PM',
-    status: 'Present',
-    workHours: '8h 20m',
-    mode: 'Biometric Fingerprint'
-  },
-  {
-    id: 4,
-    empId: 'EMP004',
-    name: 'Dr. K. Meenakshi Sundaram',
-    department: 'English Literature',
-    designation: 'Professor & HOD',
-    inTime: '09:12 AM',
-    outTime: '05:00 PM',
-    status: 'Late',
-    workHours: '7h 48m',
-    mode: 'RFID Card'
-  },
-  {
-    id: 5,
-    empId: 'EMP005',
-    name: 'Dr. R. Ramanujam',
-    department: 'Mathematics',
-    designation: 'Professor & HOD',
-    inTime: '08:45 AM',
-    outTime: '05:30 PM',
-    status: 'Present',
-    workHours: '8h 45m',
-    mode: 'Biometric Face ID'
-  },
-  {
-    id: 6,
-    empId: 'EMP006',
-    name: 'Prof. Meena Iyer',
-    department: 'Computer Applications (BCA)',
-    designation: 'Assoc. Professor & HOD',
-    inTime: '--',
-    outTime: '--',
-    status: 'On Leave',
-    workHours: '0h 00m',
-    mode: 'Approved Leave'
-  },
-  {
-    id: 7,
-    empId: 'EMP007',
-    name: 'Dr. Neeraj Gupta',
-    department: 'Computer Science',
-    designation: 'Associate Professor',
-    category: 'Faculty',
-    inTime: '08:52 AM',
-    outTime: '05:05 PM',
-    status: 'Present',
-    workHours: '8h 13m',
-    mode: 'Biometric Fingerprint'
-  },
-  {
-    id: 8,
-    empId: 'OFF001',
-    name: 'Office Staff',
-    department: 'Administrative Office',
-    designation: 'Office Administrator',
-    category: 'Office Staff',
-    inTime: '08:30 AM',
-    outTime: '05:30 PM',
-    status: 'Present',
-    workHours: '9h 00m',
-    mode: 'Biometric Fingerprint'
-  },
-  {
-    id: 9,
-    empId: 'OFF002',
-    name: 'Senior Assistant (Office)',
-    department: 'Administrative Office',
-    designation: 'Senior Assistant',
-    category: 'Office Staff',
-    inTime: '08:40 AM',
-    outTime: '05:15 PM',
-    status: 'Present',
-    workHours: '8h 35m',
-    mode: 'RFID Card'
-  },
-  {
-    id: 10,
-    empId: 'OFF003',
-    name: 'Junior Assistant (Records)',
-    department: 'Administrative Office',
-    designation: 'Junior Assistant',
-    category: 'Office Staff',
-    inTime: '08:58 AM',
-    outTime: '05:10 PM',
-    status: 'Present',
-    workHours: '8h 12m',
-    mode: 'Biometric Face ID'
-  },
-  {
-    id: 11,
-    empId: 'ACC001',
-    name: 'Accountant',
-    department: 'Accounts & Finance',
-    designation: 'Chief Accountant',
-    category: 'Accountant',
-    inTime: '08:35 AM',
-    outTime: '05:45 PM',
-    status: 'Present',
-    workHours: '9h 10m',
-    mode: 'Biometric Face ID'
-  },
-  {
-    id: 12,
-    empId: 'ACC002',
-    name: 'Accounts Assistant',
-    department: 'Accounts & Finance',
-    designation: 'Accounts Assistant',
-    category: 'Accountant',
-    inTime: '08:45 AM',
-    outTime: '05:15 PM',
-    status: 'Present',
-    workHours: '8h 30m',
-    mode: 'RFID Card'
-  }
-];
-
-const INITIAL_LEAVE_REQUESTS = [
-  {
-    id: 1,
-    applicantName: 'Prof. Meena Iyer',
-    role: 'Faculty',
-    department: 'BCA',
-    type: 'Casual Leave (CL)',
-    from: '2026-08-31',
-    to: '2026-09-01',
-    days: 2,
-    reason: 'Attending National Academic Conference on Cloud Computing',
-    status: 'Approved',
-    appliedOn: '2026-08-28'
-  },
-  {
-    id: 2,
-    applicantName: 'Dinesh Karthik (22CS005)',
-    role: 'Student',
-    department: 'Computer Science',
-    type: 'Medical Leave',
-    from: '2026-08-29',
-    to: '2026-08-31',
-    days: 3,
-    reason: 'Viral Fever and Medical Treatment under Physician care',
-    status: 'Pending',
-    appliedOn: '2026-08-29'
-  },
-  {
-    id: 3,
-    applicantName: 'Balaji Venkatesh (22CS003)',
-    role: 'Student',
-    department: 'Computer Science',
-    type: 'On Duty (OD)',
-    from: '2026-09-02',
-    to: '2026-09-03',
-    days: 2,
-    reason: 'Representing Vidyapeeth at IIT Madras Inter-College Robotics Hackathon',
-    status: 'Pending',
-    appliedOn: '2026-08-30'
-  },
-  {
-    id: 4,
-    applicantName: 'Prof. Ramesh Kumar',
-    role: 'Faculty',
-    department: 'Electronics',
-    type: 'Duty Leave (DL)',
-    from: '2026-09-05',
-    to: '2026-09-05',
-    days: 1,
-    reason: 'External Examiner duty for Anna University Central Valuation',
-    status: 'Approved',
-    appliedOn: '2026-08-27'
-  }
-];
-
-// Helper to determine student attendance status for any arbitrary date
-function getStudentAttendanceForDate(student, dateStr) {
-  const parts = dateStr.split('-');
-  const day = parseInt(parts[2] || '31', 10);
-  const dateObj = new Date(dateStr);
-  const dayOfWeek = dateObj.getDay();
-
-  if (dayOfWeek === 0) {
-    return { status: 'Holiday (Sunday)', inTime: '--', periods: 0, isPresent: false };
-  }
-
-  // Consistent pseudo-random deterministic status based on student ID and date
-  const hash = (student.id * 17 + day * 37) % 100;
-  
-  if (student.attendancePercent < 70) {
-    // Shortage student
-    if (hash < 40) return { status: 'Absent', inTime: '--', periods: 0, isPresent: false };
-    if (hash < 55) return { status: 'Late', inTime: '09:18 AM', periods: 4, isPresent: true };
-    return { status: 'Present', inTime: '08:45 AM', periods: 6, isPresent: true };
-  } else if (student.attendancePercent < 85) {
-    if (hash < 18) return { status: 'Absent', inTime: '--', periods: 0, isPresent: false };
-    if (hash < 28) return { status: 'Late', inTime: '09:08 AM', periods: 5, isPresent: true };
-    if (hash < 33) return { status: 'On Duty', inTime: '08:50 AM', periods: 6, isPresent: true };
-    return { status: 'Present', inTime: '08:40 AM', periods: 6, isPresent: true };
-  } else {
-    // Good attendance student
-    if (hash < 4) return { status: 'Absent', inTime: '--', periods: 0, isPresent: false };
-    if (hash < 8) return { status: 'Late', inTime: '09:02 AM', periods: 5, isPresent: true };
-    if (hash < 12) return { status: 'On Duty', inTime: '08:45 AM', periods: 6, isPresent: true };
-    return { status: 'Present', inTime: '08:35 AM', periods: 6, isPresent: true };
-  }
+// Helper to get local date string YYYY-MM-DD
+function getLocalDateString() {
+  const d = new Date();
+  const yr = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const dy = String(d.getDate()).padStart(2, '0');
+  return `${yr}-${mo}-${dy}`;
 }
 
-export default function AttendanceManagement() {
+export default function AttendanceManagement({ user }) {
+  const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
   // Navigation Tabs: 'daily-log', 'roll-call', 'student-register', 'staff-attendance', 'leaves'
   const [activeTab, setActiveTab] = useState('daily-log');
 
-  // Calendar State
-  const [selectedDate, setSelectedDate] = useState('2026-08-31');
-  const [currentMonth, setCurrentMonth] = useState(7); // 7 = August (0-indexed)
-  const [currentYear, setCurrentYear] = useState(2026);
+  // Calendar State - Defaults to today's real date and current month/year
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString());
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   // Filter for Date-specific Attendance: 'ALL', 'Present', 'Absent', 'Late', 'On Duty'
   const [dateStatusFilter, setDateStatusFilter] = useState('ALL');
 
-  // Students & Staff Data State
-  const [students, setStudents] = useState(INITIAL_STUDENTS);
-  const [staffAttendance, setStaffAttendance] = useState(INITIAL_STAFF_ATTENDANCE);
+  // Students & Staff Data State - Live Backend Only
+  const [students, setStudents] = useState([]);
+  const [staffAttendance, setStaffAttendance] = useState([]);
   const [staffCategoryFilter, setStaffCategoryFilter] = useState('ALL'); // 'ALL' | 'Faculty' | 'Office Staff' | 'Accountant'
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
-  const [leaveRequests, setLeaveRequests] = useState(INITIAL_LEAVE_REQUESTS);
+  const [leaveRequests, setLeaveRequests] = useState([]);
   const [dbSessions, setDbSessions] = useState([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // Fetch real attendance sessions from backend
-  const fetchAttendanceSessions = async () => {
+  // Fetch all real attendance sessions, students, staff, and leaves from backend
+  const fetchAllAttendanceData = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/attendance');
-      const data = await res.json();
-      if (data.success && Array.isArray(data.sessions)) {
-        setDbSessions(data.sessions);
+      setIsSyncing(true);
+      const [resSessions, resStudents, resStaff, resLeaves] = await Promise.allSettled([
+        fetch('http://localhost:5000/api/attendance'),
+        fetch('http://localhost:5000/api/students'),
+        fetch('http://localhost:5000/api/staff'),
+        fetch('http://localhost:5000/api/leave')
+      ]);
+
+      let sessionsList = [];
+      if (resSessions.status === 'fulfilled' && resSessions.value.ok) {
+        const d = await resSessions.value.json();
+        if (d.success && Array.isArray(d.sessions)) {
+          sessionsList = d.sessions;
+          setDbSessions(d.sessions);
+          /* Keep selectedDate on today / user selection */
+        }
       }
-    } catch (err) {
-      console.error('Failed to fetch attendance records:', err);
-    }
-  };
 
-  // Fetch real staff from backend to include all registered faculty, office staff, accountants
-  const fetchLiveStaff = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/staff');
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
-        setStaffAttendance(prev => {
-          const existingIds = new Set(prev.map(s => (s.empId || s.staffId || '').toUpperCase()));
-          const newEntries = [];
-          data.data.forEach((s, idx) => {
-            const sid = (s.staffId || s.empId || `STF${idx + 1}`).toUpperCase();
-            if (!existingIds.has(sid)) {
-              existingIds.add(sid);
-              const cat = (s.role === 'Office Staff' || s.designation?.toLowerCase().includes('office') || s.department?.toLowerCase().includes('office'))
-                ? 'Office Staff'
-                : (s.role === 'Accountant' || s.designation?.toLowerCase().includes('account') || s.department?.toLowerCase().includes('account'))
-                ? 'Accountant'
-                : 'Faculty';
-              newEntries.push({
-                id: s._id || `db_${sid}`,
-                empId: sid,
-                name: s.name,
-                department: s.department || (cat === 'Office Staff' ? 'Administrative Office' : cat === 'Accountant' ? 'Accounts & Finance' : 'General'),
-                designation: s.designation || cat,
-                category: cat,
-                inTime: '08:45 AM',
-                outTime: '05:15 PM',
-                status: s.status === 'Inactive' ? 'On Leave' : 'Present',
-                workHours: '8h 30m',
-                mode: 'Biometric Face ID'
-              });
-            }
+      if (resStudents.status === 'fulfilled' && resStudents.value.ok) {
+        const d = await resStudents.value.json();
+        if (d.success && Array.isArray(d.data)) {
+          const mappedStudents = d.data.map(stu => {
+            const roll = (stu.rollNo || '').toUpperCase();
+            let attended = 0;
+            let total = 0;
+            const subMap = {};
+
+            sessionsList.forEach(sess => {
+              if (Array.isArray(sess.records)) {
+                const rec = sess.records.find(r => (r.rollNo || '').toUpperCase() === roll);
+                if (rec) {
+                  total++;
+                  const isPresent = rec.status === 'Present' || rec.status === 'Late';
+                  if (isPresent) attended++;
+                  const subCode = sess.classCode || 'General';
+                  if (!subMap[subCode]) {
+                    subMap[subCode] = { code: subCode, name: sess.className || subCode, total: 0, attended: 0 };
+                  }
+                  subMap[subCode].total++;
+                  if (isPresent) subMap[subCode].attended++;
+                }
+              }
+            });
+
+            const percent = total > 0 
+              ? parseFloat(((attended / total) * 100).toFixed(1)) 
+              : (stu.attendance ? parseFloat(stu.attendance) : 95.0);
+
+            const subjectWise = Object.values(subMap).map(s => ({
+              ...s,
+              percent: s.total > 0 ? parseFloat(((s.attended / s.total) * 100).toFixed(1)) : 100
+            }));
+
+            let yearNum = 1;
+            const semStr = (stu.sem || stu.semester || '').toLowerCase();
+            if (semStr.includes('3') || semStr.includes('4')) yearNum = 2;
+            else if (semStr.includes('5') || semStr.includes('6')) yearNum = 3;
+            else if (semStr.includes('7') || semStr.includes('8')) yearNum = 4;
+
+            return {
+              id: stu._id || stu.id,
+              rollNo: stu.rollNo,
+              regNo: stu.admissionNo || stu.admNo || stu.studentId || stu.rollNo,
+              name: stu.name || stu.fullName,
+              department: stu.department || 'Computer Science',
+              year: yearNum,
+              sem: stu.sem || stu.semester || 'Sem 1',
+              section: stu.section || 'A',
+              totalClasses: total > 0 ? total : 24,
+              attendedClasses: total > 0 ? attended : Math.round(24 * (percent / 100)),
+              attendancePercent: percent,
+              parentName: stu.fatherName || stu.motherName || 'Parent',
+              parentPhone: stu.fatherMobile || stu.phone || stu.mobile || 'N/A',
+              parentEmail: stu.parentEmail || stu.email || 'parent@vcas.edu',
+              status: 'Present',
+              periodsAttended: 6,
+              totalPeriodsToday: 6,
+              subjectWise: subjectWise.length > 0 ? subjectWise : [
+                { code: 'CS2001', name: 'Cloud Computing', total: 10, attended: 9, percent: 90.0 }
+              ]
+            };
           });
-          return newEntries.length > 0 ? [...prev, ...newEntries] : prev;
-        });
+          setStudents(mappedStudents);
+        }
+      }
+
+      if (resStaff.status === 'fulfilled' && resStaff.value.ok) {
+        const d = await resStaff.value.json();
+        if (d.success && Array.isArray(d.data)) {
+          const staffList = d.data.map((s, idx) => {
+            const sid = (s.staffId || s.empId || `STF${idx + 1}`).toUpperCase();
+            const cat = (s.role === 'Office Staff' || s.designation?.toLowerCase().includes('office') || s.department?.toLowerCase().includes('office'))
+              ? 'Office Staff'
+              : (s.role === 'Accountant' || s.designation?.toLowerCase().includes('account') || s.department?.toLowerCase().includes('account'))
+              ? 'Accountant'
+              : 'Faculty';
+            const savedPunches = JSON.parse(localStorage.getItem('vcas_staff_punches') || '{}');
+            const todayStr = new Date().toISOString().split('T')[0];
+            const punch = savedPunches[`${sid}_${todayStr}`] || s.todayPunch || null;
+            const hasPunched = Boolean(punch && punch.inTime);
+
+            return {
+              id: s._id || sid,
+              empId: sid,
+              name: s.name,
+              department: s.department || (cat === 'Office Staff' ? 'Administrative Office' : cat === 'Accountant' ? 'Accounts & Finance' : 'Computer Science'),
+              designation: s.designation || cat,
+              category: cat,
+              inTime: hasPunched ? punch.inTime : '--',
+              outTime: hasPunched ? (punch.outTime || '--') : '--',
+              status: s.status === 'Inactive' ? 'On Leave' : (hasPunched ? 'Present' : 'Not Punched In'),
+              workHours: hasPunched ? (punch.workHours || 'Active') : '--',
+              mode: hasPunched ? (punch.mode || 'Biometric Face ID') : '--'
+            };
+          });
+          setStaffAttendance(staffList);
+        }
+      }
+
+      if (resLeaves.status === 'fulfilled' && resLeaves.value.ok) {
+        const d = await resLeaves.value.json();
+        if (d.success && Array.isArray(d.data)) {
+          setLeaveRequests(d.data.map(l => ({
+            id: l._id || l.id,
+            applicantName: l.applicantName || l.staffName || 'Staff Member',
+            role: l.role || 'Faculty',
+            department: l.department || 'General',
+            type: l.leaveType || l.type || 'Casual Leave (CL)',
+            from: l.fromDate || l.from,
+            to: l.toDate || l.to,
+            days: l.days || 1,
+            reason: l.reason || 'Personal Work',
+            status: l.status || 'Pending',
+            appliedOn: l.appliedOn || (l.createdAt ? l.createdAt.split('T')[0] : '2026-09-01')
+          })));
+        }
       }
     } catch (err) {
-      console.warn('Could not fetch live staff for attendance:', err.message);
+      console.error('Failed to sync all attendance data:', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
   React.useEffect(() => {
-    fetchAttendanceSessions();
-    fetchLiveStaff();
+    fetchAllAttendanceData();
   }, []);
 
-  const staffFacultyCount = staffAttendance.filter(s => s.category === 'Faculty').length;
+    const staffFacultyCount = staffAttendance.filter(s => s.category === 'Faculty').length;
   const staffOfficeCount = staffAttendance.filter(s => s.category === 'Office Staff').length;
   const staffAccountantCount = staffAttendance.filter(s => s.category === 'Accountant').length;
   const staffPresentCount = staffAttendance.filter(s => s.status === 'Present').length;
@@ -722,8 +267,18 @@ export default function AttendanceManagement() {
     });
   }, [staffAttendance, staffCategoryFilter, staffSearchQuery]);
 
-  // Helper to resolve student status from saved sessions or fallback
+  // Helper to resolve student status from saved staff sessions ONLY
   const resolveStudentAttendanceForDate = (student, dateStr) => {
+    // 1. Sunday check
+    const parts = (dateStr || '').split('-');
+    if (parts.length === 3) {
+      const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      if (dObj.getDay() === 0) {
+        return { status: 'Holiday (Sunday)', periods: 0, isPresent: false, isMarked: false };
+      }
+    }
+
+    // 2. Match session submitted by staff for this date
     const match = dbSessions.find(s => {
       if (s.date !== dateStr) return false;
       return Array.isArray(s.records) && s.records.some(r =>
@@ -740,23 +295,29 @@ export default function AttendanceManagement() {
         const isLt = rec.status === 'Late';
         return {
           status: rec.status,
-          inTime: isAbs ? '--' : isLt ? '09:15 AM' : (match.slot || '08:45 AM'),
           periods: isAbs ? 0 : isLt ? 5 : 6,
-          isPresent: !isAbs
+          isPresent: !isAbs,
+          isMarked: true
         };
       }
     }
 
-    return getStudentAttendanceForDate(student, dateStr);
+    // 3. If staff has not marked attendance for this date yet, reflect as Not Marked
+    return {
+      status: 'Not Marked',
+      periods: 0,
+      isPresent: false,
+      isMarked: false
+    };
   };
 
   // Roll Call Selection States
   const [rollDept, setRollDept] = useState('Computer Science');
   const [rollYear, setRollYear] = useState(3);
   const [rollSem, setRollSem] = useState('Sem 5');
-  const [rollSubject, setRollSubject] = useState('CS401 - Database Management Systems');
+  const [rollSubject, setRollSubject] = useState('CS401 - Web Development');
   const [rollPeriod, setRollPeriod] = useState('Period 1 (09:00 AM - 10:00 AM)');
-  const [classTopic, setClassTopic] = useState('Normalization up to BCNF & Lossless Join Decomposition');
+  const [classTopic, setClassTopic] = useState('Responsive Frontend Architecture & Layouts');
 
   // Restore any saved session statuses for roll call
   React.useEffect(() => {
@@ -829,6 +390,7 @@ export default function AttendanceManagement() {
   const calendarDays = useMemo(() => {
     const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
     const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sun, 1 = Mon...
+    const realToday = getLocalDateString();
     
     const daysArray = [];
     
@@ -846,17 +408,21 @@ export default function AttendanceManagement() {
       const dayOfWeek = new Date(currentYear, currentMonth, d).getDay();
       const isSunday = dayOfWeek === 0;
       
+      // Attendance is marked ONLY if staff recorded attendance session in dbSessions
+      const hasAttendanceMarked = dbSessions.some(s => s.date === dateString);
+      
       daysArray.push({
         day: d,
         dateString,
         isSunday,
-        isToday: dateString === '2026-08-31',
-        isSelected: dateString === selectedDate
+        isToday: dateString === realToday,
+        isSelected: dateString === selectedDate,
+        hasAttendanceMarked
       });
     }
     
     return daysArray;
-  }, [currentYear, currentMonth, selectedDate]);
+  }, [currentYear, currentMonth, selectedDate, dbSessions]);
 
   // Calendar Month Navigation
   const handlePrevMonth = () => {
@@ -903,9 +469,9 @@ export default function AttendanceManagement() {
       return {
         ...student,
         dayStatus: dayInfo.status,
-        dayInTime: dayInfo.inTime,
         dayPeriods: dayInfo.periods,
-        isPresentOnDate: dayInfo.isPresent
+        isPresentOnDate: dayInfo.isPresent,
+        isMarkedOnDate: dayInfo.isMarked
       };
     }).filter(s => {
       // Apply department search & status filters
@@ -928,6 +494,8 @@ export default function AttendanceManagement() {
         matchesStatus = s.dayStatus === 'Late';
       } else if (dateStatusFilter === 'On Duty') {
         matchesStatus = s.dayStatus === 'On Duty';
+      } else if (dateStatusFilter === 'Not Marked') {
+        matchesStatus = s.dayStatus === 'Not Marked';
       }
 
       return matchesSearch && matchesDept && matchesStatus;
@@ -938,12 +506,25 @@ export default function AttendanceManagement() {
   const dateTally = useMemo(() => {
     const all = students.map(s => resolveStudentAttendanceForDate(s, selectedDate));
     const total = all.length;
+    const marked = all.filter(a => a.isMarked);
     const present = all.filter(a => a.status === 'Present').length;
     const absent = all.filter(a => a.status === 'Absent').length;
     const late = all.filter(a => a.status === 'Late').length;
     const od = all.filter(a => a.status === 'On Duty').length;
-    const percent = total > 0 ? (((present + late + od) / total) * 100).toFixed(1) : '0.0';
-    return { total, present, absent, late, od, percent };
+    const notMarked = all.filter(a => a.status === 'Not Marked').length;
+    const percent = marked.length > 0
+      ? Math.round(((present + late + od) / marked.length) * 100)
+      : 0;
+    return {
+      total,
+      present,
+      absent,
+      late,
+      od,
+      notMarked,
+      percent,
+      isMarked: marked.length > 0
+    };
   }, [students, selectedDate, dbSessions]);
 
   // -------------------------------------------------------------
@@ -1016,7 +597,7 @@ export default function AttendanceManagement() {
         staffId: 'ADMIN',
         staffName: 'Academic Administrator',
         classCode: code,
-        className: rollSubject,
+        className: rollSubject || (rollDept + ' - Year ' + rollYear + ' (' + rollSem + ')'),
         date: selectedDate,
         slot: rollPeriod,
         records
@@ -1076,7 +657,7 @@ export default function AttendanceManagement() {
   };
 
   const handleExportAttendanceCSV = () => {
-    const headers = ['Roll No', 'Register No', 'Student Name', 'Department', 'Date', 'Day Status', 'In-Time', 'Overall Attendance %'];
+    const headers = ['Roll No', 'Register No', 'Student Name', 'Department', 'Date', 'Day Status', 'Overall Attendance %'];
     const rows = dailyDateAttendees.map(s => [
       `"${s.rollNo}"`,
       `"${s.regNo}"`,
@@ -1084,7 +665,6 @@ export default function AttendanceManagement() {
       `"${s.department}"`,
       `"${selectedDate}"`,
       `"${s.dayStatus}"`,
-      `"${s.dayInTime}"`,
       `${s.attendancePercent}%`
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -1138,7 +718,8 @@ export default function AttendanceManagement() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
+          {isSuperAdmin && (
+            <button
             onClick={handleExportAttendanceCSV}
             title="Download CSV Attendance Sheet"
             className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs"
@@ -1146,6 +727,7 @@ export default function AttendanceManagement() {
             <Download className="w-4 h-4 text-slate-600" />
             <span>Export Report</span>
           </button>
+          )}
         </div>
       </div>
 
@@ -1293,7 +875,7 @@ export default function AttendanceManagement() {
                     {/* Status Dot */}
                     {!isSelected && (
                       <span className={`w-1 h-1 rounded-full mt-0.5 ${
-                        isSunday ? 'bg-rose-300' : isToday ? 'bg-blue-600' : 'bg-emerald-400'
+                        cell.hasAttendanceMarked ? 'bg-emerald-500 ring-1 ring-emerald-300' : isSunday ? 'bg-rose-300' : isToday ? 'bg-blue-500' : 'bg-transparent'
                       }`}></span>
                     )}
                   </button>
@@ -1308,14 +890,14 @@ export default function AttendanceManagement() {
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <button
-                  onClick={() => handleSelectCalendarDate('2026-08-31')}
+                  onClick={() => handleSelectCalendarDate(getLocalDateString())}
                   className={`py-1.5 px-2.5 rounded-xl font-bold transition-all text-left flex items-center justify-between border ${
-                    selectedDate === '2026-08-31'
+                    selectedDate === getLocalDateString()
                       ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-100 hover:bg-slate-100'
                   }`}
                 >
-                  <span>📌 Today (31 Aug)</span>
+                  <span>📌 Today</span>
                 </button>
                 <button
                   onClick={() => handleSelectCalendarDate('2026-08-28')}
@@ -1338,7 +920,7 @@ export default function AttendanceManagement() {
                   <p className="font-extrabold text-xs text-slate-900">{formatReadableDate(selectedDate)}</p>
                 </div>
                 <span className="text-xs font-black text-emerald-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs">
-                  {dateTally.percent}% Attendance
+                  {dateTally.isMarked ? `${dateTally.percent}% Attendance` : 'Not Marked Yet'}
                 </span>
               </div>
 
@@ -1440,10 +1022,10 @@ export default function AttendanceManagement() {
             <div className="flex items-center gap-3 bg-white/10 p-2.5 rounded-2xl border border-white/10 shrink-0">
               <div className="text-right">
                 <span className="text-[10px] text-blue-200 font-bold uppercase block">Day Attendance</span>
-                <span className="text-xl font-black text-emerald-400">{dateTally.percent}%</span>
+                <span className="text-xl font-black text-emerald-400">{dateTally.isMarked ? `${dateTally.percent}%` : 'Not Marked'}</span>
               </div>
               <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-extrabold text-sm border border-emerald-400/30">
-                {dateTally.present}P
+                {dateTally.isMarked ? `${dateTally.present}P` : '0P'}
               </div>
             </div>
           </div>
@@ -1559,7 +1141,6 @@ export default function AttendanceManagement() {
                       <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                         <th className="py-3.5 px-5">STUDENT NAME & ROLL NO</th>
                         <th className="py-3.5 px-4">DEPARTMENT</th>
-                        <th className="py-3.5 px-4">IN-TIME</th>
                         <th className="py-3.5 px-4">PERIODS</th>
                         <th className="py-3.5 px-4">STATUS ON {selectedDate.split('-').slice(1).join('/')}</th>
                         <th className="py-3.5 px-5 text-right">ACTION</th>
@@ -1597,10 +1178,6 @@ export default function AttendanceManagement() {
                               {s.department} (Yr {s.year})
                             </td>
 
-                            <td className="py-3.5 px-4 font-mono font-bold text-xs text-slate-800">
-                              {s.dayInTime}
-                            </td>
-
                             <td className="py-3.5 px-4 text-xs font-semibold text-slate-600">
                               {s.dayPeriods} / {s.totalPeriodsToday || 6} Hrs
                             </td>
@@ -1615,7 +1192,8 @@ export default function AttendanceManagement() {
                                   ? 'bg-amber-50 text-amber-700 border-amber-200'
                                   : 'bg-purple-50 text-purple-700 border-purple-200'
                               }`}>
-                                {s.dayStatus === 'Present' && '✓ Present (Came)'}
+                                {s.dayStatus === 'Present' && '✓ Present'}
+                                {s.dayStatus === 'Not Marked' && '⏳ Not Marked'}
                                 {s.dayStatus === 'Absent' && '✕ Absent'}
                                 {s.dayStatus === 'Late' && '⏰ Late'}
                                 {s.dayStatus === 'On Duty' && '🛡️ On Duty'}
@@ -1639,7 +1217,7 @@ export default function AttendanceManagement() {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} className="py-10 text-center text-slate-400">
+                          <td colSpan={5} className="py-10 text-center text-slate-400">
                             <div className="max-w-xs mx-auto space-y-1.5">
                               <UserX className="w-7 h-7 mx-auto text-slate-300" />
                               <p className="text-xs font-bold text-slate-700">No students matched this date filter</p>
@@ -1709,19 +1287,7 @@ export default function AttendanceManagement() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Subject / Course</label>
-                  <select
-                    value={rollSubject}
-                    onChange={(e) => setRollSubject(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
-                  >
-                    <option value="CS401 - Database Management Systems">CS401 - Database Management Systems</option>
-                    <option value="CS402 - DBMS & SQL Laboratory">CS402 - DBMS & SQL Laboratory</option>
-                    <option value="CS501 - Operating Systems">CS501 - Operating Systems</option>
-                    <option value="CS502 - AI & Machine Learning">CS502 - AI & Machine Learning</option>
-                  </select>
-                </div>
+                
               </div>
 
               {/* Tally Bar & Bulk Actions */}
@@ -1992,7 +1558,7 @@ export default function AttendanceManagement() {
                       <th className="py-3.5 px-5">STAFF MEMBER</th>
                       <th className="py-3.5 px-4">ROLE / CATEGORY</th>
                       <th className="py-3.5 px-4">DEPARTMENT</th>
-                      <th className="py-3.5 px-4">PUNCH IN & MODE</th>
+                      <th className="py-3.5 px-4">VERIFICATION MODE</th>
                       <th className="py-3.5 px-4">WORK HOURS</th>
                       <th className="py-3.5 px-5 text-right">STATUS</th>
                     </tr>
@@ -2023,9 +1589,8 @@ export default function AttendanceManagement() {
                             </span>
                           </td>
                           <td className="py-3.5 px-4 font-semibold text-slate-700 text-xs">{st.department}</td>
-                          <td className="py-3.5 px-4">
-                            <p className="font-mono font-bold text-slate-800">{st.inTime}</p>
-                            <p className="text-[10px] text-slate-400">{st.mode}</p>
+                          <td className="py-3.5 px-4 font-semibold text-slate-700 text-xs">
+                            {st.mode || 'Biometric Face ID'}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-blue-600">{st.workHours}</td>
                           <td className="py-3.5 px-5 text-right">
@@ -2034,7 +1599,7 @@ export default function AttendanceManagement() {
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : st.status === 'Late'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : st.status === 'Not Punched In' ? 'bg-slate-100 text-slate-500 border border-slate-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                             }`}>
                               {st.status}
                             </span>

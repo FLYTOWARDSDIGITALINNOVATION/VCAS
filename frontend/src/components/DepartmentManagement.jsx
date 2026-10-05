@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, 
   Plus, 
@@ -19,9 +19,14 @@ import {
   ArrowLeft,
   Calendar, 
   Filter,
-  Save
+  Save,
+  Loader2,
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+
+const API_BASE = 'http://localhost:5000/api/departments';
 
 function formatHodEmail(name) {
   if (!name) return 'hod@college.edu';
@@ -33,7 +38,8 @@ function formatHodEmail(name) {
   return `${clean}@college.edu`;
 }
 
-const INITIAL_DEPARTMENTS = [
+const INITIAL_DEPARTMENTS = [];
+/* const UNUSED_DEPARTMENTS = [
   {
     id: 1,
     code: 'COMM',
@@ -73,8 +79,8 @@ const INITIAL_DEPARTMENTS = [
     id: 2,
     code: 'CS',
     name: 'Computer Science',
-    hod: 'Dr. Sunita Rao',
-    hodEmail: 'sunita.rao@college.edu',
+    hod: 'Prof. Department Head',
+    hodEmail: 'hod.cs@college.edu',
     hodPhone: '9811223344',
     totalYears: 3,
     totalSemesters: 6,
@@ -82,7 +88,7 @@ const INITIAL_DEPARTMENTS = [
     studentCount: 320,
     courseCount: 12,
     establishedYear: '2008',
-    description: 'Undergraduate science program focusing on Python, Algorithms, Web Technologies, Database Systems, and Cloud Data Analytics.',
+    description: 'Undergraduate science program focusing on Python, Algorithms, Web Technologies, Software Systems, and Cloud Data Analytics.',
     labs: ['Advanced Software Computing Lab', 'Open Source Technologies Lab', 'Data Analytics Lab'],
     yearBreakdown: [
       { year: 1, label: '1st Year', students: 110, semesters: ['Sem 1', 'Sem 2'] },
@@ -95,7 +101,7 @@ const INITIAL_DEPARTMENTS = [
       { code: 'CS103', name: 'Data Structures & Algorithms', credits: 4, year: 1, sem: 'Sem 2' },
       { code: 'CS104', name: 'Python Programming Lab', credits: 2, year: 1, sem: 'Sem 2' },
       { code: 'CS201', name: 'Object Oriented Programming with Java', credits: 4, year: 2, sem: 'Sem 3' },
-      { code: 'CS202', name: 'Relational Database Management Systems', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'CS202', name: 'Web Programming & Applications', credits: 4, year: 2, sem: 'Sem 3' },
       { code: 'CS203', name: 'Operating Systems & System Architecture', credits: 4, year: 2, sem: 'Sem 4' },
       { code: 'CS204', name: 'Computer Networks & Internet Protocols', credits: 4, year: 2, sem: 'Sem 4' },
       { code: 'CS301', name: 'Web Technologies & Scripting (React/Node)', credits: 4, year: 3, sem: 'Sem 5' },
@@ -193,7 +199,7 @@ const INITIAL_DEPARTMENTS = [
     coursesList: [
       { code: 'BC101', name: 'Fundamentals of Computing & C Programming', credits: 4, year: 1, sem: 'Sem 1' },
       { code: 'BC102', name: 'Programming in C & C++', credits: 4, year: 1, sem: 'Sem 2' },
-      { code: 'BC201', name: 'Database & SQL Programming', credits: 4, year: 2, sem: 'Sem 3' },
+      { code: 'BC201', name: 'Web Applications & Programming', credits: 4, year: 2, sem: 'Sem 3' },
       { code: 'BC202', name: 'Java & Android App Development', credits: 4, year: 2, sem: 'Sem 4' },
       { code: 'BC301', name: 'Cloud Computing Fundamentals', credits: 3, year: 3, sem: 'Sem 5' },
       { code: 'BC302', name: 'Full-Stack Web Development Project', credits: 6, year: 3, sem: 'Sem 6' }
@@ -228,11 +234,56 @@ const INITIAL_DEPARTMENTS = [
       { code: 'MA302', name: 'Operations Research & Applied Statistics', credits: 6, year: 3, sem: 'Sem 6' }
     ]
   }
-];
+]; */
 
 export default function DepartmentManagement() {
-  const [departments, setDepartments] = useState(INITIAL_DEPARTMENTS);
+  const [departments, setDepartments] = useState(() => {
+    try {
+      const cached = localStorage.getItem('vcas_departments_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Toast notification helper
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage('');
+    }, 4000);
+  };
+
+  // Fetch departments from MongoDB backend
+  const fetchDepartments = async () => {
+    setErrorMessage('');
+    try {
+      const res = await fetch(API_BASE);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDepartments(data.data || []);
+        try {
+          localStorage.setItem('vcas_departments_cache', JSON.stringify(data.data || []));
+        } catch (_) {}
+      } else {
+        setErrorMessage(data.message || 'Failed to fetch departments from server.');
+      }
+    } catch (err) {
+      console.error('Error fetching departments:', err);
+      setErrorMessage('Unable to connect to backend server. Please verify backend is running.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDepartments();
+  }, []);
 
   // Selected department for viewing modal (View Modal - Image 1)
   const [viewingDept, setViewingDept] = useState(null);
@@ -385,13 +436,14 @@ export default function DepartmentManagement() {
   };
 
   // Save new department
-  const handleSaveAdd = (e) => {
+  // Save new department to backend API
+  const handleSaveAdd = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     const newCode = formData.code.trim().toUpperCase();
     const newHod = formData.hod.trim();
-    const years = Number(formData.totalYears) || 4;
+    const years = Number(formData.totalYears) || 3;
     const sems = years * 2;
 
     const generatedCourses = [];
@@ -412,12 +464,12 @@ export default function DepartmentManagement() {
       });
     }
 
-    const newDept = {
-      id: Date.now(),
+    const payload = {
       name: formData.name.trim(),
       code: newCode,
       hod: newHod,
       hodEmail: formatHodEmail(newHod),
+      hodPhone: formData.hodPhone || '',
       totalYears: years,
       totalSemesters: sems,
       facultyCount: Number(formData.facultyCount) || 0,
@@ -429,12 +481,31 @@ export default function DepartmentManagement() {
       coursesList: generatedCourses
     };
 
-    setDepartments(prev => [...prev, newDept]);
-    setIsAddModalOpen(false);
+    setIsSaving(true);
+    try {
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || `Department "${payload.name}" created successfully!`);
+        setIsAddModalOpen(false);
+        fetchDepartments();
+      } else {
+        alert(data.message || 'Failed to create department.');
+      }
+    } catch (err) {
+      console.error('Error creating department:', err);
+      alert('Network error connecting to backend: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Save edited department
-  const handleSaveEdit = (e) => {
+  // Save edited department to backend API
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
     if (!editingDept) return;
@@ -444,14 +515,14 @@ export default function DepartmentManagement() {
     const newCode = formData.code.trim().toUpperCase();
     const newHod = formData.hod.trim();
     const newHodEmail = formatHodEmail(newHod);
-    const years = Number(formData.totalYears) || editingDept.totalYears || 4;
+    const years = Number(formData.totalYears) || editingDept.totalYears || 3;
 
-    const updatedDept = {
-      ...editingDept,
+    const payload = {
       name: formData.name.trim(),
       code: newCode,
       hod: newHod,
       hodEmail: newHodEmail,
+      hodPhone: formData.hodPhone || editingDept.hodPhone || '',
       totalYears: years,
       totalSemesters: years * 2,
       facultyCount: newFacultyCount,
@@ -462,22 +533,58 @@ export default function DepartmentManagement() {
       labs: editLabsList
     };
 
-    setDepartments(prev => prev.map(item => item.id === editingDept.id ? updatedDept : item));
-
-    if (viewingDept && viewingDept.id === editingDept.id) {
-      setViewingDept(updatedDept);
+    const targetId = editingDept._id || editingDept.id || editingDept.code;
+    setIsSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/${targetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || `Department "${payload.name}" updated successfully!`);
+        if (viewingDept && (viewingDept._id === targetId || viewingDept.id === targetId)) {
+          setViewingDept(data.data);
+        }
+        setEditingDept(null);
+        fetchDepartments();
+      } else {
+        alert(data.message || 'Failed to update department.');
+      }
+    } catch (err) {
+      console.error('Error updating department:', err);
+      alert('Network error updating department: ' + err.message);
+    } finally {
+      setIsSaving(false);
     }
-
-    setEditingDept(null);
   };
 
-  const handleConfirmDelete = () => {
-    if (deletingDept) {
-      setDepartments(prev => prev.filter(item => item.id !== deletingDept.id));
-      if (viewingDept && viewingDept.id === deletingDept.id) {
-        setViewingDept(null);
+  // Delete department on backend API
+  const handleConfirmDelete = async () => {
+    if (!deletingDept) return;
+    const targetId = deletingDept._id || deletingDept.id || deletingDept.code;
+    setIsSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/${targetId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || `Department removed successfully!`);
+        if (viewingDept && (viewingDept._id === targetId || viewingDept.id === targetId)) {
+          setViewingDept(null);
+        }
+        setDeletingDept(null);
+        fetchDepartments();
+      } else {
+        alert(data.message || 'Failed to delete department.');
       }
-      setDeletingDept(null);
+    } catch (err) {
+      console.error('Error deleting department:', err);
+      alert('Network error deleting department: ' + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -528,13 +635,16 @@ export default function DepartmentManagement() {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAddModal}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white font-bold text-xs sm:text-sm rounded-xl border border-blue-200 hover:border-blue-600 transition-all duration-150 shadow-xs self-start sm:self-auto shrink-0"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>Add Department</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          
+          <button
+            onClick={handleOpenAddModal}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white font-bold text-xs sm:text-sm rounded-xl border border-blue-200 hover:border-blue-600 transition-all duration-150 shadow-xs shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Add Department</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. SEARCH BAR */}
@@ -559,11 +669,57 @@ export default function DepartmentManagement() {
         </div>
       </div>
 
-      {/* 3. DEPARTMENT CARDS GRID (Exact match to screenshot) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredDepartments.map((dept) => (
-          <div
-            key={dept.id}
+      {/* ERROR BANNER */}
+      {errorMessage && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between text-xs text-rose-700 font-medium">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button 
+            onClick={fetchDepartments} 
+            className="px-3 py-1 bg-white border border-rose-200 rounded-lg font-bold text-rose-700 hover:bg-rose-100 cursor-pointer transition-all"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
+
+      {/* 3. DEPARTMENT CARDS GRID */}
+      {isLoading && departments.length === 0 ? (
+        <div className="py-16 flex items-center justify-center">
+          <Loader2 className="w-7 h-7 animate-spin text-blue-600" />
+        </div>
+      ) : filteredDepartments.length === 0 ? (
+        <div className="py-20 flex flex-col items-center justify-center gap-4 bg-white border border-slate-200/90 rounded-3xl p-8 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <Building2 className="w-7 h-7" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-800">
+              {searchQuery ? 'No departments match your search' : 'No departments added yet'}
+            </h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+              {searchQuery 
+                ? `No departments found matching "${searchQuery}". Try clearing search filter.`
+                : 'Get started by creating your institution’s first academic department.'}
+            </p>
+          </div>
+          {!searchQuery && (
+            <button
+              onClick={handleOpenAddModal}
+              className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create First Department</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredDepartments.map((dept) => (
+            <div
+              key={dept._id || dept.id || dept.code}
             className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-5"
           >
             {/* Card Top: Icon & Code Badge & Year badge */}
@@ -648,7 +804,8 @@ export default function DepartmentManagement() {
 
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 4. MODAL: ADD DEPARTMENT */}
@@ -771,10 +928,20 @@ export default function DepartmentManagement() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
+                  disabled={isSaving}
+                  className="px-6 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  <Save className="w-4 h-4" />
-                  <span>Save Department</span>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save Department</span>
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -1096,10 +1263,20 @@ export default function DepartmentManagement() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2"
+                  disabled={isSaving}
+                  className="px-6 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  <Save className="w-4 h-4" />
-                  <span>Update Department & Curriculum</span>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Update Department & Curriculum</span>
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -1343,15 +1520,33 @@ export default function DepartmentManagement() {
               </button>
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={handleConfirmDelete}
-                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-xs shadow-rose-500/20 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-xs shadow-rose-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Yes, Delete</span>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Yes, Delete</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
         </ModalPortal>
+      )}
+
+      {/* FLOATING SUCCESS TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 animate-slideUp text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
       )}
 
     </div>

@@ -304,11 +304,30 @@ const listMarksheets = async (req, res) => {
   }
 };
 
+// GET /api/internal-marks
+// List all marksheets with students for admin/super-admin view
+const getAllInternalMarks = async (req, res) => {
+  try {
+    const { department, semester, subjectCode } = req.query;
+    const filter = {};
+    if (department && department !== 'All Departments') filter.department = department;
+    if (semester) filter.semester = Number(semester);
+    if (subjectCode) filter.subjectCode = subjectCode.trim();
+
+    const marksheets = await InternalMarks.find(filter).sort({ department: 1, subjectCode: 1 });
+    res.json({ success: true, count: marksheets.length, data: marksheets });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = { 
   getMarksheet, 
   saveMarksheet, 
   updateMaxMarks, 
   toggleLock, 
   listMarksheets,
-  syncAssignmentsToInternalMarks
+  syncAssignmentsToInternalMarks,
+  getAllInternalMarks
 };
+

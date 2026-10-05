@@ -1227,7 +1227,7 @@ is authorized to export or issue this credential sheet.
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="e.g. Dr. Sunita Rao"
+                      placeholder="e.g. Prof. Faculty Name"
                       className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all ${formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
                         }`}
                     />

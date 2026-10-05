@@ -89,7 +89,8 @@ const COLOR_MAP = {
   sports: 'emerald'
 };
 
-export default function TimetableManagement() {
+export default function TimetableManagement({ user }) {
+  const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
   // Navigation: 'faculty' (Assigned Faculty Timetable) vs 'class' (Class / Section View)
   const [viewMode, setViewMode] = useState('faculty');
 
@@ -341,7 +342,7 @@ export default function TimetableManagement() {
   const handleOpenEditSlot = (day, periodNum, currentSlot) => {
     const defaultFaculty = viewMode === 'faculty'
       ? (currentStaff?.name ? `${currentStaff.name} (${currentStaff.staffId})` : selectedStaffId)
-      : (currentSlot?.faculty || 'Dr. Sunita Rao (HOD)');
+      : (currentSlot?.faculty || 'Assigned Faculty');
 
     setSlotForm({
       day,
@@ -593,7 +594,8 @@ export default function TimetableManagement() {
             <span className="hidden sm:inline">Sync</span>
           </button>
 
-          <button
+          {isSuperAdmin && (
+            <button
             onClick={handleExportCSV}
             title="Download CSV Timetable"
             className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs cursor-pointer"
@@ -601,6 +603,7 @@ export default function TimetableManagement() {
             <Download className="w-4 h-4 text-slate-600" />
             <span>Export CSV</span>
           </button>
+          )}
 
           <button
             onClick={() => setIsPrintModalOpen(true)}
@@ -1334,7 +1337,7 @@ export default function TimetableManagement() {
                     type="text"
                     value={slotForm.faculty}
                     onChange={(e) => setSlotForm({ ...slotForm, faculty: e.target.value })}
-                    placeholder="e.g. Dr. Sunita Rao (HOD)"
+                    placeholder="e.g. Prof. Faculty In-Charge"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                   />
                 </div>

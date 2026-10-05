@@ -55,7 +55,8 @@ const DEPARTMENTS = [
 const INITIAL_ASSIGNMENTS = [];
 const INITIAL_SUBMISSIONS = [];
 
-export default function AssignmentManagement() {
+export default function AssignmentManagement({ user }) {
+  const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
   // Tabs: 'assignments', 'submissions', 'analytics'
   const [activeTab, setActiveTab] = useState('assignments');
 
@@ -876,17 +877,10 @@ export default function AssignmentManagement() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={fetchAssignments}
-            disabled={loading}
-            title="Refresh assignments"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs disabled:opacity-60 cursor-pointer"
-          >
-            <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin text-blue-600' : ''}`} />
-            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
+          
 
-          <button
+          {isSuperAdmin && (
+            <button
             onClick={handleExportSubmissionsCSV}
             title="Download CSV Submissions"
             className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs"
@@ -894,6 +888,7 @@ export default function AssignmentManagement() {
             <Download className="w-4 h-4 text-slate-600" />
             <span>Export Submissions</span>
           </button>
+          )}
 
           <button
             onClick={() => setIsAddAssignmentOpen(true)}

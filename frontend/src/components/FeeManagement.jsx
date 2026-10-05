@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Printer, 
@@ -100,111 +100,85 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
     remarks: ''
   });
 
-  // Sample student fee records aligned with 5 UG Departments & Fee Structure
-  const [feeRecords, setFeeRecords] = useState([
-    {
-      id: 'STU001',
-      name: 'Arjun Sharma',
-      avatar: 'A',
-      course: 'CS (B.Sc CS)',
-      feeType: 'Tuition Fees',
-      totalFee: 28000,
-      totalFeeDisplay: '₹28K',
-      paidFee: 28000,
-      paidFeeDisplay: '₹28K',
-      pendingFee: 0,
-      pendingFeeDisplay: '-',
-      dueDate: '2026-11-15',
-      status: 'Paid',
-      phone: '9876543210',
-      email: 'arjun.s@vcas.edu'
-    },
-    {
-      id: 'STU002',
-      name: 'Priya Mehta',
-      avatar: 'P',
-      course: 'B.Com',
-      feeType: 'Tuition Fees',
-      totalFee: 12000,
-      totalFeeDisplay: '₹12K',
-      paidFee: 12000,
-      paidFeeDisplay: '₹12K',
-      pendingFee: 0,
-      pendingFeeDisplay: '-',
-      dueDate: '2026-11-30',
-      status: 'Paid',
-      phone: '9876543211',
-      email: 'priya.m@vcas.edu'
-    },
-    {
-      id: 'STU003',
-      name: 'Rahul Verma',
-      avatar: 'R',
-      course: 'BBA',
-      feeType: 'Tuition Fees',
-      totalFee: 27000,
-      totalFeeDisplay: '₹27K',
-      paidFee: 17000,
-      paidFeeDisplay: '₹17K',
-      pendingFee: 10000,
-      pendingFeeDisplay: '₹10K',
-      dueDate: '2026-12-15',
-      status: 'Pending',
-      phone: '9876543212',
-      email: 'rahul.v@vcas.edu'
-    },
-    {
-      id: 'STU004',
-      name: 'Sneha Nair',
-      avatar: 'S',
-      course: 'AI (B.Sc AI)',
-      feeType: 'Tuition Fees',
-      totalFee: 28000,
-      totalFeeDisplay: '₹28K',
-      paidFee: 18000,
-      paidFeeDisplay: '₹18K',
-      pendingFee: 10000,
-      pendingFeeDisplay: '₹10K',
-      dueDate: '2026-12-20',
-      status: 'Pending',
-      phone: '9876543213',
-      email: 'sneha.n@vcas.edu'
-    },
-    {
-      id: 'STU005',
-      name: 'Karthik Rajan',
-      avatar: 'K',
-      course: 'CFS (Cyber Forensic)',
-      feeType: 'Tuition Fees',
-      totalFee: 23000,
-      totalFeeDisplay: '₹23K',
-      paidFee: 15500,
-      paidFeeDisplay: '₹15.5K',
-      pendingFee: 7500,
-      pendingFeeDisplay: '₹7.5K',
-      dueDate: '2026-10-31',
-      status: 'Pending',
-      phone: '9876543214',
-      email: 'karthik.r@vcas.edu'
-    },
-    {
-      id: 'STU006',
-      name: 'Deepa Sundaram',
-      avatar: 'D',
-      course: 'B.Com',
-      feeType: 'Tuition Fees',
-      totalFee: 7000,
-      totalFeeDisplay: '₹7K',
-      paidFee: 7000,
-      paidFeeDisplay: '₹7K',
-      pendingFee: 0,
-      pendingFeeDisplay: '-',
-      dueDate: '2026-10-15',
-      status: 'Paid',
-      phone: '9876543215',
-      email: 'deepa.s@vcas.edu'
-    }
-  ]);
+  // Real student fee records populated directly from database (/api/students)
+  const [feeRecords, setFeeRecords] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vcas_real_fee_records');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  // Fetch real students from database on mount
+  useEffect(() => {
+    const fetchStudentsForFees = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/students');
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
+          
+          const mapped = json.data.map((st, idx) => {
+            const sid = (st.rollNo || st.studentId || st.admNo || `STU${idx + 1}`).toUpperCase();
+            // Only marked as Paid when Office Staff or Accountant explicitly records payment
+            const isPaid = savedPayments[sid]?.status === 'Paid' || (savedPayments[sid]?.paid && savedPayments[sid]?.paid >= totalFee);
+            const paid = isPaid ? totalFee : (savedPayments[sid]?.paid || 0);
+            const pending = Math.max(0, totalFee - paid);
+            
+            return {
+              id: sid,
+              name: st.name || st.fullName || 'Student',
+              avatar: (st.name || 'S').charAt(0).toUpperCase(),
+              course: st.department || st.course || 'Computer Science',
+              feeType: 'Tuition Fees',
+              totalFee: totalFee,
+              totalFeeDisplay: `₹${(totalFee / 1000).toFixed(0)}K`,
+              paidFee: paid,
+              paidFeeDisplay: paid > 0 ? `₹${(paid / 1000).toFixed(0)}K` : '₹0',
+              pendingFee: pending,
+              pendingFeeDisplay: pending > 0 ? `₹${(pending / 1000).toFixed(0)}K` : '-',
+              dueDate: '2026-11-30',
+              status: pending === 0 ? 'Paid' : 'Pending',
+              phone: st.phone || st.mobile || 'N/A',
+              email: st.email || `${sid.toLowerCase()}@vcas.edu`
+            };
+          });
+          setFeeRecords(mapped);
+          localStorage.setItem('vcas_real_fee_records', JSON.stringify(mapped));
+        }
+      } catch (err) {
+        console.error('Failed to load students for fee management:', err);
+      }
+    };
+    fetchStudentsForFees();
+  }, []);
+
+  // Compute live dashboard metrics strictly from real fee records
+  const totalCollectionSum = useMemo(() => {
+    return feeRecords.reduce((acc, curr) => acc + (Number(curr.paidFee) || 0), 0);
+  }, [feeRecords]);
+
+  const pendingFeesSum = useMemo(() => {
+    return feeRecords.reduce((acc, curr) => acc + (Number(curr.pendingFee) || 0), 0);
+  }, [feeRecords]);
+
+  const overdueCount = useMemo(() => {
+    return feeRecords.filter(r => r.status === 'Pending' || r.pendingFee > 0).length;
+  }, [feeRecords]);
+
+  const todayCollectionSum = useMemo(() => {
+    return feeRecords.filter(r => r.status === 'Paid').reduce((acc, curr) => acc + (Number(curr.paidFee) || 0), 0);
+  }, [feeRecords]);
+
+  const formatCurrencyL = (val) => {
+    if (!val || val === 0) return '₹0';
+    if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+    if (val >= 1000) return `₹${(val / 1000).toFixed(0)}K`;
+    return `₹${val}`;
+  };
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -267,6 +241,15 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
         const newPending = Math.max(0, rec.totalFee - newPaid);
         const newStatus = newPending === 0 ? 'Paid' : 'Pending';
         
+        try {
+          const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
+          savedPayments[targetStudentId] = {
+            paid: newPaid,
+            status: newStatus
+          };
+          localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
+        } catch (err) {}
+
         return {
           ...rec,
           paidFee: newPaid,
@@ -282,6 +265,36 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
     showToast(`Payment of ₹${amountNum.toLocaleString()} successfully recorded!`);
     setShowRecordModal(false);
     setSelectedStudentForPay(null);
+  };
+
+  const handleToggleFeeStatus = (targetStudentId) => {
+    setFeeRecords(prev => prev.map(rec => {
+      if (rec.id === targetStudentId) {
+        const nextStatus = rec.status === 'Paid' ? 'Pending' : 'Paid';
+        const nextPaid = nextStatus === 'Paid' ? rec.totalFee : 0;
+        const nextPending = nextStatus === 'Paid' ? 0 : rec.totalFee;
+        
+        try {
+          const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
+          savedPayments[targetStudentId] = {
+            paid: nextPaid,
+            status: nextStatus
+          };
+          localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
+        } catch (err) {}
+
+        return {
+          ...rec,
+          paidFee: nextPaid,
+          paidFeeDisplay: nextPaid > 0 ? `₹${(nextPaid / 1000).toFixed(0)}K` : '₹0',
+          pendingFee: nextPending,
+          pendingFeeDisplay: nextPending === 0 ? '-' : `₹${(nextPending / 1000).toFixed(0)}K`,
+          status: nextStatus
+        };
+      }
+      return rec;
+    }));
+    showToast(`Fee status updated by staff for ${targetStudentId}`);
   };
 
   // Filter students based on search, status, course, feeType
@@ -462,7 +475,7 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
                   TOTAL COLLECTION
                 </p>
                 <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-none">
-                  ₹48.6L
+                  {formatCurrencyL(totalCollectionSum)}
                 </p>
               </div>
               <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 text-slate-400 flex items-center justify-center font-bold shrink-0">
@@ -477,7 +490,7 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
                   PENDING FEES
                 </p>
                 <p className="text-2xl sm:text-3xl font-extrabold text-amber-500 leading-none">
-                  ₹4.8L
+                  {formatCurrencyL(pendingFeesSum)}
                 </p>
               </div>
               <div className="w-9 h-9 rounded-full border border-amber-300 bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
@@ -492,7 +505,7 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
                   TODAY'S COLLECTION
                 </p>
                 <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600 leading-none">
-                  ₹2.1L
+                  {formatCurrencyL(todayCollectionSum)}
                 </p>
               </div>
               <div className="w-9 h-9 rounded-xl text-emerald-500 flex items-center justify-center shrink-0">
@@ -507,7 +520,7 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
                   OVERDUE PAYMENTS
                 </p>
                 <p className="text-2xl sm:text-3xl font-extrabold text-rose-600 leading-none">
-                  42
+                  {overdueCount}
                 </p>
               </div>
               <div className="w-9 h-9 rounded-full border border-rose-300 bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
@@ -650,19 +663,26 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
 
                         {/* Status Pill */}
                         <td className="py-4 px-5">
-                          {row.status === 'Paid' ? (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">
-                              Paid
-                            </span>
-                          ) : row.status === 'Pending' ? (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
-                              Pending
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
-                              Overdue
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFeeStatus(row.id)}
+                            title="Click to mark as Paid or Pending"
+                            className="cursor-pointer transition-transform active:scale-95"
+                          >
+                            {row.status === 'Paid' ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100">
+                                ✓ Paid
+                              </span>
+                            ) : row.status === 'Pending' ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100">
+                                ⏳ Pending
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100">
+                                Overdue
+                              </span>
+                            )}
+                          </button>
                         </td>
 
                         {/* Actions */}
@@ -976,13 +996,9 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
                 <span className="text-slate-500 font-medium">Due Date:</span>
                 <span className="font-bold text-slate-800">{selectedStudentForView.dueDate}</span>
               </div>
-              <div className="flex justify-between py-2 border-b border-slate-100">
+              <div className="flex justify-between py-2">
                 <span className="text-slate-500 font-medium">Status:</span>
                 <span className="font-bold text-slate-800">{selectedStudentForView.status}</span>
-              </div>
-              <div className="flex justify-between py-2">
-                <span className="text-slate-500 font-medium">Email / Phone:</span>
-                <span className="font-medium text-slate-700">{selectedStudentForView.email}</span>
               </div>
             </div>
 

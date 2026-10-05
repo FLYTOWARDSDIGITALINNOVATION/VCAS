@@ -15,7 +15,6 @@ import StaffLeave from './StaffLeave';
 import StaffProfile from './StaffProfile';
 import StaffQuestionPaper from './StaffQuestionPaper';
 import StaffHallTicket from './StaffHallTicket';
-import StaffNetCertificateView from './StaffNetCertificateView';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, section: 'MAIN' },
@@ -26,7 +25,6 @@ const NAV_ITEMS = [
   { name: 'Assignments', icon: BookMarked, section: 'ACADEMIC' },
   { name: 'Question Papers', icon: ClipboardList, section: 'ACADEMIC' },
   { name: 'Hall Tickets', icon: Ticket, section: 'ACADEMIC' },
-  { name: 'NET / SET Certificate', icon: Award, section: 'FACULTY PROFILE' },
   { name: 'My Profile', icon: User, section: 'FACULTY PROFILE' },
   { name: 'Notices', icon: Bell, section: 'COMMUNICATION' },
   { name: 'Leave', icon: UserCheck, section: 'HOD' },
@@ -61,7 +59,6 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Assignments':          return <StaffAssignments staffUser={staffUser} />;
       case 'Question Papers':      return <StaffQuestionPaper staffUser={staffUser} />;
       case 'Hall Tickets':         return <StaffHallTicket staffUser={staffUser} onNavigate={setActiveNav} />;
-      case 'NET / SET Certificate': return <StaffNetCertificateView staffUser={staffUser} />;
       case 'My Profile':           return <StaffProfile staffUser={staffUser} />;
       case 'Notices':              return <StaffNotices staffUser={staffUser} />;
       case 'Leave':                return <StaffLeave staffUser={staffUser} />;
@@ -87,9 +84,9 @@ export default function StaffDashboard({ staffUser, onLogout }) {
 
       {/* Staff Identity Card */}
       <div 
-        onClick={() => { setActiveNav('NET / SET Certificate'); setMobileOpen(false); }}
+        onClick={() => { setActiveNav('My Profile'); setMobileOpen(false); }}
         className="mx-4 my-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer group"
-        title="View Faculty Profile & NET/SET Certificate"
+        title="View Faculty Profile"
       >
         <div className={`w-12 h-12 rounded-2xl overflow-hidden ${!staffUser?.profileImage ? `bg-gradient-to-br ${staffUser.avatarColor || 'from-blue-600 to-indigo-600'}` : 'bg-slate-800'} flex items-center justify-center text-white font-bold text-base shadow-lg mb-3 shrink-0 group-hover:scale-105 transition-transform`}>
           {staffUser?.profileImage ? (
@@ -185,9 +182,9 @@ export default function StaffDashboard({ staffUser, onLogout }) {
           </div>
           <div className="flex items-center gap-3">
             <div 
-              onClick={() => setActiveNav('NET / SET Certificate')}
+              onClick={() => setActiveNav('My Profile')}
               className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer group"
-              title="View NET/SET Certificate & Profile"
+              title="View Faculty Profile"
             >
               <div className={`w-8 h-8 rounded-xl overflow-hidden ${!staffUser?.profileImage ? `bg-gradient-to-br ${staffUser?.avatarColor || 'from-blue-600 to-indigo-600'}` : 'bg-slate-100'} flex items-center justify-center text-white text-xs font-bold shrink-0 group-hover:scale-105 transition-transform`}>
                 {staffUser?.profileImage ? (

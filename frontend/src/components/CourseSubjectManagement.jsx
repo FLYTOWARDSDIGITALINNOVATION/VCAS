@@ -36,617 +36,9 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const INITIAL_PROGRAMS = [
-  {
-    id: 1,
-    code: 'BCOM-GEN',
-    name: 'Bachelor of Commerce (B.Com)',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Commerce',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 3,
-    totalSemesters: 6,
-    totalCredits: 140,
-    enrolledStudents: 360,
-    totalSubjects: 36,
-    coordinator: 'Dr. S. Rajagopalan',
-    coordinatorEmail: 'rajagopalan.s@vcas.edu',
-    establishedYear: '2005',
-    description: 'Comprehensive 3-year commerce program covering Corporate Accounting, Taxation, Banking Law, Auditing, and Financial Management.'
-  },
-  {
-    id: 2,
-    code: 'BSC-CS',
-    name: 'B.Sc in Computer Science',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Computer Science',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 3,
-    totalSemesters: 6,
-    totalCredits: 140,
-    enrolledStudents: 320,
-    totalSubjects: 36,
-    coordinator: 'Dr. Sunita Rao',
-    coordinatorEmail: 'sunita.rao@vcas.edu',
-    establishedYear: '2008',
-    description: 'Foundational 3-year science program specializing in Algorithms, Python, Java Systems, DBMS, and Web Technologies.'
-  },
-  {
-    id: 3,
-    code: 'BA-ENG',
-    name: 'B.A. in English Literature',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'English Literature',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 3,
-    totalSemesters: 6,
-    totalCredits: 140,
-    enrolledStudents: 240,
-    totalSubjects: 34,
-    coordinator: 'Dr. K. Meenakshi Sundaram',
-    coordinatorEmail: 'meenakshi.s@vcas.edu',
-    establishedYear: '2006',
-    description: 'Enriching 3-year liberal arts curriculum in British, American, and World Literature, Literary Theory, and Communication.'
-  },
-  {
-    id: 4,
-    code: 'BBA-MGMT',
-    name: 'Bachelor of Business Administration (BBA)',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Business Administration (BBA)',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 3,
-    totalSemesters: 6,
-    totalCredits: 140,
-    enrolledStudents: 210,
-    totalSubjects: 32,
-    coordinator: 'Dr. Anita Desai',
-    coordinatorEmail: 'anita.desai@vcas.edu',
-    establishedYear: '2012',
-    description: 'Practical 3-year executive management degree in Marketing, HR Management, Business Finance, and Entrepreneurship.'
-  },
-  {
-    id: 5,
-    code: 'BCA-APP',
-    name: 'Bachelor of Computer Applications (BCA)',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Computer Applications (BCA)',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 3,
-    totalSemesters: 6,
-    totalCredits: 140,
-    enrolledStudents: 180,
-    totalSubjects: 32,
-    coordinator: 'Prof. Meena Iyer',
-    coordinatorEmail: 'meena.iyer@vcas.edu',
-    establishedYear: '2015',
-    description: 'Applied computing 3-year curriculum focusing on Full-Stack Web Development, Mobile Apps, Database Architecture, and Cloud.'
-  },
-  {
-    id: 6,
-    code: 'BSC-MATH',
-    name: 'B.Sc in Mathematics',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'Mathematics',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 3,
-    totalSemesters: 6,
-    totalCredits: 140,
-    enrolledStudents: 140,
-    totalSubjects: 30,
-    coordinator: 'Dr. R. Ramanujam',
-    coordinatorEmail: 'ramanujam.r@vcas.edu',
-    establishedYear: '2010',
-    description: 'Pure and Applied Mathematics degree emphasizing Calculus, Linear Algebra, Real Analysis, and Statistical Operations Research.'
-  },
-  {
-    id: 7,
-    code: 'MCOM-PG',
-    name: 'Master of Commerce (M.Com)',
-    degreeLevel: 'Postgraduate (PG)',
-    department: 'Commerce',
-    regulation: 'Regulation 2023 (R23)',
-    durationYears: 2,
-    totalSemesters: 4,
-    totalCredits: 90,
-    enrolledStudents: 90,
-    totalSubjects: 20,
-    coordinator: 'Dr. S. Rajagopalan',
-    coordinatorEmail: 'rajagopalan.s@vcas.edu',
-    establishedYear: '2014',
-    description: 'Advanced 2-year postgraduate program in Corporate Accounting, Financial Markets, International Taxation, and Business Research.'
-  }
-];
+const INITIAL_PROGRAMS = [];
 
-const INITIAL_SUBJECTS = [
-  // Computer Science - Sem 1 to 8
-  {
-    id: 101,
-    code: 'CS101',
-    name: 'Python Programming & Problem Solving',
-    department: 'Computer Science',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. Sunita Rao',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk (3L + 1T)',
-    studentsEnrolled: 120,
-    prerequisite: 'None',
-    units: [
-      { unit: 'Unit 1', title: 'Python Fundamentals & Control Flow', hours: 9 },
-      { unit: 'Unit 2', title: 'Data Structures: Lists, Tuples, Dictionaries', hours: 9 },
-      { unit: 'Unit 3', title: 'Functions, Modules & File Handling', hours: 9 },
-      { unit: 'Unit 4', title: 'Object Oriented Programming in Python', hours: 9 },
-      { unit: 'Unit 5', title: 'NumPy, Pandas & Exception Handling', hours: 9 }
-    ],
-    textbooks: 'Think Python by Allen B. Downey, Python Crash Course by Eric Matthes',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 102,
-    code: 'CS102',
-    name: 'Python Programming Laboratory',
-    department: 'Computer Science',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 2,
-    type: 'Practical / Lab',
-    faculty: 'Dr. Sunita Rao',
-    ltp: '0-0-3',
-    hours: '3 hrs/wk Lab',
-    studentsEnrolled: 120,
-    prerequisite: 'CS101 (Co-requisite)',
-    units: [
-      { unit: 'Lab 1-4', title: 'Basic Syntax, Conditional Branching & Loops', hours: 12 },
-      { unit: 'Lab 5-8', title: 'Collections processing, Matrix operations with NumPy', hours: 12 },
-      { unit: 'Lab 9-12', title: 'File manipulation, Data visualization & Mini-Project', hours: 12 }
-    ],
-    textbooks: 'Lab Manual for Python Programming - Vidyapeeth Press',
-    evaluation: { internal: 50, external: 50 }
-  },
-  {
-    id: 103,
-    code: 'CS201',
-    name: 'Object Oriented Programming with Java',
-    department: 'Computer Science',
-    year: 2,
-    sem: 'Sem 3',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. Sunita Rao',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk (3L + 1T)',
-    studentsEnrolled: 115,
-    prerequisite: 'CS101',
-    units: [
-      { unit: 'Unit 1', title: 'OOP Principles, Classes, Objects & JVM Architecture', hours: 9 },
-      { unit: 'Unit 2', title: 'Inheritance, Polymorphism & Interfaces', hours: 9 },
-      { unit: 'Unit 3', title: 'Exception Handling & Multithreading', hours: 9 },
-      { unit: 'Unit 4', title: 'Java Collections Framework & Generics', hours: 9 },
-      { unit: 'Unit 5', title: 'Java Streams, Lambda Expressions & JDBC Connection', hours: 9 }
-    ],
-    textbooks: 'Java: The Complete Reference by Herbert Schildt',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 104,
-    code: 'CS301',
-    name: 'Data Structures & Algorithms',
-    department: 'Computer Science',
-    year: 2,
-    sem: 'Sem 4',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. Sunita Rao',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk (3L + 1T)',
-    studentsEnrolled: 115,
-    prerequisite: 'CS201',
-    units: [
-      { unit: 'Unit 1', title: 'Linear Data Structures: Stacks, Queues, Deques', hours: 9 },
-      { unit: 'Unit 2', title: 'Linked Lists & Advanced Trees (AVL, Red-Black, B-Trees)', hours: 10 },
-      { unit: 'Unit 3', title: 'Graph Algorithms: BFS, DFS, Dijkstra, Kruskal & Prim', hours: 9 },
-      { unit: 'Unit 4', title: 'Algorithm Design: Divide & Conquer, Dynamic Programming', hours: 9 },
-      { unit: 'Unit 5', title: 'Greedy Algorithms, NP-Completeness & Approximation', hours: 8 }
-    ],
-    textbooks: 'Introduction to Algorithms by Cormen, Leiserson, Rivest, Stein (CLRS)',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 105,
-    code: 'CS401',
-    name: 'Database Management Systems',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. Neeraj Gupta',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk (3L + 1T)',
-    studentsEnrolled: 110,
-    prerequisite: 'CS301',
-    units: [
-      { unit: 'Unit 1', title: 'ER Modeling, Relational Model & Relational Algebra', hours: 9 },
-      { unit: 'Unit 2', title: 'Advanced SQL Queries, Subqueries, Triggers & Views', hours: 9 },
-      { unit: 'Unit 3', title: 'Functional Dependencies & Normalization (1NF to BCNF)', hours: 9 },
-      { unit: 'Unit 4', title: 'Transaction Processing, ACID Properties & Concurrency', hours: 9 },
-      { unit: 'Unit 5', title: 'NoSQL Databases (MongoDB) & Query Optimization', hours: 9 }
-    ],
-    textbooks: 'Database System Concepts by Silberschatz, Korth, Sudarshan',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 106,
-    code: 'CS502',
-    name: 'Artificial Intelligence & Machine Learning',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 6',
-    credits: 4,
-    type: 'Professional Elective',
-    faculty: 'Dr. Sunita Rao',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 98,
-    prerequisite: 'CS301, Linear Algebra',
-    units: [
-      { unit: 'Unit 1', title: 'AI Problem Formulation & Heuristic Search Algorithms', hours: 9 },
-      { unit: 'Unit 2', title: 'Supervised Learning: Regression, SVM, Decision Trees', hours: 10 },
-      { unit: 'Unit 3', title: 'Unsupervised Learning: K-Means, PCA & Clustering', hours: 9 },
-      { unit: 'Unit 4', title: 'Deep Neural Networks, CNNs & Backpropagation', hours: 9 },
-      { unit: 'Unit 5', title: 'Reinforcement Learning & Generative AI Overview', hours: 8 }
-    ],
-    textbooks: 'Pattern Recognition and Machine Learning by Christopher Bishop',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 107,
-    code: 'CS303',
-    name: 'Cyber Security & Network Forensics',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 6',
-    credits: 3,
-    type: 'Skill-Based Elective (SBE)',
-    faculty: 'Dr. Neeraj Gupta',
-    ltp: '3-0-0',
-    hours: '3 hrs/wk',
-    studentsEnrolled: 95,
-    prerequisite: 'Computer Networks',
-    units: [
-      { unit: 'Unit 1', title: 'Symmetric Cryptography: AES, DES, Cipher Modes', hours: 8 },
-      { unit: 'Unit 2', title: 'Public Key Cryptography, RSA, Diffie-Hellman & ECC', hours: 8 },
-      { unit: 'Unit 3', title: 'Network Security Protocols: TLS/SSL, IPsec, Firewalls', hours: 8 },
-      { unit: 'Unit 4', title: 'Web App Security & OWASP Top 10 Vulnerabilities', hours: 8 },
-      { unit: 'Unit 5', title: 'Ethical Hacking, Digital Forensics & Zero-Trust', hours: 8 }
-    ],
-    textbooks: 'Cryptography and Network Security by William Stallings',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 108,
-    code: 'CS304',
-    name: 'Major Software Project & Viva Voce',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 6',
-    credits: 6,
-    type: 'Project / Dissertation',
-    faculty: 'Dr. Sunita Rao',
-    ltp: '0-0-12',
-    hours: '12 hrs/wk Project Lab',
-    studentsEnrolled: 95,
-    prerequisite: 'All Core Courses (Sem 1 to 5)',
-    units: [
-      { unit: 'Phase 1', title: 'Problem Formulation, Literature Survey & Feasibility', hours: 24 },
-      { unit: 'Phase 2', title: 'Architecture Design, Prototyping & Mid-term Review', hours: 36 },
-      { unit: 'Phase 3', title: 'Implementation, Benchmarking, Project Report & Viva', hours: 48 }
-    ],
-    textbooks: 'Project Guidelines & Institutional Research Manual',
-    evaluation: { internal: 60, external: 40 }
-  },
-
-  // Commerce
-  {
-    id: 201,
-    code: 'CM101',
-    name: 'Financial Accounting & Book-keeping',
-    department: 'Commerce',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. S. Rajagopalan',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 120,
-    prerequisite: 'None',
-    units: [
-      { unit: 'Unit 1', title: 'Accounting Concepts, Conventions & Journal Entries', hours: 9 },
-      { unit: 'Unit 2', title: 'Trial Balance & Final Accounts of Sole Proprietors', hours: 9 },
-      { unit: 'Unit 3', title: 'Bank Reconciliation Statements (BRS) & Errors', hours: 9 },
-      { unit: 'Unit 4', title: 'Depreciation Accounting: Straight Line & WDV', hours: 9 },
-      { unit: 'Unit 5', title: 'Hire Purchase & Installment Purchase Systems', hours: 9 }
-    ],
-    textbooks: 'Financial Accounting by T.S. Reddy and A. Murthy',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 202,
-    code: 'CM201',
-    name: 'Corporate Accounting & Company Law',
-    department: 'Commerce',
-    year: 2,
-    sem: 'Sem 3',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. S. Rajagopalan',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 115,
-    prerequisite: 'CM101',
-    units: [
-      { unit: 'Unit 1', title: 'Issue, Forfeiture & Reissue of Equity Shares', hours: 9 },
-      { unit: 'Unit 2', title: 'Redemption of Preference Shares & Debentures', hours: 9 },
-      { unit: 'Unit 3', title: 'Preparation of Company Final Accounts (Schedule III)', hours: 9 },
-      { unit: 'Unit 4', title: 'Amalgamation, Absorption & External Reconstruction', hours: 9 },
-      { unit: 'Unit 5', title: 'Liquidation of Companies & Statement of Affairs', hours: 9 }
-    ],
-    textbooks: 'Corporate Accounting by M.A. Arulanandam & K.S. Raman',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 203,
-    code: 'CM301',
-    name: 'Cost Accounting & Management Analysis',
-    department: 'Commerce',
-    year: 3,
-    sem: 'Sem 5',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Prof. V. Sivakumar',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 110,
-    prerequisite: 'CM201',
-    units: [
-      { unit: 'Unit 1', title: 'Elements of Cost, Cost Sheet Preparation', hours: 9 },
-      { unit: 'Unit 2', title: 'Material Costing: EOQ, FIFO, LIFO, Weighted Avg', hours: 9 },
-      { unit: 'Unit 3', title: 'Labour & Overhead Allocation / Absorption', hours: 9 },
-      { unit: 'Unit 4', title: 'Marginal Costing, CVP Analysis & Break-Even Point', hours: 9 },
-      { unit: 'Unit 5', title: 'Budgetary Control & Standard Costing Variances', hours: 9 }
-    ],
-    textbooks: 'Cost Accounting by S.P. Jain and K.L. Narang',
-    evaluation: { internal: 40, external: 60 }
-  },
-
-  // English Literature
-  {
-    id: 301,
-    code: 'EN101',
-    name: 'Social History of England & British Poetry',
-    department: 'English Literature',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. K. Meenakshi Sundaram',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 85,
-    prerequisite: 'None',
-    units: [
-      { unit: 'Unit 1', title: 'Renaissance, Reformation & Elizabethan Drama', hours: 9 },
-      { unit: 'Unit 2', title: 'Milton, Donne & Metaphysical Poetry Analysis', hours: 9 },
-      { unit: 'Unit 3', title: 'Neo-Classical Age, Dryden & Alexander Pope', hours: 9 },
-      { unit: 'Unit 4', title: 'Romantic Revival: Wordsworth, Coleridge, Keats', hours: 9 },
-      { unit: 'Unit 5', title: 'Victorian Society, Industrial Revolution & Tennyson', hours: 9 }
-    ],
-    textbooks: 'An Introduction to English Literature by W.H. Hudson',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 302,
-    code: 'EN201',
-    name: 'Shakespearean Comedies & Tragedies',
-    department: 'English Literature',
-    year: 2,
-    sem: 'Sem 3',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. K. Meenakshi Sundaram',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 80,
-    prerequisite: 'EN101',
-    units: [
-      { unit: 'Unit 1', title: 'Elizabethan Theatre, Folios & Shakespearean Stage', hours: 9 },
-      { unit: 'Unit 2', title: 'Tragedy Analysis: Macbeth & Hamlet', hours: 10 },
-      { unit: 'Unit 3', title: 'Romantic Comedy: As You Like It & Twelfth Night', hours: 9 },
-      { unit: 'Unit 4', title: 'Roman & Historical Plays: Julius Caesar', hours: 9 },
-      { unit: 'Unit 5', title: 'Shakespearean Sonnets & Dramatic Soliloquies', hours: 8 }
-    ],
-    textbooks: 'Shakespeare: The Complete Works (Arden Shakespeare Edition)',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 303,
-    code: 'EN301',
-    name: 'Literary Criticism & Contemporary Theory',
-    department: 'English Literature',
-    year: 3,
-    sem: 'Sem 5',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Prof. David Williams',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 75,
-    prerequisite: 'EN201',
-    units: [
-      { unit: 'Unit 1', title: 'Classical Criticism: Aristotle Poetics & Longinus', hours: 9 },
-      { unit: 'Unit 2', title: 'Romantic Criticism: Wordsworth & Coleridge', hours: 9 },
-      { unit: 'Unit 3', title: 'New Criticism & Russian Formalism (T.S. Eliot, Brooks)', hours: 9 },
-      { unit: 'Unit 4', title: 'Structuralism, Post-Structuralism & Deconstruction', hours: 9 },
-      { unit: 'Unit 5', title: 'Feminist Criticism, Eco-criticism & Post-colonialism', hours: 9 }
-    ],
-    textbooks: 'Beginning Theory by Peter Barry',
-    evaluation: { internal: 40, external: 60 }
-  },
-
-  // Mathematics
-  {
-    id: 401,
-    code: 'MA101',
-    name: 'Classical Algebra & Trigonometry',
-    department: 'Mathematics',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. R. Ramanujam',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 60,
-    prerequisite: 'Higher Secondary Mathematics',
-    units: [
-      { unit: 'Unit 1', title: 'Theory of Equations, Relations Between Roots & Coefficients', hours: 9 },
-      { unit: 'Unit 2', title: 'Matrices, Rank of a Matrix, Cayley-Hamilton Theorem', hours: 9 },
-      { unit: 'Unit 3', title: 'Expansion of sin(nx), cos(nx), tan(nx) Powers', hours: 9 },
-      { unit: 'Unit 4', title: 'Hyperbolic Functions & Inverse Hyperbolic Functions', hours: 9 },
-      { unit: 'Unit 5', title: 'Summation of Trigonometric Series', hours: 9 }
-    ],
-    textbooks: 'Algebra by T.K. Manicavachagom Pillay',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 402,
-    code: 'MA201',
-    name: 'Differential Equations & Vector Analysis',
-    department: 'Mathematics',
-    year: 2,
-    sem: 'Sem 3',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. R. Ramanujam',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 55,
-    prerequisite: 'MA101',
-    units: [
-      { unit: 'Unit 1', title: 'Linear Equations of Second Order with Constant Coeffs', hours: 9 },
-      { unit: 'Unit 2', title: 'Partial Differential Equations & Lagrange Method', hours: 9 },
-      { unit: 'Unit 3', title: 'Laplace Transforms & Inverse Transform Solutions', hours: 9 },
-      { unit: 'Unit 4', title: 'Vector Differentiation, Gradient, Divergence, Curl', hours: 9 },
-      { unit: 'Unit 5', title: 'Gauss Divergence, Green and Stokes Theorems', hours: 9 }
-    ],
-    textbooks: 'Differential Equations and Its Applications by S. Narayanan',
-    evaluation: { internal: 40, external: 60 }
-  },
-
-  // Business Administration (BBA)
-  {
-    id: 501,
-    code: 'BB101',
-    name: 'Principles of Management & Leadership',
-    department: 'Business Administration (BBA)',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 3,
-    type: 'Core Theory',
-    faculty: 'Dr. Anita Desai',
-    ltp: '3-0-0',
-    hours: '3 hrs/wk',
-    studentsEnrolled: 75,
-    prerequisite: 'None',
-    units: [
-      { unit: 'Unit 1', title: 'Evolution of Management Thought & Planning Systems', hours: 8 },
-      { unit: 'Unit 2', title: 'Organizational Structuring & Span of Control', hours: 8 },
-      { unit: 'Unit 3', title: 'Staffing, Selection & Performance Appraisal', hours: 8 },
-      { unit: 'Unit 4', title: 'Motivation Theories & Leadership Styles', hours: 8 },
-      { unit: 'Unit 5', title: 'Managerial Controlling & Corporate Ethics', hours: 8 }
-    ],
-    textbooks: 'Principles of Management by P.C. Tripathi and P.N. Reddy',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 502,
-    code: 'BB201',
-    name: 'Marketing Management & Consumer Behaviour',
-    department: 'Business Administration (BBA)',
-    year: 2,
-    sem: 'Sem 3',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Dr. Anita Desai',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 70,
-    prerequisite: 'BB101',
-    units: [
-      { unit: 'Unit 1', title: 'Marketing Concepts, Marketing Mix (4Ps & 7Ps)', hours: 9 },
-      { unit: 'Unit 2', title: 'Market Segmentation, Targeting & Positioning (STP)', hours: 9 },
-      { unit: 'Unit 3', title: 'Consumer Decision Making Process & Buyer Psychology', hours: 9 },
-      { unit: 'Unit 4', title: 'Product Life Cycle (PLC) & Brand Strategy', hours: 9 },
-      { unit: 'Unit 5', title: 'Digital Marketing & Social Media Brand Campaigns', hours: 9 }
-    ],
-    textbooks: 'Marketing Management by Philip Kotler and Kevin Lane Keller',
-    evaluation: { internal: 40, external: 60 }
-  },
-
-  // BCA
-  {
-    id: 601,
-    code: 'BCA101',
-    name: 'Fundamentals of Computing & C Programming',
-    department: 'Computer Applications (BCA)',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Prof. Meena Iyer',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 80,
-    prerequisite: 'None',
-    units: [
-      { unit: 'Unit 1', title: 'Computer Architecture & Flowcharts', hours: 9 },
-      { unit: 'Unit 2', title: 'C Data Types, Operators & Conditional Flow', hours: 9 },
-      { unit: 'Unit 3', title: 'Arrays, Strings & Pointers in C', hours: 9 },
-      { unit: 'Unit 4', title: 'Structures, Unions & Dynamic Memory Allocation', hours: 9 },
-      { unit: 'Unit 5', title: 'File I/O & Preprocessor Directives', hours: 9 }
-    ],
-    textbooks: 'Programming in ANSI C by E. Balagurusamy',
-    evaluation: { internal: 40, external: 60 }
-  },
-  {
-    id: 602,
-    code: 'BCA201',
-    name: 'Web Technologies & Full-Stack Development',
-    department: 'Computer Applications (BCA)',
-    year: 2,
-    sem: 'Sem 3',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Prof. Meena Iyer',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk',
-    studentsEnrolled: 75,
-    prerequisite: 'BCA101',
-    units: [
-      { unit: 'Unit 1', title: 'Semantic HTML5, CSS3 Grid/Flexbox & Responsive UI', hours: 9 },
-      { unit: 'Unit 2', title: 'Modern JavaScript (ES6+), DOM & Async Fetch', hours: 9 },
-      { unit: 'Unit 3', title: 'React.js Components, State, Hooks & Router', hours: 9 },
-      { unit: 'Unit 4', title: 'Node.js, Express.js REST API & Middleware', hours: 9 },
-      { unit: 'Unit 5', title: 'MongoDB Atlas Integration, JWT Auth & Deployment', hours: 9 }
-    ],
-    textbooks: 'Full Stack React Projects by Anthony Accomazzo',
-    evaluation: { internal: 40, external: 60 }
-  }
-];
+const INITIAL_SUBJECTS = [];
 
 const DEPARTMENTS = [
   'All Departments',
@@ -658,48 +50,9 @@ const DEPARTMENTS = [
   'Mathematics'
 ];
 
-export const DEPARTMENT_HEADS = {
-  'Commerce': 'Dr. S. Rajagopalan',
-  'Computer Science': 'Dr. Sunita Rao',
-  'English Literature': 'Dr. K. Meenakshi Sundaram',
-  'Business Administration (BBA)': 'Dr. Anita Desai',
-  'Computer Applications (BCA)': 'Prof. Meena Iyer',
-  'Mathematics': 'Dr. R. Ramanujam'
-};
+export const DEPARTMENT_HEADS = {};
 
-export const DEPARTMENT_FACULTY_MEMBERS = {
-  'Commerce': [
-    { name: 'Dr. S. Rajagopalan', isHod: true, role: 'HOD / Associate Professor' },
-    { name: 'Prof. V. Sivakumar', isHod: false, role: 'Assistant Professor' },
-    { name: 'Dr. R. Jayasree', isHod: false, role: 'Assistant Professor' }
-  ],
-  'Computer Science': [
-    { name: 'Dr. Sunita Rao', isHod: true, role: 'HOD / Professor' },
-    { name: 'Dr. Neeraj Gupta', isHod: false, role: 'Associate Professor' },
-    { name: 'Prof. Arvind Menon', isHod: false, role: 'Assistant Professor' },
-    { name: 'Dr. Priya Sharma', isHod: false, role: 'Assistant Professor' }
-  ],
-  'English Literature': [
-    { name: 'Dr. K. Meenakshi Sundaram', isHod: true, role: 'HOD / Professor' },
-    { name: 'Prof. David Williams', isHod: false, role: 'Associate Professor' },
-    { name: 'Dr. Shalini George', isHod: false, role: 'Assistant Professor' }
-  ],
-  'Business Administration (BBA)': [
-    { name: 'Dr. Anita Desai', isHod: true, role: 'HOD / Professor' },
-    { name: 'Prof. Rajesh Khanna', isHod: false, role: 'Associate Professor' },
-    { name: 'Dr. Sandeep Roy', isHod: false, role: 'Assistant Professor' }
-  ],
-  'Computer Applications (BCA)': [
-    { name: 'Prof. Meena Iyer', isHod: true, role: 'HOD / Associate Professor' },
-    { name: 'Dr. Sunita Rao', isHod: false, role: 'Visiting Professor' },
-    { name: 'Prof. Akash Gupta', isHod: false, role: 'Assistant Professor' }
-  ],
-  'Mathematics': [
-    { name: 'Dr. R. Ramanujam', isHod: true, role: 'HOD / Professor' },
-    { name: 'Prof. S. Srinivasan', isHod: false, role: 'Associate Professor' },
-    { name: 'Dr. N. Geetha', isHod: false, role: 'Assistant Professor' }
-  ]
-};
+export const DEPARTMENT_FACULTY_MEMBERS = {};
 
 const SUBJECT_TYPES = [
   'All Types',
@@ -721,13 +74,80 @@ const SEMESTERS = [
   'Sem 6'
 ];
 
-export default function CourseSubjectManagement() {
+export default function CourseSubjectManagement({ user }) {
+  const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
   // Tabs: 'subjects', 'programs', 'matrix', 'allocation'
   const [activeTab, setActiveTab] = useState('subjects');
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'grid'
 
-  const [programsList, setProgramsList] = useState(INITIAL_PROGRAMS);
-  const [subjectsList, setSubjectsList] = useState(INITIAL_SUBJECTS);
+  const [programsList, setProgramsList] = useState(() => {
+    try {
+      const cached = localStorage.getItem('vcas_programs_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [subjectsList, setSubjectsList] = useState(() => {
+    try {
+      const cached = localStorage.getItem('vcas_subjects_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [facultyList, setFacultyList] = useState([]);
+  const [totalEnrolledStudents, setTotalEnrolledStudents] = useState(0);
+
+  // Fetch real data from backend API
+  const fetchCoursesAndSubjects = async () => {
+    try {
+      const [resCourses, resSubjects, resStaff, resStudents] = await Promise.allSettled([
+        fetch('http://localhost:5000/api/courses'),
+        fetch('http://localhost:5000/api/subjects'),
+        fetch('http://localhost:5000/api/staff'),
+        fetch('http://localhost:5000/api/students')
+      ]);
+
+      if (resCourses.status === 'fulfilled' && resCourses.value.ok) {
+        const cData = await resCourses.value.json();
+        if (cData.success && Array.isArray(cData.data)) {
+          setProgramsList(cData.data);
+          try { localStorage.setItem('vcas_programs_cache', JSON.stringify(cData.data)); } catch (_) {}
+        }
+      }
+
+      if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
+        const sData = await resSubjects.value.json();
+        if (sData.success && Array.isArray(sData.data)) {
+          setSubjectsList(sData.data);
+          try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(sData.data)); } catch (_) {}
+        }
+      }
+
+      if (resStudents.status === 'fulfilled' && resStudents.value.ok) {
+        const stuData = await resStudents.value.json();
+        if (stuData.success && Array.isArray(stuData.data)) {
+          setTotalEnrolledStudents(stuData.data.length);
+        }
+      }
+
+      if (resStaff.status === 'fulfilled' && resStaff.value.ok) {
+        const stData = await resStaff.value.json();
+        if (stData.success && Array.isArray(stData.data)) {
+          setFacultyList(stData.data);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching courses/subjects/staff from backend:', err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchCoursesAndSubjects();
+  }, []);
 
   // Selected Program for Curriculum Matrix View
   const [matrixSelectedProgramCode, setMatrixSelectedProgramCode] = useState('BSC-CS');
@@ -797,7 +217,7 @@ export default function CourseSubjectManagement() {
     sem: 'Sem 1',
     credits: 4,
     type: 'Core Theory',
-    faculty: 'Dr. Sunita Rao',
+    faculty: '',
     ltp: '3-1-0',
     hours: '4 hrs/wk (3L + 1T)',
     prerequisite: 'None',
@@ -811,10 +231,10 @@ export default function CourseSubjectManagement() {
     degreeLevel: 'Undergraduate (UG)',
     department: 'Computer Science',
     regulation: 'Regulation 2024 (R24)',
-    durationYears: 4,
-    totalCredits: 160,
-    coordinator: 'Dr. Sunita Rao',
-    coordinatorEmail: 'sunita.rao@vcas.edu',
+    durationYears: 3,
+    totalCredits: 140,
+    coordinator: '',
+    coordinatorEmail: '',
     description: ''
   });
 
@@ -934,7 +354,6 @@ export default function CourseSubjectManagement() {
   // -------------------------------------------------------------
   const handleOpenAddSubject = (defaultSem) => {
     const initialDept = selectedDept !== 'All Departments' ? selectedDept : 'Computer Science';
-    const initialHod = DEPARTMENT_HEADS[initialDept] || 'Dr. Sunita Rao';
     const deptPrefixes = {
       'Commerce': 'CM',
       'Computer Science': 'CS',
@@ -954,7 +373,7 @@ export default function CourseSubjectManagement() {
       sem: defaultSem || (selectedSem !== 'All Semesters' ? selectedSem : `Sem ${initialYear * 2 - 1}`),
       credits: 4,
       type: 'Core Theory',
-      faculty: initialHod,
+      faculty: '',
       ltp: '3-1-0',
       hours: '4 hrs/wk (3L + 1T)',
       prerequisite: 'None',
@@ -965,7 +384,6 @@ export default function CourseSubjectManagement() {
   };
 
   const handleSubjectDeptChange = (newDept) => {
-    const defaultHod = DEPARTMENT_HEADS[newDept] || 'Dr. Sunita Rao';
     
     // Auto-update subject code prefix if creating a new subject
     let newCode = subjectForm.code;
@@ -1042,17 +460,30 @@ export default function CourseSubjectManagement() {
 
     if (editingSubject) {
       // Update
+      const targetId = editingSubject._id || editingSubject.id || editingSubject.code;
       const updated = {
         ...editingSubject,
         ...subjectForm,
         code: subjectForm.code.trim().toUpperCase()
       };
-      setSubjectsList(prev => prev.map(s => s.id === editingSubject.id ? updated : s));
-      if (viewingSubject && viewingSubject.id === editingSubject.id) {
+      setSubjectsList(prev => prev.map(s => (s.id === editingSubject.id || s._id === editingSubject._id) ? updated : s));
+      if (viewingSubject && (viewingSubject.id === editingSubject.id || viewingSubject._id === editingSubject._id)) {
         setViewingSubject(updated);
       }
       setEditingSubject(null);
       showToast(`Subject ${updated.code} updated successfully.`);
+
+      // Sync with MongoDB backend
+      fetch(`http://localhost:5000/api/subjects/${targetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).then(r => r.json()).then(data => {
+        if (data.success && data.data) {
+          setSubjectsList(prev => prev.map(s => (s.code === updated.code) ? data.data : s));
+        }
+      }).catch(err => console.error('Error updating subject in backend:', err));
+
     } else {
       // Create new
       const newSubj = {
@@ -1072,16 +503,34 @@ export default function CourseSubjectManagement() {
       setSubjectsList(prev => [newSubj, ...prev]);
       setIsAddSubjectOpen(false);
       showToast(`New subject ${newSubj.code} added to catalog.`);
+
+      // Sync with MongoDB backend
+      fetch('http://localhost:5000/api/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSubj)
+      }).then(r => r.json()).then(data => {
+        if (data.success && data.data) {
+          setSubjectsList(prev => prev.map(s => s.code === newSubj.code ? data.data : s));
+        }
+      }).catch(err => console.error('Error creating subject in backend:', err));
     }
   };
 
   const handleConfirmDeleteSubject = () => {
     if (deletingSubject) {
-      setSubjectsList(prev => prev.filter(s => s.id !== deletingSubject.id));
-      if (viewingSubject && viewingSubject.id === deletingSubject.id) {
+      const targetId = deletingSubject._id || deletingSubject.id || deletingSubject.code;
+      setSubjectsList(prev => prev.filter(s => s.id !== deletingSubject.id && s._id !== deletingSubject._id));
+      if (viewingSubject && (viewingSubject.id === deletingSubject.id || viewingSubject._id === deletingSubject._id)) {
         setViewingSubject(null);
       }
       showToast(`Subject ${deletingSubject.code} removed.`);
+
+      // Sync with MongoDB backend
+      fetch(`http://localhost:5000/api/subjects/${targetId}`, {
+        method: 'DELETE'
+      }).catch(err => console.error('Error deleting subject in backend:', err));
+
       setDeletingSubject(null);
     }
   };
@@ -1098,8 +547,8 @@ export default function CourseSubjectManagement() {
       regulation: 'Regulation 2024 (R24)',
       durationYears: 3,
       totalCredits: 140,
-      coordinator: 'Dr. Sunita Rao',
-      coordinatorEmail: 'sunita.rao@vcas.edu',
+      coordinator: '',
+      coordinatorEmail: '',
       description: ''
     });
     setFormErrors({});
@@ -1117,7 +566,7 @@ export default function CourseSubjectManagement() {
       durationYears: prog.durationYears,
       totalCredits: prog.totalCredits,
       coordinator: prog.coordinator,
-      coordinatorEmail: prog.coordinatorEmail || `${prog.coordinator.toLowerCase().replace(/[^a-z]/g, '')}@vcas.edu`,
+      coordinatorEmail: prog.coordinatorEmail || `${prog.coordinator?.toLowerCase().replace(/[^a-z]/g, '')}@vcas.edu`,
       description: prog.description || ''
     });
     setFormErrors({});
@@ -1134,18 +583,31 @@ export default function CourseSubjectManagement() {
     }
 
     if (editingProgram) {
+      const targetId = editingProgram._id || editingProgram.id || editingProgram.code;
       const updated = {
         ...editingProgram,
         ...programForm,
         code: programForm.code.trim().toUpperCase(),
         totalSemesters: programForm.durationYears * 2
       };
-      setProgramsList(prev => prev.map(p => p.id === editingProgram.id ? updated : p));
-      if (viewingProgram && viewingProgram.id === editingProgram.id) {
+      setProgramsList(prev => prev.map(p => (p.id === editingProgram.id || p._id === editingProgram._id) ? updated : p));
+      if (viewingProgram && (viewingProgram.id === editingProgram.id || viewingProgram._id === editingProgram._id)) {
         setViewingProgram(updated);
       }
       setEditingProgram(null);
       showToast(`Degree Program ${updated.code} updated.`);
+
+      // Sync with MongoDB backend
+      fetch(`http://localhost:5000/api/courses/${targetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).then(r => r.json()).then(data => {
+        if (data.success && data.data) {
+          setProgramsList(prev => prev.map(p => p.code === updated.code ? data.data : p));
+        }
+      }).catch(err => console.error('Error updating program in backend:', err));
+
     } else {
       const newProg = {
         id: Date.now(),
@@ -1159,16 +621,34 @@ export default function CourseSubjectManagement() {
       setProgramsList(prev => [...prev, newProg]);
       setIsAddProgramOpen(false);
       showToast(`New Degree Program ${newProg.code} registered.`);
+
+      // Sync with MongoDB backend
+      fetch('http://localhost:5000/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProg)
+      }).then(r => r.json()).then(data => {
+        if (data.success && data.data) {
+          setProgramsList(prev => prev.map(p => p.code === newProg.code ? data.data : p));
+        }
+      }).catch(err => console.error('Error creating program in backend:', err));
     }
   };
 
   const handleConfirmDeleteProgram = () => {
     if (deletingProgram) {
-      setProgramsList(prev => prev.filter(p => p.id !== deletingProgram.id));
-      if (viewingProgram && viewingProgram.id === deletingProgram.id) {
+      const targetId = deletingProgram._id || deletingProgram.id || deletingProgram.code;
+      setProgramsList(prev => prev.filter(p => p.id !== deletingProgram.id && p._id !== deletingProgram._id));
+      if (viewingProgram && (viewingProgram.id === deletingProgram.id || viewingProgram._id === deletingProgram._id)) {
         setViewingProgram(null);
       }
       showToast(`Degree Program ${deletingProgram.code} removed.`);
+
+      // Sync with MongoDB backend
+      fetch(`http://localhost:5000/api/courses/${targetId}`, {
+        method: 'DELETE'
+      }).catch(err => console.error('Error deleting program in backend:', err));
+
       setDeletingProgram(null);
     }
   };
@@ -1176,8 +656,18 @@ export default function CourseSubjectManagement() {
   // Reallocate Faculty
   const handleSaveReallocation = () => {
     if (reallocatingSubject && newFacultyName.trim()) {
-      setSubjectsList(prev => prev.map(s => s.id === reallocatingSubject.id ? { ...s, faculty: newFacultyName.trim() } : s));
+      const targetId = reallocatingSubject._id || reallocatingSubject.id || reallocatingSubject.code;
+      const updated = { ...reallocatingSubject, faculty: newFacultyName.trim() };
+      setSubjectsList(prev => prev.map(s => (s.id === reallocatingSubject.id || s._id === reallocatingSubject._id) ? updated : s));
       showToast(`Reallocated ${reallocatingSubject.code} to ${newFacultyName.trim()}`);
+
+      // Sync with MongoDB backend
+      fetch(`http://localhost:5000/api/subjects/${targetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ faculty: newFacultyName.trim() })
+      }).catch(err => console.error('Error reallocating faculty in backend:', err));
+
       setReallocatingSubject(null);
       setNewFacultyName('');
     }
@@ -1216,7 +706,8 @@ export default function CourseSubjectManagement() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
+          {isSuperAdmin && (
+            <button
             onClick={handleExportCSV}
             title="Download CSV Catalog"
             className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs"
@@ -1224,6 +715,7 @@ export default function CourseSubjectManagement() {
             <Download className="w-4 h-4 text-slate-600" />
             <span className="hidden sm:inline">Export CSV</span>
           </button>
+          )}
 
           <button
             onClick={handleOpenAddProgram}
@@ -1270,8 +762,8 @@ export default function CourseSubjectManagement() {
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Enrolled</span>
-            <p className="text-2xl font-black text-emerald-600">1,248</p>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-1">Active Batches</p>
+            <p className="text-2xl font-black text-emerald-600">{totalEnrolledStudents > 0 ? totalEnrolledStudents.toLocaleString() : '0'}</p>
+            <p className="text-[11px] text-emerald-600 font-semibold mt-1">{programsList.length > 0 ? `${programsList.length} Active Programs` : 'Active Batches'}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
             <Users className="w-5 h-5" />
@@ -1281,8 +773,12 @@ export default function CourseSubjectManagement() {
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Grad Credits</span>
-            <p className="text-2xl font-black text-purple-600">160</p>
-            <p className="text-[11px] text-slate-500 font-medium mt-1">4-Year Degree Avg</p>
+            <p className="text-2xl font-black text-purple-600">
+              {subjectsList.length > 0
+                ? subjectsList.reduce((acc, s) => acc + (Number(s.credits) || 0), 0)
+                : 140}
+            </p>
+            <p className="text-[11px] text-slate-500 font-medium mt-1">Total Curriculum Credits</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
             <Award className="w-5 h-5" />
@@ -1443,7 +939,6 @@ export default function CourseSubjectManagement() {
                   <option value="1">1st Year (Fresher)</option>
                   <option value="2">2nd Year (Sophomore)</option>
                   <option value="3">3rd Year (Junior)</option>
-                  <option value="4">4th Year (Senior)</option>
                 </select>
               </div>
             )}
@@ -1645,17 +1140,31 @@ export default function CourseSubjectManagement() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
-                        <div className="max-w-xs mx-auto space-y-2">
+                      <td colSpan={8} className="py-14 text-center text-slate-400">
+                        <div className="max-w-sm mx-auto space-y-2">
                           <BookOpen className="w-8 h-8 mx-auto text-slate-300" />
-                          <p className="text-sm font-semibold text-slate-600">No subjects found</p>
-                          <p className="text-xs text-slate-400">Try changing your search terms or filter selections</p>
-                          <button
-                            onClick={handleResetFilters}
-                            className="mt-2 text-xs font-bold text-blue-600 hover:underline"
-                          >
-                            Clear all filters
-                          </button>
+                          <p className="text-sm font-semibold text-slate-700">
+                            {searchQuery || selectedDept !== 'All Departments' ? 'No subjects found matching your filters' : 'No subjects added yet'}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {searchQuery || selectedDept !== 'All Departments' ? 'Try changing your search terms or filter selections.' : 'Get started by adding your institution’s academic subjects and curriculum modules.'}
+                          </p>
+                          {searchQuery || selectedDept !== 'All Departments' ? (
+                            <button
+                              onClick={handleResetFilters}
+                              className="mt-2 text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                            >
+                              Clear all filters
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleOpenAddSubject}
+                              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Subject</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1741,95 +1250,127 @@ export default function CourseSubjectManagement() {
       {/* 6. TAB 2: DEGREE PROGRAMS & REGULATIONS                                    */}
       {/* ========================================================================= */}
       {activeTab === 'programs' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredPrograms.map((prog) => (
-            <div
-              key={prog.id}
-              className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-5"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="px-3 py-1 bg-blue-50 text-blue-700 font-bold text-xs rounded-xl border border-blue-100">
-                    {prog.code}
-                  </span>
-                  <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">
-                    {prog.degreeLevel}
-                  </span>
-                </div>
-
-                <h3 className="text-base font-extrabold text-slate-900 leading-tight">
-                  {prog.name}
-                </h3>
-                
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-semibold text-[10px] rounded-md border border-indigo-100">
-                    {prog.regulation}
-                  </span>
-                  <span className="text-[11px] text-slate-400 font-medium">Est. {prog.establishedYear}</span>
-                </div>
-
-                <p className="text-xs text-slate-500 font-semibold mt-2.5">
-                  Lead Coordinator: <span className="text-slate-800">{prog.coordinator}</span>
-                </p>
-                <p className="text-xs text-slate-500 mt-2 line-clamp-2">
-                  {prog.description}
-                </p>
-              </div>
-
-              {/* Metrics */}
-              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center text-xs">
-                <div>
-                  <span className="text-base font-extrabold text-slate-900 block leading-tight">
-                    {prog.durationYears} Yrs
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">{prog.totalSemesters} Sems</span>
-                </div>
-                <div className="border-x border-slate-200">
-                  <span className="text-base font-extrabold text-blue-600 block leading-tight">
-                    {prog.totalCredits}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Credits</span>
-                </div>
-                <div>
-                  <span className="text-base font-extrabold text-purple-600 block leading-tight">
-                    {prog.enrolledStudents}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Students</span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                <button
-                  onClick={() => {
-                    setMatrixSelectedProgramCode(prog.code);
-                    setActiveTab('matrix');
-                  }}
-                  className="flex-1 py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 border border-blue-200/80"
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>Semester Matrix</span>
-                </button>
-
-                <button
-                  onClick={() => handleOpenEditProgram(prog)}
-                  className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 transition-all"
-                  title="Edit Program"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  onClick={() => setDeletingProgram(prog)}
-                  className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition-all"
-                  title="Delete Program"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+        filteredPrograms.length === 0 ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-4 bg-white border border-slate-200/90 rounded-3xl p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <BookOpen className="w-7 h-7" />
             </div>
-          ))}
-        </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                {searchQuery || selectedDept !== 'All Departments' ? 'No degree programs match your filters' : 'No degree programs added yet'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                {searchQuery || selectedDept !== 'All Departments' ? 'Try clearing your search filter.' : 'Get started by registering your institution’s academic degree programs.'}
+              </p>
+            </div>
+            {searchQuery || selectedDept !== 'All Departments' ? (
+              <button
+                onClick={handleResetFilters}
+                className="mt-2 text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
+                Clear all filters
+              </button>
+            ) : (
+              <button
+                onClick={handleOpenAddProgram}
+                className="mt-2 flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Degree Program</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPrograms.map((prog) => (
+              <div
+                key={prog.id}
+                className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-5"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="px-3 py-1 bg-blue-50 text-blue-700 font-bold text-xs rounded-xl border border-blue-100">
+                      {prog.code}
+                    </span>
+                    <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">
+                      {prog.degreeLevel}
+                    </span>
+                  </div>
+
+                  <h3 className="text-base font-extrabold text-slate-900 leading-tight">
+                    {prog.name}
+                  </h3>
+                  
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-semibold text-[10px] rounded-md border border-indigo-100">
+                      {prog.regulation}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-medium">Est. {prog.establishedYear}</span>
+                  </div>
+
+                  <p className="text-xs text-slate-500 font-semibold mt-2.5">
+                    Lead Coordinator: <span className="text-slate-800">{prog.coordinator}</span>
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2 line-clamp-2">
+                    {prog.description}
+                  </p>
+                </div>
+
+                {/* Metrics */}
+                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center text-xs">
+                  <div>
+                    <span className="text-base font-extrabold text-slate-900 block leading-tight">
+                      {prog.durationYears} Yrs
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">{prog.totalSemesters} Sems</span>
+                  </div>
+                  <div className="border-x border-slate-200">
+                    <span className="text-base font-extrabold text-blue-600 block leading-tight">
+                      {prog.totalCredits}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Credits</span>
+                  </div>
+                  <div>
+                    <span className="text-base font-extrabold text-purple-600 block leading-tight">
+                      {prog.enrolledStudents}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Students</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => {
+                      setMatrixSelectedProgramCode(prog.code);
+                      setActiveTab('matrix');
+                    }}
+                    className="flex-1 py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 border border-blue-200/80"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Semester Matrix</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenEditProgram(prog)}
+                    className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 transition-all"
+                    title="Edit Program"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    onClick={() => setDeletingProgram(prog)}
+                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition-all"
+                    title="Delete Program"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
 
       {/* ========================================================================= */}
@@ -2240,7 +1781,6 @@ export default function CourseSubjectManagement() {
                     <option value={1}>1st Year</option>
                     <option value={2}>2nd Year</option>
                     <option value={3}>3rd Year</option>
-                    <option value={4}>4th Year</option>
                   </select>
                 </div>
 
@@ -2310,23 +1850,22 @@ export default function CourseSubjectManagement() {
                     <label className="block text-xs font-bold text-slate-700">
                       Faculty In-Charge *
                     </label>
-                    <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md font-bold">
-                      HOD: {DEPARTMENT_HEADS[subjectForm.department] || 'Dr. Sunita Rao'}
-                    </span>
                   </div>
                   <select
                     value={subjectForm.faculty}
                     onChange={(e) => setSubjectForm({ ...subjectForm, faculty: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                    required
                   >
-                    {DEPARTMENT_FACULTY_MEMBERS[subjectForm.department]?.map((fac) => (
-                      <option key={fac.name} value={fac.name}>
-                        {fac.name} {fac.isHod ? '⭐ (HOD - Head of Department)' : `(${fac.role})`}
-                      </option>
-                    )) || (
-                      <option value={DEPARTMENT_HEADS[subjectForm.department] || 'Dr. Sunita Rao'}>
-                        {DEPARTMENT_HEADS[subjectForm.department] || 'Dr. Sunita Rao'} (HOD)
-                      </option>
+                    <option value="">-- Select Faculty In-Charge --</option>
+                    {facultyList && facultyList.length > 0 ? (
+                      facultyList.map((fac) => (
+                        <option key={fac._id || fac.staffId || fac.name} value={fac.name}>
+                          {fac.name} {fac.designation ? `(${fac.designation})` : fac.department ? `(${fac.department})` : ''}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="Assigned Faculty">Assigned Department Faculty</option>
                     )}
                   </select>
                 </div>

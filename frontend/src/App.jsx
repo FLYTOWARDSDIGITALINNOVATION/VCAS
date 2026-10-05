@@ -8,17 +8,13 @@ export default function App() {
   // Restore user and login state from sessionStorage on page refresh
   const [currentUser, setCurrentUser] = useState(() => {
     const savedUser = sessionStorage.getItem('vcas_user');
-    return savedUser ? JSON.parse(savedUser) : {
-      name: 'Super Administrator',
-      role: 'Super Admin',
-      email: 'superadmin@vcas.edu',
-      isSuperAdmin: true
-    };
+    return savedUser ? JSON.parse(savedUser) : null;
   });
 
   const [viewMode, setViewMode] = useState(() => {
     const isLoggedIn = sessionStorage.getItem('vcas_isLoggedIn');
-    return isLoggedIn === 'true' ? 'dashboard' : 'login';
+    const savedUser = sessionStorage.getItem('vcas_user');
+    return (isLoggedIn === 'true' && savedUser) ? 'dashboard' : 'login';
   });
 
   // Sync browser URL with viewMode state
@@ -36,7 +32,8 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const isLoggedIn = sessionStorage.getItem('vcas_isLoggedIn');
-      if (isLoggedIn === 'true') {
+      const savedUser = sessionStorage.getItem('vcas_user');
+      if (isLoggedIn === 'true' && savedUser) {
         setViewMode('dashboard');
       } else {
         setViewMode('login');
@@ -60,6 +57,7 @@ export default function App() {
     sessionStorage.removeItem('vcas_activeNav');
     sessionStorage.removeItem('vcas_selectedFeeType');
     sessionStorage.removeItem('vcas_staff_nav');
+    setCurrentUser(null);
     setViewMode('login');
   };
 

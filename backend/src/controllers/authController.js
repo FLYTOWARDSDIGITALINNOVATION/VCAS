@@ -1,4 +1,54 @@
 const Staff = require('../models/Staff');
+const Admin = require('../models/Admin');
+
+let adminAccountsSeeded = false;
+async function ensureAdminAccounts() {
+  if (adminAccountsSeeded) return;
+  try {
+    let superAdmin = await Admin.findOne({ email: 'superadmin@vcas.edu' });
+    if (!superAdmin) {
+      await Admin.create({
+        email: 'superadmin@vcas.edu',
+        password: 'superadmin123',
+        name: 'Super Administrator',
+        role: 'Super Admin',
+        isSuperAdmin: true,
+        permissions: ['download_credentials', 'print_credentials', 'full_admin_access']
+      });
+      console.log('[Auth] Seeded superadmin@vcas.edu into database.');
+    } else {
+      const isSuperMatch = await superAdmin.matchPassword('superadmin123');
+      if (!isSuperMatch) {
+        superAdmin.password = 'superadmin123';
+        await superAdmin.save();
+        console.log('[Auth] Updated superadmin@vcas.edu password to superadmin123.');
+      }
+    }
+
+    let principalAdmin = await Admin.findOne({ email: 'admin@vcas.edu' });
+    if (!principalAdmin) {
+      await Admin.create({
+        email: 'admin@vcas.edu',
+        password: 'admin123',
+        name: 'Principal',
+        role: 'Admin',
+        isSuperAdmin: false,
+        permissions: ['admin_access']
+      });
+      console.log('[Auth] Seeded admin@vcas.edu into database.');
+    } else {
+      const isAdminMatch = await principalAdmin.matchPassword('admin123');
+      if (!isAdminMatch) {
+        principalAdmin.password = 'admin123';
+        await principalAdmin.save();
+        console.log('[Auth] Updated admin@vcas.edu password to admin123.');
+      }
+    }
+    adminAccountsSeeded = true;
+  } catch (err) {
+    console.error('Error ensuring admin accounts:', err.message);
+  }
+}
 
 // Helper to compute initials
 function getInitials(name) {
@@ -378,4 +428,46 @@ exports.deleteAchievement = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc   Admin / Super Admin Login with database password verification
+// @route  POST /api/auth/admin/login
+// Body: { email, password, expectedRole }
+exports.adminLogin = async (req, res) => {
+  try {
+    await ensureAdminAccounts();
+
+    const { email, password, expectedRole } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const admin = await Admin.findOne({ email: cleanEmail });
+
+    if (!admin) {
+      return res.status(401).json({ success: false, message: 'Invalid admin credentials.' });
+    }
+
+    // Verify password using bcrypt against database
+    const isMatch = await admin.matchPassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid password. Please check your credentials.' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${admin.role} authenticated successfully.`,
+      user: {
+        role: admin.role,
+        email: admin.email,
+        name: admin.name,
+        isSuperAdmin: admin.isSuperAdmin,
+        permissions: admin.permissions || []
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Server error during admin login.' });
+  }
+};
+
 

@@ -18,7 +18,7 @@ import {
   Printer
 } from 'lucide-react';
 
-export default function StudentProfileView({ student, onBack, user, canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff'), onDownloadCredentials, onPrintCredentials }) {
+export default function StudentProfileView({ student, onBack, user, canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff'), onDownloadCredentials, onPrintCredentials, onEdit }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
   const [activeTab, setActiveTab] = useState('Overview');
 
@@ -138,8 +138,24 @@ export default function StudentProfileView({ student, onBack, user, canViewFees 
               </>
             )}
             <button 
-              onClick={() => alert(`Edit profile for ${studentData.name}`)}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs flex items-center gap-2 transition-all"
+              onClick={() => {
+                if (onEdit) {
+                  onEdit({
+                    ...studentData,
+                    ...student,
+                    _id: student?._id || student?.id,
+                    studentId: student?.studentId || student?.id || studentData.id,
+                    id: student?.studentId || student?.id || studentData.id,
+                    name: student?.name || studentData.name,
+                    admNo: student?.admNo || studentData.admNo,
+                    phone: student?.phone || student?.mobile || studentData.mobile,
+                    sem: student?.sem || studentData.sem,
+                    department: student?.department || studentData.department,
+                    course: student?.course || studentData.course
+                  });
+                }
+              }}
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer"
             >
               <Edit className="w-4 h-4 text-slate-400" />
               Edit Profile

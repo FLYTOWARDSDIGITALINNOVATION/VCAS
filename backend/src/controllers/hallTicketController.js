@@ -1,5 +1,6 @@
 const HallTicket = require('../models/HallTicket');
 const Class = require('../models/Class');
+const Student = require('../models/Student');
 
 // Helper: Normalize & deduplicate subjects array
 const deduplicateSubjects = (subjects = []) => {
@@ -211,6 +212,30 @@ exports.getEligibleStudents = async (req, res) => {
       }
     });
 
+    // Also include students registered in the main Student collection
+    try {
+      const stuFilter = {};
+      if (department && department !== 'All') {
+        stuFilter.department = { $regex: new RegExp(department.trim().split(' ')[0], 'i') };
+      }
+      const registeredStudents = await Student.find(stuFilter);
+      registeredStudents.forEach(st => {
+        const rollNo = (st.rollNo || st.studentId || '').trim().toUpperCase();
+        if (rollNo && !studentMap.has(rollNo)) {
+          studentMap.set(rollNo, {
+            rollNo,
+            name: (st.name || '').trim(),
+            dept: st.department || department || '',
+            semester: st.sem ? parseInt(st.sem) || 1 : 1,
+            section: st.section || 'A',
+            subjects: []
+          });
+        }
+      });
+    } catch (sErr) {
+      console.error('Error fetching registered students for exam eligibility:', sErr.message);
+    }
+
     const students = Array.from(studentMap.values()).sort((a, b) => a.rollNo.localeCompare(b.rollNo));
     const availableSubjects = Array.from(subjectsMap.values());
 
@@ -300,9 +325,91 @@ exports.createOrUpdateAllocation = async (req, res) => {
       ]
     };
 
+    // Helper to merge existing allocation students with new incoming students
+    const mergeWithExisting = (existingDoc) => {
+      // 1. Merge common subjects
+      const combinedSubjects = deduplicateSubjects([
+        ...(existingDoc.commonSubjects || []),
+        ...cleanCommonSubjects
+      ]);
+
+      // 2. Merge halls
+      const hallMap = new Map();
+      (existingDoc.halls || []).forEach(h => {
+        if (h && h.hallNo) hallMap.set(h.hallNo.trim().toLowerCase(), h);
+      });
+      cleanHalls.forEach(h => {
+        if (h && h.hallNo) hallMap.set(h.hallNo.trim().toLowerCase(), h);
+      });
+      const combinedHalls = Array.from(hallMap.values());
+
+      // 3. Merge students by rollNo
+      const studentMap = new Map();
+      // Put all existing students first
+      (existingDoc.students || []).forEach(st => {
+        const roll = (st.rollNo || '').trim().toUpperCase();
+        if (roll) {
+          studentMap.set(roll, {
+            rollNo: roll,
+            name: st.name,
+            dept: st.dept || existingDoc.department,
+            semester: st.semester || existingDoc.semester,
+            section: st.section || 'A',
+            hallNo: st.hallNo,
+            seatNo: st.seatNo,
+            deskNo: st.deskNo,
+            eligible: st.eligible !== false,
+            remarks: st.remarks || 'Eligible for Examination',
+            subjects: Array.isArray(st.subjects) ? [...st.subjects] : []
+          });
+        }
+      });
+
+      // Merge incoming students
+      cleanStudents.forEach(newSt => {
+        const roll = (newSt.rollNo || '').trim().toUpperCase();
+        if (!roll) return;
+        if (studentMap.has(roll)) {
+          const current = studentMap.get(roll);
+          // Update hall/seat if newly provided and valid
+          if (newSt.hallNo && newSt.hallNo !== 'TBA' && newSt.hallNo !== 'Unassigned') {
+            current.hallNo = newSt.hallNo;
+          }
+          if (newSt.seatNo && newSt.seatNo !== 'TBA') {
+            current.seatNo = newSt.seatNo;
+          }
+          if (newSt.deskNo) current.deskNo = newSt.deskNo;
+          if (newSt.name) current.name = newSt.name;
+
+          // Merge subjects for this student across different subjects
+          const subMap = new Map();
+          (current.subjects || []).forEach(s => {
+            if (s && s.code) subMap.set(s.code.trim().toUpperCase(), s);
+          });
+          (newSt.subjects || []).forEach(s => {
+            if (s && s.code) subMap.set(s.code.trim().toUpperCase(), s);
+          });
+          current.subjects = Array.from(subMap.values());
+          studentMap.set(roll, current);
+        } else {
+          studentMap.set(roll, newSt);
+        }
+      });
+
+      payload.commonSubjects = combinedSubjects;
+      payload.halls = combinedHalls;
+      payload.students = Array.from(studentMap.values());
+    };
+
     let allocation;
     if (_id) {
-      allocation = await HallTicket.findByIdAndUpdate(_id, payload, { new: true, runValidators: true });
+      const existingById = await HallTicket.findById(_id);
+      if (existingById) {
+        mergeWithExisting(existingById);
+        allocation = await HallTicket.findByIdAndUpdate(_id, payload, { new: true, runValidators: true });
+      } else {
+        allocation = await HallTicket.create(payload);
+      }
     } else {
       const existingExam = await HallTicket.findOne({
         examName: payload.examName,
@@ -311,13 +418,14 @@ exports.createOrUpdateAllocation = async (req, res) => {
       });
 
       if (existingExam) {
+        mergeWithExisting(existingExam);
         allocation = await HallTicket.findByIdAndUpdate(existingExam._id, payload, { new: true, runValidators: true });
       } else {
         allocation = await HallTicket.create(payload);
       }
     }
 
-    console.log('[HallTicket] Allocation saved successfully! ID:', allocation._id);
+    console.log('[HallTicket] Allocation saved successfully! Total students:', payload.students.length);
 
     res.status(200).json({
       success: true,

@@ -6,8 +6,12 @@ const {
   completeProfile,
   updateProfile,
   addAchievement,
-  deleteAchievement
+  deleteAchievement,
+  adminLogin
 } = require('../controllers/authController');
+
+// POST /api/auth/admin/login
+router.post('/admin/login', adminLogin);
 
 // POST /api/auth/staff/login
 router.post('/staff/login', staffLogin);

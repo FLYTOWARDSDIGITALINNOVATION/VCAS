@@ -231,7 +231,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
     if (day > 28) {
       return { day, status: 'Upcoming', label: '-', bg: 'bg-slate-50 text-slate-300 border-slate-100' };
     }
-    return { day, status: 'Present (Checked in 08:52 AM)', label: 'P', bg: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold' };
+    return { day, status: 'Present', label: 'P', bg: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold' };
   });
 
   const presentCount = 19;
@@ -970,14 +970,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
                     </p>
                   </div>
 
-                  <button
-                    onClick={fetchStaffAchievements}
-                    title="Refresh achievements"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-xl transition-all self-start sm:self-auto shadow-2xs"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingAchievements ? 'animate-spin text-blue-600' : ''}`} />
-                    <span>Refresh</span>
-                  </button>
+                  
                 </div>
 
                 {/* Category Filter Chips */}

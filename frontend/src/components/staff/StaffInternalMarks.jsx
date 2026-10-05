@@ -111,7 +111,7 @@ export default function StaffInternalMarks({ staffUser }) {
     }
     if (list.length === 0) {
       list.push(
-        { code: "CS2001", name: "Cloud Database" },
+        { code: "CS2001", name: "Cloud Computing" },
         { code: "CS2005", name: "DBMS" }
       );
     }

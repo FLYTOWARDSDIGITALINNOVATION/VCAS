@@ -1,4 +1,12 @@
 require('dotenv').config();
+const dns = require('dns');
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+  if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+} catch (e) {}
+
 const express    = require('express');
 const cors       = require('cors');
 const mongoose   = require('mongoose');
@@ -14,6 +22,12 @@ const noticeRoutes           = require('./routes/noticeRoutes');
 const leaveRoutes            = require('./routes/leaveRoutes');
 const questionPaperRoutes    = require('./routes/questionPaperRoutes');
 const hallTicketRoutes       = require('./routes/hallTicketRoutes');
+const studentRoutes          = require('./routes/studentRoutes');
+const departmentRoutes       = require('./routes/departmentRoutes');
+const courseRoutes           = require('./routes/courseRoutes');
+const subjectRoutes          = require('./routes/subjectRoutes');
+const settingsRoutes         = require('./routes/settingsRoutes');
+const examRoutes             = require('./routes/examRoutes');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -55,6 +69,12 @@ app.use('/api/notices',         noticeRoutes);
 app.use('/api/leave',           leaveRoutes);
 app.use('/api/question-papers', questionPaperRoutes);
 app.use('/api/hall-tickets',    hallTicketRoutes);
+app.use('/api/students',        studentRoutes);
+app.use('/api/departments',     departmentRoutes);
+app.use('/api/courses',         courseRoutes);
+app.use('/api/subjects',        subjectRoutes);
+app.use('/api/settings',        settingsRoutes);
+app.use('/api/exams',           examRoutes);
 
 // 404
 app.use((req, res) => {
@@ -70,11 +90,12 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`=================================================`);
   console.log(`🚀 VCAS Backend Server running on port ${PORT}`);
-  console.log(`🌐 Health:     http://localhost:${PORT}/api/health`);
-  console.log(`🔐 Auth:       http://localhost:${PORT}/api/auth/staff/login`);
-  console.log(`📚 Classes:    http://localhost:${PORT}/api/classes`);
-  console.log(`📋 Attendance: http://localhost:${PORT}/api/attendance`);
-  console.log(`📅 Timetable:      http://localhost:${PORT}/api/timetable`);
+  console.log(`🌐 Health:        http://localhost:${PORT}/api/health`);
+  console.log(`🔐 Auth:          http://localhost:${PORT}/api/auth/staff/login`);
+  console.log(`🎓 Students:      http://localhost:${PORT}/api/students`);
+  console.log(`📚 Classes:       http://localhost:${PORT}/api/classes`);
+  console.log(`📋 Attendance:    http://localhost:${PORT}/api/attendance`);
+  console.log(`📅 Timetable:     http://localhost:${PORT}/api/timetable`);
   console.log(`📝 InternalMarks: http://localhost:${PORT}/api/internal-marks`);
   console.log(`📌 Assignments:   http://localhost:${PORT}/api/assignments`);
   console.log(`📢 Notices:       http://localhost:${PORT}/api/notices`);

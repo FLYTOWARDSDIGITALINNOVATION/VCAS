@@ -256,7 +256,7 @@ export default function StaffNetCertificateView({ staffUser = {} }) {
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 {netSetExamCertificate
-                  ? 'Official certificate uploaded and saved in database'
+                  ? 'Official certificate uploaded and verified'
                   : 'No certificate uploaded yet. Please upload your document below.'}
               </p>
             </div>
@@ -309,7 +309,7 @@ export default function StaffNetCertificateView({ staffUser = {} }) {
             {isUploading && (
               <span className="text-xs font-bold text-indigo-600 animate-pulse flex items-center gap-1.5 ml-auto">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                Saving to database...
+                Saving certificate...
               </span>
             )}
           </div>

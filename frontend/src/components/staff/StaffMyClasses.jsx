@@ -573,7 +573,6 @@ export default function StaffMyClasses({ staffUser }) {
                     <option value={1}>Year 1</option>
                     <option value={2}>Year 2</option>
                     <option value={3}>Year 3</option>
-                    <option value={4}>Year 4</option>
                   </select>
                 </div>
 
@@ -584,7 +583,7 @@ export default function StaffMyClasses({ staffUser }) {
                     onChange={(e) => setNewClass({ ...newClass, semester: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                    {[1, 2, 3, 4, 5, 6].map(s => (
                       <option key={s} value={s}>Sem {s}</option>
                     ))}
                   </select>
@@ -764,7 +763,7 @@ export default function StaffMyClasses({ staffUser }) {
                     onChange={(e) => setEditForm({ ...editForm, semester: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-amber-500"
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s}>Sem {s}</option>)}
+                    {[1, 2, 3, 4, 5, 6].map(s => <option key={s} value={s}>Sem {s}</option>)}
                   </select>
                 </div>
               </div>

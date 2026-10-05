@@ -15,7 +15,7 @@ const DEFAULT_INSTRUCTIONS = [
   'Students must sign in the attendance sheet and on the hall ticket in the presence of the Hall Superintendent.'
 ];
 
-const ALL_SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
+const ALL_SEMESTERS = [1, 2, 3, 4, 5, 6];
 const DEFAULT_DEPTS = [
   'Computer Science',
   'Information Technology',
@@ -386,30 +386,51 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
         };
 
         if (data.students && data.students.length > 0) {
-          const formatted = data.students.map(st => {
-            const existingInState = studentsToAllocate.find(s => s.rollNo.toUpperCase() === st.rollNo.toUpperCase());
-            const assignedHall = existingInState?.hallNo || '';
-            const assignedSeat = existingInState?.seatNo || '';
+          setStudentsToAllocate(prev => {
+            const studentMap = new Map();
+            // Preserve all previously allocated students across all subjects
+            prev.forEach(s => {
+              if (s && s.rollNo) {
+                studentMap.set(s.rollNo.toUpperCase(), {
+                  ...s,
+                  subjects: Array.isArray(s.subjects) ? [...s.subjects] : []
+                });
+              }
+            });
 
-            return {
-              rollNo: st.rollNo,
-              name: st.name,
-              dept: st.dept || activeDept,
-              semester: st.semester || activeSem,
-              section: st.section || 'A',
-              hallNo: assignedHall,
-              seatNo: assignedSeat,
-              eligible: true,
-              remarks: 'Eligible for Examination',
-              // Student is strictly assigned ONLY the subject staff selected
-              subjects: [chosenSub]
-            };
+            // Merge newly loaded students for this subject
+            data.students.forEach(st => {
+              const roll = (st.rollNo || '').toUpperCase();
+              if (!roll) return;
+
+              if (studentMap.has(roll)) {
+                const existing = studentMap.get(roll);
+                const curSubs = existing.subjects || [];
+                if (!curSubs.some(s => s.code.toUpperCase() === chosenSub.code.toUpperCase())) {
+                  existing.subjects.push(chosenSub);
+                }
+                studentMap.set(roll, existing);
+              } else {
+                studentMap.set(roll, {
+                  rollNo: st.rollNo,
+                  name: st.name,
+                  dept: st.dept || activeDept,
+                  semester: st.semester || activeSem,
+                  section: st.section || 'A',
+                  hallNo: '',
+                  seatNo: '',
+                  eligible: true,
+                  remarks: 'Eligible for Examination',
+                  subjects: [chosenSub]
+                });
+              }
+            });
+
+            return Array.from(studentMap.values());
           });
-          setStudentsToAllocate(formatted);
-          setStatusMessage({ type: 'success', text: `Loaded ${formatted.length} student(s) studying ${chosenSub.code} (${chosenSub.name}).` });
+          setStatusMessage({ type: 'success', text: `Loaded student(s) for ${chosenSub.code} (${chosenSub.name}). All existing allocated students preserved.` });
         } else {
-          setStudentsToAllocate([]);
-          setStatusMessage({ type: 'info', text: `No students found enrolled in subject ${activeSub}.` });
+          setStatusMessage({ type: 'info', text: `No new students found enrolled in subject ${activeSub}. Existing allocated students remain intact.` });
         }
       }
     } catch (err) {
@@ -424,8 +445,45 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   useEffect(() => {
     if (activeTab === 'allocate') {
       loadAvailableSubjects(formDept, formSemester, formSection);
+      if (currentAllocation?.students?.length > 0) {
+        setStudentsToAllocate(prev => {
+          const map = new Map();
+          currentAllocation.students.forEach(s => {
+            if (s && s.rollNo) {
+              map.set(s.rollNo.toUpperCase(), {
+                ...s,
+                subjects: Array.isArray(s.subjects) ? [...s.subjects] : []
+              });
+            }
+          });
+          prev.forEach(s => {
+            if (s && s.rollNo) {
+              const roll = s.rollNo.toUpperCase();
+              if (map.has(roll)) {
+                const existing = map.get(roll);
+                const mergedSubs = [...existing.subjects];
+                (s.subjects || []).forEach(sub => {
+                  if (!mergedSubs.some(x => x.code.toUpperCase() === sub.code.toUpperCase())) {
+                    mergedSubs.push(sub);
+                  }
+                });
+                map.set(roll, {
+                  ...existing,
+                  ...s,
+                  hallNo: s.hallNo || existing.hallNo,
+                  seatNo: s.seatNo || existing.seatNo,
+                  subjects: mergedSubs
+                });
+              } else {
+                map.set(roll, s);
+              }
+            }
+          });
+          return Array.from(map.values());
+        });
+      }
     }
-  }, [activeTab, formDept, formSemester, formSection]);
+  }, [activeTab, formDept, formSemester, formSection, currentAllocation?._id]);
 
   // Add Hall to hallsList
   const handleAddHall = () => {
@@ -460,12 +518,21 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     });
   };
 
-  // Students filtered by selected allocation subject
+  // Students displayed in allocation matrix:
+  // All students who are already allocated with a hall are ALWAYS displayed.
+  // When a subject is chosen, unallocated students for that subject are also shown.
+  // If 'ALL' or empty, all students in the allocation matrix are displayed.
   const displayedStudents = useMemo(() => {
-    if (!selectedAllocationSubject) return [];
+    if (!selectedAllocationSubject || selectedAllocationSubject === 'ALL') {
+      return studentsToAllocate;
+    }
+    const cleanTargetCode = selectedAllocationSubject.toUpperCase();
     return studentsToAllocate.filter(st => {
+      // Always display students who already have a hall allocated!
+      const hasHall = st.hallNo && st.hallNo !== 'TBA' && st.hallNo !== 'Unassigned';
+      if (hasHall) return true;
       if (!st.subjects || st.subjects.length === 0) return true;
-      return st.subjects.some(s => s.code.toUpperCase() === selectedAllocationSubject.toUpperCase());
+      return st.subjects.some(s => s.code && s.code.toUpperCase() === cleanTargetCode);
     });
   }, [studentsToAllocate, selectedAllocationSubject]);
 
@@ -2430,15 +2497,13 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
                       onChange={(e) => {
                         const subCode = e.target.value;
                         setSelectedAllocationSubject(subCode);
-                        if (subCode) {
+                        if (subCode && subCode !== 'ALL') {
                           loadEligibleStudents(formDept, formSemester, formSection, subCode);
-                        } else {
-                          setStudentsToAllocate([]);
                         }
                       }}
                       className="bg-white border-2 border-blue-500 rounded-xl px-4 py-2 text-xs font-black text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm min-w-[280px]"
                     >
-                      <option value="">-- Please Select Subject to Allocate --</option>
+                      <option value="ALL">📋 All Subjects & All Allocated Candidates ({studentsToAllocate.length})</option>
                       {subjectsSchedule.map(s => (
                         <option key={s.code} value={s.code}>
                           {s.code} — {s.name} ({s.date || 'TBA'} · {s.session})

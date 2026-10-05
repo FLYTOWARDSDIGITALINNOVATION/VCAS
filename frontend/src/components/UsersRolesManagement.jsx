@@ -54,7 +54,7 @@ const MODULE_PERMISSIONS_MATRIX = [
 
 const AUDIT_LOGS = [
   { id: 1, user: 'Admin User (admin@vcas.edu)', action: 'Modified Role Permissions Matrix', ip: '192.168.1.45', time: '10 mins ago', status: 'Success' },
-  { id: 2, user: 'Dr. Sunita Rao (sunita.rao@vcas.edu)', action: 'Published Circular CIR/2025/ACAD-114', ip: '192.168.1.88', time: '45 mins ago', status: 'Success' },
+  { id: 2, user: 'Department Coordinator (coord@vcas.edu)', action: 'Published Circular CIR/2025/ACAD-114', ip: '192.168.1.88', time: '45 mins ago', status: 'Success' },
   { id: 3, user: 'Mr. K. Narayanan (accounts@vcas.edu)', action: 'Recorded Bulk Fee Receipts (₹45,000)', ip: '192.168.1.102', time: '2 hours ago', status: 'Success' },
   { id: 4, user: 'Unknown IP (103.24.55.19)', action: 'Failed Password Attempt (5 tries - Blocked)', ip: '103.24.55.19', time: '3 hours ago', status: 'Blocked / Warning' },
   { id: 5, user: 'Aditya Kapoor (aditya.k@student.vcas.edu)', action: 'Submitted Assignment #4 CS301', ip: '172.16.4.12', time: '5 hours ago', status: 'Success' }
@@ -562,12 +562,7 @@ export default function UsersRolesManagement() {
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between">
             <h3 className="text-sm font-extrabold text-slate-900">Security & Authentication Access Trail</h3>
-            <button 
-              onClick={() => showToast('Audit logs refreshed')}
-              className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh Log
-            </button>
+            
           </div>
 
           <div className="divide-y divide-slate-100">
@@ -633,7 +628,7 @@ export default function UsersRolesManagement() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Dr. Sunita Rao"
+                  placeholder="e.g. Prof. Faculty Name"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none"
                 />
               </div>

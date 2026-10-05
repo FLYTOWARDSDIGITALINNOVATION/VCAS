@@ -56,8 +56,8 @@ export default function LoginCard({ onLoginSuccess }) {
   const [staffMode, setStaffMode] = useState('login');
 
   // ── Login form state ──────────────────────────────────────────
-  const [email, setEmail] = useState('superadmin@vcas.edu');
-  const [password, setPassword] = useState('••••••••••••');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -86,32 +86,26 @@ export default function LoginCard({ onLoginSuccess }) {
       id: 'SuperAdmin', 
       label: 'Super Admin', 
       icon: ShieldCheck, 
-      defaultEmail: 'superadmin@vcas.edu', 
-      defaultPassword: '••••••••••••',
       badge: 'All Access' 
     },
     { 
       id: 'Admin', 
       label: 'Principal', 
       icon: Building2, 
-      defaultEmail: 'admin@vcas.edu', 
-      defaultPassword: '••••••••••••',
       badge: 'Admin' 
     },
     { 
       id: 'Staff', 
       label: 'Staff Portal', 
       icon: Users, 
-      defaultEmail: '', 
-      defaultPassword: '',
       badge: 'Faculty & Office' 
     }
   ];
 
   const handleRoleSelect = (role) => {
     setActiveRole(role.id);
-    setEmail(role.defaultEmail);
-    setPassword(role.defaultPassword);
+    setEmail('');
+    setPassword('');
     setErrorMsg('');
     setSuccessMsg('');
     setStaffMode('login');
@@ -156,7 +150,8 @@ export default function LoginCard({ onLoginSuccess }) {
   // ── Login ───────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!email.trim() || !password) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
       setErrorMsg('Please enter both Email and Password.');
       return;
     }
@@ -164,93 +159,58 @@ export default function LoginCard({ onLoginSuccess }) {
     setErrorMsg('');
 
     try {
-      if (activeRole === 'Staff') {
-        const cleanEmail = email.trim().toLowerCase();
-
-        // Direct demo credentials handling for effortless testing
-        if (cleanEmail === 'accountant@vcas.edu') {
-          setTimeout(() => {
-            onLoginSuccess({
-              role: 'Accountant',
-              email: 'accountant@vcas.edu',
-              name: 'Accountant',
-              title: 'Accountant',
-              department: 'Accounts & Finance',
-              designation: 'Accountant',
-              canViewFees: true
-            });
-          }, 150);
-          return;
-        }
-
-        if (cleanEmail === 'officestaff@vcas.edu') {
-          setTimeout(() => {
-            onLoginSuccess({
-              role: 'Office Staff',
-              email: 'officestaff@vcas.edu',
-              name: 'Office Staff',
-              title: 'Office Administration',
-              department: 'Administrative Office',
-              designation: 'Office Staff',
-              canViewFees: true
-            });
-          }, 150);
-          return;
-        }
-
-        const response = await fetch(`${API_BASE}/api/auth/staff/login`, {
+      // 1. If it is an admin email or SuperAdmin/Admin role is active, verify with Admin database
+      if (cleanEmail === 'superadmin@vcas.edu' || cleanEmail === 'admin@vcas.edu' || activeRole === 'SuperAdmin' || activeRole === 'Admin') {
+        const adminRes = await fetch(`${API_BASE}/api/auth/admin/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim(), password })
+          body: JSON.stringify({ 
+            email: cleanEmail, 
+            password
+          })
         });
-        const data = await response.json();
+        const adminData = await adminRes.json();
 
-        if (response.ok && data.success) {
-          const s = data.staff;
-          const initials = s.name
-            ? s.name.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
-            : 'ST';
-          
-          const resolvedRole = s.role || (
-            s.designation === 'Accountant' || s.department?.includes('Account') ? 'Accountant' :
-            s.designation === 'Office Staff' || s.department?.includes('Office') ? 'Office Staff' :
-            'Staff'
-          );
-          const isFinanceStaff = resolvedRole === 'Accountant' || resolvedRole === 'Office Staff';
-
-          onLoginSuccess({
-            ...s,
-            role: resolvedRole,
-            canViewFees: isFinanceStaff,
-            subjects: s.subjects || (s.classes ? s.classes.map(c => c.code) : []),
-            avatarColor: s.avatarBg || (resolvedRole === 'Accountant' ? 'from-amber-600 to-orange-600' : resolvedRole === 'Office Staff' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'),
-            avatarInitials: s.avatarText || initials
-          });
-        } else {
-          setErrorMsg(data.message || 'Invalid email or password.');
+        if (adminRes.ok && adminData.success) {
+          onLoginSuccess(adminData.user);
+          return;
+        } else if (cleanEmail === 'superadmin@vcas.edu' || cleanEmail === 'admin@vcas.edu') {
+          setErrorMsg(adminData.message || 'Invalid password. Please check your credentials.');
+          return;
         }
-      } else if (activeRole === 'SuperAdmin') {
-        setTimeout(() => {
-          onLoginSuccess({
-            role: 'Super Admin',
-            email: email.trim() || 'superadmin@vcas.edu',
-            name: 'Super Administrator',
-            isSuperAdmin: true,
-            permissions: ['download_credentials', 'print_credentials', 'full_admin_access']
-          });
-        }, 150);
+      }
+
+      // 2. Otherwise verify with Staff database
+      const response = await fetch(`${API_BASE}/api/auth/staff/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password })
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const s = data.staff;
+        const initials = s.name
+          ? s.name.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+          : 'ST';
+        
+        const resolvedRole = s.role || (
+          s.designation === 'Accountant' || s.department?.includes('Account') ? 'Accountant' :
+          s.designation === 'Office Staff' || s.department?.includes('Office') ? 'Office Staff' :
+          'Staff'
+        );
+        const isFinanceStaff = resolvedRole === 'Accountant' || resolvedRole === 'Office Staff';
+
+        onLoginSuccess({
+          ...s,
+          role: resolvedRole,
+          canViewFees: isFinanceStaff,
+          subjects: s.subjects || (s.classes ? s.classes.map(c => c.code) : []),
+          avatarColor: s.avatarBg || (resolvedRole === 'Accountant' ? 'from-amber-600 to-orange-600' : resolvedRole === 'Office Staff' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'),
+          avatarInitials: s.avatarText || initials
+        });
       } else {
-        // Admin / Principal
-        setTimeout(() => {
-          onLoginSuccess({
-            role: 'Admin',
-            email: email.trim() || 'admin@vcas.edu',
-            name: 'Principal',
-            title: 'Principal',
-            isSuperAdmin: false,
-            canViewFees: false
-          });
-        }, 150);
+        setErrorMsg(data.message || 'Invalid email or password.');
       }
     } catch (err) {
       setErrorMsg('Unable to connect to VCAS server. Please make sure the backend is running on port 5000.');
@@ -619,10 +579,13 @@ export default function LoginCard({ onLoginSuccess }) {
                 <Mail className="w-4 h-4" />
               </div>
               <input
+                id="login-email"
+                name="email"
                 type="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={activeRole === 'Staff' ? 'e.g. staff.name@vcas.edu' : 'admin@vcas.edu'}
+                placeholder="Enter your email address"
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
                 required
               />
@@ -637,7 +600,10 @@ export default function LoginCard({ onLoginSuccess }) {
                 <Lock className="w-4 h-4" />
               </div>
               <input
+                id="login-password"
+                name="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
@@ -674,51 +640,6 @@ export default function LoginCard({ onLoginSuccess }) {
             </a>
           </div>
 
-          {/* Quick Demo Credentials for Staff Portal */}
-          {activeRole === 'Staff' && (
-            <div className="p-2.5 bg-slate-50 border border-slate-200/90 rounded-xl space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
-                <span>Quick Fill Demo Staff Login:</span>
-                <span className="text-[10px] text-blue-600 font-bold">1-Click Auto Fill</span>
-              </div>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('ravi.kumar@vcas.edu');
-                    setPassword('vcas@2026');
-                    setErrorMsg('');
-                  }}
-                  className="flex-1 py-1 px-1.5 bg-white border border-slate-200 rounded-lg text-[10.5px] font-semibold text-slate-700 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50 transition-all text-center"
-                >
-                  👨‍🏫 Faculty
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('accountant@vcas.edu');
-                    setPassword('vcas@2026');
-                    setErrorMsg('');
-                  }}
-                  className="flex-1 py-1 px-1.5 bg-white border border-amber-200 rounded-lg text-[10.5px] font-semibold text-amber-800 hover:bg-amber-50 transition-all text-center"
-                >
-                  💰 Accountant
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('officestaff@vcas.edu');
-                    setPassword('vcas@2026');
-                    setErrorMsg('');
-                  }}
-                  className="flex-1 py-1 px-1.5 bg-white border border-emerald-200 rounded-lg text-[10.5px] font-semibold text-emerald-800 hover:bg-emerald-50 transition-all text-center"
-                >
-                  📋 Office Staff
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Submit */}
           <button
             type="submit"
@@ -747,14 +668,6 @@ export default function LoginCard({ onLoginSuccess }) {
 
         </form>
       )}
-
-      {/* Footer */}
-      <div className="mt-4 pt-3 border-t border-slate-100 text-center">
-        <p className="text-[11px] text-slate-400">
-          Need help signing in? <span className="text-slate-600 font-medium">Contact Administrator</span>
-        </p>
-        <p className="text-[10px] text-slate-300 mt-0.5">VCAS Campus Automation Portal © 2026</p>
-      </div>
 
     </div>
   );

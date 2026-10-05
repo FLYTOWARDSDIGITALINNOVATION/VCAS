@@ -85,25 +85,18 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   // Real backend metrics and dynamic activities state
   const [dashboardStats, setDashboardStats] = useState({
-    totalStudents: 1248,
-    totalStaff: 84,
-    departmentsCount: 6,
-    totalCourses: 24,
-    attendanceRate: '89.2%',
-    pendingFees: '₹4.8L',
+    totalStudents: 0,
+    totalStaff: 0,
+    departmentsCount: 0,
+    totalCourses: 0,
+    attendanceRate: '--',
+    pendingFees: '₹0',
     pendingLeaves: 0,
     totalLeaves: 0,
     leaveDisplayCount: 0,
     noticesCount: 0,
-    attendanceBreakdown: { presentPct: 79, absentPct: 15, leavePct: 6 },
-    deptEnrollments: [
-      { dept: 'Commerce', count: 360, width: '92%' },
-      { dept: 'Computer Science', count: 320, width: '82%' },
-      { dept: 'English Literature', count: 240, width: '65%' },
-      { dept: 'Business Admin (BBA)', count: 210, width: '58%' },
-      { dept: 'Computer Apps (BCA)', count: 180, width: '48%' },
-      { dept: 'Mathematics', count: 140, width: '38%' }
-    ],
+    attendanceBreakdown: { presentPct: 0, absentPct: 0, leavePct: 0 },
+    deptEnrollments: [],
     recentActivities: [],
     loading: true
   });
@@ -111,13 +104,15 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const fetchDashboardRealData = async () => {
     try {
       setDashboardStats(prev => ({ ...prev, loading: true }));
-      const [resLeaves, resStaff, resClasses, resNotices, resAssignments, resAttendance] = await Promise.allSettled([
+      const [resLeaves, resStaff, resClasses, resNotices, resAssignments, resAttendance, resStudents, resDepts] = await Promise.allSettled([
         fetch('http://localhost:5000/api/leave'),
         fetch('http://localhost:5000/api/staff'),
         fetch('http://localhost:5000/api/classes'),
         fetch('http://localhost:5000/api/notices'),
         fetch('http://localhost:5000/api/assignments'),
-        fetch('http://localhost:5000/api/attendance')
+        fetch('http://localhost:5000/api/attendance'),
+        fetch('http://localhost:5000/api/students'),
+        fetch('http://localhost:5000/api/departments')
       ]);
 
       let leavesData = null;
@@ -150,6 +145,16 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         attendanceData = await resAttendance.value.json();
       }
 
+      let studentsData = null;
+      if (resStudents.status === 'fulfilled' && resStudents.value.ok) {
+        studentsData = await resStudents.value.json();
+      }
+
+      let deptsData = null;
+      if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
+        deptsData = await resDepts.value.json();
+      }
+
       // Process leaves
       const leavesList = Array.isArray(leavesData?.leaves) 
         ? leavesData.leaves 
@@ -167,35 +172,71 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
       // Process staff
       const staffList = staffData?.data || (Array.isArray(staffData) ? staffData : []);
-      const totalStaffCount = staffList.length > 0 ? staffList.length : 84;
+      const totalStaffCount = staffList.length;
 
-      // Process classes & students
+      // Process classes
       const classesList = classesData?.classes || (Array.isArray(classesData) ? classesData : []);
-      const totalCoursesCount = classesList.length > 0 ? classesList.length : 24;
+      const totalCoursesCount = classesList.length;
 
-      let totalStudentsCount = 0;
-      const deptCountMap = {};
-      classesList.forEach(cls => {
-        const stdCount = Array.isArray(cls.students) ? cls.students.length : (cls.enrolledCount || 0);
-        totalStudentsCount += stdCount;
-        const dName = cls.dept || 'General';
-        deptCountMap[dName] = (deptCountMap[dName] || 0) + stdCount;
+      // Process real students
+      const rawStudentsList = studentsData?.data || (Array.isArray(studentsData) ? studentsData : []);
+      const studentMap = new Map();
+
+      rawStudentsList.forEach(s => {
+        const key = s.studentId || s.admNo || s.rollNo || s.id || s._id;
+        if (key) {
+          studentMap.set(key, {
+            name: s.name || s.fullName,
+            department: s.department || 'Computer Science'
+          });
+        }
       });
 
-      if (totalStudentsCount === 0) totalStudentsCount = 1248;
+      classesList.forEach(cls => {
+        const enrolled = Array.isArray(cls.students) ? cls.students : [];
+        enrolled.forEach(st => {
+          const key = st.rollNo || st.admNo || st.studentId || st.name;
+          if (key && !studentMap.has(key)) {
+            studentMap.set(key, {
+              name: st.name,
+              department: cls.dept || 'Computer Science'
+            });
+          }
+        });
+      });
 
+      const totalStudentsCount = studentMap.size;
+
+      // Dept enrollments bar data
+      const deptCountMap = {};
+      if (studentMap.size > 0) {
+        studentMap.forEach(st => {
+          const dName = st.department || 'General';
+          deptCountMap[dName] = (deptCountMap[dName] || 0) + 1;
+        });
+      } else {
+        classesList.forEach(cls => {
+          const stdCount = Array.isArray(cls.students) ? cls.students.length : (cls.enrolledCount || 0);
+          const dName = cls.dept || 'General';
+          deptCountMap[dName] = (deptCountMap[dName] || 0) + stdCount;
+        });
+      }
+
+      const rawDeptsList = deptsData?.data || (Array.isArray(deptsData) ? deptsData : []);
       const uniqueDepts = new Set([
+        ...rawDeptsList.map(d => d.name).filter(Boolean),
+        ...Object.keys(deptCountMap).filter(Boolean),
         ...classesList.map(c => c.dept).filter(Boolean),
         ...staffList.map(s => s.department).filter(Boolean)
       ]);
       const departmentsCount = uniqueDepts.size > 0 ? uniqueDepts.size : 6;
 
-      // Dept enrollments bar data
       let deptEnrollments = Object.entries(deptCountMap).map(([dept, count]) => ({
         dept,
         count,
         width: `${Math.min(100, Math.max(15, Math.round((count / (totalStudentsCount || 1)) * 100)))}%`
       }));
+
       if (deptEnrollments.length === 0) {
         deptEnrollments = [
           { dept: 'Commerce', count: 360, width: '95%' },
@@ -305,24 +346,38 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       // Sort activities descending by date
       activities.sort((a, b) => b.rawDate - a.rawDate);
 
+      // Compute real pending fees
+      const savedFeeRecords = JSON.parse(localStorage.getItem('vcas_real_fee_records') || '[]');
+      let pendingFeesSum = 0;
+      if (savedFeeRecords.length > 0) {
+        pendingFeesSum = savedFeeRecords.reduce((acc, curr) => acc + (Number(curr.pendingFee) || 0), 0);
+      } else {
+        rawStudentsList.forEach(s => {
+          if ((s.feeStatus || '').toLowerCase() !== 'paid') {
+            pendingFeesSum += 25000;
+          }
+        });
+      }
+      const pendingFeesDisplay = pendingFeesSum >= 100000 
+        ? `₹${(pendingFeesSum / 100000).toFixed(1)}L` 
+        : pendingFeesSum >= 1000 
+        ? `₹${(pendingFeesSum / 1000).toFixed(0)}K` 
+        : `₹${pendingFeesSum}`;
+
       setDashboardStats({
         totalStudents: totalStudentsCount,
         totalStaff: totalStaffCount,
         departmentsCount,
         totalCourses: totalCoursesCount,
         attendanceRate,
-        pendingFees: '₹4.8L',
+        pendingFees: pendingFeesDisplay,
         pendingLeaves: pendingLeavesCount,
         totalLeaves: totalLeavesCount,
         leaveDisplayCount,
         noticesCount: totalNoticesCount,
         attendanceBreakdown: { presentPct, absentPct, leavePct },
         deptEnrollments,
-        recentActivities: activities.length > 0 ? activities.slice(0, 6) : [
-          { title: 'New student registered', detail: 'Aditya Kapoor – B.Com Dept', time: '5 min ago', bg: 'bg-blue-100 text-blue-600', icon: UserPlus, navTarget: 'Students' },
-          { title: 'Leave request submitted', detail: 'Prof. Ramesh Kumar – Casual Leave', time: '1 hr ago', bg: 'bg-amber-100 text-amber-600', icon: Calendar, navTarget: 'Leave Management' },
-          { title: 'Faculty member added', detail: 'Dr. K. Meenakshi Sundaram – English Lit', time: '2 hr ago', bg: 'bg-purple-100 text-purple-600', icon: Users, navTarget: 'Staff' }
-        ],
+        recentActivities: activities.slice(0, 6),
         loading: false
       });
     } catch (err) {
@@ -795,11 +850,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           </main>
         ) : activeNav === 'Courses & Subjects' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            <CourseSubjectManagement />
+            <CourseSubjectManagement user={user} />
           </main>
         ) : activeNav === 'Attendance' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            <AttendanceManagement />
+            <AttendanceManagement user={user} />
           </main>
         ) : activeNav === 'Leave Management' ? (
           <main className="flex-1">
@@ -807,15 +862,15 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           </main>
         ) : activeNav === 'Examinations' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            <ExaminationManagement />
+            <ExaminationManagement user={user} />
           </main>
         ) : activeNav === 'Timetable' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            <TimetableManagement />
+            <TimetableManagement user={user} />
           </main>
         ) : activeNav === 'Assignments' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            <AssignmentManagement />
+            <AssignmentManagement user={user} />
           </main>
         ) : activeNav === 'Notices' ? (
           <main className="flex-1">
@@ -827,7 +882,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           </main>
         ) : activeNav === 'Reports' ? (
           <main className="flex-1">
-            <ReportsManagement />
+            <ReportsManagement user={user} />
           </main>
         ) : activeNav === 'Users & Roles' ? (
           <main className="flex-1">

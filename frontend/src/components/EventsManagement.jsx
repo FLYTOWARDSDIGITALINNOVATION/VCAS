@@ -1520,8 +1520,7 @@ export default function EventsManagement() {
                   >
                     <option value="1st Year (Semester 1/2)">1st Year</option>
                     <option value="2nd Year (Semester 3/4)">2nd Year</option>
-                    <option value="3rd Year (Semester 5/6)">3rd Year</option>
-                    <option value="Final Year (Semester 7/8)">Final Year</option>
+                    <option value="3rd Year (Final Year - Semester 5/6)">3rd Year (Final Year)</option>
                     <option value="PG / Post-Graduate">PG / Masters</option>
                   </select>
                 </div>

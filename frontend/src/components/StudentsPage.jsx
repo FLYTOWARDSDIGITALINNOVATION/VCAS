@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AddStudentWizard from './AddStudentWizard';
 import StudentProfileView from './StudentProfileView';
 import { 
@@ -17,9 +17,54 @@ import {
   AlertTriangle,
   Key,
   Copy,
-  Printer
+  Printer,
+  Loader2,
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+
+const API_BASE = 'http://localhost:5000';
+
+function normalizeStudent(s) {
+  if (!s) return null;
+  return {
+    ...s,
+    id: s.studentId || s.id || s._id,
+    studentId: s.studentId || s.id || s._id,
+    admNo: s.admNo || s.admissionNo || '',
+    admissionNo: s.admNo || s.admissionNo || '',
+    rollNo: s.rollNo || '',
+    name: s.name || s.fullName || '',
+    fullName: s.name || s.fullName || '',
+    sem: s.sem || s.semester || '1st Sem',
+    semester: s.sem || s.semester || '1st Sem',
+    department: s.department || '',
+    course: s.course || '',
+    phone: s.phone || s.mobile || '',
+    mobile: s.phone || s.mobile || '',
+    email: s.email || '',
+    attendance: s.attendance !== undefined ? Number(s.attendance) : 85,
+    feeStatus: s.feeStatus || '--',
+    status: s.status || 'Active',
+    gender: s.gender || 'Male',
+    dob: s.dob || '',
+    bloodGroup: s.bloodGroup || 'O+',
+    address: s.address || '',
+    city: s.city || '',
+    state: s.state || 'Tamil Nadu',
+    pinCode: s.pinCode || '',
+    batch: s.batch || '2024–2027',
+    section: s.section || 'A',
+    cgpa: s.cgpa || '8.0',
+    rank: s.rank || '',
+    fatherName: s.fatherName || '',
+    motherName: s.motherName || '',
+    fatherMobile: s.fatherMobile || s.parentMobile || '',
+    parentOccupation: s.parentOccupation || '',
+    emergencyContact: s.emergencyContact || ''
+  };
+}
 
 export default function StudentsPage({ user, canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff') }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
@@ -35,6 +80,69 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   const [editingStudent, setEditingStudent] = useState(null);
   const [deleteModalStudent, setDeleteModalStudent] = useState(null);
 
+  const [students, setStudents] = useState(() => {
+    try {
+      const cached = localStorage.getItem('vcas_students_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Toast notification helper
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage('');
+    }, 4000);
+  };
+
+  // Fetch student list from MongoDB Atlas and keep cache fresh
+  const fetchStudents = async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      const res = await fetch(`${API_BASE}/api/students`);
+      const result = await res.json();
+      if (res.ok && result.success) {
+        const normalized = (result.data || []).map(normalizeStudent);
+        if (normalized.length > 0) {
+          setStudents(normalized);
+          try {
+            localStorage.setItem('vcas_students_cache', JSON.stringify(normalized));
+          } catch (e) {}
+        }
+      } else {
+        console.error('Failed to fetch students:', result.message);
+        setErrorMessage(result.message || 'Failed to fetch students from server');
+      }
+    } catch (err) {
+      console.error('Error connecting to backend:', err);
+      // Fallback to local cache if offline
+      try {
+        const cached = localStorage.getItem('vcas_students_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setStudents(parsed);
+          }
+        }
+      } catch (e) {}
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
   // Ensure main scroll container is active and unlocked for students page, wizard, and profile views
   React.useEffect(() => {
     const scrollContainer = document.getElementById('main-content-scroll-container');
@@ -49,94 +157,6 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       }
     };
   }, []);
-
-  // Initial 7 students matching Arts and Science college curriculum
-  const [students, setStudents] = useState([
-    {
-      id: 'STU001',
-      admNo: 'ADM2024001',
-      name: 'Arjun Sharma',
-      sem: '4th Sem',
-      department: 'Computer Science',
-      course: 'B.Sc CS',
-      phone: '9876543210',
-      attendance: 88,
-      feeStatus: 'Paid',
-      status: 'Active'
-    },
-    {
-      id: 'STU002',
-      admNo: 'ADM2024002',
-      name: 'Priya Mehta',
-      sem: '4th Sem',
-      department: 'Commerce',
-      course: 'B.Com',
-      phone: '9876543211',
-      attendance: 72,
-      feeStatus: 'Pending',
-      status: 'Active'
-    },
-    {
-      id: 'STU003',
-      admNo: 'ADM2024003',
-      name: 'Rahul Verma',
-      sem: '2nd Sem',
-      department: 'Business Administration (BBA)',
-      course: 'BBA',
-      phone: '9876543212',
-      attendance: 65,
-      feeStatus: 'Partial',
-      status: 'Active'
-    },
-    {
-      id: 'STU004',
-      admNo: 'ADM2024004',
-      name: 'Sneha Nair',
-      sem: '2nd Sem',
-      department: 'Commerce',
-      course: 'M.Com',
-      phone: '9876543213',
-      attendance: 91,
-      feeStatus: 'Paid',
-      status: 'Active'
-    },
-    {
-      id: 'STU005',
-      admNo: 'ADM2024005',
-      name: 'Karthik Rajan',
-      sem: '6th Sem',
-      department: 'English Literature',
-      course: 'B.A. English',
-      phone: '9876543214',
-      attendance: 58,
-      feeStatus: 'Overdue',
-      status: 'Inactive'
-    },
-    {
-      id: 'STU006',
-      admNo: 'ADM2024006',
-      name: 'Divya Krishnan',
-      sem: '2nd Sem',
-      department: 'Mathematics',
-      course: 'B.Sc Maths',
-      phone: '9876543215',
-      attendance: 83,
-      feeStatus: 'Paid',
-      status: 'Active'
-    },
-    {
-      id: 'STU007',
-      admNo: 'ADM2024007',
-      name: 'Amit Patel',
-      sem: '6th Sem',
-      department: 'Computer Applications (BCA)',
-      course: 'BCA',
-      phone: '9876543216',
-      attendance: 77,
-      feeStatus: 'Paid',
-      status: 'Active'
-    }
-  ]);
 
   // Form state for adding new student
   const [newStudent, setNewStudent] = useState({
@@ -181,26 +201,39 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     }
   };
 
-  const handleAddStudentSubmit = (e) => {
+  const handleAddStudentSubmit = async (e) => {
     e.preventDefault();
-    const count = students.length + 1;
-    const createdStudent = {
-      ...newStudent,
-      id: `STU${String(count).padStart(3, '0')}`,
-      admNo: `ADM2024${String(count).padStart(3, '0')}`
-    };
-    setStudents([...students, createdStudent]);
-    setShowAddModal(false);
-    setNewStudent({
-      name: '',
-      sem: '1st Sem',
-      department: 'Commerce',
-      course: 'B.Com',
-      phone: '',
-      attendance: 85,
-      feeStatus: 'Paid',
-      status: 'Active'
-    });
+    setIsSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/students`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newStudent)
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        const created = normalizeStudent(result.data);
+        setStudents(prev => [created, ...prev]);
+        showToast(`Student "${created.name}" added successfully!`);
+        setNewStudent({
+          name: '',
+          sem: '1st Sem',
+          department: 'Commerce',
+          course: 'B.Com',
+          phone: '',
+          attendance: 85,
+          feeStatus: 'Paid',
+          status: 'Active'
+        });
+      } else {
+        alert(result.message || 'Failed to add student');
+      }
+    } catch (err) {
+      console.error('Error adding student:', err);
+      alert('Unable to connect to backend server.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getFeeBadgeClass = (feeStatus) => {
@@ -370,7 +403,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
   };
 
   const handleExportAllStudentsCSV = () => {
-    const headers = ['Student ID', 'Admission No', 'Name', 'Department', 'Course', 'Semester', 'Phone', 'Attendance %', 'Fee Status', 'Status', 'Default Password'];
+    const headers = ['Student ID', 'Admission No', 'Name', 'Department', 'Course', 'Semester', 'Phone', 'Attendance %', 'Academic Status'];
     const rows = filteredStudents.map(s => [
       `"${s.id}"`,
       `"${s.admNo}"`,
@@ -379,50 +412,169 @@ Unauthorized reproduction or distribution is strictly prohibited.
       `"${s.course}"`,
       `"${s.sem}"`,
       `"${s.phone}"`,
-      `"${s.attendance}%"`,
-      `"${s.feeStatus}"`,
-      `"${s.status}"`,
-      `"${s.id.toLowerCase()}@2026"`
+      `"${s.attendance !== undefined ? s.attendance + '%' : '0%'}"`,
+      `"${s.status || 'Active'}"`
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `VCAS_Student_Credentials_Master_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `VCAS_Students_Registry_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingStudent) return;
-    setStudents(students.map(s => s.id === editingStudent.id ? editingStudent : s));
-    setEditingStudent(null);
+    setIsSaving(true);
+    try {
+      const targetId = editingStudent._originalId || editingStudent._id || editingStudent.studentId || editingStudent.id;
+      const payload = {
+        ...editingStudent,
+        studentId: editingStudent.studentId || editingStudent.id,
+        id: editingStudent.studentId || editingStudent.id,
+        name: editingStudent.name || editingStudent.fullName,
+        admNo: editingStudent.admNo || editingStudent.admissionNo,
+        sem: editingStudent.sem || editingStudent.semester,
+        phone: editingStudent.phone || editingStudent.mobile,
+        attendance: Number(editingStudent.attendance)
+      };
+
+      const res = await fetch(`${API_BASE}/api/students/${targetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        const updated = normalizeStudent(result.data);
+        const originalRef = editingStudent._originalId;
+        const originalId = editingStudent._originalStudentId || editingStudent.id;
+
+        setStudents(prev => {
+          const next = prev.map(s => {
+            if (
+              (originalRef && (s._id === originalRef || s.studentId === originalRef || s.id === originalRef)) ||
+              (s._id && updated._id && s._id === updated._id) ||
+              (s.studentId && updated.studentId && s.studentId === updated.studentId) ||
+              (s.id === originalId || s.id === updated.id)
+            ) {
+              return updated;
+            }
+            return s;
+          });
+          try {
+            localStorage.setItem('vcas_students_cache', JSON.stringify(next));
+          } catch (e) {}
+          return next;
+        });
+
+        if (selectedStudentProfile) {
+          setSelectedStudentProfile(updated);
+        }
+        setEditingStudent(null);
+        showToast(`Student "${updated.name}" updated successfully!`);
+      } else {
+        alert(result.message || 'Failed to update student');
+      }
+    } catch (err) {
+      console.error('Error updating student:', err);
+      alert('Unable to connect to backend server. Make sure backend is running on port 5000.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteModalStudent) return;
-    setStudents(students.filter(s => s.id !== deleteModalStudent.id));
-    setDeleteModalStudent(null);
+    setIsSaving(true);
+    try {
+      const targetId = deleteModalStudent._id || deleteModalStudent.studentId || deleteModalStudent.id;
+      const res = await fetch(`${API_BASE}/api/students/${targetId}`, {
+        method: 'DELETE'
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        setStudents(prev => {
+          const next = prev.filter(s => s.id !== deleteModalStudent.id && s._id !== deleteModalStudent._id);
+          try {
+            localStorage.setItem('vcas_students_cache', JSON.stringify(next));
+          } catch (e) {}
+          return next;
+        });
+        showToast(`Student "${deleteModalStudent.name}" deleted successfully.`);
+        setDeleteModalStudent(null);
+      } else {
+        alert(result.message || 'Failed to delete student');
+      }
+    } catch (err) {
+      console.error('Error deleting student:', err);
+      alert('Unable to connect to backend server.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleCompleteWizard = (newStudentData) => {
-    const count = students.length + 1;
-    const createdStudent = {
-      id: `STU${String(count).padStart(3, '0')}`,
-      admNo: newStudentData.admissionNo || `ADM2024${String(count).padStart(3, '0')}`,
-      name: newStudentData.fullName || 'New Registered Student',
-      sem: newStudentData.semester || '1st Sem',
-      department: newStudentData.department || 'Commerce',
-      course: newStudentData.course || 'B.Com',
-      phone: newStudentData.mobile || '9876543219',
-      attendance: 100,
-      feeStatus: 'Paid',
-      status: 'Active'
-    };
-    setStudents([createdStudent, ...students]);
-    setShowAddWizard(false);
+  const handleCompleteWizard = async (newStudentData) => {
+    setIsSaving(true);
+    try {
+      const payload = {
+        name: newStudentData.fullName || newStudentData.name || 'New Student',
+        studentId: (newStudentData.studentId && !newStudentData.studentId.includes('Auto-generated')) ? newStudentData.studentId : undefined,
+        admNo: newStudentData.admissionNo || undefined,
+        rollNo: newStudentData.rollNo || '',
+        department: newStudentData.department || 'Commerce',
+        course: newStudentData.course || 'B.Com',
+        sem: newStudentData.semester || newStudentData.sem || '1st Sem',
+        academicYear: newStudentData.academicYear || '2026-2027',
+        phone: newStudentData.mobile || newStudentData.phone || '',
+        email: newStudentData.email || '',
+        dob: newStudentData.dob || '',
+        gender: newStudentData.gender || 'Male',
+        bloodGroup: newStudentData.bloodGroup || 'O+',
+        address: newStudentData.address || '',
+        fatherName: newStudentData.fatherName || '',
+        motherName: newStudentData.motherName || '',
+        fatherMobile: newStudentData.parentMobile || newStudentData.fatherMobile || '',
+        parentOccupation: newStudentData.parentOccupation || '',
+        emergencyContact: newStudentData.emergencyContact || '',
+        doc10th: newStudentData.doc10th || '',
+        doc12th: newStudentData.doc12th || '',
+        docTc: newStudentData.docTc || '',
+        docAadhaar: newStudentData.docAadhaar || '',
+        attendance: 100,
+        feeStatus: 'Paid',
+        status: 'Active'
+      };
+
+      const res = await fetch(`${API_BASE}/api/students`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        const created = normalizeStudent(result.data);
+        setStudents(prev => {
+          const next = [created, ...prev];
+          try {
+            localStorage.setItem('vcas_students_cache', JSON.stringify(next));
+          } catch (e) {}
+          return next;
+        });
+        setShowAddWizard(false);
+        showToast(`Student "${created.name}" registered successfully!`);
+      } else {
+        alert(result.message || 'Failed to register student');
+      }
+    } catch (err) {
+      console.error('Error creating student:', err);
+      alert('Unable to connect to backend server.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (selectedStudentProfile) {
@@ -434,6 +586,18 @@ Unauthorized reproduction or distribution is strictly prohibited.
         canViewFees={canViewFees}
         onDownloadCredentials={handleDownloadStudentCredentials}
         onPrintCredentials={handlePrintStudentCredentials}
+        onEdit={(stu) => {
+          setSelectedStudentProfile(null);
+          setEditingStudent({ 
+            ...stu,
+            _originalId: stu._id || stu.studentId || stu.id,
+            _originalStudentId: stu.studentId || stu.id,
+            id: stu.studentId || stu.id,
+            studentId: stu.studentId || stu.id,
+            admNo: stu.admNo || stu.admissionNo || '',
+            sem: stu.sem || stu.semester || '1st Sem'
+          });
+        }}
       />
     );
   }
@@ -443,6 +607,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
       <AddStudentWizard 
         onBack={() => setShowAddWizard(false)}
         onComplete={handleCompleteWizard}
+        isSaving={isSaving}
       />
     );
   }
@@ -468,10 +633,19 @@ Unauthorized reproduction or distribution is strictly prohibited.
         </div>
 
         <div className="flex items-center gap-3">
+          <button 
+            onClick={fetchStudents}
+            disabled={isLoading}
+            className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 border border-slate-200"
+            title="Refresh student records"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
           {isSuperAdmin && (
             <button 
               onClick={handleExportAllStudentsCSV}
-              className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs border border-purple-200 shadow-xs flex items-center gap-2 transition-all"
+              className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs border border-purple-200 shadow-xs flex items-center gap-2 transition-all cursor-pointer"
             >
               <Download className="w-4 h-4 text-purple-600" />
               <span>Export Student CSV</span>
@@ -479,13 +653,29 @@ Unauthorized reproduction or distribution is strictly prohibited.
           )}
           <button 
             onClick={() => setShowAddWizard(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all"
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Add Student
           </button>
         </div>
       </div>
+
+      {/* ERROR BANNER */}
+      {errorMessage && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between text-xs text-rose-700 font-medium">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button 
+            onClick={fetchStudents} 
+            className="px-3 py-1 bg-white border border-rose-200 rounded-lg font-bold text-rose-700 hover:bg-rose-100 cursor-pointer transition-all"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
 
       {/* FILTER & SEARCH BAR CONTAINER */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
@@ -495,7 +685,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
           <div className="relative flex-1 min-w-[220px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input 
-              type="text"
+              type="text" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by name or ID..."
@@ -593,9 +783,18 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
             {/* Table Body */}
             <tbody className="divide-y divide-slate-100 text-xs font-medium">
-              {filteredStudents.length === 0 ? (
+              {isLoading ? (
                 <tr>
-                  <td colSpan={canViewFees ? "10" : "9"} className="py-12 text-center text-slate-400 font-normal">
+                  <td colSpan={canViewFees ? (isSuperAdmin ? "11" : "10") : (isSuperAdmin ? "10" : "9")} className="py-16 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-2.5">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                      <span className="text-xs font-semibold text-slate-600">Loading student records...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan={canViewFees ? (isSuperAdmin ? "11" : "10") : (isSuperAdmin ? "10" : "9")} className="py-12 text-center text-slate-400 font-normal">
                     No students match your filter criteria.
                   </td>
                 </tr>
@@ -742,7 +941,18 @@ Unauthorized reproduction or distribution is strictly prohibited.
                             <Eye className="w-4 h-4" />
                           </button>
                           <button 
-                            onClick={() => setEditingStudent({ ...student })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingStudent({ 
+                                ...student,
+                                _originalId: student._id || student.studentId || student.id,
+                                _originalStudentId: student.studentId || student.id,
+                                id: student.studentId || student.id,
+                                studentId: student.studentId || student.id,
+                                admNo: student.admNo || student.admissionNo || '',
+                                sem: student.sem || student.semester || '1st Sem'
+                              });
+                            }}
                             title="Edit Student"
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                           >
@@ -827,8 +1037,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   <input 
                     type="text" 
                     required
-                    value={editingStudent.id}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, id: e.target.value })}
+                    value={editingStudent.id || editingStudent.studentId || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, id: e.target.value, studentId: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>
@@ -837,8 +1047,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   <input 
                     type="text" 
                     required
-                    value={editingStudent.admNo}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, admNo: e.target.value })}
+                    value={editingStudent.admNo || editingStudent.admissionNo || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, admNo: e.target.value, admissionNo: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>
@@ -849,10 +1059,13 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Department</label>
                   <select 
-                    value={editingStudent.department}
+                    value={editingStudent.department || 'Commerce'}
                     onChange={(e) => setEditingStudent({ ...editingStudent, department: e.target.value })}
                     className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
                   >
+                    {editingStudent.department && !['Commerce', 'Computer Science', 'English Literature', 'Business Administration (BBA)', 'Computer Applications (BCA)', 'Mathematics'].includes(editingStudent.department) && (
+                      <option value={editingStudent.department}>{editingStudent.department}</option>
+                    )}
                     <option value="Commerce">Commerce</option>
                     <option value="Computer Science">Computer Science</option>
                     <option value="English Literature">English Literature</option>
@@ -864,10 +1077,13 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Course</label>
                   <select 
-                    value={editingStudent.course}
+                    value={editingStudent.course || 'B.Com'}
                     onChange={(e) => setEditingStudent({ ...editingStudent, course: e.target.value })}
                     className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
                   >
+                    {editingStudent.course && !['B.Com', 'B.Sc CS', 'B.A. English', 'BBA', 'BCA', 'B.Sc Maths', 'M.Com', 'M.Sc CS'].includes(editingStudent.course) && (
+                      <option value={editingStudent.course}>{editingStudent.course}</option>
+                    )}
                     <option value="B.Com">B.Com</option>
                     <option value="B.Sc CS">B.Sc CS</option>
                     <option value="B.A. English">B.A. English</option>
@@ -885,10 +1101,13 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Semester</label>
                   <select 
-                    value={editingStudent.sem}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, sem: e.target.value })}
+                    value={editingStudent.sem || '1st Sem'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, sem: e.target.value, semester: e.target.value })}
                     className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
                   >
+                    {editingStudent.sem && !['1st Sem', '2nd Sem', '3rd Sem', '4th Sem', '5th Sem', '6th Sem'].includes(editingStudent.sem) && (
+                      <option value={editingStudent.sem}>{editingStudent.sem}</option>
+                    )}
                     <option value="1st Sem">1st Sem</option>
                     <option value="2nd Sem">2nd Sem</option>
                     <option value="3rd Sem">3rd Sem</option>
@@ -961,9 +1180,17 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20"
+                  disabled={isSaving}
+                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
-                  Save Changes
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -988,23 +1215,32 @@ Unauthorized reproduction or distribution is strictly prohibited.
             </div>
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600">
-              <p>This action will remove the student record from Vidyapeeth Management System.</p>
+              <p>This action will permanently remove the student record.</p>
             </div>
 
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => setDeleteModalStudent(null)}
-                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all border border-slate-200"
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all border border-slate-200 cursor-pointer disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={handleConfirmDelete}
-                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-500/20 transition-all"
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                Yes, Delete
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Yes, Delete</span>
+                )}
               </button>
             </div>
           </div>
@@ -1113,6 +1349,14 @@ Unauthorized reproduction or distribution is strictly prohibited.
             </div>
           </div>
         </ModalPortal>
+      )}
+
+      {/* FLOATING SUCCESS TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 animate-slideUp text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
       )}
 
     </div>

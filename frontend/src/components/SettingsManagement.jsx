@@ -36,23 +36,24 @@ export default function SettingsManagement() {
   const [activeTab, setActiveTab] = useState('general');
   const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isBackingUp, setIsBackingUp] = useState(false);
 
   // Form State
   const [settings, setSettings] = useState({
     // General
-    collegeName: 'Vidyapeeth College of Arts and Sciences',
-    collegeCode: 'VCAS-2008',
-    accreditation: 'NAAC A++ Grade (CGPA 3.82) | Autonomous',
-    affiliation: 'State Technical & Arts University',
-    address: '42, Vidyapeeth Knowledge Corridor, Chennai Highway',
-    city: 'Chennai',
-    state: 'Tamil Nadu',
-    pincode: '600044',
-    officialEmail: 'registrar@vcas.edu',
-    helpdeskPhone: '+91 44 2855 1200',
-    websiteUrl: 'https://vcas.edu.in',
-    currentAcademicYear: '2024-2025',
+    collegeName: '',
+    collegeCode: '',
+    accreditation: '',
+    affiliation: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    officialEmail: '',
+    helpdeskPhone: '',
+    websiteUrl: '',
+    currentAcademicYear: '2025-2026',
     currentSemesterCycle: 'Even Semester (Sem 2, 4, 6, 8)',
     timezone: 'Asia/Kolkata (IST +5:30)',
 
@@ -76,14 +77,19 @@ export default function SettingsManagement() {
     enableIpWhitelisting: false,
 
     // Appearance
-    themeColor: 'blue', // 'blue', 'indigo', 'purple', 'emerald', 'amber'
+    themeColor: 'blue',
     headerBrandTitle: 'Vidyapeeth Management System',
     enableDarkMode: false,
 
     // Finance Gateway
     paymentGateway: 'Razorpay PG',
     lateFeePerDay: 50,
-    currencySymbol: 'INR (₹)'
+    currencySymbol: 'INR (₹)',
+
+    // Backup info
+    lastBackupFileName: 'vcas_backup_current.sql',
+    lastBackupAt: null,
+    lastBackupSizeMB: 44.2
   });
 
   const showToast = (msg) => {
@@ -91,22 +97,77 @@ export default function SettingsManagement() {
     setTimeout(() => setToastMessage(''), 3500);
   };
 
-  const handleSaveSettings = (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-      showToast('Portal configuration saved and applied successfully!');
-    }, 800);
+  const fetchSettings = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('http://localhost:5000/api/settings');
+      const data = await res.json();
+      if (data.success && data.settings) {
+        setSettings(prev => ({
+          ...prev,
+          ...data.settings
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleTriggerManualBackup = () => {
+  React.useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const handleSaveSettings = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setIsSaving(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.settings) setSettings(prev => ({ ...prev, ...data.settings }));
+        showToast(data.message || 'Portal configuration saved and applied successfully!');
+      } else {
+        showToast('Error saving settings: ' + (data.message || 'Server error'));
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      showToast('Network error while saving settings.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTriggerManualBackup = async () => {
     setIsBackingUp(true);
-    showToast('Compiling institutional database backup archive...');
-    setTimeout(() => {
+    showToast('Compiling institutional system backup archive...');
+    try {
+      const res = await fetch('http://localhost:5000/api/settings/backup', {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success && data.backup) {
+        setSettings(prev => ({
+          ...prev,
+          lastBackupFileName: data.backup.fileName,
+          lastBackupAt: data.backup.timestamp,
+          lastBackupSizeMB: data.backup.sizeMB
+        }));
+        showToast(data.message);
+      } else {
+        showToast(data.message || 'Backup failed');
+      }
+    } catch (err) {
+      console.error('Backup error:', err);
+      showToast('Failed to trigger backup snapshot');
+    } finally {
       setIsBackingUp(false);
-      showToast('Snapshot backup completed! (vcas_backup_20250501.sql • 44.2 MB)');
-    }, 2000);
+    }
   };
 
   return (
@@ -129,7 +190,7 @@ export default function SettingsManagement() {
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">System Settings & Configuration</h1>
             <p className="text-xs text-slate-500 font-medium">
-              Manage institution metadata, SMS/Email communication triggers, security rules, and database backups
+              Manage institution metadata, communication triggers, security rules, and institutional backups
             </p>
           </div>
         </div>
@@ -459,24 +520,15 @@ export default function SettingsManagement() {
       {activeTab === 'backup' && (
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 sm:p-8 space-y-6">
           <div>
-            <h3 className="text-base font-extrabold text-slate-900">Database Backup & Disaster Recovery</h3>
-            <p className="text-xs text-slate-400">Automated nightly backups, manual database snapshots, and data export</p>
+            <h3 className="text-base font-extrabold text-slate-900">System Backup & Data Recovery</h3>
+            <p className="text-xs text-slate-400">Automated nightly backups, manual system snapshots, and data export</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
-              <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Automated Nightly Backup: Active</span>
-              </div>
-              <p className="text-xs text-slate-600">Last automated snapshot captured today at <strong>03:00 AM IST</strong> (44.2 MB compressed SQL dump).</p>
-              <p className="text-[11px] text-slate-400">Encrypted with AES-256 and replicated across redundant cloud storage.</p>
-            </div>
-
+          <div className="max-w-xl">
             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col justify-between gap-3">
               <div>
                 <p className="font-extrabold text-slate-900 text-xs">Instant Manual Snapshot</p>
-                <p className="text-xs text-slate-500 mt-1">Generate a fresh point-in-time full database export right now.</p>
+                <p className="text-xs text-slate-500 mt-1">Generate a fresh point-in-time full institutional system backup right now.</p>
               </div>
               <button
                 type="button"

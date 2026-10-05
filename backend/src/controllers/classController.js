@@ -1,5 +1,6 @@
 const Class = require('../models/Class');
 const Staff = require('../models/Staff');
+const Student = require('../models/Student');
 
 // Helper to find a class by ID or Code
 async function findClassByIdOrCode(identifier, staffId = null) {
@@ -341,6 +342,38 @@ exports.enrollStudent = async (req, res) => {
           }
         }
       }
+    }
+
+    // Sync to main Student collection so the student appears on the Admin Students page as well
+    try {
+      let mainStudent = await Student.findOne({
+        $or: [
+          { rollNo: cleanRollNo },
+          { studentId: cleanRollNo }
+        ]
+      });
+      if (!mainStudent) {
+        const count = await Student.countDocuments();
+        const autoId = `STU${String(count + 1).padStart(3, '0')}`;
+        const autoAdm = `ADM2024${String(count + 1).padStart(3, '0')}`;
+        mainStudent = new Student({
+          studentId: autoId,
+          admNo: autoAdm,
+          rollNo: cleanRollNo,
+          name: name.trim(),
+          department: targetClass.dept || 'General',
+          course: targetClass.dept || targetClass.name,
+          sem: targetClass.semester ? `${targetClass.semester}th Sem` : '1st Sem',
+          phone: (phone || '').trim(),
+          email: (email || `${cleanRollNo.toLowerCase()}@student.edu`).trim(),
+          attendance: 100,
+          feeStatus: 'Pending',
+          status: 'Active'
+        });
+        await mainStudent.save();
+      }
+    } catch (sErr) {
+      console.error('Error syncing enrolled student to Student collection:', sErr.message);
     }
 
     res.status(201).json({
