@@ -54,6 +54,12 @@ const staffSchema = new mongoose.Schema({
   netSetExamStatus:      { type: String, default: 'Not Applicable' },
   netSetExamCertificate: { type: String, default: '' },
   netSetCertificateName: { type: String, default: '' },
+  aadhaar:            { type: String, default: '', trim: true },
+  pan:                { type: String, default: '', uppercase: true, trim: true },
+  bankAccountNo:      { type: String, default: '', trim: true },
+  bankName:           { type: String, default: '', trim: true },
+  ifscCode:           { type: String, default: '', uppercase: true, trim: true },
+  bankBranch:         { type: String, default: '', trim: true },
   classes:            [classSubjectSchema],
   achievements:       [achievementSchema]
 }, {

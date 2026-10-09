@@ -15,7 +15,26 @@ function getInitials(name) {
 // @route  GET /api/staff
 exports.getAllStaff = async (req, res) => {
   try {
-    const staffMembers = await Staff.find().select('-password').sort({ createdAt: -1 });
+    const { search, department, role } = req.query;
+    const filter = {};
+    if (department && department !== 'All' && department !== 'All Departments') {
+      filter.department = department;
+    }
+    if (role && role !== 'All') {
+      filter.role = role;
+    }
+    if (search && search.trim()) {
+      const regex = new RegExp(search.trim(), 'i');
+      filter.$or = [
+        { name: regex },
+        { staffId: regex },
+        { email: regex },
+        { designation: regex },
+        { department: regex },
+        { phone: regex }
+      ];
+    }
+    const staffMembers = await Staff.find(filter).select('-password').sort({ createdAt: -1 });
     res.status(200).json({
       success: true,
       count: staffMembers.length,
@@ -144,6 +163,12 @@ exports.createStaff = async (req, res) => {
       netSetExamStatus: netSetExamStatus || 'Not Applicable',
       netSetExamCertificate: netSetExamCertificate || '',
       netSetCertificateName: netSetCertificateName || '',
+      aadhaar: req.body.aadhaar ? req.body.aadhaar.trim() : '',
+      pan: req.body.pan ? req.body.pan.trim().toUpperCase() : '',
+      bankAccountNo: req.body.bankAccountNo ? req.body.bankAccountNo.trim() : '',
+      bankName: req.body.bankName ? req.body.bankName.trim() : '',
+      ifscCode: req.body.ifscCode ? req.body.ifscCode.trim().toUpperCase() : '',
+      bankBranch: req.body.bankBranch ? req.body.bankBranch.trim() : '',
       classTeacherOf: classTeacherOf || '',
       classes: []
     });
@@ -184,7 +209,8 @@ exports.updateStaff = async (req, res) => {
       'name', 'phone', 'department', 'designation', 'role', 'employmentType', 
       'status', 'joiningDate', 'qualification', 'experience', 'bloodGroup', 
       'dob', 'address', 'emergencyContact', 'avatarBg', 'classTeacherOf', 'password', 'profileImage',
-      'netSetExamStatus', 'netSetExamCertificate', 'netSetCertificateName'
+      'netSetExamStatus', 'netSetExamCertificate', 'netSetCertificateName',
+      'aadhaar', 'pan', 'bankAccountNo', 'bankName', 'ifscCode', 'bankBranch'
     ];
 
     allowedUpdates.forEach(field => {

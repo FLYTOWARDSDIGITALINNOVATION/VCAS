@@ -548,8 +548,10 @@ export default function StaffAssignments({ staffUser }) {
       if (submissionsFilter === "Submitted" && std.status !== "Submitted" && std.status !== "Graded") return false;
       if (submissionsFilter === "Not Submitted" && (std.status === "Submitted" || std.status === "Graded")) return false;
       if (submissionsSearch.trim()) {
-        const q = submissionsSearch.toLowerCase();
-        return std.studentName?.toLowerCase().includes(q) || std.rollNo?.toLowerCase().includes(q) || std.regNo?.toLowerCase().includes(q);
+        const q = submissionsSearch.toLowerCase().trim();
+        return String(std.studentName || '').toLowerCase().includes(q) ||
+          String(std.rollNo || '').toLowerCase().includes(q) ||
+          String(std.regNo || '').toLowerCase().includes(q);
       }
       return true;
     });

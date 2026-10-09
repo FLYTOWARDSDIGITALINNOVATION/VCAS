@@ -65,6 +65,12 @@ export default function StaffProfile({ staffUser = {} }) {
   const [altPhone, setAltPhone] = useState(staffUser?.altPhone || '');
   const [address, setAddress] = useState(staffUser?.address || '');
   const [emergencyContact, setEmergencyContact] = useState(staffUser?.emergencyContact || '');
+  const [aadhaar, setAadhaar] = useState(staffUser?.aadhaar || '');
+  const [pan, setPan] = useState(staffUser?.pan || '');
+  const [bankAccountNo, setBankAccountNo] = useState(staffUser?.bankAccountNo || '');
+  const [bankName, setBankName] = useState(staffUser?.bankName || '');
+  const [ifscCode, setIfscCode] = useState(staffUser?.ifscCode || '');
+  const [bankBranch, setBankBranch] = useState(staffUser?.bankBranch || '');
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [mySubjects, setMySubjects] = useState([]);
@@ -92,6 +98,12 @@ export default function StaffProfile({ staffUser = {} }) {
       if (staffUser.altPhone) setAltPhone(staffUser.altPhone);
       if (staffUser.address) setAddress(staffUser.address);
       if (staffUser.emergencyContact) setEmergencyContact(staffUser.emergencyContact);
+      if (staffUser.aadhaar) setAadhaar(staffUser.aadhaar);
+      if (staffUser.pan) setPan(staffUser.pan);
+      if (staffUser.bankAccountNo) setBankAccountNo(staffUser.bankAccountNo);
+      if (staffUser.bankName) setBankName(staffUser.bankName);
+      if (staffUser.ifscCode) setIfscCode(staffUser.ifscCode);
+      if (staffUser.bankBranch) setBankBranch(staffUser.bankBranch);
       if (staffUser.netSetExamStatus) setNetSetExamStatus(staffUser.netSetExamStatus);
       if (staffUser.netSetExamCertificate) setNetSetExamCertificate(staffUser.netSetExamCertificate);
       if (staffUser.netSetCertificateName) setNetSetCertificateName(staffUser.netSetCertificateName);
@@ -322,7 +334,13 @@ export default function StaffProfile({ staffUser = {} }) {
           profileImage,
           netSetExamStatus,
           netSetExamCertificate,
-          netSetCertificateName
+          netSetCertificateName,
+          aadhaar,
+          pan,
+          bankAccountNo,
+          bankName,
+          ifscCode,
+          bankBranch
         })
       });
       const data = await res.json();
@@ -339,7 +357,13 @@ export default function StaffProfile({ staffUser = {} }) {
             profileImage,
             netSetExamStatus,
             netSetExamCertificate,
-            netSetCertificateName
+            netSetCertificateName,
+            aadhaar,
+            pan,
+            bankAccountNo,
+            bankName,
+            ifscCode,
+            bankBranch
           }));
         } catch (_) {}
         setTimeout(() => setIsSaved(false), 4000);
@@ -793,6 +817,82 @@ export default function StaffProfile({ staffUser = {} }) {
                 onChange={(e) => setAddress(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               ></textarea>
+            </div>
+          </div>
+
+          {/* Statutory & Banking Details */}
+          <div className="pt-4 border-t border-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                Statutory &amp; Banking Details (Aadhaar, PAN &amp; Bank Account)
+              </h4>
+              <span className="text-[10px] text-slate-400 font-semibold">Payroll &amp; Institutional Verification</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Aadhaar Card Number</label>
+                <input
+                  type="text"
+                  maxLength={14}
+                  value={aadhaar}
+                  onChange={(e) => setAadhaar(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">PAN Card Number</label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={pan}
+                  onChange={(e) => setPan(e.target.value.toUpperCase())}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-medium text-slate-800 uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Bank Account Number</label>
+                <input
+                  type="text"
+                  value={bankAccountNo}
+                  onChange={(e) => setBankAccountNo(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Bank Name</label>
+                <input
+                  type="text"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">IFSC Code</label>
+                <input
+                  type="text"
+                  maxLength={11}
+                  value={ifscCode}
+                  onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-medium text-slate-800 uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Branch Name</label>
+                <input
+                  type="text"
+                  value={bankBranch}
+                  onChange={(e) => setBankBranch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
             </div>
           </div>
 

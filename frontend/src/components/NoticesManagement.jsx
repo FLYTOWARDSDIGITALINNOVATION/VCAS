@@ -242,15 +242,20 @@ export default function NoticesManagement() {
   // Filtered Notices
   const filteredNotices = useMemo(() => {
     return notices.filter(item => {
-      const matchSearch = 
-        item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.refNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.content.toLowerCase().includes(searchTerm.toLowerCase());
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchSearch = !q || (
+        String(item.title || '').toLowerCase().includes(q) ||
+        String(item.refNo || '').toLowerCase().includes(q) ||
+        String(item.author || item.postedBy || '').toLowerCase().includes(q) ||
+        String(item.content || item.body || '').toLowerCase().includes(q) ||
+        String(item.category || item.tag || '').toLowerCase().includes(q)
+      );
       
-      const matchCategory = selectedCategory === 'All' || item.category === selectedCategory;
+      const matchCategory = selectedCategory === 'All' || item.category === selectedCategory || item.tag === selectedCategory;
       const matchPriority = selectedPriority === 'All' || item.priority === selectedPriority;
-      const matchAudience = selectedAudience === 'All' || item.targetAudience === selectedAudience || (selectedAudience === 'Students' && item.targetAudience.includes('Students'));
+      const matchAudience = selectedAudience === 'All' || 
+        item.targetAudience === selectedAudience || 
+        String(item.targetAudience || '').includes(selectedAudience);
 
       return matchSearch && matchCategory && matchPriority && matchAudience;
     });

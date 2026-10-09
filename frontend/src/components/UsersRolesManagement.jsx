@@ -145,11 +145,13 @@ export default function UsersRolesManagement() {
   // Filtered Users
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
-      const matchSearch = 
-        u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.empId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.department.toLowerCase().includes(searchTerm.toLowerCase());
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchSearch = !q || (
+        String(u.name || '').toLowerCase().includes(q) ||
+        String(u.email || '').toLowerCase().includes(q) ||
+        String(u.empId || '').toLowerCase().includes(q) ||
+        String(u.department || '').toLowerCase().includes(q)
+      );
 
       const matchRole = selectedRole === 'All' || u.role === selectedRole;
       const matchStatus = selectedStatus === 'All' || u.status === selectedStatus;

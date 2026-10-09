@@ -60,7 +60,13 @@ function normalizeStaff(s) {
     profileImage: s.profileImage || '',
     netSetExamStatus: s.netSetExamStatus || 'Not Applicable',
     netSetExamCertificate: s.netSetExamCertificate || '',
-    netSetCertificateName: s.netSetCertificateName || ''
+    netSetCertificateName: s.netSetCertificateName || '',
+    aadhaar: s.aadhaar || '',
+    pan: s.pan || '',
+    bankAccountNo: s.bankAccountNo || '',
+    bankName: s.bankName || '',
+    ifscCode: s.ifscCode || '',
+    bankBranch: s.bankBranch || ''
   };
 }
 
@@ -655,14 +661,14 @@ is authorized to export or issue this credential sheet.
   // Filtered staff list
   const filteredStaff = useMemo(() => {
     return staffList.filter(item => {
-      const q = searchQuery.toLowerCase().trim();
+      const q = (searchQuery || '').toLowerCase().trim();
       const matchesSearch = !q || (
-        item.name.toLowerCase().includes(q) ||
-        item.empId.toLowerCase().includes(q) ||
-        item.email.toLowerCase().includes(q) ||
-        item.phone.includes(q) ||
-        item.department.toLowerCase().includes(q) ||
-        item.designation.toLowerCase().includes(q)
+        String(item.name || '').toLowerCase().includes(q) ||
+        String(item.empId || item.staffId || '').toLowerCase().includes(q) ||
+        String(item.email || '').toLowerCase().includes(q) ||
+        String(item.phone || '').includes(q) ||
+        String(item.department || '').toLowerCase().includes(q) ||
+        String(item.designation || '').toLowerCase().includes(q)
       );
 
       const matchesDept = selectedDept === 'All Departments' || item.department === selectedDept;
@@ -1538,11 +1544,11 @@ is authorized to export or issue this credential sheet.
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-extrabold text-slate-900 leading-tight">Edit Staff Profile</h3>
                     <span className="text-[11px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                      {editingStaff.empId}
+                      {String(editingStaff.empId || editingStaff.staffId || '')}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Updating details for <strong className="text-slate-800">{editingStaff.name}</strong>
+                    Updating details for <strong className="text-slate-800">{String(editingStaff.name || '')}</strong>
                   </p>
                 </div>
               </div>

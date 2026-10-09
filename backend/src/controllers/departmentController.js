@@ -77,20 +77,33 @@ exports.createDepartment = async (req, res) => {
       coursesList
     } = req.body;
 
-    if (!name || !code) {
+    if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Department Name and Department Code are required.'
+        message: 'Department Name is required.'
       });
     }
 
-    const cleanCode = code.trim().toUpperCase();
-    const existing = await Department.findOne({ code: cleanCode });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: `Department with code "${cleanCode}" already exists.`
-      });
+    let cleanCode = (code || '').trim().toUpperCase();
+    if (!cleanCode) {
+      const words = name.trim().split(/\s+/).filter(Boolean);
+      let candidate = words.length > 1 
+        ? words.map(w => w[0]).join('').toUpperCase().slice(0, 5) 
+        : name.trim().slice(0, 4).toUpperCase();
+      let attempt = candidate;
+      let counter = 1;
+      while (await Department.findOne({ code: attempt })) {
+        attempt = `${candidate}${counter++}`;
+      }
+      cleanCode = attempt;
+    } else {
+      const existing = await Department.findOne({ code: cleanCode });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: `Department with code "${cleanCode}" already exists.`
+        });
+      }
     }
 
     const years = Number(totalYears) || 3;

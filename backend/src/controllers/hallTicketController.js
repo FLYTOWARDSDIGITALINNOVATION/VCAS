@@ -212,7 +212,7 @@ exports.getEligibleStudents = async (req, res) => {
       }
     });
 
-    // Also include students registered in the main Student collection
+    // Also include students registered in the main Student collection and enrich feeStatus & attendance
     try {
       const stuFilter = {};
       if (department && department !== 'All') {
@@ -220,16 +220,42 @@ exports.getEligibleStudents = async (req, res) => {
       }
       const registeredStudents = await Student.find(stuFilter);
       registeredStudents.forEach(st => {
-        const rollNo = (st.rollNo || st.studentId || '').trim().toUpperCase();
+        const rollNo = (st.rollNo || st.studentId || st.regNo || '').trim().toUpperCase();
         if (rollNo && !studentMap.has(rollNo)) {
           studentMap.set(rollNo, {
             rollNo,
+            regNo: st.regNo || rollNo,
             name: (st.name || '').trim(),
             dept: st.department || department || '',
             semester: st.sem ? parseInt(st.sem) || 1 : 1,
             section: st.section || 'A',
+            feeStatus: st.feeStatus || 'Paid',
+            attendance: st.attendance !== undefined ? st.attendance : 85,
             subjects: []
           });
+        }
+      });
+
+      // Enrich all students in studentMap with feeStatus & attendance from registered records
+      const allRegistered = await Student.find();
+      const regMap = new Map();
+      allRegistered.forEach(r => {
+        const k1 = (r.rollNo || '').trim().toUpperCase();
+        const k2 = (r.regNo || '').trim().toUpperCase();
+        if (k1) regMap.set(k1, r);
+        if (k2) regMap.set(k2, r);
+      });
+
+      studentMap.forEach((val, key) => {
+        const match = regMap.get(key);
+        if (match) {
+          val.feeStatus = match.feeStatus || 'Paid';
+          val.attendance = match.attendance !== undefined ? match.attendance : 85;
+          val.regNo = match.regNo || key;
+        } else {
+          val.feeStatus = val.feeStatus || 'Paid';
+          val.attendance = val.attendance !== undefined ? val.attendance : 85;
+          val.regNo = val.regNo || key;
         }
       });
     } catch (sErr) {

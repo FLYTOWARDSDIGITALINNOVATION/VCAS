@@ -7,8 +7,16 @@ const {
   updateProfile,
   addAchievement,
   deleteAchievement,
-  adminLogin
+  adminLogin,
+  studentLogin,
+  studentRegister
 } = require('../controllers/authController');
+
+// POST /api/auth/student/login
+router.post('/student/login', studentLogin);
+
+// POST /api/auth/student/register
+router.post('/student/register', studentRegister);
 
 // POST /api/auth/admin/login
 router.post('/admin/login', adminLogin);

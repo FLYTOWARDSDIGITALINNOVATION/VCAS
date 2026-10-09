@@ -34,7 +34,8 @@ import {
   Printer,
   FileCheck,
   Eye,
-  X
+  X,
+  CreditCard
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
@@ -532,6 +533,39 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
                 <div className="sm:col-span-2 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Emergency Contact</span>
                   <span className="font-semibold text-slate-800">{emergencyContact}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Statutory & Banking Details Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-emerald-600" /> Statutory &amp; Bank Account Details
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Aadhaar Card Number</span>
+                  <span className="font-mono font-bold text-slate-800">{staff.aadhaar || '—'}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">PAN Card Number</span>
+                  <span className="font-mono font-bold text-slate-800">{staff.pan || '—'}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Bank Account Number</span>
+                  <span className="font-mono font-bold text-blue-700">{staff.bankAccountNo || '—'}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Bank Name</span>
+                  <span className="font-semibold text-slate-800">{staff.bankName || '—'}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">IFSC Code</span>
+                  <span className="font-mono font-bold text-slate-800">{staff.ifscCode || '—'}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Branch Name</span>
+                  <span className="font-semibold text-slate-800">{staff.bankBranch || '—'}</span>
                 </div>
               </div>
             </div>

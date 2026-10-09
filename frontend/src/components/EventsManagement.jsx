@@ -493,11 +493,13 @@ export default function EventsManagement() {
   // Filtered Events
   const filteredEvents = useMemo(() => {
     return events.filter(ev => {
-      const matchSearch = 
-        ev.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ev.venue.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ev.speaker.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ev.organizer.toLowerCase().includes(searchTerm.toLowerCase());
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchSearch = !q || (
+        String(ev.title || '').toLowerCase().includes(q) ||
+        String(ev.venue || '').toLowerCase().includes(q) ||
+        String(ev.speaker || '').toLowerCase().includes(q) ||
+        String(ev.organizer || '').toLowerCase().includes(q)
+      );
 
       const matchCat = selectedCategory === 'All' || ev.category === selectedCategory;
       const matchDept = selectedDept === 'All' || ev.department === selectedDept;
@@ -1264,7 +1266,13 @@ export default function EventsManagement() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {eventRegistrations[showViewModal.id]
-                          .filter(r => !regSearchTerm || r.studentName.toLowerCase().includes(regSearchTerm.toLowerCase()) || r.rollNo.toLowerCase().includes(regSearchTerm.toLowerCase()) || (r.collegeName && r.collegeName.toLowerCase().includes(regSearchTerm.toLowerCase())))
+                          .filter(r => {
+                            const q = (regSearchTerm || '').toLowerCase().trim();
+                            return !q ||
+                              String(r.studentName || '').toLowerCase().includes(q) ||
+                              String(r.rollNo || '').toLowerCase().includes(q) ||
+                              String(r.collegeName || '').toLowerCase().includes(q);
+                          })
                           .map((reg) => (
                             <tr key={reg.id} className="hover:bg-slate-50/80">
                               <td className="py-2.5 px-3">

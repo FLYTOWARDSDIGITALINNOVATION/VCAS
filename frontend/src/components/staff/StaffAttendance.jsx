@@ -133,9 +133,9 @@ export default function StaffAttendance({ staffUser }) {
   // Filter students based on search query
   const displayedStudents = useMemo(() => {
     if (!searchQuery.trim()) return classStudents;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
     return classStudents.filter(s =>
-      s.name.toLowerCase().includes(q) || s.rollNo.toLowerCase().includes(q)
+      String(s.name || '').toLowerCase().includes(q) || String(s.rollNo || '').toLowerCase().includes(q)
     );
   }, [classStudents, searchQuery]);
 

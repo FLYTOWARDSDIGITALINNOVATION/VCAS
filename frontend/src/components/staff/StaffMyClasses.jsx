@@ -4,6 +4,7 @@ import {
   Hash, Layers, Plus, X, Trash2, CheckCircle2, UserPlus,
   AlertCircle, Building2, MapPin, Pencil
 } from 'lucide-react';
+import ModalPortal from '../ModalPortal';
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -175,26 +176,36 @@ export default function StaffMyClasses({ staffUser }) {
     }
   };
 
-  // Handle Delete Class
-  const handleDeleteClass = async (classCode, e) => {
-    e.stopPropagation();
-    if (!window.confirm(`Are you sure you want to delete class ${classCode}? This will remove it from your class list.`)) {
-      return;
-    }
+  // Delete confirmation modal states
+  const [classToDelete, setClassToDelete] = useState(null);
+  const [studentToRemove, setStudentToRemove] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
+  // Trigger Delete Class Modal (Centered)
+  const handleDeleteClass = (classCode, e) => {
+    if (e) e.stopPropagation();
+    setClassToDelete(classCode);
+  };
+
+  const executeDeleteClass = async () => {
+    if (!classToDelete) return;
+    setIsDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${classCode}`, {
+      const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${classToDelete}`, {
         method: 'DELETE'
       });
       const data = await res.json();
       if (data.success) {
-        showFeedback(`Class ${classCode} removed.`);
+        showFeedback(`Class ${classToDelete} removed.`);
         fetchClasses();
+        setClassToDelete(null);
       } else {
         alert(data.message || 'Failed to delete class.');
       }
     } catch (err) {
       alert('Error deleting class: ' + err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -232,23 +243,30 @@ export default function StaffMyClasses({ staffUser }) {
     }
   };
 
-  // Handle Remove Student
-  const handleRemoveStudent = async (classCode, rollNo) => {
-    if (!window.confirm(`Remove student ${rollNo} from class ${classCode}?`)) return;
+  // Trigger Remove Student Modal (Centered)
+  const handleRemoveStudent = (classCode, rollNo) => {
+    setStudentToRemove({ classCode, rollNo });
+  };
 
+  const executeRemoveStudent = async () => {
+    if (!studentToRemove) return;
+    setIsDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${classCode}/students/${rollNo}`, {
+      const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${studentToRemove.classCode}/students/${studentToRemove.rollNo}`, {
         method: 'DELETE'
       });
       const data = await res.json();
       if (data.success) {
-        showFeedback(`Student ${rollNo} removed.`);
+        showFeedback(`Student ${studentToRemove.rollNo} removed.`);
         fetchClasses();
+        setStudentToRemove(null);
       } else {
         alert(data.message || 'Failed to remove student.');
       }
     } catch (err) {
       alert('Error removing student: ' + err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -261,11 +279,13 @@ export default function StaffMyClasses({ staffUser }) {
 
   return (
     <div className="p-5 sm:p-7 space-y-6 max-w-5xl mx-auto">
-      {/* Toast Feedback */}
+      {/* Centered Feedback Popup */}
       {feedbackMsg && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-emerald-600 text-white rounded-2xl shadow-xl text-xs font-bold animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>{feedbackMsg}</span>
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95">
+          <div className="flex items-center gap-3 px-6 py-4 bg-slate-900/95 backdrop-blur-md text-white rounded-2xl shadow-2xl text-sm font-bold border border-slate-700 pointer-events-auto">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>{feedbackMsg}</span>
+          </div>
         </div>
       )}
 
@@ -912,6 +932,76 @@ export default function StaffMyClasses({ staffUser }) {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Centered Modal: Confirm Delete Class */}
+      {classToDelete && (
+        <ModalPortal isOpen={Boolean(classToDelete)} onClose={() => !isDeleting && setClassToDelete(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-900">Delete Class Confirmation</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Are you sure you want to delete class <strong className="text-slate-800 font-mono font-bold">{classToDelete}</strong>? This will remove it from your active class schedule.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setClassToDelete(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={executeDeleteClass}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-500/20 transition-all cursor-pointer"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Class'}
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Centered Modal: Confirm Remove Student */}
+      {studentToRemove && (
+        <ModalPortal isOpen={Boolean(studentToRemove)} onClose={() => !isDeleting && setStudentToRemove(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
+              <AlertCircle className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-900">Remove Student from Class</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Are you sure you want to remove roll no <strong className="text-slate-800 font-mono font-bold">{studentToRemove.rollNo}</strong> from class <strong className="text-slate-800 font-mono">{studentToRemove.classCode}</strong>?
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setStudentToRemove(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={executeRemoveStudent}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-500/20 transition-all cursor-pointer"
+              >
+                {isDeleting ? 'Removing...' : 'Remove Student'}
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

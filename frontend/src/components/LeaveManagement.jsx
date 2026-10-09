@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   UserCheck, 
   Calendar, 
@@ -160,6 +161,23 @@ export default function LeaveManagement() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
+  // Client-side filtered leaves
+  const filteredLeaves = useMemo(() => {
+    return leaves.filter((item) => {
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchSearch = !q || (
+        String(item.staffName || '').toLowerCase().includes(q) ||
+        String(item.staffId || '').toLowerCase().includes(q) ||
+        String(item.reason || '').toLowerCase().includes(q) ||
+        String(item.leaveType || '').toLowerCase().includes(q) ||
+        String(item.department || '').toLowerCase().includes(q)
+      );
+      const matchStatus = selectedStatus === 'All' || (item.status || '').toLowerCase() === selectedStatus.toLowerCase();
+      const matchDept = selectedDept === 'All' || selectedDept === 'All Departments' || item.department === selectedDept;
+      return matchSearch && matchStatus && matchDept;
+    });
+  }, [leaves, searchTerm, selectedStatus, selectedDept]);
+
   const showToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(''), 4000);
@@ -286,11 +304,12 @@ export default function LeaveManagement() {
   return (
     <div className="p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
       {/* Toast */}
-      {toastMsg && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 p-3 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-lg animate-in fade-in slide-in-from-top-3">
+      {toastMsg && typeof document !== 'undefined' && createPortal(
+        <div className="fixed top-5 right-5 z-[99999] flex items-center gap-2 p-3 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-2xl animate-in fade-in slide-in-from-top-3 border border-emerald-500 pointer-events-auto">
           <CheckCircle2 className="w-4 h-4" />
           <span>{toastMsg}</span>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Header */}
@@ -475,7 +494,7 @@ export default function LeaveManagement() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-extrabold text-slate-900 text-sm">
-            Faculty Leave Applications ({leaves.length})
+            Faculty Leave Applications ({filteredLeaves.length})
           </h2>
           <span className="text-xs text-slate-400 font-medium">
             Active Records
@@ -487,12 +506,14 @@ export default function LeaveManagement() {
             <Loader2 className="w-7 h-7 animate-spin text-blue-600" />
             <p className="text-xs font-semibold">Loading leave records...</p>
           </div>
-        ) : leaves.length === 0 ? (
+        ) : filteredLeaves.length === 0 ? (
           <div className="py-16 text-center text-slate-400">
             <UserCheck className="w-12 h-12 mx-auto mb-2 text-slate-300" />
             <p className="text-sm font-bold text-slate-700">No leave applications found</p>
             <p className="text-xs text-slate-400 mt-1">
-              {selectedStatus !== 'All' 
+              {searchTerm 
+                ? `No leave records matching "${searchTerm}".`
+                : selectedStatus !== 'All' 
                 ? `There are currently no ${selectedStatus} leave applications.` 
                 : 'Faculty leave submissions will appear here automatically for review.'}
             </p>
@@ -512,7 +533,7 @@ export default function LeaveManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {leaves.map((item) => {
+                {filteredLeaves.map((item) => {
                   const isActioning = actionLoadingId === item._id;
                   return (
                     <tr key={item._id} className="hover:bg-slate-50/70 transition-colors">

@@ -22,10 +22,16 @@ exports.getAllStudents = async (req, res) => {
       const regex = new RegExp(search.trim(), 'i');
       filter.$or = [
         { name: regex },
+        { regNo: regex },
         { studentId: regex },
         { admNo: regex },
+        { rollNo: regex },
+        { emisNumber: regex },
+        { aadhaar: regex },
+        { pan: regex },
         { phone: regex },
-        { email: regex }
+        { email: regex },
+        { course: regex }
       ];
     }
 
@@ -143,47 +149,43 @@ exports.createStudent = async (req, res) => {
     const body = req.body;
 
     const studentName = body.name || body.fullName;
-    const studentDept = body.department;
-    const studentCourse = body.course;
+    const studentCourseAdmitted = (body.courseAdmitted || body.course || '').trim();
+    const studentDept = (body.department || studentCourseAdmitted || 'General').trim();
+    const studentCourse = (body.course || studentCourseAdmitted || 'Undergraduate').trim();
 
-    if (!studentName || !studentDept || !studentCourse) {
+    if (!studentName || !studentName.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Name, Department, and Course are required fields.'
+        message: 'Student Name is required.'
       });
     }
 
-    // Determine student ID
-    let finalStudentId = (body.studentId || body.id || '').trim();
-    if (!finalStudentId || finalStudentId.toLowerCase().includes('auto-generated')) {
+    // Determine Student ID and Register Number (Instead of ID, place it as Reg No)
+    let finalRegNo = (body.regNo || body.registerNo || body.studentId || body.id || '').trim();
+    if (!finalRegNo || finalRegNo.toLowerCase().includes('auto-generated')) {
       const count = await Student.countDocuments();
       let nextNum = count + 1;
-      let candidate = `STU${String(nextNum).padStart(3, '0')}`;
-      while (await Student.findOne({ studentId: candidate })) {
+      let candidate = `REG2026${String(nextNum).padStart(3, '0')}`;
+      while (await Student.findOne({ $or: [{ regNo: candidate }, { studentId: candidate }] })) {
         nextNum++;
-        candidate = `STU${String(nextNum).padStart(3, '0')}`;
+        candidate = `REG2026${String(nextNum).padStart(3, '0')}`;
       }
-      finalStudentId = candidate;
+      finalRegNo = candidate;
     } else {
-      finalStudentId = finalStudentId.toUpperCase();
-      const existing = await Student.findOne({ studentId: finalStudentId });
-      if (existing) {
-        return res.status(400).json({
-          success: false,
-          message: `Student with ID "${finalStudentId}" already exists.`
-        });
-      }
+      finalRegNo = finalRegNo.toUpperCase();
     }
+
+    let finalStudentId = (body.studentId || finalRegNo).trim().toUpperCase();
 
     // Determine Admission Number
     let finalAdmNo = (body.admNo || body.admissionNo || '').trim();
     if (!finalAdmNo) {
       const count = await Student.countDocuments();
       let nextNum = count + 1;
-      let candidate = `ADM2024${String(nextNum).padStart(3, '0')}`;
+      let candidate = `ADM2026${String(nextNum).padStart(3, '0')}`;
       while (await Student.findOne({ admNo: candidate })) {
         nextNum++;
-        candidate = `ADM2024${String(nextNum).padStart(3, '0')}`;
+        candidate = `ADM2026${String(nextNum).padStart(3, '0')}`;
       }
       finalAdmNo = candidate;
     } else {
@@ -197,51 +199,42 @@ exports.createStudent = async (req, res) => {
       }
     }
 
+    const studentDob = (body.dob || '').trim();
+    // Set Student Date of Birth as Password
+    const studentPassword = studentDob ? studentDob : (body.password || `${finalRegNo.toLowerCase()}@2026`);
+
     const newStudent = new Student({
+      ...body,
       studentId: finalStudentId,
-      admNo: finalAdmNo,
-      rollNo: body.rollNo || '',
+      regNo: finalRegNo,
+      admNo: finalAdmNo || finalRegNo,
+      rollNo: (body.rollNo || '').trim().toUpperCase(),
+      year: body.year || '1st Year',
+      loginId: (body.loginId || finalRegNo).trim().toUpperCase(),
       name: studentName.trim(),
       sem: body.sem || body.semester || '1st Sem',
-      department: studentDept.trim(),
-      course: studentCourse.trim(),
+      department: studentDept,
+      course: studentCourse,
+      courseAdmitted: studentCourseAdmitted,
+      dateOfAdmission: (body.dateOfAdmission || body.admissionDate || '').trim(),
+      nationalityReligion: (body.nationalityReligion || `${body.nationality || 'INDIAN'} & ${body.religion || 'HINDU'}`).trim(),
+      casteCommunity: (body.casteCommunity || body.caste || '').trim(),
       phone: (body.phone || body.mobile || '').trim(),
-      email: (body.email || `${finalStudentId.toLowerCase()}@student.edu`).toLowerCase().trim(),
+      email: (body.email || '').toLowerCase().trim(),
       attendance: Number(body.attendance) >= 0 ? Number(body.attendance) : 100,
       feeStatus: body.feeStatus || 'Pending',
       status: body.status || 'Active',
       gender: body.gender || 'Male',
-      dob: body.dob || '',
+      dob: studentDob,
       bloodGroup: body.bloodGroup || 'O+',
-      address: body.address || '',
-      city: body.city || '',
-      state: body.state || 'Tamil Nadu',
-      pinCode: body.pinCode || '',
-      country: body.country || 'India',
-      batch: body.batch || body.academicYear || '2026-2027',
-      academicYear: body.academicYear || '2026-2027',
-      section: body.section || 'A',
-      cgpa: body.cgpa || '8.0',
-      rank: body.rank || '',
-      fatherName: body.fatherName || '',
-      motherName: body.motherName || '',
-      fatherMobile: body.fatherMobile || body.parentMobile || '',
-      motherMobile: body.motherMobile || '',
-      parentOccupation: body.parentOccupation || '',
-      parentEmail: body.parentEmail || '',
-      emergencyContact: body.emergencyContact || '',
-      doc10th: body.doc10th || '',
-      doc12th: body.doc12th || '',
-      docTc: body.docTc || '',
-      docAadhaar: body.docAadhaar || '',
-      password: `${finalStudentId.toLowerCase()}@2026`
+      password: studentPassword
     });
 
     const saved = await newStudent.save();
 
     res.status(201).json({
       success: true,
-      message: `Student "${saved.name}" registered successfully.`,
+      message: `Student "${saved.name}" registered successfully with Reg No "${saved.regNo}".`,
       data: saved
     });
   } catch (error) {
@@ -264,6 +257,8 @@ exports.updateStudent = async (req, res) => {
       const trimmedId = (id || '').trim();
       student = await Student.findOne({
         $or: [
+          { regNo: trimmedId },
+          { regNo: trimmedId.toUpperCase() },
           { studentId: trimmedId },
           { studentId: trimmedId.toUpperCase() },
           { admNo: trimmedId },
@@ -280,15 +275,28 @@ exports.updateStudent = async (req, res) => {
 
     const updates = req.body || {};
 
+    // Apply all portfolio and statutory fields from updates
+    Object.keys(updates).forEach(key => {
+      if (key !== '_id' && key !== '__v') {
+        student.set(key, updates[key]);
+      }
+    });
+
     // Name
     if (updates.name || updates.fullName) {
       student.name = (updates.name || updates.fullName).trim();
     }
 
-    // Student ID
-    const newStudentId = updates.studentId || updates.id;
-    if (newStudentId && !newStudentId.match(/^[0-9a-fA-F]{24}$/)) {
-      student.studentId = newStudentId.trim().toUpperCase();
+    // Reg No / Student ID
+    if (updates.regNo) {
+      student.regNo = updates.regNo.trim().toUpperCase();
+      student.studentId = student.regNo;
+    } else if (updates.studentId || updates.id) {
+      const newId = (updates.studentId || updates.id).trim().toUpperCase();
+      if (!newId.match(/^[0-9a-fA-F]{24}$/)) {
+        student.studentId = newId;
+        if (!student.regNo) student.regNo = newId;
+      }
     }
 
     // Admission No
@@ -302,9 +310,47 @@ exports.updateStudent = async (req, res) => {
       student.rollNo = (updates.rollNo || '').trim().toUpperCase();
     }
 
-    // Department & Course
+    // Year
+    if (updates.year !== undefined) {
+      student.year = updates.year.trim();
+    }
+
+    // Login ID
+    if (updates.loginId !== undefined) {
+      student.loginId = updates.loginId.trim();
+    }
+
+    // Student Information Fields
+    if (updates.aadhaar !== undefined) student.aadhaar = updates.aadhaar.trim();
+    if (updates.pan !== undefined) student.pan = updates.pan.trim().toUpperCase();
+    if (updates.bankAccountNo !== undefined) student.bankAccountNo = updates.bankAccountNo.trim();
+    if (updates.bankName !== undefined) student.bankName = updates.bankName.trim();
+    if (updates.ifscCode !== undefined) student.ifscCode = updates.ifscCode.trim().toUpperCase();
+    if (updates.bankBranch !== undefined) student.bankBranch = updates.bankBranch.trim();
+    if (updates.drivingLicense !== undefined) student.drivingLicense = updates.drivingLicense.trim().toUpperCase();
+    if (updates.emisNumber !== undefined) student.emisNumber = updates.emisNumber.trim();
+    if (updates.tenthMarks !== undefined) student.tenthMarks = updates.tenthMarks.trim();
+    if (updates.tenthPercentage !== undefined) student.tenthPercentage = updates.tenthPercentage.trim();
+    if (updates.tenthBoard !== undefined) student.tenthBoard = updates.tenthBoard.trim();
+    if (updates.twelfthMarks !== undefined) student.twelfthMarks = updates.twelfthMarks.trim();
+    if (updates.twelfthPercentage !== undefined) student.twelfthPercentage = updates.twelfthPercentage.trim();
+    if (updates.twelfthBoard !== undefined) student.twelfthBoard = updates.twelfthBoard.trim();
+    if (updates.nationality !== undefined) student.nationality = updates.nationality.trim();
+    if (updates.caste !== undefined) student.caste = updates.caste.trim();
+    if (updates.religion !== undefined) student.religion = updates.religion.trim();
+    if (updates.donation !== undefined) student.donation = updates.donation.trim();
+
+    // Department, Course & 1-8 Fields
     if (updates.department) student.department = updates.department.trim();
     if (updates.course) student.course = updates.course.trim();
+    if (updates.courseAdmitted !== undefined) {
+      student.courseAdmitted = updates.courseAdmitted.trim();
+      if (!student.course || student.course === 'Undergraduate') student.course = updates.courseAdmitted.trim();
+      if (!student.department || student.department === 'General') student.department = updates.courseAdmitted.trim();
+    }
+    if (updates.dateOfAdmission !== undefined) student.dateOfAdmission = updates.dateOfAdmission.trim();
+    if (updates.nationalityReligion !== undefined) student.nationalityReligion = updates.nationalityReligion.trim();
+    if (updates.casteCommunity !== undefined) student.casteCommunity = updates.casteCommunity.trim();
 
     // Semester
     if (updates.sem || updates.semester) {
@@ -332,7 +378,15 @@ exports.updateStudent = async (req, res) => {
 
     // Personal & Parent details
     if (updates.gender) student.gender = updates.gender;
-    if (updates.dob) student.dob = updates.dob;
+    if (updates.dob) {
+      student.dob = updates.dob;
+      // Also update default password if not custom-set
+      if (!updates.password && (!student.password || student.password.includes('@2026'))) {
+        student.password = updates.dob;
+      }
+    }
+    if (updates.password) student.password = updates.password;
+
     if (updates.bloodGroup) student.bloodGroup = updates.bloodGroup;
     if (updates.address) student.address = updates.address;
     if (updates.city) student.city = updates.city;
@@ -363,7 +417,7 @@ exports.updateStudent = async (req, res) => {
       const field = Object.keys(error.keyPattern || {})[0] || 'field';
       return res.status(400).json({ 
         success: false, 
-        message: `A student with this ${field === 'studentId' ? 'Student ID' : field === 'admNo' ? 'Admission No.' : field} already exists.` 
+        message: `A student with this ${field === 'studentId' ? 'Student ID' : field === 'admNo' ? 'Admission No.' : field === 'regNo' ? 'Reg No' : field} already exists.` 
       });
     }
     res.status(500).json({ success: false, message: error.message || 'Server error while updating student.' });
@@ -383,6 +437,7 @@ exports.deleteStudent = async (req, res) => {
     if (!deleted) {
       deleted = await Student.findOneAndDelete({
         $or: [
+          { regNo: id.toUpperCase() },
           { studentId: id.toUpperCase() },
           { admNo: id.toUpperCase() }
         ]
@@ -395,7 +450,7 @@ exports.deleteStudent = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Student "${deleted.name}" (${deleted.studentId}) deleted successfully.`
+      message: `Student "${deleted.name}" (${deleted.regNo || deleted.studentId}) deleted successfully.`
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -415,6 +470,7 @@ exports.getStudentCredentials = async (req, res) => {
     if (!student) {
       student = await Student.findOne({
         $or: [
+          { regNo: id.toUpperCase() },
           { studentId: id.toUpperCase() },
           { admNo: id.toUpperCase() }
         ]
@@ -425,23 +481,46 @@ exports.getStudentCredentials = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student not found.' });
     }
 
+    const regNo = student.regNo || student.studentId;
+    const loginId = regNo;
+    const password = student.dob || `${regNo.toLowerCase()}@2026`;
+
     res.status(200).json({
       success: true,
       credentials: {
-        studentId: student.studentId,
+        regNo: regNo,
+        studentId: regNo,
+        rollNo: student.rollNo || '—',
+        year: student.year || '1st Year',
+        loginId: loginId,
         admNo: student.admNo,
         name: student.name,
         department: student.department,
         course: student.course,
         sem: student.sem,
+        dob: student.dob,
         phone: student.phone,
         email: student.email,
-        loginUsername: student.admNo,
-        alternateLogin: student.studentId,
-        defaultPasscode: `${student.studentId.toLowerCase()}@2026`,
+        loginUsername: loginId,
+        alternateLogin: student.rollNo || student.admNo,
+        defaultPasscode: password,
         attendance: student.attendance,
         feeStatus: student.feeStatus,
-        status: student.status
+        status: student.status,
+        aadhaar: student.aadhaar || '—',
+        pan: student.pan || '—',
+        bankAccountNo: student.bankAccountNo || '—',
+        bankName: student.bankName || '—',
+        ifscCode: student.ifscCode || '—',
+        bankBranch: student.bankBranch || '—',
+        drivingLicense: student.drivingLicense || '—',
+        emisNumber: student.emisNumber || '—',
+        tenthMarks: student.tenthMarks || '—',
+        twelfthMarks: student.twelfthMarks || '—',
+        nationality: student.nationality || 'Indian',
+        caste: student.caste || '—',
+        religion: student.religion || 'Hindu',
+        donation: student.donation || 'Nil'
       }
     });
   } catch (error) {

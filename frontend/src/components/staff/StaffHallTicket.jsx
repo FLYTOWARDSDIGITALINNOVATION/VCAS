@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Ticket, Building2, Users, Calendar, Clock, Download, Printer,
   Search, Filter, Plus, Trash2, CheckCircle2, AlertCircle, RefreshCw,
-  Eye, BookOpen, Sparkles, X, UserPlus, Save, Pencil, Check, Award
+  Eye, BookOpen, Sparkles, X, UserPlus, Save, Pencil, Check, Award,
+  RotateCcw
 } from 'lucide-react';
+import ModalPortal from '../ModalPortal';
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -37,6 +39,9 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [selectedAllocationId, setSelectedAllocationId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [hallFilter, setHallFilter] = useState('All');
+  const [allocationToDelete, setAllocationToDelete] = useState(null);
+  const [isDeletingAllocation, setIsDeletingAllocation] = useState(false);
+  const [showResetInstructionsModal, setShowResetInstructionsModal] = useState(false);
 
   // Currently viewed allocation (placed early to prevent ReferenceError TDZ)
   const currentAllocation = useMemo(() => {
@@ -924,9 +929,14 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   };
 
   const handleResetInstructions = () => {
-    if (window.confirm('Reset all instructions to default examination rules?')) {
-      setInstructionsList(DEFAULT_INSTRUCTIONS);
-    }
+    setShowResetInstructionsModal(true);
+  };
+
+  const executeResetInstructions = () => {
+    setInstructionsList(DEFAULT_INSTRUCTIONS);
+    setShowResetInstructionsModal(false);
+    setStatusMessage({ type: 'info', text: 'Reset instructions to default examination rules.' });
+    setTimeout(() => setStatusMessage(null), 3000);
   };
 
   const handleSaveInstructionsToAllocation = async () => {
@@ -1208,17 +1218,29 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   };
 
   // Delete Allocation
-  const handleDeleteAllocation = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this hall allocation? This will remove all associated hall tickets.')) return;
+  const handleDeleteAllocation = (id) => {
+    setAllocationToDelete(id);
+  };
+
+  const executeDeleteAllocation = async () => {
+    if (!allocationToDelete) return;
+    setIsDeletingAllocation(true);
     try {
-      const res = await fetch(`${API_BASE}/hall-tickets/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/hall-tickets/${allocationToDelete}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        setStatusMessage({ type: 'success', text: 'Allocation deleted successfully.' });
-        loadAllocations();
+        setStatusMessage({ type: 'success', text: 'Hall allocation deleted successfully.' });
+        setAllocationToDelete(null);
+        await loadAllocations();
+      } else {
+        setStatusMessage({ type: 'error', text: data.message || 'Failed to delete allocation.' });
       }
     } catch (err) {
       console.error('Failed to delete allocation:', err);
+      setStatusMessage({ type: 'error', text: 'Failed to delete allocation.' });
+    } finally {
+      setIsDeletingAllocation(false);
+      setTimeout(() => setStatusMessage(null), 5000);
     }
   };
 
@@ -1281,7 +1303,17 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           <!-- College Header -->
           <div class="header-table">
             <div class="logo-box">
-              <div class="logo-circle">🏛️</div>
+              <div class="logo-circle">
+                <svg viewBox="0 0 100 100" style="width:46px;height:46px;" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="50" cy="50" r="46" stroke="#d97706" stroke-width="2.5" stroke-dasharray="3 2" />
+                  <path d="M50 23 C52 28, 56 31, 56 36 C56 40, 53 43, 50 44 C47 43, 44 40, 44 36 C44 31, 48 28, 50 23 Z" fill="#d97706" />
+                  <path d="M44 44 Q50 42 56 44 L55 48 Q50 49 45 48 Z" fill="#b45309" />
+                  <path d="M50 56 Q36 50 24 53 L24 67 Q36 64 50 70 Q64 64 76 67 L76 53 Q64 50 50 56 Z" fill="#0f1e3c" stroke="#cbd5e1" stroke-width="1" />
+                  <path d="M32 72 Q50 82 68 72 Q59 86 50 87 Q41 86 32 72 Z" fill="#d97706" stroke="#b45309" stroke-width="0.6" />
+                  <rect x="36" y="86" width="28" height="5.5" rx="2" fill="#0f172a" />
+                  <text x="50" y="90.5" text-anchor="middle" fill="#fde047" font-size="4.2" font-weight="900" font-family="sans-serif">VCAS</text>
+                </svg>
+              </div>
             </div>
             <div class="header-text">
               <div class="college-title">VIVEKANANDA COLLEGE OF ARTS AND SCIENCES</div>
@@ -1652,11 +1684,26 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
         </div>
 
         {statusMessage && (
-          <div className={`mt-3 p-3 rounded-xl flex items-center gap-2 text-xs font-medium ${
-            statusMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-          }`}>
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            {statusMessage.text}
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95">
+            <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border pointer-events-auto ${
+              statusMessage.type === 'error'
+                ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
+                : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
+            }`}>
+              {statusMessage.type === 'error' ? (
+                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              )}
+              <span>{statusMessage.text}</span>
+              <button 
+                type="button" 
+                onClick={() => setStatusMessage(null)} 
+                className="ml-3 text-slate-400 hover:text-white text-lg leading-none cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -3019,6 +3066,130 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete Allocation Centered Modal */}
+      {allocationToDelete && (
+        <ModalPortal isOpen={Boolean(allocationToDelete)} onClose={() => !isDeletingAllocation && setAllocationToDelete(null)}>
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-7 max-w-md w-full animate-in fade-in zoom-in-95 text-left my-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-200/70 flex items-center justify-center text-rose-600 shadow-xs">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">Delete Hall Allocation</h3>
+                  <p className="text-xs text-slate-500 font-medium">Remove examination allocation & tickets</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDeletingAllocation && setAllocationToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="my-5 space-y-3">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Target Plan</div>
+                <div className="text-sm font-extrabold text-slate-900 mt-0.5">
+                  {(allocations.find(a => a._id === allocationToDelete) || currentAllocation)?.examName || 'Examination Allocation'}
+                </div>
+                <div className="text-xs text-slate-600 font-medium mt-1">
+                  {(allocations.find(a => a._id === allocationToDelete) || currentAllocation)?.department} · Semester {(allocations.find(a => a._id === allocationToDelete) || currentAllocation)?.semester} · {(allocations.find(a => a._id === allocationToDelete) || currentAllocation)?.students?.length || 0} candidates
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200/80 text-xs text-rose-900 font-medium leading-relaxed">
+                <span className="font-bold">Warning:</span> Are you sure you want to delete this hall allocation? This will permanently remove all associated student hall tickets and seating arrangements.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingAllocation}
+                onClick={() => setAllocationToDelete(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingAllocation}
+                onClick={executeDeleteAllocation}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-xs font-bold text-white shadow-md shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isDeletingAllocation ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Allocation</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Reset Instructions Centered Modal */}
+      {showResetInstructionsModal && (
+        <ModalPortal isOpen={showResetInstructionsModal} onClose={() => setShowResetInstructionsModal(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-7 max-w-md w-full animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200/70 flex items-center justify-center text-blue-600 shadow-xs">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">Reset Instructions</h3>
+                  <p className="text-xs text-slate-500 font-medium">Revert candidate rules to defaults</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResetInstructionsModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="my-5 space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                Are you sure you want to reset all candidate hall ticket instructions to the default standard examination guidelines?
+              </p>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-[11px] text-slate-500">
+                This will replace any custom instructions entered for this examination plan with the 5 standard VCAS rules.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetInstructionsModal(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeResetInstructions}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Reset Defaults</span>
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

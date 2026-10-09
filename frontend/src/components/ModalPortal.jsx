@@ -36,14 +36,28 @@ export default function ModalPortal({ isOpen = true, onClose, children, classNam
 
   return createPortal(
     <div 
-      className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md overflow-y-auto animate-fadeIn ${className}`}
+      className={`fixed inset-0 z-[9999] overflow-y-auto bg-slate-950/75 backdrop-blur-md animate-fadeIn ${className}`}
       onClick={(e) => {
         if (e.target === e.currentTarget && onClose) {
           onClose();
         }
       }}
     >
-      {children}
+      <div 
+        className="min-h-full w-full flex items-center justify-center p-4 sm:p-6 text-center"
+        onClick={(e) => {
+          if (e.target === e.currentTarget && onClose) {
+            onClose();
+          }
+        }}
+      >
+        <div 
+          className="w-full flex items-center justify-center pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      </div>
     </div>,
     document.body
   );

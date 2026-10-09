@@ -3,19 +3,25 @@ const mongoose = require('mongoose');
 const studentSchema = new mongoose.Schema({
   studentId: {
     type: String,
-    required: [true, 'Student ID is required'],
-    unique: true,
+    default: '',
     uppercase: true,
     trim: true,
+    sparse: true
+  },
+  regNo: {
+    type: String,
+    default: '',
+    uppercase: true,
+    trim: true,
+    sparse: true,
     index: true
   },
   admNo: {
     type: String,
-    required: [true, 'Admission number is required'],
-    unique: true,
+    default: '',
     uppercase: true,
     trim: true,
-    index: true
+    sparse: true
   },
   rollNo: {
     type: String,
@@ -35,12 +41,32 @@ const studentSchema = new mongoose.Schema({
   },
   department: {
     type: String,
-    required: [true, 'Department is required'],
+    default: 'General',
     trim: true
   },
   course: {
     type: String,
-    required: [true, 'Course is required'],
+    default: 'Undergraduate',
+    trim: true
+  },
+  courseAdmitted: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  dateOfAdmission: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  nationalityReligion: {
+    type: String,
+    default: 'INDIAN & HINDU',
+    trim: true
+  },
+  casteCommunity: {
+    type: String,
+    default: '',
     trim: true
   },
   phone: {
@@ -150,6 +176,116 @@ const studentSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  regNo: {
+    type: String,
+    default: '',
+    uppercase: true,
+    trim: true,
+    index: true
+  },
+  year: {
+    type: String,
+    default: '1st Year',
+    trim: true
+  },
+  loginId: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  aadhaar: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  pan: {
+    type: String,
+    default: '',
+    uppercase: true,
+    trim: true
+  },
+  bankAccountNo: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  bankName: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  ifscCode: {
+    type: String,
+    default: '',
+    uppercase: true,
+    trim: true
+  },
+  bankBranch: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  drivingLicense: {
+    type: String,
+    default: '',
+    uppercase: true,
+    trim: true
+  },
+  emisNumber: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  tenthMarks: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  tenthPercentage: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  tenthBoard: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  twelfthMarks: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  twelfthPercentage: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  twelfthBoard: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  nationality: {
+    type: String,
+    default: 'Indian',
+    trim: true
+  },
+  caste: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  religion: {
+    type: String,
+    default: 'Hindu',
+    trim: true
+  },
+  donation: {
+    type: String,
+    default: 'Nil',
+    trim: true
+  },
   doc10th: {
     type: String,
     default: ''
@@ -169,12 +305,113 @@ const studentSchema = new mongoose.Schema({
   password: {
     type: String,
     default: ''
-  }
+  },
+  // Mentor Diary & Student Portfolio Statutory & Profile Fields
+  courseDurationFrom: { type: String, default: '' },
+  courseDurationTo: { type: String, default: '' },
+  community: { type: String, default: 'BC' },
+  communityCertNo: { type: String, default: '' },
+  umisNumber: { type: String, default: '' },
+  presentAddress: { type: String, default: '' },
+  permanentAddress: { type: String, default: '' },
+  residencePhone: { type: String, default: '' },
+  officePhone: { type: String, default: '' },
+  fatherQualification: { type: String, default: '' },
+  fatherOccupation: { type: String, default: '' },
+  motherQualification: { type: String, default: '' },
+  motherOccupation: { type: String, default: '' },
+  guardianName: { type: String, default: '' },
+  guardianQualification: { type: String, default: '' },
+  guardianOccupation: { type: String, default: '' },
+  guardianPhone: { type: String, default: '' },
+  annualIncome: { type: String, default: '' },
+  incomeCertNo: { type: String, default: '' },
+  localGuardianName: { type: String, default: '' },
+  localGuardianRelationship: { type: String, default: '' },
+  localGuardianAddress: { type: String, default: '' },
+  localGuardianPhone: { type: String, default: '' },
+  micrNo: { type: String, default: '' },
+  sibling1Name: { type: String, default: '' },
+  sibling1Age: { type: String, default: '' },
+  sibling1Status: { type: String, default: '' },
+  sibling2Name: { type: String, default: '' },
+  sibling2Age: { type: String, default: '' },
+  sibling2Status: { type: String, default: '' },
+  sibling3Name: { type: String, default: '' },
+  sibling3Age: { type: String, default: '' },
+  sibling3Status: { type: String, default: '' },
+  tenthInstitution: { type: String, default: '' },
+  tenthPassingYear: { type: String, default: '' },
+  twelfthInstitution: { type: String, default: '' },
+  twelfthPassingYear: { type: String, default: '' },
+  degreeMajor: { type: String, default: '' },
+  degreeInstitution: { type: String, default: '' },
+  degreePassingYear: { type: String, default: '' },
+  degreeBoard: { type: String, default: '' },
+  degreeMarks: { type: String, default: '' },
+  nssNccOthers: { type: String, default: '' },
+  sports: { type: String, default: '' },
+  fineArts: { type: String, default: '' },
+  aimInLife: { type: String, default: '' },
+  hobbies: { type: String, default: '' },
+  height: { type: String, default: '' },
+  weight: { type: String, default: '' },
+  idMark1: { type: String, default: '' },
+  idMark2: { type: String, default: '' },
+  healthProblemsAllergies: { type: String, default: '' },
+  langTamilRead: { type: Boolean, default: false },
+  langTamilWrite: { type: Boolean, default: false },
+  langTamilSpeak: { type: Boolean, default: false },
+  langTamilPercent: { type: String, default: '' },
+  langEnglishRead: { type: Boolean, default: false },
+  langEnglishWrite: { type: Boolean, default: false },
+  langEnglishSpeak: { type: Boolean, default: false },
+  langEnglishPercent: { type: String, default: '' },
+  langOtherName: { type: String, default: '' },
+  langOtherRead: { type: Boolean, default: false },
+  langOtherWrite: { type: Boolean, default: false },
+  langOtherSpeak: { type: Boolean, default: false },
+  langOtherPercent: { type: String, default: '' },
+  transportI_Bus: { type: String, default: 'No' },
+  transportI_Own: { type: String, default: 'No' },
+  transportI_Details: { type: String, default: '' },
+  transportII_Bus: { type: String, default: 'No' },
+  transportII_Own: { type: String, default: 'No' },
+  transportII_Details: { type: String, default: '' },
+  transportIII_Bus: { type: String, default: 'No' },
+  transportIII_Own: { type: String, default: 'No' },
+  transportIII_Details: { type: String, default: '' },
+  mentorName: { type: String, default: '' },
+  mentorDesignation: { type: String, default: '' },
+  mentorDepartment: { type: String, default: '' },
+  counsellingNotes: { type: String, default: '' },
+  coCurricularActivities: { type: String, default: '' },
+  extraCurricularProgrammes: { type: String, default: '' },
+  valueAddedCourses: { type: String, default: '' },
+  industrialVisits: { type: String, default: '' },
+  disciplinaryActions: { type: String, default: '' },
+  totalWorkingHours: { type: String, default: '' },
+  hoursAbsent: { type: String, default: '' },
+  totalArrearsTillLastSem: { type: String, default: '' },
+  arrearsClearedThisSem: { type: String, default: '' },
+  arrearsYetToBeCleared: { type: String, default: '' }
 }, {
   timestamps: true,
   collection: 'students',
+  strict: false,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
+});
+
+// Ensure regNo, studentId, and admNo are always synced and never null
+studentSchema.pre('validate', function(next) {
+  const primaryId = this.regNo || this.studentId || this.admNo;
+  if (primaryId) {
+    if (!this.regNo) this.regNo = primaryId;
+    if (!this.studentId) this.studentId = primaryId;
+    if (!this.admNo) this.admNo = primaryId;
+  }
+  next();
 });
 
 // Virtual aliases for frontend compatibility
@@ -206,6 +443,12 @@ studentSchema.virtual('semester').get(function () {
   return this.sem;
 }).set(function (v) {
   this.sem = v;
+});
+
+studentSchema.virtual('registerNo').get(function () {
+  return this.regNo || this.studentId;
+}).set(function (v) {
+  this.regNo = v;
 });
 
 module.exports = mongoose.model('Student', studentSchema, 'students');

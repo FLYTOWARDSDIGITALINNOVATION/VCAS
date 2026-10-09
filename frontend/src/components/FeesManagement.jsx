@@ -66,9 +66,12 @@ export default function FeesManagement() {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      const matchSearch = t.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.rollNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.receiptNo.toLowerCase().includes(searchTerm.toLowerCase());
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchSearch = !q || (
+        String(t.studentName || '').toLowerCase().includes(q) ||
+        String(t.rollNo || '').toLowerCase().includes(q) ||
+        String(t.receiptNo || '').toLowerCase().includes(q)
+      );
       const matchStatus = selectedStatus === 'All' || t.status === selectedStatus;
       return matchSearch && matchStatus;
     });

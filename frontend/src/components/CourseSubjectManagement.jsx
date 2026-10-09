@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   BookOpen, 
   Plus, 
@@ -83,19 +84,36 @@ export default function CourseSubjectManagement({ user }) {
   const [programsList, setProgramsList] = useState(() => {
     try {
       const cached = localStorage.getItem('vcas_programs_cache');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const demoCodes = ['BSC-CS', 'BCOM-GEN', 'BCA-APP', 'BBA-MGMT', 'BA-ENG', 'BSC-MATH'];
+        const filtered = Array.isArray(parsed) ? parsed.filter(p => !demoCodes.includes(p.code)) : [];
+        if (filtered.length > 0) return filtered;
+        localStorage.removeItem('vcas_programs_cache');
+      }
+    } catch (_) {}
+    return INITIAL_PROGRAMS;
   });
 
   const [subjectsList, setSubjectsList] = useState(() => {
     try {
       const cached = localStorage.getItem('vcas_subjects_cache');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const demoSubjectCodes = [
+          'CS101', 'CS102', 'CS103P', 'MAT101', 'CS201', 'CS202', 'CS203P',
+          'CS301', 'CS302', 'CS303P', 'CS401', 'CS402', 'CS403P', 'CS501',
+          'CS502', 'CS503P', 'CS601', 'CS602', 'CS603', 'COM101', 'COM102',
+          'COM201', 'COM202', 'COM301', 'COM401', 'COM501', 'COM601',
+          'BCA101', 'BCA201', 'BCA301', 'BCA401', 'BCA501', 'BCA601',
+          'BBA101', 'BBA201', 'BBA301', 'BBA401', 'BBA501', 'BBA601'
+        ];
+        const filtered = Array.isArray(parsed) ? parsed.filter(s => !demoSubjectCodes.includes(s.code)) : [];
+        if (filtered.length > 0) return filtered;
+        localStorage.removeItem('vcas_subjects_cache');
+      }
+    } catch (_) {}
+    return INITIAL_SUBJECTS;
   });
 
   const [facultyList, setFacultyList] = useState([]);
@@ -150,7 +168,7 @@ export default function CourseSubjectManagement({ user }) {
   }, []);
 
   // Selected Program for Curriculum Matrix View
-  const [matrixSelectedProgramCode, setMatrixSelectedProgramCode] = useState('BSC-CS');
+  const [matrixSelectedProgramCode, setMatrixSelectedProgramCode] = useState('');
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -245,13 +263,13 @@ export default function CourseSubjectManagement({ user }) {
   // -------------------------------------------------------------
   const filteredSubjects = useMemo(() => {
     return subjectsList.filter(s => {
-      const q = searchQuery.toLowerCase().trim();
+      const q = (searchQuery || '').toLowerCase().trim();
       const matchesSearch = !q || (
-        s.name.toLowerCase().includes(q) ||
-        s.code.toLowerCase().includes(q) ||
-        s.faculty.toLowerCase().includes(q) ||
-        s.department.toLowerCase().includes(q) ||
-        (s.textbooks && s.textbooks.toLowerCase().includes(q))
+        String(s.name || '').toLowerCase().includes(q) ||
+        String(s.code || '').toLowerCase().includes(q) ||
+        String(s.faculty || '').toLowerCase().includes(q) ||
+        String(s.department || '').toLowerCase().includes(q) ||
+        (s.textbooks && String(s.textbooks).toLowerCase().includes(q))
       );
 
       const matchesDept = selectedDept === 'All Departments' || s.department === selectedDept;
@@ -271,13 +289,13 @@ export default function CourseSubjectManagement({ user }) {
 
   const filteredPrograms = useMemo(() => {
     return programsList.filter(p => {
-      const q = searchQuery.toLowerCase().trim();
+      const q = (searchQuery || '').toLowerCase().trim();
       const matchesSearch = !q || (
-        p.name.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q) ||
-        p.coordinator.toLowerCase().includes(q) ||
-        p.department.toLowerCase().includes(q) ||
-        p.regulation.toLowerCase().includes(q)
+        String(p.name || '').toLowerCase().includes(q) ||
+        String(p.code || '').toLowerCase().includes(q) ||
+        String(p.coordinator || '').toLowerCase().includes(q) ||
+        String(p.department || '').toLowerCase().includes(q) ||
+        String(p.regulation || '').toLowerCase().includes(q)
       );
 
       const matchesDept = selectedDept === 'All Departments' || p.department === selectedDept;
@@ -301,14 +319,16 @@ export default function CourseSubjectManagement({ user }) {
       }
       map[fac].subjects.push(sub);
       map[fac].totalCredits += sub.credits;
-      map[fac].totalStudents += (sub.studentsEnrolled || 60);
+      map[fac].totalStudents += (Number(sub.studentsEnrolled) || 0);
     });
     return Object.values(map);
   }, [subjectsList]);
 
   // Selected Program for Matrix
   const activeMatrixProgram = useMemo(() => {
-    return programsList.find(p => p.code === matrixSelectedProgramCode) || programsList[0];
+    const list = programsList && programsList.length > 0 ? programsList : [];
+    if (!list.length) return null;
+    return list.find(p => p.code === matrixSelectedProgramCode) || list[0] || null;
   }, [programsList, matrixSelectedProgramCode]);
 
   // Reset all filters
@@ -377,7 +397,8 @@ export default function CourseSubjectManagement({ user }) {
       ltp: '3-1-0',
       hours: '4 hrs/wk (3L + 1T)',
       prerequisite: 'None',
-      textbooks: ''
+      textbooks: '',
+      studentsEnrolled: 0
     });
     setFormErrors({});
     setIsAddSubjectOpen(true);
@@ -443,7 +464,8 @@ export default function CourseSubjectManagement({ user }) {
       ltp: subj.ltp || '3-1-0',
       hours: subj.hours || '4 hrs/wk',
       prerequisite: subj.prerequisite || 'None',
-      textbooks: subj.textbooks || ''
+      textbooks: subj.textbooks || '',
+      studentsEnrolled: subj.studentsEnrolled || 0
     });
     setFormErrors({});
   };
@@ -464,7 +486,8 @@ export default function CourseSubjectManagement({ user }) {
       const updated = {
         ...editingSubject,
         ...subjectForm,
-        code: subjectForm.code.trim().toUpperCase()
+        code: subjectForm.code.trim().toUpperCase(),
+        studentsEnrolled: Number(subjectForm.studentsEnrolled) || 0
       };
       setSubjectsList(prev => prev.map(s => (s.id === editingSubject.id || s._id === editingSubject._id) ? updated : s));
       if (viewingSubject && (viewingSubject.id === editingSubject.id || viewingSubject._id === editingSubject._id)) {
@@ -490,7 +513,7 @@ export default function CourseSubjectManagement({ user }) {
         id: Date.now(),
         ...subjectForm,
         code: subjectForm.code.trim().toUpperCase(),
-        studentsEnrolled: 80,
+        studentsEnrolled: Number(subjectForm.studentsEnrolled) || 0,
         units: [
           { unit: 'Unit 1', title: 'Foundational Principles & Core Concepts', hours: 9 },
           { unit: 'Unit 2', title: 'Theoretical Framework & Analytical Methods', hours: 9 },
@@ -677,14 +700,15 @@ export default function CourseSubjectManagement({ user }) {
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full font-sans animate-fadeIn">
       
       {/* TOAST NOTIFICATION */}
-      {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-800 animate-fadeIn">
+      {toastMessage && typeof document !== 'undefined' && createPortal(
+        <div className="fixed top-5 right-5 z-[99999] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-700 animate-fadeIn pointer-events-auto">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           <span className="text-xs font-semibold">{toastMessage}</span>
-          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white ml-2">
+          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white ml-2 cursor-pointer">
             <X className="w-4 h-4" />
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 1. TOP HEADER & ACTION BUTTONS */}
@@ -776,7 +800,7 @@ export default function CourseSubjectManagement({ user }) {
             <p className="text-2xl font-black text-purple-600">
               {subjectsList.length > 0
                 ? subjectsList.reduce((acc, s) => acc + (Number(s.credits) || 0), 0)
-                : 140}
+                : 0}
             </p>
             <p className="text-[11px] text-slate-500 font-medium mt-1">Total Curriculum Credits</p>
           </div>
@@ -1175,74 +1199,106 @@ export default function CourseSubjectManagement({ user }) {
           </div>
         ) : (
           /* GRID CARD VIEW */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredSubjects.map(subj => (
-              <div 
-                key={subj.id}
-                onClick={() => setViewingSubject(subj)}
-                className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4 cursor-pointer group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-mono font-extrabold text-xs border border-blue-100">
-                      {subj.code}
-                    </span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${
-                      subj.type === 'Core Theory' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
-                    }`}>
-                      {subj.type}
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
-                    {subj.name}
-                  </h3>
-
-                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
-                    <span className="font-semibold text-slate-700">{subj.department}</span>
-                    <span>•</span>
-                    <span>Year {subj.year} ({subj.sem})</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-center text-xs">
-                  <div>
-                    <span className="text-sm font-extrabold text-blue-600 block">{subj.credits}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Credits</span>
-                  </div>
-                  <div className="border-x border-slate-200">
-                    <span className="text-sm font-extrabold text-slate-800 block">{subj.units?.length || 5}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Units</span>
-                  </div>
-                  <div>
-                    <span className="text-sm font-extrabold text-emerald-600 block">{subj.studentsEnrolled || 90}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Enrolled</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                  <span className="text-slate-600 font-medium truncate max-w-[160px]">
-                    👨‍🏫 {subj.faculty}
-                  </span>
-
-                  <div className="flex items-center gap-1 text-slate-400" onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={() => handleOpenEditSubject(subj)}
-                      className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setDeletingSubject(subj)}
-                      className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+          filteredSubjects.length === 0 ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-4 bg-white border border-slate-200/90 rounded-3xl p-8 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                <BookOpen className="w-7 h-7" />
               </div>
-            ))}
-          </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-800">
+                  {searchQuery || selectedDept !== 'All Departments' ? 'No subjects found matching your filters' : 'No subjects added yet'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                  {searchQuery || selectedDept !== 'All Departments' ? 'Try changing your search terms or filter selections.' : 'Get started by adding your institution’s academic subjects and curriculum modules.'}
+                </p>
+              </div>
+              {searchQuery || selectedDept !== 'All Departments' ? (
+                <button
+                  onClick={handleResetFilters}
+                  className="mt-2 text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                >
+                  Clear all filters
+                </button>
+              ) : (
+                <button
+                  onClick={handleOpenAddSubject}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Subject</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredSubjects.map(subj => (
+                <div 
+                  key={subj.id} 
+                  onClick={() => setViewingSubject(subj)}
+                  className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4 cursor-pointer group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-mono font-extrabold text-xs border border-blue-100">
+                        {subj.code}
+                      </span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${
+                        subj.type === 'Core Theory' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
+                      }`}>
+                        {subj.type}
+                      </span>
+                    </div>
+
+                    <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
+                      {subj.name}
+                    </h3>
+
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+                      <span className="font-semibold text-slate-700">{subj.department}</span>
+                      <span>•</span>
+                      <span>Year {subj.year} ({subj.sem})</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-center text-xs">
+                    <div>
+                      <span className="text-sm font-extrabold text-blue-600 block">{subj.credits}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Credits</span>
+                    </div>
+                    <div className="border-x border-slate-200">
+                      <span className="text-sm font-extrabold text-slate-800 block">{subj.units?.length || 5}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Units</span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-extrabold text-emerald-600 block">{subj.studentsEnrolled || 0}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Enrolled</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <span className="text-slate-600 font-medium truncate max-w-[160px]">
+                      👨‍🏫 {subj.faculty}
+                    </span>
+
+                    <div className="flex items-center gap-1 text-slate-400" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleOpenEditSubject(subj)}
+                        className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingSubject(subj)}
+                        className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         )
       )}
 
@@ -1377,109 +1433,131 @@ export default function CourseSubjectManagement({ user }) {
       {/* 7. TAB 3: CURRICULUM MATRIX & SEMESTER ROADMAP                            */}
       {/* ========================================================================= */}
       {activeTab === 'matrix' && (
-        <div className="space-y-6">
-          {/* Program Switcher Banner */}
-          <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        programsList.length === 0 ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-4 bg-white border border-slate-200/90 rounded-3xl p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <GraduationCap className="w-7 h-7" />
+            </div>
             <div>
-              <span className="text-xs font-bold text-blue-300 uppercase tracking-wider block mb-1">
-                Curriculum Structure & Semester Progression
-              </span>
-              <h2 className="text-xl sm:text-2xl font-extrabold leading-tight">
-                {activeMatrixProgram.name}
-              </h2>
-              <p className="text-xs text-slate-300 mt-1">
-                {activeMatrixProgram.regulation} • {activeMatrixProgram.durationYears} Years ({activeMatrixProgram.totalSemesters} Semesters) • Total {activeMatrixProgram.totalCredits} Credits
+              <h3 className="text-base font-bold text-slate-800">No Degree Programs Added Yet</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                Add your degree programs and curriculum subjects to view the semester curriculum progression matrix.
               </p>
             </div>
+            <button
+              onClick={handleOpenAddProgram}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Degree Program</span>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Program Switcher Banner */}
+            <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-bold text-blue-300 uppercase tracking-wider block mb-1">
+                  Curriculum Structure & Semester Progression
+                </span>
+                <h2 className="text-xl sm:text-2xl font-extrabold leading-tight">
+                  {activeMatrixProgram?.name || 'Academic Degree Program'}
+                </h2>
+                <p className="text-xs text-slate-300 mt-1">
+                  {activeMatrixProgram?.regulation || 'Regulation 2024 (R24)'} • {activeMatrixProgram?.durationYears || 3} Years ({activeMatrixProgram?.totalSemesters || 6} Semesters) • Total {activeMatrixProgram?.totalCredits || 140} Credits
+                </p>
+              </div>
 
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-semibold text-slate-300">Select Degree:</label>
-              <select
-                value={matrixSelectedProgramCode}
-                onChange={(e) => setMatrixSelectedProgramCode(e.target.value)}
-                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold rounded-xl px-4 py-2.5 focus:outline-none focus:bg-slate-900 cursor-pointer transition-all"
-              >
-                {programsList.map(p => (
-                  <option key={p.id} value={p.code} className="text-slate-900 bg-white">{p.code} - {p.name}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-semibold text-slate-300">Select Degree:</label>
+                <select
+                  value={matrixSelectedProgramCode || activeMatrixProgram?.code || ''}
+                  onChange={(e) => setMatrixSelectedProgramCode(e.target.value)}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold rounded-xl px-4 py-2.5 focus:outline-none focus:bg-slate-900 cursor-pointer transition-all"
+                >
+                  {programsList.map(p => (
+                    <option key={p.id || p.code} value={p.code} className="text-slate-900 bg-white">{p.code} - {p.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Semesters Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {Array.from({ length: Number(activeMatrixProgram?.totalSemesters) || (Number(activeMatrixProgram?.durationYears) ? Number(activeMatrixProgram.durationYears) * 2 : 6) }).map((_, idx) => {
+                const semNumber = idx + 1;
+                const semLabel = `Sem ${semNumber}`;
+                const allSubjects = subjectsList;
+                const semSubjects = allSubjects.filter(s => 
+                  (s.department === activeMatrixProgram?.department || s.course === activeMatrixProgram?.code) && (s.sem === semLabel || s.semester === semNumber)
+                );
+                const totalSemCredits = semSubjects.reduce((acc, curr) => acc + (Number(curr.credits) || 0), 0);
+
+                return (
+                  <div key={semLabel} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-8 h-8 rounded-xl bg-blue-600 text-white font-extrabold text-xs flex items-center justify-center">
+                          S{semNumber}
+                        </span>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-slate-900">Semester {semNumber}</h4>
+                          <p className="text-[11px] text-slate-400 font-medium">Year {Math.ceil(semNumber / 2)} Curriculum</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="font-extrabold text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
+                          {totalSemCredits} Credits
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Subjects list in semester */}
+                    <div className="space-y-2">
+                      {semSubjects.length > 0 ? (
+                        semSubjects.map(sub => (
+                          <div 
+                            key={sub.id} 
+                            onClick={() => setViewingSubject(sub)}
+                            className="p-3 bg-slate-50 hover:bg-blue-50/50 rounded-xl border border-slate-100 text-xs flex items-center justify-between cursor-pointer transition-all group"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono font-bold text-[11px] text-blue-700 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                                {sub.code}
+                              </span>
+                              <span className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors truncate">
+                                {sub.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                                sub.type === 'Practical / Lab' ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-700'
+                              }`}>
+                                {sub.credits}C
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-6 text-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                          <p className="text-xs font-semibold text-slate-500">No subjects assigned for Semester {semNumber}</p>
+                          <button
+                            onClick={() => handleOpenAddSubject(semLabel)}
+                            className="mt-2 text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Subject to Sem {semNumber}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-
-          {/* Semesters Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {Array.from({ length: activeMatrixProgram.totalSemesters }).map((_, idx) => {
-              const semNumber = idx + 1;
-              const semLabel = `Sem ${semNumber}`;
-              const semSubjects = subjectsList.filter(s => 
-                s.department === activeMatrixProgram.department && s.sem === semLabel
-              );
-              const totalSemCredits = semSubjects.reduce((acc, curr) => acc + curr.credits, 0);
-
-              return (
-                <div key={semLabel} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-8 h-8 rounded-xl bg-blue-600 text-white font-extrabold text-xs flex items-center justify-center">
-                        S{semNumber}
-                      </span>
-                      <div>
-                        <h4 className="font-extrabold text-sm text-slate-900">Semester {semNumber}</h4>
-                        <p className="text-[11px] text-slate-400 font-medium">Year {Math.ceil(semNumber / 2)} Curriculum</p>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="font-extrabold text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
-                        {totalSemCredits} Credits
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Subjects list in semester */}
-                  <div className="space-y-2">
-                    {semSubjects.length > 0 ? (
-                      semSubjects.map(sub => (
-                        <div 
-                          key={sub.id} 
-                          onClick={() => setViewingSubject(sub)}
-                          className="p-3 bg-slate-50 hover:bg-blue-50/50 rounded-xl border border-slate-100 text-xs flex items-center justify-between cursor-pointer transition-all group"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="font-mono font-bold text-[11px] text-blue-700 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
-                              {sub.code}
-                            </span>
-                            <span className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors truncate">
-                              {sub.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                              sub.type === 'Practical / Lab' ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-700'
-                            }`}>
-                              {sub.credits}C
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="py-6 text-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                        <p className="text-xs font-semibold text-slate-500">Core courses defined in master syllabus</p>
-                        <button
-                          onClick={() => handleOpenAddSubject(semLabel)}
-                          className="mt-2 text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Subject to Sem {semNumber}</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        )
       )}
 
       {/* ========================================================================= */}
@@ -1495,55 +1573,65 @@ export default function CourseSubjectManagement({ user }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {facultyWorkload.map((fac, idx) => (
-                <div key={idx} className="p-5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-sm shadow-xs">
-                          {fac.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+            {facultyWorkload.length === 0 ? (
+              <div className="py-16 text-center text-slate-400">
+                <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                <h4 className="text-sm font-bold text-slate-700">No Faculty Allocations Yet</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
+                  Faculty course loads and assigned subjects will appear here once subjects are added and allocated to faculty.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {facultyWorkload.map((fac, idx) => (
+                  <div key={idx} className="p-5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-sm shadow-xs">
+                            {fac.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                          </div>
+                          <div>
+                            <h4 className="font-extrabold text-sm text-slate-900 leading-tight">{fac.name}</h4>
+                            <span className="text-[11px] font-semibold text-slate-500">{fac.department}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 bg-white p-3 rounded-xl border border-slate-200/70 text-center text-xs my-3">
+                        <div>
+                          <span className="font-black text-blue-600 text-base leading-none block">{fac.totalCredits}</span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">Teaching Credits</span>
                         </div>
                         <div>
-                          <h4 className="font-extrabold text-sm text-slate-900 leading-tight">{fac.name}</h4>
-                          <span className="text-[11px] font-semibold text-slate-500">{fac.department}</span>
+                          <span className="font-black text-emerald-600 text-base leading-none block">{fac.totalStudents}</span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">Enrolled</span>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2 bg-white p-3 rounded-xl border border-slate-200/70 text-center text-xs my-3">
-                      <div>
-                        <span className="font-black text-blue-600 text-base leading-none block">{fac.totalCredits}</span>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Teaching Credits</span>
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Subjects:</span>
+                        {fac.subjects.map(s => (
+                          <div key={s.id} className="text-xs p-2 bg-white rounded-lg border border-slate-100 flex items-center justify-between">
+                            <span className="font-bold text-slate-800 truncate mr-2">{s.code} - {s.name}</span>
+                            <button
+                              onClick={() => {
+                                setReallocatingSubject(s);
+                                setNewFacultyName(s.faculty);
+                              }}
+                              title="Reallocate Faculty"
+                              className="text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline shrink-0"
+                            >
+                              Reassign
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                      <div>
-                        <span className="font-black text-emerald-600 text-base leading-none block">{fac.totalStudents}</span>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Enrolled</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Subjects:</span>
-                      {fac.subjects.map(s => (
-                        <div key={s.id} className="text-xs p-2 bg-white rounded-lg border border-slate-100 flex items-center justify-between">
-                          <span className="font-bold text-slate-800 truncate mr-2">{s.code} - {s.name}</span>
-                          <button
-                            onClick={() => {
-                              setReallocatingSubject(s);
-                              setNewFacultyName(s.faculty);
-                            }}
-                            title="Reallocate Faculty"
-                            className="text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline shrink-0"
-                          >
-                            Reassign
-                          </button>
-                        </div>
-                      ))}
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1880,6 +1968,18 @@ export default function CourseSubjectManagement({ user }) {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Students Enrolled</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={subjectForm.studentsEnrolled ?? 0}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, studentsEnrolled: Math.max(0, parseInt(e.target.value) || 0) })}
+                    placeholder="0"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
               </div>
 
               {/* Textbooks */}
@@ -1966,8 +2066,8 @@ export default function CourseSubjectManagement({ user }) {
                 <input
                   type="text"
                   required
-                  value={programFormData.name}
-                  onChange={(e) => setProgramFormData({ ...programFormData, name: e.target.value })}
+                  value={programForm.name}
+                  onChange={(e) => setProgramForm({ ...programForm, name: e.target.value })}
                   placeholder="e.g. B.Sc Computer Science or B.Com Professional"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                 />
@@ -1980,8 +2080,8 @@ export default function CourseSubjectManagement({ user }) {
                   <input
                     type="text"
                     required
-                    value={programFormData.code}
-                    onChange={(e) => setProgramFormData({ ...programFormData, code: e.target.value.toUpperCase() })}
+                    value={programForm.code}
+                    onChange={(e) => setProgramForm({ ...programForm, code: e.target.value.toUpperCase() })}
                     placeholder="e.g. BSC-CS or BCOM-GEN"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold font-mono focus:bg-white focus:border-purple-500 focus:outline-none uppercase transition-all"
                   />
@@ -1989,8 +2089,8 @@ export default function CourseSubjectManagement({ user }) {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Department *</label>
                   <select
-                    value={programFormData.department}
-                    onChange={(e) => setProgramFormData({ ...programFormData, department: e.target.value })}
+                    value={programForm.department}
+                    onChange={(e) => setProgramForm({ ...programForm, department: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
@@ -2005,8 +2105,8 @@ export default function CourseSubjectManagement({ user }) {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Degree Level</label>
                   <select
-                    value={programFormData.level}
-                    onChange={(e) => setProgramFormData({ ...programFormData, level: e.target.value })}
+                    value={programForm.degreeLevel || 'Undergraduate (UG)'}
+                    onChange={(e) => setProgramForm({ ...programForm, degreeLevel: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     <option value="Undergraduate (UG)">Undergraduate (UG)</option>
@@ -2017,11 +2117,11 @@ export default function CourseSubjectManagement({ user }) {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Total Duration</label>
                   <select
-                    value={programFormData.durationYears}
+                    value={programForm.durationYears}
                     onChange={(e) => {
                       const years = parseInt(e.target.value);
-                      setProgramFormData({ 
-                        ...programFormData, 
+                      setProgramForm({ 
+                        ...programForm, 
                         durationYears: years,
                         totalSemesters: years * 2
                       });
@@ -2043,8 +2143,8 @@ export default function CourseSubjectManagement({ user }) {
                   type="number"
                   min="60"
                   max="240"
-                  value={programFormData.totalCredits}
-                  onChange={(e) => setProgramFormData({ ...programFormData, totalCredits: parseInt(e.target.value) || 0 })}
+                  value={programForm.totalCredits}
+                  onChange={(e) => setProgramForm({ ...programForm, totalCredits: parseInt(e.target.value) || 0 })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                 />
               </div>

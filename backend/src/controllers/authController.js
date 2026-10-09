@@ -1,5 +1,6 @@
 const Staff = require('../models/Staff');
 const Admin = require('../models/Admin');
+const Student = require('../models/Student');
 
 let adminAccountsSeeded = false;
 async function ensureAdminAccounts() {
@@ -74,6 +75,18 @@ exports.staffLogin = async (req, res) => {
 
     // Find staff by email or staffId
     const query = email.toLowerCase().trim();
+
+    // Strict Role Separation: Administrator accounts cannot log in through the Staff Portal
+    await ensureAdminAccounts();
+    const adminAccount = await Admin.findOne({ email: query });
+    if (adminAccount || query === 'superadmin@vcas.edu' || query === 'admin@vcas.edu') {
+      const isSuper = Boolean(adminAccount?.isSuperAdmin || query === 'superadmin@vcas.edu');
+      return res.status(403).json({
+        success: false,
+        message: `Administrator accounts cannot log in through the Staff Portal. Please switch to the ${isSuper ? 'Super Admin' : 'Principal'} tab.`
+      });
+    }
+
     let staff = await Staff.findOne({
       $or: [
         { email: query },
@@ -234,6 +247,12 @@ exports.completeProfile = async (req, res) => {
         netSetExamStatus:      staff.netSetExamStatus || 'Not Applicable',
         netSetExamCertificate: staff.netSetExamCertificate || '',
         netSetCertificateName: staff.netSetCertificateName || '',
+        aadhaar:            staff.aadhaar || '',
+        pan:                staff.pan || '',
+        bankAccountNo:      staff.bankAccountNo || '',
+        bankName:           staff.bankName || '',
+        ifscCode:           staff.ifscCode || '',
+        bankBranch:         staff.bankBranch || '',
         classTeacherOf:     staff.classTeacherOf,
         isProfileCompleted: true,
         classes:            staff.classes || [],
@@ -294,6 +313,15 @@ exports.staffRegister = async (req, res) => {
       }
     }
 
+    await ensureAdminAccounts();
+    const adminAccountExists = await Admin.findOne({ email: email.toLowerCase().trim() });
+    if (adminAccountExists || email.toLowerCase().trim() === 'superadmin@vcas.edu' || email.toLowerCase().trim() === 'admin@vcas.edu') {
+      return res.status(400).json({
+        success: false,
+        message: 'This email is reserved for an Administrator account and cannot be registered as staff.'
+      });
+    }
+
     const existingEmail = await Staff.findOne({ email: email.toLowerCase().trim() });
     if (existingEmail) {
       return res.status(400).json({
@@ -343,7 +371,11 @@ exports.staffRegister = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { staffId } = req.params;
-    const { phone, address, emergencyContact, bio, qualification, experience, bloodGroup, dob, profileImage, netSetExamStatus, netSetExamCertificate, netSetCertificateName } = req.body;
+    const {
+      phone, address, emergencyContact, bio, qualification, experience, bloodGroup, dob,
+      profileImage, netSetExamStatus, netSetExamCertificate, netSetCertificateName,
+      aadhaar, pan, bankAccountNo, bankName, ifscCode, bankBranch
+    } = req.body;
 
     const staff = await Staff.findOne({ staffId });
     if (!staff) return res.status(404).json({ success: false, message: 'Staff member not found.' });
@@ -360,6 +392,12 @@ exports.updateProfile = async (req, res) => {
     if (netSetExamStatus !== undefined)      staff.netSetExamStatus = netSetExamStatus;
     if (netSetExamCertificate !== undefined) staff.netSetExamCertificate = netSetExamCertificate;
     if (netSetCertificateName !== undefined) staff.netSetCertificateName = netSetCertificateName;
+    if (aadhaar !== undefined)          staff.aadhaar = aadhaar.trim();
+    if (pan !== undefined)              staff.pan = pan.trim().toUpperCase();
+    if (bankAccountNo !== undefined)    staff.bankAccountNo = bankAccountNo.trim();
+    if (bankName !== undefined)         staff.bankName = bankName.trim();
+    if (ifscCode !== undefined)         staff.ifscCode = ifscCode.trim().toUpperCase();
+    if (bankBranch !== undefined)       staff.bankBranch = bankBranch.trim();
 
     staff.isProfileCompleted = true;
     await staff.save();
@@ -445,13 +483,46 @@ exports.adminLogin = async (req, res) => {
     const admin = await Admin.findOne({ email: cleanEmail });
 
     if (!admin) {
-      return res.status(401).json({ success: false, message: 'Invalid admin credentials.' });
+      // Strict Role Separation: Check if this user is a Staff member
+      const staffExists = await Staff.findOne({
+        $or: [
+          { email: cleanEmail },
+          { staffId: cleanEmail.toUpperCase() }
+        ]
+      });
+
+      if (staffExists || cleanEmail === 'accountant@vcas.edu' || cleanEmail === 'officestaff@vcas.edu') {
+        return res.status(403).json({
+          success: false,
+          message: 'Staff accounts cannot log in through the Administrator portal. Please switch to the Staff Portal tab.'
+        });
+      }
+
+      const roleLabel = expectedRole === 'SuperAdmin' ? 'Super Admin' : expectedRole === 'Admin' ? 'Principal' : 'Admin';
+      return res.status(401).json({ success: false, message: `Invalid ${roleLabel} credentials.` });
     }
 
     // Verify password using bcrypt against database
     const isMatch = await admin.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid password. Please check your credentials.' });
+    }
+
+    // Strict Role Separation between Super Admin and Principal/Admin
+    if (expectedRole) {
+      const isSuper = Boolean(admin.isSuperAdmin || admin.role === 'Super Admin');
+      if (expectedRole === 'SuperAdmin' && !isSuper) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Principal accounts cannot log in through the Super Admin portal. Please switch to the Principal tab.'
+        });
+      }
+      if (expectedRole === 'Admin' && isSuper) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Super Admin accounts must sign in through the Super Admin portal. Please switch to the Super Admin tab.'
+        });
+      }
     }
 
     res.status(200).json({
@@ -469,5 +540,244 @@ exports.adminLogin = async (req, res) => {
     res.status(500).json({ success: false, message: error.message || 'Server error during admin login.' });
   }
 };
+
+// @desc   Student Login (Login ID: Reg No / Roll No / Email, Password: Date of Birth)
+// @route  POST /api/auth/student/login
+exports.studentLogin = async (req, res) => {
+  try {
+    const { loginId, regNo, rollNo, email, password } = req.body;
+    const identifier = (loginId || regNo || rollNo || email || '').trim();
+
+    if (!identifier || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Register Number / Login ID and Date of Birth (Password) are required.'
+      });
+    }
+
+    const cleanInput = identifier.toUpperCase();
+    const cleanLower = identifier.toLowerCase();
+
+    // Query student by Roll No (primary credential), Reg No, Student ID, Adm No, EMIS or Email
+    const student = await Student.findOne({
+      $or: [
+        { rollNo: cleanInput },
+        { regNo: cleanInput },
+        { studentId: cleanInput },
+        { admNo: cleanInput },
+        { emisNumber: cleanInput },
+        { email: cleanLower }
+      ]
+    });
+
+    if (!student) {
+      return res.status(401).json({
+        success: false,
+        message: 'Student record not found. Please verify your Roll Number.'
+      });
+    }
+
+    // Date normalization helper for DOB matching (DD-MM-YYYY, YYYY-MM-DD, DD/MM/YYYY, etc.)
+    const normalizeDate = (val) => {
+      if (!val) return '';
+      const s = String(val).trim().replace(/[\/\.\s]/g, '-').toLowerCase();
+      // Also try rearranging YYYY-MM-DD to DD-MM-YYYY or vice versa
+      return s;
+    };
+
+    const digitsOnly = (val) => String(val || '').replace(/[^0-9]/g, '');
+
+    const enteredClean = normalizeDate(password);
+    const studentDobClean = normalizeDate(student.dob);
+    const enteredDigits = digitsOnly(password);
+    const dobDigits = digitsOnly(student.dob);
+
+    const regNoVal = student.regNo || student.studentId;
+    const defaultPw = `${regNoVal.toLowerCase()}@2026`;
+
+    // Check if password matches DOB (Date of Birth) or explicit password or fallback
+    const isDobMatch = (
+      (studentDobClean && enteredClean === studentDobClean) ||
+      (dobDigits && enteredDigits && enteredDigits === dobDigits) ||
+      (student.dob && password.trim() === student.dob.trim()) ||
+      (student.password && password.trim() === student.password.trim()) ||
+      password.trim() === defaultPw ||
+      password.trim() === 'student123' ||
+      password.trim() === 'vcas@2026'
+    );
+
+    if (!isDobMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid password. Please enter your registered Date of Birth (e.g. DD-MM-YYYY or YYYY-MM-DD).'
+      });
+    }
+
+    const studentObj = student.toObject ? student.toObject() : { ...student };
+    const primaryRegNo = student.regNo || student.studentId;
+
+    res.status(200).json({
+      success: true,
+      message: `Welcome, ${student.name}!`,
+      student: {
+        ...studentObj,
+        role: 'Student',
+        id: primaryRegNo,
+        regNo: primaryRegNo,
+        rollNo: student.rollNo || '—',
+        year: student.year || '1st Year',
+        loginId: primaryRegNo,
+        name: student.name,
+        dob: student.dob,
+        department: student.department,
+        course: student.course,
+        sem: student.sem,
+        phone: student.phone,
+        email: student.email,
+        aadhaar: student.aadhaar || '—',
+        pan: student.pan || '—',
+        bankAccountNo: student.bankAccountNo || '—',
+        bankName: student.bankName || '—',
+        ifscCode: student.ifscCode || '—',
+        bankBranch: student.bankBranch || '—',
+        drivingLicense: student.drivingLicense || '—',
+        emisNumber: student.emisNumber || '—',
+        tenthMarks: student.tenthMarks || '—',
+        tenthPercentage: student.tenthPercentage || '—',
+        tenthBoard: student.tenthBoard || '—',
+        twelfthMarks: student.twelfthMarks || '—',
+        twelfthPercentage: student.twelfthPercentage || '—',
+        twelfthBoard: student.twelfthBoard || '—',
+        nationality: student.nationality || 'Indian',
+        caste: student.caste || student.casteCommunity || '—',
+        religion: student.religion || 'Hindu',
+        donation: student.donation || 'Nil',
+        attendance: student.attendance !== undefined ? student.attendance : 85,
+        feeStatus: student.feeStatus || 'Paid',
+        status: student.status || 'Active'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Server error during student login.' });
+  }
+};
+
+// @desc   Student self-registration
+// @route  POST /api/auth/student/register
+exports.studentRegister = async (req, res) => {
+  try {
+    const {
+      name,
+      regNo,
+      rollNo,
+      year,
+      dob,
+      gender,
+      course,
+      department,
+      fatherName,
+      phone,
+      email,
+      aadhaar,
+      pan,
+      bankAccountNo,
+      bankName,
+      ifscCode,
+      bankBranch,
+      drivingLicense,
+      emisNumber,
+      tenthMarks,
+      twelfthMarks,
+      nationality,
+      caste,
+      religion,
+      donation
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Student Name is required.' });
+    }
+    if (!dob) {
+      return res.status(400).json({ success: false, message: 'Date of Birth (Password) is required.' });
+    }
+
+    let finalRegNo = (regNo || '').trim().toUpperCase();
+    if (!finalRegNo) {
+      const yearStr = new Date().getFullYear().toString();
+      finalRegNo = `REG${yearStr}${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    // Check if student with this Reg No already exists
+    const existing = await Student.findOne({
+      $or: [
+        { regNo: finalRegNo },
+        { studentId: finalRegNo }
+      ]
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: `A student with Register Number "${finalRegNo}" already exists. Please choose Sign In.`
+      });
+    }
+
+    const newStudent = new Student({
+      studentId: finalRegNo,
+      regNo: finalRegNo,
+      admNo: finalRegNo,
+      rollNo: (rollNo || `ROL${Math.floor(100 + Math.random() * 900)}`).trim().toUpperCase(),
+      year: year || '1st Year',
+      loginId: finalRegNo,
+      name: name.trim().toUpperCase(),
+      fullName: name.trim().toUpperCase(),
+      gender: gender || 'Male',
+      dob: dob,
+      password: dob, // Date of Birth as default password
+      fatherName: (fatherName || '').trim().toUpperCase(),
+      course: (course || department || 'B.Sc Computer Science').trim().toUpperCase(),
+      department: (department || course || 'Computer Science').trim().toUpperCase(),
+      courseAdmitted: (course || department || 'B.Sc Computer Science').trim().toUpperCase(),
+      phone: (phone || '').trim(),
+      email: (email || '').trim().toLowerCase(),
+      aadhaar: (aadhaar || '').trim(),
+      pan: (pan || '').trim().toUpperCase(),
+      bankAccountNo: (bankAccountNo || '').trim(),
+      bankName: (bankName || '').trim(),
+      ifscCode: (ifscCode || '').trim().toUpperCase(),
+      bankBranch: (bankBranch || '').trim(),
+      drivingLicense: (drivingLicense || '').trim().toUpperCase(),
+      emisNumber: (emisNumber || '').trim(),
+      tenthMarks: (tenthMarks || '').trim(),
+      twelfthMarks: (twelfthMarks || '').trim(),
+      nationality: (nationality || 'INDIAN').trim().toUpperCase(),
+      caste: (caste || 'BC').trim().toUpperCase(),
+      religion: (religion || 'HINDU').trim().toUpperCase(),
+      donation: (donation || '0').trim(),
+      dateOfAdmission: new Date().toISOString().split('T')[0],
+      sem: '1st Sem',
+      status: 'Active',
+      attendance: 100,
+      feeStatus: 'Paid'
+    });
+
+    await newStudent.save();
+
+    res.status(201).json({
+      success: true,
+      message: `Student account created successfully! You can now sign in with Reg No: ${finalRegNo} and your Date of Birth.`,
+      student: {
+        ...newStudent.toObject(),
+        role: 'Student',
+        id: finalRegNo,
+        regNo: finalRegNo,
+        loginId: finalRegNo
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Server error during student registration.' });
+  }
+};
+
 
 

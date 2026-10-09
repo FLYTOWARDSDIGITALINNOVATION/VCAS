@@ -1,510 +1,702 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
-  Upload, 
-  RotateCcw, 
-  ChevronRight, 
-  Check, 
-  User, 
-  GraduationCap, 
-  Users, 
+  UserPlus, 
+  CheckCircle2, 
+  Loader2, 
+  Save, 
+  GraduationCap,
+  CreditCard,
+  Building2,
   FileText,
-  CheckCircle2,
-  Loader2
+  User,
+  ShieldCheck,
+  Calendar,
+  Award,
+  Hash
 } from 'lucide-react';
+import CollegeLogo from './CollegeLogo';
+
+const API_BASE = 'http://localhost:5000';
 
 export default function AddStudentWizard({ onBack, onComplete, isSaving = false }) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [photoPreview, setPhotoPreview] = useState(null);
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [activeTab, setActiveTab] = useState('academic'); // 'academic' | 'personal' | 'statutory' | 'bank' | 'previous'
 
-  // Form State
+  // Fetch departments for course suggestion dropdown
+  useEffect(() => {
+    fetch(`${API_BASE}/api/departments`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          setDepartmentsList(data.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Generate suggested Reg No based on current year
+  const currentYearDigits = new Date().getFullYear().toString();
+  const defaultSuggestedReg = `REG${currentYearDigits}${Math.floor(1000 + Math.random() * 9000)}`;
+
+  // Form state containing all required fields
   const [formData, setFormData] = useState({
-    // Step 1: Personal Info
-    studentId: 'STU008 (Auto-generated)',
-    admissionNo: 'ADM2024008',
-    fullName: '',
-    dob: '',
-    gender: '',
-    bloodGroup: '',
-    email: '',
-    mobile: '',
-    address: '',
+    // Academic & Portal Identity
+    regNo: defaultSuggestedReg,
+    rollNo: `ROL${Math.floor(100 + Math.random() * 900)}`,
+    year: '1st Year',
+    courseAdmitted: 'B.Sc. COMPUTER SCIENCE',
+    dateOfAdmission: new Date().toISOString().split('T')[0],
 
-    // Step 2: Academic Info
-    department: 'Commerce',
-    course: 'B.Com',
-    semester: '1st Sem',
-    academicYear: '2026-2027',
-    rollNo: '24CM008',
-
-    // Step 3: Parent Info
+    // Personal Information
+    name: '',
+    gender: 'Male',
+    dob: '2005-06-15', // Sets default password
     fatherName: '',
-    motherName: '',
-    parentMobile: '',
-    parentOccupation: '',
-    emergencyContact: '',
+    nationality: 'INDIAN',
+    religion: 'HINDU',
+    caste: 'BC',
+    casteCommunity: 'BC',
+    nationalityReligion: 'INDIAN & HINDU',
 
-    // Step 4: Documents
-    doc10th: null,
-    doc12th: null,
-    docTc: null,
-    docAadhaar: null
+    // Statutory & Identity Proofs
+    aadhaar: '',
+    pan: '',
+    drivingLicense: '',
+    emisNumber: '',
+
+    // Bank Account Details
+    bankName: 'State Bank of India',
+    bankAccountNo: '',
+    ifscCode: 'SBIN0001234',
+    bankBranch: 'Tiruchengode',
+
+    // Academic Prior Records
+    tenthMarks: '',
+    twelfthMarks: '',
+
+    // Donation / Admission Details
+    donation: '0'
   });
 
-  const steps = [
-    { number: 1, label: 'Personal Info', icon: User },
-    { number: 2, label: 'Academic Info', icon: GraduationCap },
-    { number: 3, label: 'Parent Info', icon: Users },
-    { number: 4, label: 'Documents', icon: FileText }
-  ];
+  const [formErrors, setFormErrors] = useState({});
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const validate = () => {
+    const errors = {};
+    if (!formData.name.trim()) errors.name = 'Student Name is required';
+    if (!formData.regNo.trim()) errors.regNo = 'Register Number (Reg No) is required';
+    if (!formData.dob) errors.dob = 'Date of Birth (Password) is required';
+    if (!formData.year) errors.year = 'Year is required';
+    if (!formData.courseAdmitted.trim()) errors.courseAdmitted = 'Course is required';
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setPhotoPreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleNext = () => {
-    if (currentStep < 4) {
-      setCurrentStep(prev => prev + 1);
-    } else {
-      // Complete registration
-      if (onComplete) {
-        onComplete(formData);
-      } else {
-        alert("Student registered successfully!");
-        onBack();
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!validate()) {
+      // Switch to first tab with error
+      if (!formData.name.trim() || !formData.dob) {
+        setActiveTab('personal');
+      } else if (!formData.regNo.trim() || !formData.year || !formData.courseAdmitted.trim()) {
+        setActiveTab('academic');
       }
+      return;
     }
-  };
 
-  const handlePrev = () => {
-    if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
-    } else {
-      onBack();
+    if (onComplete) {
+      onComplete({
+        ...formData,
+        fullName: formData.name,
+        department: formData.courseAdmitted,
+        course: formData.courseAdmitted,
+        loginId: formData.regNo,
+        password: formData.dob,
+        nationalityReligion: `${formData.nationality || 'INDIAN'} & ${formData.religion || 'HINDU'}`
+      });
     }
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto space-y-6 animate-fadeIn pb-12 font-sans">
       
-      {/* Back Link */}
-      <button 
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Students
-      </button>
+      {/* Top Navigation Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Students List</span>
+        </button>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Add New Student</h1>
-        <p className="text-xs text-slate-500 mt-1">Complete all steps to register a student</p>
-      </div>
-
-      {/* STEPPER PROGRESS BAR */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center justify-between relative">
-          
-          {/* Progress Line */}
-          <div className="absolute left-8 right-8 top-1/2 -translate-y-1/2 h-0.5 bg-slate-200 -z-0"></div>
-          <div 
-            className="absolute left-8 top-1/2 -translate-y-1/2 h-0.5 bg-blue-600 transition-all duration-300 -z-0"
-            style={{ width: `${((currentStep - 1) / 3) * 100}%` }}
-          ></div>
-
-          {steps.map((step) => {
-            const isCompleted = currentStep > step.number;
-            const isActive = currentStep === step.number;
-            const Icon = step.icon;
-
-            return (
-              <div key={step.number} className="relative z-10 flex flex-col items-center gap-2 bg-white px-2">
-                <div 
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-200 ${
-                    isCompleted 
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
-                      : isActive 
-                        ? 'bg-white text-blue-600 border-2 border-blue-600 shadow-md' 
-                        : 'bg-slate-100 text-slate-400 border border-slate-200'
-                  }`}
-                >
-                  {isCompleted ? <Check className="w-5 h-5" /> : step.number}
-                </div>
-                <span className={`text-xs font-bold ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
-                  {step.label}
-                </span>
-              </div>
-            );
-          })}
-
+        <div className="flex items-center gap-2 text-right">
+          <span className="text-[11px] font-extrabold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+            Reg No & DOB Authentication System
+          </span>
+          <span className="text-[11px] font-extrabold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg border border-purple-200">
+            VCAS Official Portal
+          </span>
         </div>
       </div>
 
-      {/* STEP CONTENT CONTAINER */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-6">
+      {/* Main Form Card */}
+      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
         
-        {/* STEP 1: PERSONAL INFORMATION */}
-        {currentStep === 1 && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Personal Information
-            </h2>
-
-            {/* Photo Upload Circle */}
-            <div className="flex justify-center my-4">
-              <label className="w-32 h-32 rounded-full border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden group">
-                {photoPreview ? (
-                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                ) : (
-                  <>
-                    <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-blue-50 text-slate-400 group-hover:text-blue-600 flex items-center justify-center mb-1 transition-all">
-                      <Upload className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 group-hover:text-blue-600">Photo</span>
-                  </>
-                )}
-                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-              </label>
+        {/* Header Banner */}
+        <div className="bg-gradient-to-r from-[#0f1e3c] via-[#162a52] to-[#1e3a6f] text-white p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-1 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/20 shrink-0">
+                <CollegeLogo size="sm" showText={false} />
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight">Student Admission & Registration</h2>
+                <p className="text-xs text-blue-200 mt-1">
+                  Vivekanandha College of Arts and Sciences for Women (Autonomous) • Student Profile Creation
+                </p>
+              </div>
             </div>
 
-            {/* Form Fields Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-              
-              {/* Student ID */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Student ID</label>
-                <input 
-                  type="text" 
-                  disabled
-                  value={formData.studentId}
-                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-semibold cursor-not-allowed"
-                />
-              </div>
-
-              {/* Admission No. */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Admission No.</label>
-                <input 
-                  type="text"
-                  value={formData.admissionNo}
-                  onChange={(e) => handleInputChange('admissionNo', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Full Name */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Full Name</label>
-                <input 
-                  type="text"
-                  placeholder="Enter full name"
-                  value={formData.fullName}
-                  onChange={(e) => handleInputChange('fullName', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Date of Birth */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Date of Birth</label>
-                <input 
-                  type="date"
-                  value={formData.dob}
-                  onChange={(e) => handleInputChange('dob', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Gender */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Gender</label>
-                <select 
-                  value={formData.gender}
-                  onChange={(e) => handleInputChange('gender', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">Select Gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              {/* Blood Group */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Blood Group</label>
-                <select 
-                  value={formData.bloodGroup}
-                  onChange={(e) => handleInputChange('bloodGroup', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">Select Blood Group</option>
-                  <option value="A+">A+</option>
-                  <option value="A-">A-</option>
-                  <option value="B+">B+</option>
-                  <option value="B-">B-</option>
-                  <option value="O+">O+</option>
-                  <option value="O-">O-</option>
-                  <option value="AB+">AB+</option>
-                  <option value="AB-">AB-</option>
-                </select>
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Email</label>
-                <input 
-                  type="email"
-                  placeholder="student@college.edu"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Mobile Number */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Mobile Number</label>
-                <input 
-                  type="text"
-                  placeholder="+91"
-                  value={formData.mobile}
-                  onChange={(e) => handleInputChange('mobile', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Address (Full width) */}
-              <div className="md:col-span-2">
-                <label className="block font-bold text-slate-700 mb-1.5">Address</label>
-                <textarea 
-                  rows="3"
-                  placeholder="Full address"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none"
-                ></textarea>
-              </div>
-
+            <div className="bg-white/10 px-4 py-2 rounded-2xl border border-white/20 text-xs backdrop-blur-xs">
+              <span className="text-blue-200 block text-[10px] uppercase font-bold tracking-wider">Default Login Credential</span>
+              <span className="font-mono font-bold text-amber-300">Reg No + DOB Password</span>
             </div>
           </div>
-        )}
 
-        {/* STEP 2: ACADEMIC INFORMATION */}
-        {currentStep === 2 && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Academic Information
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Department</label>
-                <select 
-                  value={formData.department}
-                  onChange={(e) => handleInputChange('department', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                >
-                  <option value="Commerce">Commerce</option>
-                  <option value="Computer Science">Computer Science</option>
-                  <option value="English Literature">English Literature</option>
-                  <option value="Business Administration (BBA)">Business Administration (BBA)</option>
-                  <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
-                  <option value="Mathematics">Mathematics</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Course</label>
-                <select 
-                  value={formData.course}
-                  onChange={(e) => handleInputChange('course', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                >
-                  <option value="B.Com">B.Com</option>
-                  <option value="B.Sc CS">B.Sc CS</option>
-                  <option value="B.A. English">B.A. English</option>
-                  <option value="BBA">BBA</option>
-                  <option value="BCA">BCA</option>
-                  <option value="B.Sc Maths">B.Sc Maths</option>
-                  <option value="M.Com">M.Com</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Semester</label>
-                <select 
-                  value={formData.semester}
-                  onChange={(e) => handleInputChange('semester', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                >
-                  <option value="1st Sem">1st Sem</option>
-                  <option value="2nd Sem">2nd Sem</option>
-                  <option value="3rd Sem">3rd Sem</option>
-                  <option value="4th Sem">4th Sem</option>
-                  <option value="5th Sem">5th Sem</option>
-                  <option value="6th Sem">6th Sem</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Academic Year</label>
-                <input 
-                  type="text"
-                  value={formData.academicYear}
-                  onChange={(e) => handleInputChange('academicYear', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Roll Number</label>
-                <input 
-                  type="text"
-                  value={formData.rollNo}
-                  onChange={(e) => handleInputChange('rollNo', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3: PARENT INFORMATION */}
-        {currentStep === 3 && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Parent Information
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Father's Name</label>
-                <input 
-                  type="text"
-                  placeholder="Father's full name"
-                  value={formData.fatherName}
-                  onChange={(e) => handleInputChange('fatherName', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Mother's Name</label>
-                <input 
-                  type="text"
-                  placeholder="Mother's full name"
-                  value={formData.motherName}
-                  onChange={(e) => handleInputChange('motherName', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Parent Mobile Number</label>
-                <input 
-                  type="text"
-                  placeholder="+91"
-                  value={formData.parentMobile}
-                  onChange={(e) => handleInputChange('parentMobile', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Emergency Contact</label>
-                <input 
-                  type="text"
-                  placeholder="+91"
-                  value={formData.emergencyContact}
-                  onChange={(e) => handleInputChange('emergencyContact', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 4: DOCUMENTS */}
-        {currentStep === 4 && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Upload Documents
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              {['10th Marksheet', '12th / Diploma Certificate', 'Transfer Certificate (TC)', 'Identity Proof (Aadhaar/Passport)'].map((doc, idx) => (
-                <div key={idx} className="p-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center justify-center text-center space-y-2 hover:border-blue-500 transition-all cursor-pointer">
-                  <Upload className="w-6 h-6 text-slate-400" />
-                  <p className="font-bold text-slate-800">{doc}</p>
-                  <p className="text-[11px] text-slate-400">PDF, JPG or PNG (Max 5MB)</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* BOTTOM ACTION BAR */}
-        <div className="flex items-center justify-between pt-6 border-t border-slate-100">
-          
-          {/* Save Draft */}
-          <button 
-            type="button"
-            onClick={() => alert("Draft saved successfully!")}
-            className="flex items-center gap-2 px-4 py-2.5 text-slate-600 hover:text-slate-900 text-xs font-bold transition-all"
-          >
-            <RotateCcw className="w-4 h-4 text-slate-400" />
-            Save Draft
-          </button>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3">
-            {currentStep > 1 && (
-              <button 
-                type="button"
-                onClick={handlePrev}
-                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
-              >
-                Previous Step
-              </button>
-            )}
-
-            <button 
+          {/* Section Navigation Tabs */}
+          <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-1 text-xs">
+            <button
               type="button"
-              disabled={isSaving}
-              onClick={handleNext}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
+              onClick={() => setActiveTab('academic')}
+              className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'academic' ? 'bg-white text-slate-900 shadow-md' : 'text-blue-100 hover:bg-white/10'
+              }`}
             >
-              {currentStep === 4 ? (
-                isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Registering Student...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" /> Register Student
-                  </>
-                )
-              ) : (
-                <>
-                  Next Step <ChevronRight className="w-4 h-4" />
-                </>
-              )}
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span>1. Reg No & Academic</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('personal')}
+              className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'personal' ? 'bg-white text-slate-900 shadow-md' : 'text-blue-100 hover:bg-white/10'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>2. Personal & DOB (Password)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('statutory')}
+              className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'statutory' ? 'bg-white text-slate-900 shadow-md' : 'text-blue-100 hover:bg-white/10'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>3. Aadhaar, PAN & IDs</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('bank')}
+              className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'bank' ? 'bg-white text-slate-900 shadow-md' : 'text-blue-100 hover:bg-white/10'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>4. Bank Details</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('previous')}
+              className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'previous' ? 'bg-white text-slate-900 shadow-md' : 'text-blue-100 hover:bg-white/10'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>5. 10th, 12th & Donation</span>
             </button>
           </div>
-
         </div>
 
-      </div>
+        {/* Multi-Section Form */}
+        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
 
+          {/* TAB 1: ACADEMIC & PORTAL IDENTITY */}
+          {activeTab === 'academic' && (
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Academic & Portal Identity</h3>
+                  <p className="text-xs text-slate-500">Register Number replaces ID as primary key. Student year and course settings.</p>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-200">
+                  Step 1 of 5
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Reg No */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-black text-slate-800 uppercase tracking-wider">
+                    Register Number (Reg No) * <span className="text-[10px] text-blue-600 font-bold">(Used as Login ID)</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.regNo}
+                    onChange={(e) => setFormData({ ...formData, regNo: e.target.value.toUpperCase() })}
+                    className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-xs font-black text-blue-900 uppercase font-mono focus:bg-white focus:outline-none transition-all ${
+                      formErrors.regNo ? 'border-rose-400 focus:border-rose-500' : 'border-slate-300 focus:border-blue-500'
+                    }`}
+                  />
+                  {formErrors.regNo && <p className="text-[10px] text-rose-500 font-bold">{formErrors.regNo}</p>}
+                </div>
+
+                {/* Roll Number */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Roll Number
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.rollNo}
+                    onChange={(e) => setFormData({ ...formData, rollNo: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Year */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Year of Study *
+                  </label>
+                  <select
+                    value={formData.year}
+                    onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                  </select>
+                </div>
+
+                {/* Course Admitted */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Course in Which Admitted *
+                  </label>
+                  <input
+                    type="text"
+                    list="courses-preset-list"
+                    value={formData.courseAdmitted}
+                    onChange={(e) => setFormData({ ...formData, courseAdmitted: e.target.value.toUpperCase() })}
+                    className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold text-slate-900 uppercase focus:bg-white focus:outline-none transition-all ${
+                      formErrors.courseAdmitted ? 'border-rose-400' : 'border-slate-200 focus:border-blue-500'
+                    }`}
+                  />
+                  <datalist id="courses-preset-list">
+                    {departmentsList.map(dept => (
+                      <option key={dept._id || dept.code} value={dept.name}>
+                        {dept.name}
+                      </option>
+                    ))}
+                    <option value="B.Sc. COMPUTER SCIENCE" />
+                    <option value="BCA" />
+                    <option value="B.Com." />
+                    <option value="B.B.A." />
+                    <option value="B.Sc. (CRIMINOLOGY AND FORENSIC SCIENCE)" />
+                    <option value="M.Sc. COMPUTER SCIENCE" />
+                    <option value="M.Com." />
+                  </datalist>
+                </div>
+
+                {/* Date of Admission */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Date of Admission
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.dateOfAdmission}
+                    onChange={(e) => setFormData({ ...formData, dateOfAdmission: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: PERSONAL & DOB (PASSWORD) */}
+          {activeTab === 'personal' && (
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Personal Information & DOB Password</h3>
+                  <p className="text-xs text-slate-500">Student Date of Birth is automatically set as the Student Login Password.</p>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
+                  Step 2 of 5
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Student Name */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Name of the Student *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value.toUpperCase() })}
+                    className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold text-slate-900 uppercase focus:bg-white focus:outline-none transition-all ${
+                      formErrors.name ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
+                    }`}
+                  />
+                  {formErrors.name && <p className="text-[10px] text-rose-500 font-bold">{formErrors.name}</p>}
+                </div>
+
+                {/* Gender */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Gender *
+                  </label>
+                  <select
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="Male">MALE</option>
+                    <option value="Female">FEMALE</option>
+                    <option value="Transgender">TRANSGENDER</option>
+                  </select>
+                </div>
+
+                {/* Date of Birth - SETS PASSWORD */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-black text-emerald-800 uppercase tracking-wider">
+                    Date of Birth * <span className="text-[10px] text-emerald-600 font-bold">(Sets Student Password)</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.dob}
+                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-emerald-50/50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-950 focus:bg-white focus:outline-none focus:border-emerald-600 transition-all"
+                  />
+                  <p className="text-[10px] text-slate-500">Student will log in with Reg No and this Date of Birth.</p>
+                </div>
+
+                {/* Father's Name */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Father's Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.fatherName}
+                    onChange={(e) => setFormData({ ...formData, fatherName: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Nationality */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Nationality
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nationality}
+                    onChange={(e) => setFormData({ ...formData, nationality: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Religion */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Religion
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.religion}
+                    onChange={(e) => setFormData({ ...formData, religion: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Caste / Community */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Caste & Community
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.caste}
+                    onChange={(e) => setFormData({ ...formData, caste: e.target.value.toUpperCase(), casteCommunity: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: STATUTORY & GOVT IDENTIFIERS */}
+          {activeTab === 'statutory' && (
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Government Identifiers & Statutory Records</h3>
+                  <p className="text-xs text-slate-500">Aadhaar, PAN Card, EMIS Number, and Driving License.</p>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg border border-purple-200">
+                  Step 3 of 5
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Aadhaar Number */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Aadhaar Number
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={16}
+                    value={formData.aadhaar}
+                    onChange={(e) => setFormData({ ...formData, aadhaar: e.target.value.trim() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 font-mono focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* PAN Card */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    PAN Card Number
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={formData.pan}
+                    onChange={(e) => setFormData({ ...formData, pan: e.target.value.toUpperCase().trim() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 uppercase font-mono focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* EMIS Number */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    EMIS Number (School Education)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.emisNumber}
+                    onChange={(e) => setFormData({ ...formData, emisNumber: e.target.value.trim() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 font-mono focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Driving License */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Driving License (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.drivingLicense}
+                    onChange={(e) => setFormData({ ...formData, drivingLicense: e.target.value.toUpperCase().trim() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 uppercase font-mono focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: BANK ACCOUNT DETAILS */}
+          {activeTab === 'bank' && (
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Bank Account Details</h3>
+                  <p className="text-xs text-slate-500">Disbursement for scholarships, stipends, and refund management.</p>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200">
+                  Step 4 of 5
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Bank Name */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Bank Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.bankName}
+                    onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Bank Account Number */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Account Number
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.bankAccountNo}
+                    onChange={(e) => setFormData({ ...formData, bankAccountNo: e.target.value.trim() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 font-mono focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* IFSC Code */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    IFSC Code
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.ifscCode}
+                    onChange={(e) => setFormData({ ...formData, ifscCode: e.target.value.toUpperCase().trim() })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 uppercase font-mono focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Bank Branch */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Bank Branch
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.bankBranch}
+                    onChange={(e) => setFormData({ ...formData, bankBranch: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: 10TH, 12TH MARKS & DONATION */}
+          {activeTab === 'previous' && (
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Academic Records (10th / 12th) & Donation</h3>
+                  <p className="text-xs text-slate-500">Secondary/Higher secondary performance records and institution donation details.</p>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200">
+                  Step 5 of 5
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* 10th Record / Marks */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    10th Record / Marks (%)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.tenthMarks}
+                    onChange={(e) => setFormData({ ...formData, tenthMarks: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* 12th Record / Marks */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    12th Record / Marks (%)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.twelfthMarks}
+                    onChange={(e) => setFormData({ ...formData, twelfthMarks: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Donation */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Donation / Special Endowment (₹)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.donation}
+                    onChange={(e) => setFormData({ ...formData, donation: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                  />
+                  <p className="text-[10px] text-slate-500">Enter Nil or donation contribution amount if applicable.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Form Navigation & Actions */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-6 border-t border-slate-100">
+            <div className="flex items-center gap-2">
+              {activeTab !== 'academic' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tabs = ['academic', 'personal', 'statutory', 'bank', 'previous'];
+                    const idx = tabs.indexOf(activeTab);
+                    if (idx > 0) setActiveTab(tabs[idx - 1]);
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+                >
+                  Previous Tab
+                </button>
+              )}
+              {activeTab !== 'previous' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tabs = ['academic', 'personal', 'statutory', 'bank', 'previous'];
+                    const idx = tabs.indexOf(activeTab);
+                    if (idx < tabs.length - 1) setActiveTab(tabs[idx + 1]);
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-all cursor-pointer"
+                >
+                  Next Tab →
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onBack}
+                className="px-5 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span>Register Student & Generate Slip</span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+      </div>
     </div>
   );
 }

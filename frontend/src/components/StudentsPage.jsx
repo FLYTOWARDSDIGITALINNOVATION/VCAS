@@ -23,18 +23,23 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
 
 const API_BASE = 'http://localhost:5000';
 
 function normalizeStudent(s) {
   if (!s) return null;
+  const regNo = s.regNo || s.registerNo || s.studentId || s.id || s._id || '';
   return {
     ...s,
-    id: s.studentId || s.id || s._id,
-    studentId: s.studentId || s.id || s._id,
+    id: regNo,
+    regNo: regNo,
+    studentId: regNo,
     admNo: s.admNo || s.admissionNo || '',
     admissionNo: s.admNo || s.admissionNo || '',
-    rollNo: s.rollNo || '',
+    rollNo: s.rollNo || '—',
+    year: s.year || '1st Year',
+    loginId: s.loginId || regNo,
     name: s.name || s.fullName || '',
     fullName: s.name || s.fullName || '',
     sem: s.sem || s.semester || '1st Sem',
@@ -45,7 +50,7 @@ function normalizeStudent(s) {
     mobile: s.phone || s.mobile || '',
     email: s.email || '',
     attendance: s.attendance !== undefined ? Number(s.attendance) : 85,
-    feeStatus: s.feeStatus || '--',
+    feeStatus: s.feeStatus || 'Paid',
     status: s.status || 'Active',
     gender: s.gender || 'Male',
     dob: s.dob || '',
@@ -59,6 +64,28 @@ function normalizeStudent(s) {
     cgpa: s.cgpa || '8.0',
     rank: s.rank || '',
     fatherName: s.fatherName || '',
+    nationality: s.nationality || 'Indian',
+    caste: s.caste || s.casteCommunity || '',
+    religion: s.religion || 'Hindu',
+    nationalityReligion: s.nationalityReligion || `${s.nationality || 'INDIAN'} & ${s.religion || 'HINDU'}`,
+    casteCommunity: s.casteCommunity || s.caste || '',
+    dateOfAdmission: s.dateOfAdmission || s.admissionDate || '',
+    courseAdmitted: s.courseAdmitted || s.course || s.department || '',
+    aadhaar: s.aadhaar || '',
+    pan: s.pan || '',
+    bankAccountNo: s.bankAccountNo || '',
+    bankName: s.bankName || '',
+    ifscCode: s.ifscCode || '',
+    bankBranch: s.bankBranch || '',
+    drivingLicense: s.drivingLicense || '',
+    emisNumber: s.emisNumber || '',
+    tenthMarks: s.tenthMarks || s.tenthPercentage ? `${s.tenthMarks || ''} (${s.tenthPercentage || ''}%)` : (s.doc10th || ''),
+    tenthPercentage: s.tenthPercentage || '',
+    tenthBoard: s.tenthBoard || '',
+    twelfthMarks: s.twelfthMarks || s.twelfthPercentage ? `${s.twelfthMarks || ''} (${s.twelfthPercentage || ''}%)` : (s.doc12th || ''),
+    twelfthPercentage: s.twelfthPercentage || '',
+    twelfthBoard: s.twelfthBoard || '',
+    donation: s.donation || 'Nil',
     motherName: s.motherName || '',
     fatherMobile: s.fatherMobile || s.parentMobile || '',
     parentOccupation: s.parentOccupation || '',
@@ -94,6 +121,18 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [departmentsList, setDepartmentsList] = useState([]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/departments`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          setDepartmentsList(data.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Toast notification helper
   const showToast = (msg) => {
@@ -172,11 +211,19 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
   // Filter students based on search and dropdowns
   const filteredStudents = students.filter(student => {
-    const matchesSearch = 
-      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.admNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.phone.includes(searchTerm);
+    const term = (searchTerm || '').toLowerCase().trim();
+    const matchesSearch = !term || (
+      String(student.name || '').toLowerCase().includes(term) ||
+      String(student.id || '').toLowerCase().includes(term) ||
+      String(student.studentId || '').toLowerCase().includes(term) ||
+      String(student.rollNo || '').toLowerCase().includes(term) ||
+      String(student.regNo || student.registerNumber || '').toLowerCase().includes(term) ||
+      String(student.admNo || '').toLowerCase().includes(term) ||
+      String(student.email || '').toLowerCase().includes(term) ||
+      String(student.phone || '').toLowerCase().includes(term) ||
+      String(student.course || '').toLowerCase().includes(term) ||
+      String(student.department || '').toLowerCase().includes(term)
+    );
 
     const matchesDept = selectedDept === 'All Departments' || student.department === selectedDept;
     const matchesFee = !canViewFees || selectedFeeStatus === 'All Statuses' || student.feeStatus === selectedFeeStatus;
@@ -247,40 +294,61 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   };
 
   const handleDownloadStudentCredentials = (student) => {
+    const regNo = student.regNo || student.studentId || student.id;
+    const loginId = student.loginId || regNo;
+    const dobPw = student.dob || `${regNo.toLowerCase()}@2026`;
+
     const content = `
 ================================================================================
-          VIVEKANANDA COLLEGE OF ARTS AND SCIENCE (AUTONOMOUS)
+          VIVEKANANDHA COLLEGE OF ARTS AND SCIENCES (AUTONOMOUS)
                       VELLALANKULAM, TAMIL NADU
-             CONFIDENTIAL STUDENT CREDENTIAL & DATA SLIP
+                  OFFICIAL STUDENT SLIP & CREDENTIAL PASS
 ================================================================================
 Generated On        : ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
 Issued By           : Super Administrator (VCAS Master Auth Controller)
 Security Level      : RESTRICTED / STUDENT ACCESS
 --------------------------------------------------------------------------------
-STUDENT PARTICULARS:
-  Student Name      : ${student.name}
-  Student ID (Roll) : ${student.id}
-  Admission No.     : ${student.admNo}
-  Department        : ${student.department}
-  Degree / Course   : ${student.course}
-  Current Semester  : ${student.sem}
-  Contact Phone     : ${student.phone}
-  Attendance Rate   : ${student.attendance}%
-  Fee Clearance     : ${student.feeStatus}
-  Enrollment Status : ${student.status}
-
 PORTAL ACCESS CREDENTIALS:
   Portal Login URL  : http://localhost:5173/login
   Role              : Student
-  Login Username    : ${student.admNo}
-  Alternate Login   : ${student.id}
-  Initial Passcode  : ${(student.id || 'student').toLowerCase()}@2026
+  Register Number   : ${regNo}
+  Login ID          : ${loginId}
+  Password (DOB)    : ${dobPw}
   Registered Mobile : ${student.phone}
 
-ACADEMIC & ENROLLMENT METRICS:
-  Institution Code  : VCAS-TN-048
-  Academic Year     : 2025-2026
-  Campus            : Vellalankulam Main Campus
+ACADEMIC PARTICULARS:
+  Student Name      : ${student.name}
+  Reg No            : ${regNo}
+  Roll Number       : ${student.rollNo || '—'}
+  Year of Study     : ${student.year || '1st Year'}
+  Course / Degree   : ${student.course}
+  Department        : ${student.department}
+  Current Semester  : ${student.sem}
+  Enrollment Status : ${student.status}
+  Attendance Rate   : ${student.attendance}%
+  Fee Clearance     : ${student.feeStatus}
+
+STUDENT INFORMATION & STATUTORY PARTICULARS:
+  Date of Birth     : ${student.dob || '—'}
+  Aadhaar Number    : ${student.aadhaar || '—'}
+  PAN Number        : ${student.pan || '—'}
+  EMIS Number       : ${student.emisNumber || '—'}
+  Driving License   : ${student.drivingLicense || '—'}
+  Nationality       : ${student.nationality || 'Indian'}
+  Caste & Community : ${student.caste || student.casteCommunity || '—'}
+  Religion          : ${student.religion || 'Hindu'}
+  Course Admitted   : ${student.courseAdmitted || student.course || '—'}
+  Donation          : ${student.donation || 'Nil'}
+
+ACADEMIC RECORDS:
+  10th Std Record   : ${student.tenthMarks || '—'}
+  12th Std Record   : ${student.twelfthMarks || '—'}
+
+BANK ACCOUNT DETAILS:
+  Bank Name         : ${student.bankName || '—'}
+  Account Number    : ${student.bankAccountNo || '—'}
+  IFSC Code         : ${student.ifscCode || '—'}
+  Branch            : ${student.bankBranch || '—'}
 --------------------------------------------------------------------------------
 CONFIDENTIALITY NOTICE:
 This credential document is issued under the authorization of the Super Administrator.
@@ -292,7 +360,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${student.id}_${student.name.replace(/[^a-zA-Z0-9]/g, '_')}_Credentials.txt`;
+    link.download = `Student_Slip_${regNo}_${student.name.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -301,7 +369,11 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
   // Super Admin Exclusive: Print Student Credentials Slip
   const handlePrintStudentCredentials = (student) => {
-    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    const regNo = student.regNo || student.studentId || student.id;
+    const loginId = student.loginId || regNo;
+    const dobPw = student.dob || `${regNo.toLowerCase()}@2026`;
+
+    const printWindow = window.open('', '_blank', 'width=850,height=950');
     if (!printWindow) {
       alert('Please allow popups to print credential slips.');
       return;
@@ -310,87 +382,140 @@ Unauthorized reproduction or distribution is strictly prohibited.
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Student Credential Slip - ${student.name} (${student.id})</title>
+        <title>Student Slip - ${student.name} (${regNo})</title>
         <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #1e293b; }
-          .header { text-align: center; border-bottom: 2px solid #7c3aed; padding-bottom: 20px; margin-bottom: 25px; }
-          .title { font-size: 20px; font-weight: bold; color: #5b21b6; text-transform: uppercase; margin: 0; }
-          .subtitle { font-size: 14px; color: #475569; margin: 5px 0 0 0; }
-          .badge { display: inline-block; background: #faf5ff; color: #6b21a8; font-size: 11px; padding: 4px 10px; border-radius: 9999px; font-weight: 600; margin-top: 10px; border: 1px solid #e9d5ff; }
-          .meta-bar { display: flex; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 16px; font-size: 12px; margin-bottom: 25px; }
-          .section { margin-bottom: 25px; }
-          .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; color: #7c3aed; letter-spacing: 0.5px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; }
-          table { width: 100%; border-collapse: collapse; font-size: 13px; }
-          td { padding: 8px 12px; vertical-align: top; }
-          td.label { width: 35%; font-weight: 600; color: #64748b; }
-          td.value { width: 65%; color: #0f172a; font-weight: 500; }
-          .cred-box { background: #faf5ff; border: 1px solid #d8b4fe; border-radius: 8px; padding: 14px 18px; margin-top: 10px; }
-          .cred-title { font-size: 13px; font-weight: bold; color: #6b21a8; margin-bottom: 10px; }
-          .cred-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-          .cred-item { font-size: 13px; }
-          .cred-item span { color: #64748b; font-size: 11px; display: block; font-weight: 600; }
-          .cred-item strong { color: #0f172a; font-family: monospace; font-size: 14px; }
-          .footer { margin-top: 40px; border-top: 1px dashed #cbd5e1; padding-top: 20px; font-size: 11px; color: #64748b; text-align: center; }
-          .stamp-row { display: flex; justify-content: space-between; margin-top: 50px; padding: 0 30px; font-size: 12px; font-weight: 600; }
+          @page { size: A4; margin: 15mm; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; color: #0f172a; font-size: 12px; }
+          .header { text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 15px; }
+          .header-brand { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 6px; }
+          .title { font-size: 18px; font-weight: 900; color: #0f1e3c; text-transform: uppercase; margin: 0; }
+          .subtitle { font-size: 11px; color: #475569; font-weight: 600; margin: 2px 0 0 0; }
+          .badge { display: inline-block; background: #eff6ff; color: #1e40af; font-size: 11px; padding: 3px 12px; border-radius: 9999px; font-weight: 800; margin-top: 6px; border: 1px solid #bfdbfe; }
+          .meta-bar { display: flex; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 14px; font-size: 11px; margin-bottom: 15px; font-weight: 600; }
+          .cred-box { background: #faf5ff; border: 1px dashed #9333ea; border-radius: 8px; padding: 12px 16px; margin-bottom: 15px; }
+          .cred-title { font-size: 11px; font-weight: 800; color: #7e22ce; margin-bottom: 8px; text-transform: uppercase; }
+          .cred-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+          .cred-item span { color: #6b21a8; font-size: 9.5px; display: block; font-weight: 700; }
+          .cred-item strong { color: #0f172a; font-family: monospace; font-size: 13px; }
+          .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px; }
+          .section { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; background: #fff; }
+          .section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #1e3a8a; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 8px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+          td { padding: 4px 6px; vertical-align: top; }
+          td.label { width: 40%; font-weight: 600; color: #64748b; }
+          td.value { width: 60%; color: #0f172a; font-weight: 700; }
+          .footer { margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 10px; font-size: 10px; color: #64748b; text-align: center; }
+          .stamp-row { display: flex; justify-content: space-between; margin-top: 40px; padding: 0 30px; font-size: 11px; font-weight: 700; }
           @media print {
-            body { margin: 20px; }
+            body { padding: 0; }
             .no-print { display: none; }
           }
         </style>
       </head>
       <body>
         <div class="header">
-          <div class="title">Vivekananda College of Arts and Science</div>
-          <div class="subtitle">Autonomous Institution • Affiliated with MS University • Vellalankulam</div>
-          <div class="badge">Official Student Access Pass & Academic Credentials</div>
+          <div class="header-brand">
+            ${getCollegeLogoHtml(44)}
+            <div>
+              <div class="title">Vivekanandha College of Arts and Sciences</div>
+              <div class="subtitle">Autonomous Institution • Affiliated with MS University • Vellalankulam</div>
+            </div>
+          </div>
+          <div class="badge">Official Student Slip & Academic Credentials Pass</div>
         </div>
+
         <div class="meta-bar">
-          <div><strong>Generated On:</strong> ${new Date().toLocaleString('en-IN')}</div>
+          <div><strong>Generated:</strong> ${new Date().toLocaleString('en-IN')}</div>
           <div><strong>Authorized By:</strong> Super Administrator</div>
-          <div><strong>Ref:</strong> VCAS-STU-${student.id}</div>
+          <div><strong>Ref:</strong> VCAS-SLIP-${regNo}</div>
         </div>
-        <div class="section">
-          <div class="section-title">Student Particulars</div>
-          <table>
-            <tr><td class="label">Student Name</td><td class="value"><strong>${student.name}</strong></td></tr>
-            <tr><td class="label">Roll / Student ID</td><td class="value">${student.id}</td></tr>
-            <tr><td class="label">Admission Number</td><td class="value">${student.admNo}</td></tr>
-            <tr><td class="label">Department</td><td class="value">${student.department}</td></tr>
-            <tr><td class="label">Degree & Program</td><td class="value">${student.course} (${student.sem || 'N/A'})</td></tr>
-            <tr><td class="label">Registered Phone</td><td class="value">${student.phone}</td></tr>
-            <tr><td class="label">Enrollment Status</td><td class="value">${student.status}</td></tr>
-          </table>
-        </div>
-        <div class="section">
-          <div class="section-title">Confidential Login Credentials</div>
-          <div class="cred-box">
-            <div class="cred-title">Digital Portal Authentication Details</div>
-            <div class="cred-grid">
-              <div class="cred-item">
-                <span>PORTAL LOGIN ID (ADMISSION NO)</span>
-                <strong>${student.admNo}</strong>
-              </div>
-              <div class="cred-item">
-                <span>ALTERNATE ID (ROLL NO)</span>
-                <strong>${student.id}</strong>
-              </div>
-              <div class="cred-item">
-                <span>INITIAL PASSCODE</span>
-                <strong>${(student.id || 'student').toLowerCase()}@2026</strong>
-              </div>
-              <div class="cred-item">
-                <span>PORTAL ADDRESS</span>
-                <strong>vcas.edu/login</strong>
-              </div>
+
+        <!-- Credentials Passcode Bar -->
+        <div class="cred-box">
+          <div class="cred-title">Digital Portal Authentication Particulars</div>
+          <div class="cred-grid">
+            <div class="cred-item">
+              <span>REGISTER NUMBER (REG NO)</span>
+              <strong>${regNo}</strong>
+            </div>
+            <div class="cred-item">
+              <span>ROLL NUMBER</span>
+              <strong>${student.rollNo || '—'}</strong>
+            </div>
+            <div class="cred-item">
+              <span>LOGIN ID</span>
+              <strong>${loginId}</strong>
+            </div>
+            <div class="cred-item">
+              <span>PASSWORD (DOB)</span>
+              <strong>${dobPw}</strong>
             </div>
           </div>
         </div>
+
+        <div class="grid-2">
+          <!-- Academic Particulars -->
+          <div class="section">
+            <div class="section-title">1. Academic & Enrollment Details</div>
+            <table>
+              <tr><td class="label">Student Name</td><td class="value">${student.name}</td></tr>
+              <tr><td class="label">Reg No</td><td class="value">${regNo}</td></tr>
+              <tr><td class="label">Roll Number</td><td class="value">${student.rollNo || '—'}</td></tr>
+              <tr><td class="label">Year of Study</td><td class="value">${student.year || '1st Year'}</td></tr>
+              <tr><td class="label">Department</td><td class="value">${student.department}</td></tr>
+              <tr><td class="label">Course / Degree</td><td class="value">${student.course} (${student.sem || 'N/A'})</td></tr>
+              <tr><td class="label">Attendance Rate</td><td class="value">${student.attendance}%</td></tr>
+              <tr><td class="label">Fee Clearance</td><td class="value">${student.feeStatus}</td></tr>
+            </table>
+          </div>
+
+          <!-- Student Personal Information -->
+          <div class="section">
+            <div class="section-title">2. Student Personal Information</div>
+            <table>
+              <tr><td class="label">Date of Birth (DOB)</td><td class="value">${student.dob || '—'}</td></tr>
+              <tr><td class="label">Aadhaar Number</td><td class="value">${student.aadhaar || '—'}</td></tr>
+              <tr><td class="label">PAN Number</td><td class="value">${student.pan || '—'}</td></tr>
+              <tr><td class="label">EMIS Number</td><td class="value">${student.emisNumber || '—'}</td></tr>
+              <tr><td class="label">Driving License</td><td class="value">${student.drivingLicense || '—'}</td></tr>
+              <tr><td class="label">Nationality</td><td class="value">${student.nationality || 'Indian'}</td></tr>
+              <tr><td class="label">Religion / Caste</td><td class="value">${student.religion || 'Hindu'} / ${student.caste || student.casteCommunity || '—'}</td></tr>
+              <tr><td class="label">Donation Status</td><td class="value">${student.donation || 'Nil'}</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Prior Qualifications -->
+          <div class="section">
+            <div class="section-title">3. Prior Qualifications & Contact</div>
+            <table>
+              <tr><td class="label">10th Std Marks</td><td class="value">${student.tenthMarks || '—'}</td></tr>
+              <tr><td class="label">12th Std Marks</td><td class="value">${student.twelfthMarks || '—'}</td></tr>
+              <tr><td class="label">Registered Mobile</td><td class="value">${student.phone}</td></tr>
+              <tr><td class="label">Registered Email</td><td class="value">${student.email || '—'}</td></tr>
+            </table>
+          </div>
+
+          <!-- Bank Account Details -->
+          <div class="section">
+            <div class="section-title">4. Student Bank Account Details</div>
+            <table>
+              <tr><td class="label">Bank Name</td><td class="value">${student.bankName || '—'}</td></tr>
+              <tr><td class="label">Account Number</td><td class="value">${student.bankAccountNo || '—'}</td></tr>
+              <tr><td class="label">IFSC Code</td><td class="value">${student.ifscCode || '—'}</td></tr>
+              <tr><td class="label">Branch Name</td><td class="value">${student.bankBranch || '—'}</td></tr>
+            </table>
+          </div>
+        </div>
+
         <div class="stamp-row">
           <div>Verified by Academic Section</div>
           <div>Authorized Signatory (Super Admin)</div>
         </div>
+
         <div class="footer">
-          Notice: This document contains confidential system credentials. Issued under authorization of Super Admin.
+          Official Student Slip issued under authorization of Super Admin. Valid for official verification and portal access.
         </div>
         <script>
           window.onload = function() { window.print(); }
@@ -403,23 +528,67 @@ Unauthorized reproduction or distribution is strictly prohibited.
   };
 
   const handleExportAllStudentsCSV = () => {
-    const headers = ['Student ID', 'Admission No', 'Name', 'Department', 'Course', 'Semester', 'Phone', 'Attendance %', 'Academic Status'];
+    const headers = [
+      'Register Number (Reg No)', 
+      'Roll Number', 
+      'Year', 
+      'Login ID', 
+      'Password (DOB)', 
+      'Name', 
+      'Gender', 
+      'Course', 
+      'Department', 
+      'Father Name', 
+      'Nationality', 
+      'Religion', 
+      'Caste', 
+      'Aadhaar', 
+      'PAN', 
+      'Bank Name', 
+      'Account No', 
+      'IFSC Code', 
+      'Branch', 
+      'Driving License', 
+      'EMIS Number', 
+      '10th Marks', 
+      '12th Marks', 
+      'Donation', 
+      'Admission Date', 
+      'Academic Status'
+    ];
     const rows = filteredStudents.map(s => [
-      `"${s.id}"`,
-      `"${s.admNo}"`,
+      `"${s.regNo || s.id}"`,
+      `"${s.rollNo || ''}"`,
+      `"${s.year || '1st Year'}"`,
+      `"${s.loginId || s.regNo || s.id}"`,
+      `"${s.dob || ''}"`,
       `"${s.name}"`,
+      `"${s.gender || 'Male'}"`,
+      `"${s.course || s.courseAdmitted || s.department}"`,
       `"${s.department}"`,
-      `"${s.course}"`,
-      `"${s.sem}"`,
-      `"${s.phone}"`,
-      `"${s.attendance !== undefined ? s.attendance + '%' : '0%'}"`,
+      `"${s.fatherName || ''}"`,
+      `"${s.nationality || 'Indian'}"`,
+      `"${s.religion || 'Hindu'}"`,
+      `"${s.caste || s.casteCommunity || ''}"`,
+      `"${s.aadhaar || ''}"`,
+      `"${s.pan || ''}"`,
+      `"${s.bankName || ''}"`,
+      `"${s.bankAccountNo || ''}"`,
+      `"${s.ifscCode || ''}"`,
+      `"${s.bankBranch || ''}"`,
+      `"${s.drivingLicense || ''}"`,
+      `"${s.emisNumber || ''}"`,
+      `"${s.tenthMarks || ''}"`,
+      `"${s.twelfthMarks || ''}"`,
+      `"${s.donation || '0'}"`,
+      `"${s.dateOfAdmission || ''}"`,
       `"${s.status || 'Active'}"`
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `VCAS_Students_Registry_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `VCAS_Student_Master_Registry_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -433,13 +602,38 @@ Unauthorized reproduction or distribution is strictly prohibited.
       const targetId = editingStudent._originalId || editingStudent._id || editingStudent.studentId || editingStudent.id;
       const payload = {
         ...editingStudent,
-        studentId: editingStudent.studentId || editingStudent.id,
-        id: editingStudent.studentId || editingStudent.id,
-        name: editingStudent.name || editingStudent.fullName,
-        admNo: editingStudent.admNo || editingStudent.admissionNo,
-        sem: editingStudent.sem || editingStudent.semester,
-        phone: editingStudent.phone || editingStudent.mobile,
-        attendance: Number(editingStudent.attendance)
+        regNo: (editingStudent.regNo || editingStudent.registerNo || editingStudent.studentId || editingStudent.id || '').trim().toUpperCase(),
+        rollNo: (editingStudent.rollNo || '').trim().toUpperCase(),
+        year: editingStudent.year || '1st Year',
+        loginId: (editingStudent.loginId || editingStudent.regNo || editingStudent.studentId || '').trim().toUpperCase(),
+        password: editingStudent.dob,
+        studentId: editingStudent.regNo || editingStudent.studentId || editingStudent.id,
+        id: editingStudent.regNo || editingStudent.studentId || editingStudent.id,
+        name: (editingStudent.name || editingStudent.fullName || '').trim().toUpperCase(),
+        gender: editingStudent.gender || 'Male',
+        dob: editingStudent.dob || '',
+        fatherName: (editingStudent.fatherName || '').trim().toUpperCase(),
+        nationality: (editingStudent.nationality || 'INDIAN').trim().toUpperCase(),
+        religion: (editingStudent.religion || 'HINDU').trim().toUpperCase(),
+        caste: (editingStudent.caste || editingStudent.casteCommunity || '').trim().toUpperCase(),
+        casteCommunity: (editingStudent.casteCommunity || editingStudent.caste || '').trim().toUpperCase(),
+        nationalityReligion: (editingStudent.nationalityReligion || `${editingStudent.nationality || 'INDIAN'} & ${editingStudent.religion || 'HINDU'}`).trim().toUpperCase(),
+        aadhaar: (editingStudent.aadhaar || '').trim(),
+        pan: (editingStudent.pan || '').trim().toUpperCase(),
+        bankAccountNo: (editingStudent.bankAccountNo || '').trim(),
+        bankName: (editingStudent.bankName || '').trim(),
+        ifscCode: (editingStudent.ifscCode || '').trim().toUpperCase(),
+        bankBranch: (editingStudent.bankBranch || '').trim(),
+        drivingLicense: (editingStudent.drivingLicense || '').trim().toUpperCase(),
+        emisNumber: (editingStudent.emisNumber || '').trim(),
+        tenthMarks: (editingStudent.tenthMarks || '').trim(),
+        twelfthMarks: (editingStudent.twelfthMarks || '').trim(),
+        donation: (editingStudent.donation || '').trim(),
+        courseAdmitted: (editingStudent.courseAdmitted || editingStudent.course || editingStudent.department || '').trim().toUpperCase(),
+        course: (editingStudent.course || editingStudent.courseAdmitted || editingStudent.department || '').trim().toUpperCase(),
+        department: (editingStudent.department || editingStudent.courseAdmitted || editingStudent.course || '').trim().toUpperCase(),
+        status: editingStudent.status || 'Active',
+        attendance: Number(editingStudent.attendance || 100)
       };
 
       const res = await fetch(`${API_BASE}/api/students/${targetId}`, {
@@ -521,32 +715,38 @@ Unauthorized reproduction or distribution is strictly prohibited.
     setIsSaving(true);
     try {
       const payload = {
-        name: newStudentData.fullName || newStudentData.name || 'New Student',
-        studentId: (newStudentData.studentId && !newStudentData.studentId.includes('Auto-generated')) ? newStudentData.studentId : undefined,
-        admNo: newStudentData.admissionNo || undefined,
-        rollNo: newStudentData.rollNo || '',
-        department: newStudentData.department || 'Commerce',
-        course: newStudentData.course || 'B.Com',
-        sem: newStudentData.semester || newStudentData.sem || '1st Sem',
-        academicYear: newStudentData.academicYear || '2026-2027',
-        phone: newStudentData.mobile || newStudentData.phone || '',
-        email: newStudentData.email || '',
-        dob: newStudentData.dob || '',
+        name: (newStudentData.name || newStudentData.fullName || 'New Student').trim().toUpperCase(),
+        regNo: (newStudentData.regNo || '').trim().toUpperCase(),
+        rollNo: (newStudentData.rollNo || '').trim().toUpperCase(),
+        year: newStudentData.year || '1st Year',
+        loginId: (newStudentData.loginId || newStudentData.regNo || '').trim().toUpperCase(),
+        password: newStudentData.dob || '',
         gender: newStudentData.gender || 'Male',
-        bloodGroup: newStudentData.bloodGroup || 'O+',
-        address: newStudentData.address || '',
-        fatherName: newStudentData.fatherName || '',
-        motherName: newStudentData.motherName || '',
-        fatherMobile: newStudentData.parentMobile || newStudentData.fatherMobile || '',
-        parentOccupation: newStudentData.parentOccupation || '',
-        emergencyContact: newStudentData.emergencyContact || '',
-        doc10th: newStudentData.doc10th || '',
-        doc12th: newStudentData.doc12th || '',
-        docTc: newStudentData.docTc || '',
-        docAadhaar: newStudentData.docAadhaar || '',
+        dob: newStudentData.dob || '',
+        fatherName: (newStudentData.fatherName || '').trim().toUpperCase(),
+        nationalityReligion: (newStudentData.nationalityReligion || `${newStudentData.nationality || 'INDIAN'} & ${newStudentData.religion || 'HINDU'}`).trim().toUpperCase(),
+        nationality: (newStudentData.nationality || 'INDIAN').trim().toUpperCase(),
+        religion: (newStudentData.religion || 'HINDU').trim().toUpperCase(),
+        caste: (newStudentData.caste || newStudentData.casteCommunity || '').trim().toUpperCase(),
+        casteCommunity: (newStudentData.casteCommunity || newStudentData.caste || '').trim().toUpperCase(),
+        aadhaar: (newStudentData.aadhaar || '').trim(),
+        pan: (newStudentData.pan || '').trim().toUpperCase(),
+        bankAccountNo: (newStudentData.bankAccountNo || '').trim(),
+        bankName: (newStudentData.bankName || '').trim(),
+        ifscCode: (newStudentData.ifscCode || '').trim().toUpperCase(),
+        bankBranch: (newStudentData.bankBranch || '').trim(),
+        drivingLicense: (newStudentData.drivingLicense || '').trim().toUpperCase(),
+        emisNumber: (newStudentData.emisNumber || '').trim(),
+        tenthMarks: (newStudentData.tenthMarks || '').trim(),
+        twelfthMarks: (newStudentData.twelfthMarks || '').trim(),
+        donation: (newStudentData.donation || '0').trim(),
+        dateOfAdmission: newStudentData.dateOfAdmission || new Date().toISOString().split('T')[0],
+        courseAdmitted: (newStudentData.courseAdmitted || newStudentData.course || newStudentData.department || '').trim().toUpperCase(),
+        department: (newStudentData.courseAdmitted || newStudentData.department || '').trim(),
+        course: (newStudentData.courseAdmitted || newStudentData.course || '').trim(),
+        status: 'Active',
         attendance: 100,
-        feeStatus: 'Paid',
-        status: 'Active'
+        feeStatus: 'Paid'
       };
 
       const res = await fetch(`${API_BASE}/api/students`, {
@@ -688,8 +888,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
               type="text" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name or ID..."
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none transition-all h-10"
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all h-10"
             />
           </div>
 
@@ -702,12 +901,13 @@ Unauthorized reproduction or distribution is strictly prohibited.
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10"
             >
               <option value="All Departments">All Departments</option>
-              <option value="Commerce">Commerce</option>
-              <option value="Computer Science">Computer Science</option>
-              <option value="English Literature">English Literature</option>
-              <option value="Business Administration (BBA)">Business Administration (BBA)</option>
-              <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
-              <option value="Mathematics">Mathematics</option>
+              {departmentsList.length > 0 ? (
+                departmentsList.map(d => (
+                  <option key={d._id || d.code} value={d.name}>{d.name}</option>
+                ))
+              ) : (
+                <option value="Computer Science">Computer Science</option>
+              )}
             </select>
 
             {/* Courses Filter */}
@@ -768,15 +968,16 @@ Unauthorized reproduction or distribution is strictly prohibited.
                     className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                   />
                 </th>
-                <th className="py-3.5 px-4">STUDENT</th>
-                <th className="py-3.5 px-4">ID / ADM NO.</th>
-                <th className="py-3.5 px-4">DEPARTMENT</th>
-                <th className="py-3.5 px-4">COURSE</th>
-                <th className="py-3.5 px-4">PHONE</th>
-                <th className="py-3.5 px-4">ATTENDANCE</th>
-                {canViewFees && <th className="py-3.5 px-4 text-center">FEES</th>}
-                <th className="py-3.5 px-4 text-center">STATUS</th>
-                {isSuperAdmin && <th className="py-3.5 px-4 text-center">CREDENTIALS</th>}
+                <th className="py-3.5 px-3 text-left">STUDENT / REG NO</th>
+                <th className="py-3.5 px-2 text-center w-24">YEAR</th>
+                <th className="py-3.5 px-2 text-center w-20">2. GENDER</th>
+                <th className="py-3.5 px-2 text-center w-28">3. DOB (PWD)</th>
+                <th className="py-3.5 px-3 text-left">4. FATHER'S NAME</th>
+                <th className="py-3.5 px-3 text-center">ROLL NO</th>
+                <th className="py-3.5 px-2 text-center w-28">7. ADM DATE</th>
+                <th className="py-3.5 px-3 text-left">8. COURSE ADMITTED</th>
+                <th className="py-3.5 px-3 text-center">STATUS</th>
+                {isSuperAdmin && <th className="py-3.5 px-4 text-center">STUDENT SLIP</th>}
                 <th className="py-3.5 px-4 text-right">ACTIONS</th>
               </tr>
             </thead>
@@ -785,7 +986,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
             <tbody className="divide-y divide-slate-100 text-xs font-medium">
               {isLoading ? (
                 <tr>
-                  <td colSpan={canViewFees ? (isSuperAdmin ? "11" : "10") : (isSuperAdmin ? "10" : "9")} className="py-16 text-center text-slate-400">
+                  <td colSpan={isSuperAdmin ? "12" : "11"} className="py-16 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2.5">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                       <span className="text-xs font-semibold text-slate-600">Loading student records...</span>
@@ -794,7 +995,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </tr>
               ) : filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={canViewFees ? (isSuperAdmin ? "11" : "10") : (isSuperAdmin ? "10" : "9")} className="py-12 text-center text-slate-400 font-normal">
+                  <td colSpan={isSuperAdmin ? "12" : "11"} className="py-12 text-center text-slate-400 font-normal">
                     No students match your filter criteria.
                   </td>
                 </tr>
@@ -814,82 +1015,76 @@ Unauthorized reproduction or distribution is strictly prohibited.
                         />
                       </td>
 
-                      {/* Student Info */}
-                      <td className="py-3.5 px-4 cursor-pointer" onClick={() => setSelectedStudentProfile(student)}>
-                        <div className="flex items-center gap-3 group">
-                          <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
-                            {student.name.charAt(0)}
+                      {/* 1. Name & Reg No */}
+                      <td className="py-3.5 px-3 cursor-pointer" onClick={() => setSelectedStudentProfile(student)}>
+                        <div className="flex items-center gap-2.5 group">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                            {(student.name || 'S').charAt(0)}
                           </div>
                           <div>
-                            <p className="font-bold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">{student.name}</p>
-                            <p className="text-[11px] text-slate-400 mt-0.5">{student.sem}</p>
+                            <p className="font-extrabold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors uppercase">
+                              {student.name || student.fullName}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] text-blue-700 font-mono font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                Reg No: {student.regNo || student.id}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* ID / ADM NO */}
-                      <td className="py-3.5 px-4 cursor-pointer" onClick={() => setSelectedStudentProfile(student)}>
-                        <p className="font-bold text-slate-800">{student.id}</p>
-                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">{student.admNo}</p>
+                      {/* Year */}
+                      <td className="py-3.5 px-2 text-center">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-[10px] border border-amber-200">
+                          {student.year || '1st Year'}
+                        </span>
                       </td>
 
-                      {/* Department */}
-                      <td className="py-3.5 px-4 font-semibold text-slate-700">
-                        {student.department}
+                      {/* 2. Gender */}
+                      <td className="py-3.5 px-2 text-center">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px]">
+                          {student.gender || 'MALE'}
+                        </span>
                       </td>
 
-                      {/* Course */}
-                      <td className="py-3.5 px-4 text-slate-600 font-semibold">
-                        {student.course}
+                      {/* 3. Date of Birth (Password) */}
+                      <td className="py-3.5 px-2 text-center font-medium text-slate-700">
+                        {student.dob || '—'}
                       </td>
 
-                      {/* Phone */}
-                      <td className="py-3.5 px-4 font-mono text-slate-600">
-                        {student.phone}
+                      {/* 4. Father's Name */}
+                      <td className="py-3.5 px-3 font-bold text-slate-800 uppercase">
+                        {student.fatherName || '—'}
                       </td>
 
-                      {/* Attendance */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2 min-w-[110px]">
-                          <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden shrink-0">
-                            <div 
-                              className={`h-full rounded-full ${
-                                student.attendance >= 80 ? 'bg-emerald-500' :
-                                student.attendance >= 65 ? 'bg-amber-500' : 'bg-rose-500'
-                              }`} 
-                              style={{ width: `${student.attendance}%` }}
-                            ></div>
-                          </div>
-                          <span className={`font-bold text-[11px] ${
-                            student.attendance >= 80 ? 'text-emerald-600' :
-                            student.attendance >= 65 ? 'text-amber-600' : 'text-rose-600'
-                          }`}>
-                            {student.attendance}%
-                          </span>
-                        </div>
+                      {/* Roll Number */}
+                      <td className="py-3.5 px-3 text-center text-slate-700 font-mono font-bold">
+                        {student.rollNo || '—'}
                       </td>
 
-                      {/* Fee Status Badge (Accountant & Office Staff Only) */}
-                      {canViewFees && (
-                        <td className="py-3.5 px-4 text-center">
-                          <span className={`inline-flex items-center justify-center min-w-[72px] px-2.5 py-1 rounded-full text-[11px] font-bold ${getFeeBadgeClass(student.feeStatus)}`}>
-                            {student.feeStatus}
-                          </span>
-                        </td>
-                      )}
+                      {/* 7. Date of Admission */}
+                      <td className="py-3.5 px-2 text-center font-medium text-slate-700">
+                        {student.dateOfAdmission || '—'}
+                      </td>
+
+                      {/* 8. Course in Which Admitted */}
+                      <td className="py-3.5 px-3 font-extrabold text-blue-700">
+                        {student.courseAdmitted || student.course || student.department || '—'}
+                      </td>
 
                       {/* Status Badge */}
-                      <td className="py-3.5 px-4 text-center">
-                        <span className={`inline-flex items-center justify-center min-w-[72px] px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                      <td className="py-3.5 px-3 text-center">
+                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           student.status === 'Active' 
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
                             : 'bg-slate-100 text-slate-500 border border-slate-200'
                         }`}>
-                          {student.status}
+                          {student.status || 'Active'}
                         </span>
                       </td>
 
-                      {/* Credentials Slip (Super Admin only) */}
+                      {/* Student Slip (Super Admin only) */}
                       {isSuperAdmin && (
                         <td className="py-3.5 px-4 text-center">
                           <button
@@ -897,11 +1092,11 @@ Unauthorized reproduction or distribution is strictly prohibited.
                               e.stopPropagation();
                               setCredentialModalStudent(student);
                             }}
-                            title="Download & View Student Credentials"
+                            title="Download & View Official Student Slip"
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all shadow-2xs"
                           >
                             <Key className="w-3.5 h-3.5 text-purple-600" />
-                            <span>Download Slip</span>
+                            <span>Student Slip</span>
                           </button>
                         </td>
                       )}
@@ -1005,7 +1200,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Edit Student Profile</h3>
-                <p className="text-xs text-slate-400 font-mono">Editing Record: {editingStudent.id}</p>
+                <p className="text-xs text-slate-400 font-mono">Editing Record: {String(editingStudent.id || editingStudent.studentId || '')}</p>
               </div>
               <button 
                 type="button"
@@ -1016,158 +1211,278 @@ Unauthorized reproduction or distribution is strictly prohibited.
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
               
-              {/* Full Name */}
+              {/* Reg No, Roll No & Year */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
+                <div>
+                  <label className="block font-black text-blue-900 mb-1">Register Number (Reg No) *</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={editingStudent.regNo || editingStudent.registerNo || editingStudent.studentId || editingStudent.id || ''}
+                    onChange={(e) => setEditingStudent({ 
+                      ...editingStudent, 
+                      regNo: e.target.value.toUpperCase(),
+                      loginId: e.target.value.toUpperCase(),
+                      studentId: e.target.value.toUpperCase(),
+                      id: e.target.value.toUpperCase()
+                    })}
+                    className="w-full px-3 py-2 bg-white border border-blue-300 rounded-xl text-blue-950 font-black uppercase font-mono focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Roll Number</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.rollNo || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, rollNo: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Year *</label>
+                  <select 
+                    value={editingStudent.year || '1st Year'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none"
+                  >
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Student Name */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Full Name</label>
+                <label className="block font-bold text-slate-700 mb-1">Student Name *</label>
                 <input 
                   type="text" 
                   required
-                  value={editingStudent.name}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
+                  value={editingStudent.name || editingStudent.fullName || ''}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value.toUpperCase() })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
-              {/* Student ID & Admission No */}
+              {/* Gender & DOB (Password) */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Student ID</label>
+                  <label className="block font-bold text-slate-700 mb-1">Gender *</label>
+                  <select 
+                    value={editingStudent.gender || 'Male'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, gender: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white focus:outline-none"
+                  >
+                    <option value="Male">MALE</option>
+                    <option value="Female">FEMALE</option>
+                    <option value="Transgender">TRANSGENDER</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-black text-emerald-800 mb-1">Date of Birth (Password) *</label>
+                  <input 
+                    type="date" 
+                    value={editingStudent.dob || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, dob: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-emerald-50/50 border border-emerald-300 rounded-xl text-emerald-950 font-bold focus:bg-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Father's Name & Course */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Father's Name</label>
                   <input 
                     type="text" 
-                    required
-                    value={editingStudent.id || editingStudent.studentId || ''}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, id: e.target.value, studentId: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
+                    value={editingStudent.fatherName || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, fatherName: e.target.value.toUpperCase() })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Admission No.</label>
+                  <label className="block font-bold text-slate-700 mb-1">Course Admitted *</label>
                   <input 
                     type="text" 
-                    required
-                    value={editingStudent.admNo || editingStudent.admissionNo || ''}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, admNo: e.target.value, admissionNo: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
+                    value={editingStudent.courseAdmitted || editingStudent.course || ''}
+                    onChange={(e) => setEditingStudent({ 
+                      ...editingStudent, 
+                      courseAdmitted: e.target.value.toUpperCase(),
+                      course: e.target.value.toUpperCase(),
+                      department: e.target.value.toUpperCase()
+                    })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
                   />
                 </div>
               </div>
 
-              {/* Department & Course */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Nationality, Religion, Caste */}
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Department</label>
-                  <select 
-                    value={editingStudent.department || 'Commerce'}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, department: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
-                  >
-                    {editingStudent.department && !['Commerce', 'Computer Science', 'English Literature', 'Business Administration (BBA)', 'Computer Applications (BCA)', 'Mathematics'].includes(editingStudent.department) && (
-                      <option value={editingStudent.department}>{editingStudent.department}</option>
-                    )}
-                    <option value="Commerce">Commerce</option>
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="English Literature">English Literature</option>
-                    <option value="Business Administration (BBA)">Business Administration (BBA)</option>
-                    <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
-                    <option value="Mathematics">Mathematics</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Course</label>
-                  <select 
-                    value={editingStudent.course || 'B.Com'}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, course: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
-                  >
-                    {editingStudent.course && !['B.Com', 'B.Sc CS', 'B.A. English', 'BBA', 'BCA', 'B.Sc Maths', 'M.Com', 'M.Sc CS'].includes(editingStudent.course) && (
-                      <option value={editingStudent.course}>{editingStudent.course}</option>
-                    )}
-                    <option value="B.Com">B.Com</option>
-                    <option value="B.Sc CS">B.Sc CS</option>
-                    <option value="B.A. English">B.A. English</option>
-                    <option value="BBA">BBA</option>
-                    <option value="BCA">BCA</option>
-                    <option value="B.Sc Maths">B.Sc Maths</option>
-                    <option value="M.Com">M.Com</option>
-                    <option value="M.Sc CS">M.Sc CS</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Semester & Phone */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Semester</label>
-                  <select 
-                    value={editingStudent.sem || '1st Sem'}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, sem: e.target.value, semester: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
-                  >
-                    {editingStudent.sem && !['1st Sem', '2nd Sem', '3rd Sem', '4th Sem', '5th Sem', '6th Sem'].includes(editingStudent.sem) && (
-                      <option value={editingStudent.sem}>{editingStudent.sem}</option>
-                    )}
-                    <option value="1st Sem">1st Sem</option>
-                    <option value="2nd Sem">2nd Sem</option>
-                    <option value="3rd Sem">3rd Sem</option>
-                    <option value="4th Sem">4th Sem</option>
-                    <option value="5th Sem">5th Sem</option>
-                    <option value="6th Sem">6th Sem</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Phone Number</label>
+                  <label className="block font-bold text-slate-700 mb-1">Nationality</label>
                   <input 
                     type="text" 
-                    required
-                    value={editingStudent.phone}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, phone: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
+                    value={editingStudent.nationality || 'INDIAN'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, nationality: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Religion</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.religion || 'HINDU'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, religion: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Caste / Community</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.caste || editingStudent.casteCommunity || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, caste: e.target.value.toUpperCase(), casteCommunity: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
                   />
                 </div>
               </div>
 
-              {/* Attendance % & Fee Status */}
+              {/* Statutory Identifiers: Aadhaar, PAN, EMIS, DL */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Aadhaar</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.aadhaar || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, aadhaar: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">PAN Card</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.pan || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, pan: e.target.value.toUpperCase() })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">EMIS Number</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.emisNumber || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, emisNumber: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Driving License</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.drivingLicense || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, drivingLicense: e.target.value.toUpperCase() })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none uppercase"
+                  />
+                </div>
+              </div>
+
+              {/* Bank Details */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-emerald-50/40 p-3 rounded-2xl border border-emerald-100">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Bank Name</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.bankName || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, bankName: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Account No</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.bankAccountNo || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, bankAccountNo: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">IFSC Code</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.ifscCode || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, ifscCode: e.target.value.toUpperCase() })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Branch</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.bankBranch || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, bankBranch: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 text-xs focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* 10th, 12th Marks & Donation */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">10th Marks / Board</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.tenthMarks || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, tenthMarks: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">12th Marks / Board</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.twelfthMarks || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, twelfthMarks: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Donation (₹)</label>
+                  <input 
+                    type="text" 
+                    value={editingStudent.donation || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, donation: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Date of Admission & Account Status */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Attendance (%)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Date of Admission</label>
                   <input 
-                    type="number" 
-                    min="0"
-                    max="100"
-                    required
-                    value={editingStudent.attendance}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, attendance: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none"
+                    type="date" 
+                    value={editingStudent.dateOfAdmission || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, dateOfAdmission: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Fee Status</label>
+                  <label className="block font-bold text-slate-700 mb-1">Account Status</label>
                   <select 
-                    value={editingStudent.feeStatus}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, feeStatus: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
+                    value={editingStudent.status || 'Active'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, status: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
                   >
-                    <option value="Paid">Paid</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Partial">Partial</option>
-                    <option value="Overdue">Overdue</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
                   </select>
                 </div>
-              </div>
-
-              {/* Status (Active / Inactive) */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Account Status</label>
-                <select 
-                  value={editingStudent.status}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, status: e.target.value })}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
               </div>
 
               <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
@@ -1279,28 +1594,50 @@ Unauthorized reproduction or distribution is strictly prohibited.
                     <span className="font-bold text-slate-900 font-sans">{credentialModalStudent.name}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="text-slate-500 font-sans">Student ID:</span>
-                    <span className="font-bold text-purple-700">{credentialModalStudent.id}</span>
+                    <span className="text-slate-500 font-sans">Register Number (Reg No):</span>
+                    <span className="font-bold text-purple-700">{credentialModalStudent.regNo || credentialModalStudent.id}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="text-slate-500 font-sans">Admission No:</span>
-                    <span className="font-semibold text-slate-800">{credentialModalStudent.admNo}</span>
+                    <span className="text-slate-500 font-sans">Roll Number:</span>
+                    <span className="font-semibold text-slate-800">{credentialModalStudent.rollNo || '—'}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="text-slate-500 font-sans">Department / Course:</span>
-                    <span className="font-medium text-slate-700 font-sans">{credentialModalStudent.department} ({credentialModalStudent.course})</span>
+                    <span className="text-slate-500 font-sans">Year:</span>
+                    <span className="font-bold text-amber-700 font-sans">{credentialModalStudent.year || '1st Year'}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="text-slate-500 font-sans">Login ID / Username:</span>
-                    <span className="font-bold text-slate-900">{credentialModalStudent.admNo}</span>
+                    <span className="text-slate-500 font-sans">Course & Department:</span>
+                    <span className="font-medium text-slate-700 font-sans">{credentialModalStudent.course || credentialModalStudent.department}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="text-slate-500 font-sans">Default Passcode:</span>
-                    <span className="font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-300">{(credentialModalStudent.id || 'student').toLowerCase()}@2026</span>
+                    <span className="text-slate-500 font-sans">Login ID:</span>
+                    <span className="font-bold text-slate-900">{credentialModalStudent.loginId || credentialModalStudent.regNo || credentialModalStudent.id}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">Password (Date of Birth):</span>
+                    <span className="font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-300">
+                      {credentialModalStudent.dob || '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">Aadhaar / PAN:</span>
+                    <span className="text-slate-800 font-semibold">{credentialModalStudent.aadhaar || '—'} • {credentialModalStudent.pan || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">EMIS / Driving License:</span>
+                    <span className="text-slate-800 font-semibold">{credentialModalStudent.emisNumber || '—'} • {credentialModalStudent.drivingLicense || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">Bank Account Details:</span>
+                    <span className="text-slate-800 font-semibold">{credentialModalStudent.bankName || '—'} ({credentialModalStudent.bankAccountNo || '—'})</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-500 font-sans">10th & 12th Records:</span>
+                    <span className="text-slate-800 font-semibold">{credentialModalStudent.tenthMarks || '—'} • {credentialModalStudent.twelfthMarks || '—'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500 font-sans">Registered Phone:</span>
-                    <span className="text-slate-800 font-semibold">{credentialModalStudent.phone}</span>
+                    <span className="text-slate-500 font-sans">Nationality / Caste / Donation:</span>
+                    <span className="text-slate-800 font-semibold font-sans">{credentialModalStudent.nationality || 'Indian'} • {credentialModalStudent.caste || '—'} • {credentialModalStudent.donation || 'Nil'}</span>
                   </div>
                 </div>
 
@@ -1312,7 +1649,17 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(`VCAS Student Credentials\nName: ${credentialModalStudent.name}\nID: ${credentialModalStudent.id}\nAdmission No: ${credentialModalStudent.admNo}\nLogin Username: ${credentialModalStudent.admNo}\nPassword: ${(credentialModalStudent.id || 'student').toLowerCase()}@2026\nPortal: http://localhost:5173/login`);
+                      navigator.clipboard.writeText(
+                        `VCAS Official Student Authentication Pass\n` +
+                        `Student Name: ${credentialModalStudent.name}\n` +
+                        `Register Number (Reg No): ${credentialModalStudent.regNo || credentialModalStudent.id}\n` +
+                        `Roll Number: ${credentialModalStudent.rollNo || '—'}\n` +
+                        `Year: ${credentialModalStudent.year || '1st Year'}\n` +
+                        `Login ID: ${credentialModalStudent.loginId || credentialModalStudent.regNo || credentialModalStudent.id}\n` +
+                        `Password (Date of Birth): ${credentialModalStudent.dob || '—'}\n` +
+                        `Course: ${credentialModalStudent.course || credentialModalStudent.department || '—'}\n` +
+                        `Portal URL: http://localhost:5173/login`
+                      );
                       setCopiedStudentCred(true);
                       setTimeout(() => setCopiedStudentCred(false), 2000);
                     }}

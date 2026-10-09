@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import StudentsPage from './StudentsPage';
 import ModalPortal from './ModalPortal';
+import CollegeLogo from './CollegeLogo';
 import { 
   LayoutDashboard, 
   GraduationCap, 
@@ -82,6 +83,17 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const [feesDropdownOpen, setFeesDropdownOpen] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Global header search state
+  const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  const [headerSearchResultsOpen, setHeaderSearchResultsOpen] = useState(false);
+  const [searchCatalog, setSearchCatalog] = useState({
+    students: [],
+    staff: [],
+    courses: [],
+    departments: [],
+    notices: []
+  });
 
   // Real backend metrics and dynamic activities state
   const [dashboardStats, setDashboardStats] = useState({
@@ -223,29 +235,24 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       }
 
       const rawDeptsList = deptsData?.data || (Array.isArray(deptsData) ? deptsData : []);
-      const uniqueDepts = new Set([
-        ...rawDeptsList.map(d => d.name).filter(Boolean),
-        ...Object.keys(deptCountMap).filter(Boolean),
-        ...classesList.map(c => c.dept).filter(Boolean),
-        ...staffList.map(s => s.department).filter(Boolean)
-      ]);
-      const departmentsCount = uniqueDepts.size > 0 ? uniqueDepts.size : 6;
+      const departmentsCount = rawDeptsList.length;
 
-      let deptEnrollments = Object.entries(deptCountMap).map(([dept, count]) => ({
-        dept,
-        count,
-        width: `${Math.min(100, Math.max(15, Math.round((count / (totalStudentsCount || 1)) * 100)))}%`
-      }));
-
-      if (deptEnrollments.length === 0) {
-        deptEnrollments = [
-          { dept: 'Commerce', count: 360, width: '95%' },
-          { dept: 'Computer Science', count: 320, width: '85%' },
-          { dept: 'English Literature', count: 240, width: '65%' },
-          { dept: 'Business Administration (BBA)', count: 210, width: '55%' },
-          { dept: 'Computer Applications (BCA)', count: 180, width: '48%' },
-          { dept: 'Mathematics', count: 140, width: '38%' }
-        ];
+      let deptEnrollments = [];
+      if (rawDeptsList.length > 0) {
+        deptEnrollments = rawDeptsList.map(dept => {
+          const count = deptCountMap[dept.name] || deptCountMap[dept.code] || 0;
+          return {
+            dept: dept.name,
+            count,
+            width: `${Math.min(100, Math.max(10, Math.round((count / (totalStudentsCount || 1)) * 100)))}%`
+          };
+        });
+      } else if (Object.keys(deptCountMap).length > 0) {
+        deptEnrollments = Object.entries(deptCountMap).map(([dept, count]) => ({
+          dept,
+          count,
+          width: `${Math.min(100, Math.max(10, Math.round((count / (totalStudentsCount || 1)) * 100)))}%`
+        }));
       }
 
       // Process Attendance
@@ -380,11 +387,123 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         recentActivities: activities.slice(0, 6),
         loading: false
       });
+
+      setSearchCatalog({
+        students: rawStudentsList,
+        staff: staffList,
+        courses: classesList,
+        departments: rawDeptsList,
+        notices: Array.isArray(noticesData?.notices) ? noticesData.notices : []
+      });
     } catch (err) {
       console.error('Error fetching dashboard real data:', err);
       setDashboardStats(prev => ({ ...prev, loading: false }));
     }
   };
+
+  // Header quick search results
+  const headerSearchResults = useMemo(() => {
+    const q = (headerSearchQuery || '').toLowerCase().trim();
+    if (!q) return [];
+    const results = [];
+
+    // Match students
+    (searchCatalog.students || []).forEach(st => {
+      const name = String(st.name || st.fullName || '');
+      const roll = String(st.rollNo || st.studentId || st.admNo || '');
+      const dept = String(st.department || '');
+      if (name.toLowerCase().includes(q) || roll.toLowerCase().includes(q) || dept.toLowerCase().includes(q)) {
+        if (results.filter(r => r.type === 'Student').length < 3) {
+          results.push({
+            id: `st-${st._id || roll || name}`,
+            type: 'Student',
+            title: name,
+            subtitle: `${roll ? roll + ' • ' : ''}${dept}`,
+            nav: 'Students',
+            icon: Users
+          });
+        }
+      }
+    });
+
+    // Match staff
+    (searchCatalog.staff || []).forEach(st => {
+      const name = String(st.name || '');
+      const id = String(st.staffId || st.empId || '');
+      const dept = String(st.department || '');
+      const desig = String(st.designation || '');
+      if (name.toLowerCase().includes(q) || id.toLowerCase().includes(q) || dept.toLowerCase().includes(q) || desig.toLowerCase().includes(q)) {
+        if (results.filter(r => r.type === 'Faculty').length < 3) {
+          results.push({
+            id: `fac-${st._id || id || name}`,
+            type: 'Faculty',
+            title: name,
+            subtitle: `${desig ? desig + ' • ' : ''}${dept}`,
+            nav: 'Staff',
+            icon: UserCheck
+          });
+        }
+      }
+    });
+
+    // Match courses
+    (searchCatalog.courses || []).forEach(c => {
+      const name = String(c.name || c.subjectName || '');
+      const code = String(c.code || c.classCode || c.subjectCode || '');
+      const dept = String(c.dept || c.department || '');
+      if (name.toLowerCase().includes(q) || code.toLowerCase().includes(q) || dept.toLowerCase().includes(q)) {
+        if (results.filter(r => r.type === 'Course').length < 3) {
+          results.push({
+            id: `crs-${c._id || code || name}`,
+            type: 'Course',
+            title: `${code ? code + ': ' : ''}${name}`,
+            subtitle: dept,
+            nav: 'Courses & Subjects',
+            icon: BookOpen
+          });
+        }
+      }
+    });
+
+    // Match departments
+    (searchCatalog.departments || []).forEach(d => {
+      const name = String(d.name || '');
+      const code = String(d.code || '');
+      const hod = String(d.hod || '');
+      if (name.toLowerCase().includes(q) || code.toLowerCase().includes(q) || hod.toLowerCase().includes(q)) {
+        if (results.filter(r => r.type === 'Department').length < 2) {
+          results.push({
+            id: `dpt-${d._id || code || name}`,
+            type: 'Department',
+            title: name,
+            subtitle: `${code ? code + ' • ' : ''}${hod ? 'HOD: ' + hod : ''}`,
+            nav: 'Departments',
+            icon: Building2
+          });
+        }
+      }
+    });
+
+    // Match notices
+    (searchCatalog.notices || []).forEach(n => {
+      const title = String(n.title || '');
+      const ref = String(n.refNo || '');
+      if (title.toLowerCase().includes(q) || ref.toLowerCase().includes(q)) {
+        if (results.filter(r => r.type === 'Notice').length < 2) {
+          results.push({
+            id: `not-${n._id || ref || title}`,
+            type: 'Notice',
+            title,
+            subtitle: ref || 'Notice & Circular',
+            nav: 'Notices',
+            icon: Bell
+          });
+        }
+      }
+    });
+
+    return results;
+  }, [headerSearchQuery, searchCatalog]);
 
   useEffect(() => {
     fetchDashboardRealData();
@@ -630,15 +749,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       <div>
         {/* Sticky Logo / Title Header */}
         <div className="sticky top-0 z-20 bg-white border-b border-slate-100 p-5 sm:p-6 flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xl shadow-md shrink-0">
-              🏛️
-            </div>
-            <div>
-              <h1 className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight">Vivekananda College</h1>
-              <p className="text-[10px] text-slate-700 font-semibold leading-tight mt-0.5">of Arts and Science, Vellalankulam</p>
-            </div>
-          </div>
+          <CollegeLogo size="md" showText={true} />
           {/* Close button on mobile */}
           <button 
             onClick={() => setMobileMenuOpen(false)}
@@ -750,7 +861,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   );
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
+    <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
       
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col shrink-0 h-full overflow-y-auto">
@@ -790,9 +901,91 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
+                value={headerSearchQuery}
+                onChange={(e) => {
+                  setHeaderSearchQuery(e.target.value);
+                  setHeaderSearchResultsOpen(true);
+                }}
+                onFocus={() => setHeaderSearchResultsOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (headerSearchResults.length > 0) {
+                      setActiveNav(headerSearchResults[0].nav);
+                      setHeaderSearchResultsOpen(false);
+                    } else if (headerSearchQuery.trim()) {
+                      setActiveNav('Students');
+                      setHeaderSearchResultsOpen(false);
+                    }
+                  } else if (e.key === 'Escape') {
+                    setHeaderSearchResultsOpen(false);
+                  }
+                }}
                 placeholder={isFinanceOrOffice ? "Search fee records, notices..." : "Search students, staff, courses..."}
-                className="w-full pl-10 pr-4 py-2 bg-slate-100 border border-transparent rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                className="w-full pl-10 pr-9 py-2 bg-slate-100 border border-transparent rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-xs"
               />
+              {headerSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHeaderSearchQuery('');
+                    setHeaderSearchResultsOpen(false);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {/* Quick Results Overlay */}
+              {headerSearchResultsOpen && headerSearchQuery.trim() && (
+                <div 
+                  className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-2 z-50 overflow-hidden animate-fadeIn"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <div className="px-3.5 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <span>Quick Search Results ({headerSearchResults.length})</span>
+                    <span className="text-[10px] text-slate-400">Click to navigate</span>
+                  </div>
+                  {headerSearchResults.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-400">
+                      No matches found for "{headerSearchQuery}"
+                    </div>
+                  ) : (
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
+                      {headerSearchResults.map(item => {
+                        const ItemIcon = item.icon || Search;
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => {
+                              setActiveNav(item.nav);
+                              setHeaderSearchResultsOpen(false);
+                            }}
+                            className="px-3.5 py-2.5 hover:bg-blue-50/70 flex items-center justify-between gap-3 cursor-pointer transition-colors group"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-blue-100 group-hover:text-blue-600 text-slate-600 flex items-center justify-center shrink-0">
+                                <ItemIcon className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-700">
+                                  {item.title}
+                                </p>
+                                <p className="text-[10.5px] text-slate-400 truncate">
+                                  {item.subtitle}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-700 shrink-0">
+                              {item.nav}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -837,7 +1030,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
         {/* CONDITIONALLY RENDER CONTENT BASED ON ACTIVE NAV */}
         {activeNav === 'Students' ? (
-          <main className="flex-1">
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
             <StudentsPage user={user} canViewFees={canViewFees} />
           </main>
         ) : activeNav === 'Staff' ? (
@@ -1157,17 +1350,21 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                     <span className="text-[11px] font-bold text-slate-500">Students</span>
                   </div>
                   <div className="space-y-3 text-xs">
-                    {dashboardStats.deptEnrollments.map((d, i) => (
-                      <div key={i}>
-                        <div className="flex justify-between font-semibold text-slate-700 mb-1">
-                          <span>{d.dept}</span>
-                          <span className="font-bold text-slate-900">{d.count}</span>
+                    {dashboardStats.deptEnrollments.length === 0 ? (
+                      <p className="text-slate-400 text-xs italic py-2">No department enrollment data recorded yet.</p>
+                    ) : (
+                      dashboardStats.deptEnrollments.map((d, i) => (
+                        <div key={i}>
+                          <div className="flex justify-between font-semibold text-slate-700 mb-1">
+                            <span>{d.dept}</span>
+                            <span className="font-bold text-slate-900">{d.count}</span>
+                          </div>
+                          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-600 rounded-full transition-all duration-500" style={{ width: d.width }}></div>
+                          </div>
                         </div>
-                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-600 rounded-full transition-all duration-500" style={{ width: d.width }}></div>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 

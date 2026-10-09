@@ -1,8 +1,15 @@
 const mongoose = require('mongoose');
 
 const courseSchema = new mongoose.Schema({
+  sNo: { type: Number, default: 1 },
   code: { type: String, required: true, uppercase: true, trim: true },
-  name: { type: String, required: true, trim: true },
+  name: { type: String, default: '', trim: true },
+  title: { type: String, default: '', trim: true },
+  handledStaff: { type: String, default: '', trim: true },
+  appearedCount: { type: Number, default: 0 },
+  passCount: { type: Number, default: 0 },
+  passPercentage: { type: Number, default: 100 },
+  reappearCount: { type: mongoose.Schema.Types.Mixed, default: '-' },
   credits: { type: Number, default: 3 },
   year: { type: Number, default: 1 },
   sem: { type: String, default: 'Sem 1' }
@@ -18,8 +25,6 @@ const yearBreakdownSchema = new mongoose.Schema({
 const departmentSchema = new mongoose.Schema({
   code: {
     type: String,
-    required: [true, 'Department code is required'],
-    unique: true,
     uppercase: true,
     trim: true,
     index: true

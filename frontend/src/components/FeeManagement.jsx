@@ -123,13 +123,15 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
           
           const mapped = json.data.map((st, idx) => {
             const sid = (st.rollNo || st.studentId || st.admNo || `STU${idx + 1}`).toUpperCase();
-            // Only marked as Paid when Office Staff or Accountant explicitly records payment
-            const isPaid = savedPayments[sid]?.status === 'Paid' || (savedPayments[sid]?.paid && savedPayments[sid]?.paid >= totalFee);
+            const dbPaid = (st.feeStatus || '').toLowerCase() === 'paid';
+            const isPaid = savedPayments[sid]?.status === 'Paid' || (savedPayments[sid] === undefined && dbPaid) || (savedPayments[sid]?.paid && savedPayments[sid]?.paid >= totalFee);
             const paid = isPaid ? totalFee : (savedPayments[sid]?.paid || 0);
             const pending = Math.max(0, totalFee - paid);
             
             return {
               id: sid,
+              mongoId: st._id || st.id,
+              rollNo: st.rollNo,
               name: st.name || st.fullName || 'Student',
               avatar: (st.name || 'S').charAt(0).toUpperCase(),
               course: st.department || st.course || 'Computer Science',
@@ -147,7 +149,6 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
             };
           });
           setFeeRecords(mapped);
-          localStorage.setItem('vcas_real_fee_records', JSON.stringify(mapped));
         }
       } catch (err) {
         console.error('Failed to load students for fee management:', err);
@@ -248,6 +249,14 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
             status: newStatus
           };
           localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
+          
+          if (rec.mongoId) {
+            fetch(`http://localhost:5000/api/students/${rec.mongoId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ feeStatus: newStatus })
+            }).catch(console.error);
+          }
         } catch (err) {}
 
         return {
@@ -281,6 +290,14 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
             status: nextStatus
           };
           localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
+
+          if (rec.mongoId) {
+            fetch(`http://localhost:5000/api/students/${rec.mongoId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ feeStatus: nextStatus })
+            }).catch(console.error);
+          }
         } catch (err) {}
 
         return {
@@ -299,11 +316,16 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
 
   // Filter students based on search, status, course, feeType
   const filteredRecords = feeRecords.filter(rec => {
-    const matchesSearch = rec.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          rec.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          rec.course.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All' || rec.status.toLowerCase() === statusFilter.toLowerCase();
-    const matchesCourse = courseFilter === 'All' || rec.course.toLowerCase().includes(courseFilter.toLowerCase());
+    const term = (searchTerm || '').toLowerCase().trim();
+    const matchesSearch = !term || (
+      String(rec.name || '').toLowerCase().includes(term) ||
+      String(rec.id || '').toLowerCase().includes(term) ||
+      String(rec.rollNo || '').toLowerCase().includes(term) ||
+      String(rec.course || '').toLowerCase().includes(term) ||
+      String(rec.feeType || '').toLowerCase().includes(term)
+    );
+    const matchesStatus = statusFilter === 'All' || String(rec.status || '').toLowerCase() === statusFilter.toLowerCase();
+    const matchesCourse = courseFilter === 'All' || String(rec.course || '').toLowerCase().includes(courseFilter.toLowerCase());
     const matchesFeeType = feeTypeFilter === 'All' || rec.feeType === feeTypeFilter;
     return matchesSearch && matchesStatus && matchesCourse && matchesFeeType;
   });

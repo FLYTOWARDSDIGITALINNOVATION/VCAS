@@ -109,11 +109,48 @@ exports.deleteExam = async (req, res) => {
   }
 };
 
-// @desc    Get all exam halls
+// @desc    Get all exam halls (synced from real staff seating allocations & registered halls)
 // @route   GET /api/exams/halls
 exports.getHalls = async (req, res) => {
   try {
-    let halls = await ExamHall.find().sort({ hallName: 1 });
+    // Automatically sync real halls configured by staff in HallTicket allocations
+    try {
+      const tickets = await HallTicket.find();
+      for (const t of tickets) {
+        if (Array.isArray(t.halls)) {
+          for (const h of t.halls) {
+            const hallName = `Hall ${h.hallNo}`;
+            const studentsInHall = (t.students || []).filter(s => (s.hallNo || '').trim().toUpperCase() === (h.hallNo || '').trim().toUpperCase());
+            const rolls = studentsInHall.map(s => s.rollNo).filter(Boolean).sort();
+            const rollRange = rolls.length > 1 ? `${rolls[0]} - ${rolls[rolls.length - 1]}` : rolls.length === 1 ? rolls[0] : 'No candidates assigned';
+
+            const existing = await ExamHall.findOne({ hallName });
+            if (!existing) {
+              await ExamHall.create({
+                hallName,
+                capacity: Number(h.capacity) || 30,
+                allocatedStudents: studentsInHall.length,
+                departments: `${t.department || 'Computer Science'} (Sem ${t.semester || 1})`,
+                rollRange,
+                invigilator: t.allocatedByStaffName || 'Staff In-Charge',
+                invigilatorDept: t.department || 'Computer Science',
+                status: studentsInHall.length >= (h.capacity || 30) ? 'Fully Allocated' : 'Allocated'
+              });
+            } else {
+              existing.allocatedStudents = studentsInHall.length;
+              existing.rollRange = rollRange;
+              if (t.allocatedByStaffName) existing.invigilator = t.allocatedByStaffName;
+              if (t.department) existing.invigilatorDept = t.department;
+              await existing.save();
+            }
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.warn('Error syncing halls from HallTicket:', syncErr.message);
+    }
+
+    const halls = await ExamHall.find().sort({ hallName: 1 });
     return res.status(200).json({
       success: true,
       count: halls.length,

@@ -307,11 +307,57 @@ export default function ReportsManagement({ user }) {
   // Filtered Academic Results
   const filteredResults = useMemo(() => {
     return academicDeptResults.filter(d => {
-      const matchDept = selectedDept === 'All Departments' || d.dept.toLowerCase().includes(selectedDept.toLowerCase());
-      const matchSearch = d.dept.toLowerCase().includes(searchTerm.toLowerCase()) || d.topper.toLowerCase().includes(searchTerm.toLowerCase());
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchDept = selectedDept === 'All Departments' || String(d.dept || '').toLowerCase().includes(selectedDept.toLowerCase());
+      const matchSearch = !q || String(d.dept || '').toLowerCase().includes(q) || String(d.topper || '').toLowerCase().includes(q);
       return matchDept && matchSearch;
     });
   }, [academicDeptResults, selectedDept, searchTerm]);
+
+  // Filtered Defaulters for Attendance tab
+  const filteredDefaulters = useMemo(() => {
+    return defaultersList.filter(d => {
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchSearch = !q || (
+        String(d.name || '').toLowerCase().includes(q) ||
+        String(d.rollNo || '').toLowerCase().includes(q) ||
+        String(d.dept || '').toLowerCase().includes(q)
+      );
+      const matchDept = selectedDept === 'All Departments' || String(d.dept || '').toLowerCase().includes(selectedDept.toLowerCase());
+      return matchSearch && matchDept;
+    });
+  }, [defaultersList, searchTerm, selectedDept]);
+
+  // Filtered Students for Enrollment tab
+  const filteredEnrollmentStudents = useMemo(() => {
+    return students.filter(s => {
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchSearch = !q || (
+        String(s.name || s.fullName || '').toLowerCase().includes(q) ||
+        String(s.rollNo || '').toLowerCase().includes(q) ||
+        String(s.department || '').toLowerCase().includes(q) ||
+        String(s.phone || '').toLowerCase().includes(q)
+      );
+      const matchDept = selectedDept === 'All Departments' || s.department === selectedDept;
+      return matchSearch && matchDept;
+    });
+  }, [students, searchTerm, selectedDept]);
+
+  // Filtered Staff for Faculty tab
+  const filteredStaffList = useMemo(() => {
+    return staff.filter(st => {
+      const q = (searchTerm || '').toLowerCase().trim();
+      const matchSearch = !q || (
+        String(st.name || '').toLowerCase().includes(q) ||
+        String(st.staffId || st.empId || '').toLowerCase().includes(q) ||
+        String(st.department || '').toLowerCase().includes(q) ||
+        String(st.designation || '').toLowerCase().includes(q) ||
+        String(st.email || '').toLowerCase().includes(q)
+      );
+      const matchDept = selectedDept === 'All Departments' || st.department === selectedDept;
+      return matchSearch && matchDept;
+    });
+  }, [staff, searchTerm, selectedDept]);
 
   // Export live CSV
   const handleExportLiveCSV = () => {
@@ -689,7 +735,7 @@ export default function ReportsManagement({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {defaultersList.map((d, i) => (
+                  {filteredDefaulters.map((d, i) => (
                     <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{d.rollNo}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900">{d.name}</td>
@@ -795,7 +841,7 @@ export default function ReportsManagement({ user }) {
                 <h3 className="text-sm font-extrabold text-slate-900">Student Admissions & Enrollment Roster</h3>
                 <p className="text-xs text-slate-400">Live institutional student records verified</p>
               </div>
-              <span className="text-xs font-bold text-slate-400">{students.length} Registered Students</span>
+              <span className="text-xs font-bold text-slate-400">{filteredEnrollmentStudents.length} Registered Students</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -811,7 +857,7 @@ export default function ReportsManagement({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {students.map((s, idx) => (
+                  {filteredEnrollmentStudents.map((s, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{s.rollNo}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900">{s.name || s.fullName}</td>
@@ -875,7 +921,7 @@ export default function ReportsManagement({ user }) {
                 <h3 className="text-sm font-extrabold text-slate-900">Faculty & Staff Directory Roster</h3>
                 <p className="text-xs text-slate-400">Live roster verified from staff registry</p>
               </div>
-              <span className="text-xs font-bold text-slate-400">{staff.length} Active Staff</span>
+              <span className="text-xs font-bold text-slate-400">{filteredStaffList.length} Active Staff</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -890,7 +936,7 @@ export default function ReportsManagement({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {staff.map((st, idx) => (
+                  {filteredStaffList.map((st, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{st.staffId || st.empId || `STF${idx + 1}`}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900">{st.name}</td>

@@ -365,7 +365,7 @@ exports.enrollStudent = async (req, res) => {
           course: targetClass.dept || targetClass.name,
           sem: targetClass.semester ? `${targetClass.semester}th Sem` : '1st Sem',
           phone: (phone || '').trim(),
-          email: (email || `${cleanRollNo.toLowerCase()}@student.edu`).trim(),
+          email: (email || '').trim(),
           attendance: 100,
           feeStatus: 'Pending',
           status: 'Active'

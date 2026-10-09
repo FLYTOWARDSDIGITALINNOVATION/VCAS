@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FileSpreadsheet,
   Search,
@@ -33,7 +34,8 @@ import {
   Sparkles,
   ExternalLink,
   ChevronDown,
-  Save
+  Save,
+  RefreshCw
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
@@ -57,7 +59,6 @@ const EXAM_SESSIONS = [
 
 const INITIAL_EXAMS = [];
 const INITIAL_STUDENT_MARKS = [];
-const INITIAL_HALLS = [];
 
 export default function ExaminationManagement({ user }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
@@ -111,7 +112,11 @@ export default function ExaminationManagement({ user }) {
         const d = await resHalls.value.json();
         if (d.success && Array.isArray(d.halls)) {
           setHallsList(d.halls);
+        } else {
+          setHallsList([]);
         }
+      } else {
+        setHallsList([]);
       }
 
       // 3. Process Staff Uploaded Internal Marks + Students
@@ -182,7 +187,7 @@ export default function ExaminationManagement({ user }) {
         const roll = (st.rollNo || '').trim().toUpperCase();
         if (!roll) return;
         const attNum = typeof st.attendance === 'number' ? st.attendance : parseFloat(st.attendance) || 0;
-        const isFeeCleared = st.feeStatus ? st.feeStatus.toLowerCase() === 'paid' : true;
+        const isFeeCleared = st.feeStatus ? st.feeStatus.toLowerCase() === 'paid' : false;
         const isEligible = attNum >= 75 && isFeeCleared;
         const statusStr = isEligible
           ? 'Eligible'
@@ -200,8 +205,20 @@ export default function ExaminationManagement({ user }) {
           sem: st.sem || st.semester || 'Sem 5',
           attendance: attNum,
           feeCleared: isFeeCleared,
+          st1: 16,
+          st2: 15,
+          st3: 18,
+          st4: 17,
+          it1: 21,
+          it2: 22,
           cia1: 42,
           cia2: 45,
+          model: 68,
+          project: 18,
+          assignment1: 5,
+          assignment2: 5,
+          assignment3: 4,
+          assignment4: 5,
           assignment: 9,
           ciaTotal: 35,
           eseMarks: 52,
@@ -223,12 +240,22 @@ export default function ExaminationManagement({ user }) {
             if (!roll || !studentMap.has(roll)) return;
             const existing = studentMap.get(roll);
 
-            const cia1Val = typeof stMark.cia1 === 'number' ? stMark.cia1 : (existing.cia1 || 40);
-            const cia2Val = typeof stMark.cia2 === 'number' ? stMark.cia2 : (existing.cia2 || 42);
+            const st1Val = stMark.st1 !== null && stMark.st1 !== undefined ? stMark.st1 : (existing.st1 ?? 16);
+            const st2Val = stMark.st2 !== null && stMark.st2 !== undefined ? stMark.st2 : (existing.st2 ?? 15);
+            const st3Val = stMark.st3 !== null && stMark.st3 !== undefined ? stMark.st3 : (existing.st3 ?? 18);
+            const st4Val = stMark.st4 !== null && stMark.st4 !== undefined ? stMark.st4 : (existing.st4 ?? 17);
+            const it1Val = stMark.it1 !== null && stMark.it1 !== undefined ? stMark.it1 : (typeof stMark.cia1 === 'number' ? stMark.cia1 : (existing.it1 || 21));
+            const it2Val = stMark.it2 !== null && stMark.it2 !== undefined ? stMark.it2 : (typeof stMark.cia2 === 'number' ? stMark.cia2 : (existing.it2 || 22));
+            const modelVal = stMark.model !== null && stMark.model !== undefined ? stMark.model : (existing.model ?? 65);
+            const projectVal = stMark.project !== null && stMark.project !== undefined ? stMark.project : (existing.project ?? 18);
+            const a1Val = stMark.assignment1 !== null && stMark.assignment1 !== undefined ? stMark.assignment1 : 5;
+            const a2Val = stMark.assignment2 !== null && stMark.assignment2 !== undefined ? stMark.assignment2 : 5;
+            const a3Val = stMark.assignment3 !== null && stMark.assignment3 !== undefined ? stMark.assignment3 : 4;
+            const a4Val = stMark.assignment4 !== null && stMark.assignment4 !== undefined ? stMark.assignment4 : 5;
             const assignVal = typeof stMark.assignment === 'number' ? stMark.assignment : (existing.assignment || 8);
             const ciaTot = typeof stMark.consolidated === 'number' && stMark.consolidated > 0
               ? stMark.consolidated
-              : Math.round(((cia1Val + cia2Val) / 2) * 0.4 + assignVal);
+              : Math.round(((Number(it1Val) || 0) + (Number(it2Val) || 0)) * 0.4 + assignVal);
 
             const ese = 52;
             const total = ciaTot + ese;
@@ -244,8 +271,20 @@ export default function ExaminationManagement({ user }) {
             studentMap.set(roll, {
               ...existing,
               name: stMark.name || existing.name,
-              cia1: cia1Val,
-              cia2: cia2Val,
+              st1: st1Val,
+              st2: st2Val,
+              st3: st3Val,
+              st4: st4Val,
+              it1: it1Val,
+              it2: it2Val,
+              cia1: it1Val,
+              cia2: it2Val,
+              model: modelVal,
+              project: projectVal,
+              assignment1: a1Val,
+              assignment2: a2Val,
+              assignment3: a3Val,
+              assignment4: a4Val,
               assignment: assignVal,
               ciaTotal: ciaTot,
               eseMarks: ese,
@@ -264,23 +303,57 @@ export default function ExaminationManagement({ user }) {
 
       // Overlay hall ticket allocations created by staff
       hallTicketAllocations.forEach(alloc => {
+        const commonSubs = (Array.isArray(alloc.commonSubjects) && alloc.commonSubjects.length > 0)
+          ? alloc.commonSubjects
+          : (Array.isArray(alloc.subjects) && alloc.subjects.length > 0)
+            ? alloc.subjects
+            : [];
+
         if (Array.isArray(alloc.students)) {
           alloc.students.forEach(st => {
             const roll = (st.rollNo || '').trim().toUpperCase();
             if (roll && studentMap.has(roll)) {
               const existing = studentMap.get(roll);
               const isElig = (existing.attendance >= 75) && existing.feeCleared;
+              const studentSubs = (Array.isArray(st.subjects) && st.subjects.length > 0)
+                ? st.subjects
+                : commonSubs.length > 0
+                  ? commonSubs
+                  : (existing.subjects || []);
+
               studentMap.set(roll, {
                 ...existing,
                 hallNo: st.hallNo || existing.hallNo || 'Hall 101',
                 seatNo: st.seatNo || existing.seatNo || 'A1',
                 deskNo: st.deskNo || existing.deskNo || '',
-                subjects: Array.isArray(st.subjects) && st.subjects.length > 0 ? st.subjects : (existing.subjects || []),
+                subjects: studentSubs,
                 eligible: isElig,
-                status: isElig ? 'Eligible' : 'Blocked (Shortage <75%)'
+                status: isElig ? 'Eligible' : (existing.attendance < 75 ? 'Blocked (Shortage <75%)' : 'Blocked (Fee Due)'),
+                examTitle: alloc.examName || existing.examTitle,
+                academicYear: alloc.academicYear || existing.academicYear
               });
             }
           });
+        }
+      });
+
+      // If student subjects are still empty, map from staff allocation for their department
+      studentMap.forEach((st) => {
+        if (!st.subjects || st.subjects.length === 0) {
+          const matchAlloc = hallTicketAllocations.find(a => 
+            a.department && (a.department.toLowerCase() === (st.department || '').toLowerCase())
+          );
+          if (matchAlloc) {
+            const allocSubs = (Array.isArray(matchAlloc.commonSubjects) && matchAlloc.commonSubjects.length > 0)
+              ? matchAlloc.commonSubjects
+              : (Array.isArray(matchAlloc.subjects) ? matchAlloc.subjects : []);
+            if (allocSubs.length > 0) {
+              st.subjects = allocSubs;
+              if (!st.hallNo || st.hallNo === 'Hall 101') {
+                st.hallNo = matchAlloc.halls?.[0]?.hallNo || 'Hall 101';
+              }
+            }
+          }
         }
       });
 
@@ -350,12 +423,12 @@ export default function ExaminationManagement({ user }) {
   // Filtered Exam Schedules
   const filteredExams = useMemo(() => {
     return examsList.filter(e => {
-      const q = searchQuery.toLowerCase().trim();
+      const q = (searchQuery || '').toLowerCase().trim();
       const matchesSearch = !q || (
-        e.code.toLowerCase().includes(q) ||
-        e.name.toLowerCase().includes(q) ||
-        e.hall.toLowerCase().includes(q) ||
-        e.qpCode.toLowerCase().includes(q)
+        String(e.code || '').toLowerCase().includes(q) ||
+        String(e.name || '').toLowerCase().includes(q) ||
+        String(e.hall || '').toLowerCase().includes(q) ||
+        String(e.qpCode || '').toLowerCase().includes(q)
       );
 
       const matchesDept = selectedDept === 'All Departments' || e.department === selectedDept;
@@ -368,12 +441,12 @@ export default function ExaminationManagement({ user }) {
   // Filtered Students for Hall Tickets / Results
   const filteredStudents = useMemo(() => {
     return studentMarksList.filter(s => {
-      const q = searchQuery.toLowerCase().trim();
+      const q = (searchQuery || '').toLowerCase().trim();
       const matchesSearch = !q || (
-        s.name.toLowerCase().includes(q) ||
-        s.rollNo.toLowerCase().includes(q) ||
-        s.regNo.includes(q) ||
-        s.department.toLowerCase().includes(q)
+        String(s.name || '').toLowerCase().includes(q) ||
+        String(s.rollNo || '').toLowerCase().includes(q) ||
+        String(s.regNo || s.registerNumber || '').toLowerCase().includes(q) ||
+        String(s.department || '').toLowerCase().includes(q)
       );
 
       const matchesDept = selectedDept === 'All Departments' || s.department === selectedDept;
@@ -387,7 +460,7 @@ export default function ExaminationManagement({ user }) {
   }, [studentMarksList]);
 
   const totalBlocked = useMemo(() => {
-    return studentMarksList.filter(s => s.status.includes('Blocked')).length;
+    return studentMarksList.filter(s => String(s.status || '').includes('Blocked')).length;
   }, [studentMarksList]);
 
   // Save New Exam Schedule
@@ -483,16 +556,204 @@ export default function ExaminationManagement({ user }) {
     }
   };
 
-  // Update Student CIA Marks dynamically
+  // ── Exam Hall Seating State & Handlers ──────────────────
+  const [isAddHallOpen, setIsAddHallOpen] = useState(false);
+  const [editingHallId, setEditingHallId] = useState(null);
+  const [isSubmittingHall, setIsSubmittingHall] = useState(false);
+  const [viewingDoorSlip, setViewingDoorSlip] = useState(null);
+  const [seatingSearchQuery, setSeatingSearchQuery] = useState('');
+  const [seatingStatusFilter, setSeatingStatusFilter] = useState('ALL');
+
+  const [hallForm, setHallForm] = useState({
+    hallName: '',
+    capacity: 60,
+    allocatedStudents: 60,
+    departments: 'Computer Science',
+    rollRange: '',
+    invigilator: '',
+    invigilatorDept: 'Computer Science',
+    status: 'Allocated'
+  });
+
+  const handleOpenAddHall = (hallToEdit = null) => {
+    if (hallToEdit) {
+      setEditingHallId(hallToEdit._id || hallToEdit.id);
+      setHallForm({
+        hallName: hallToEdit.hallName || '',
+        capacity: hallToEdit.capacity || 60,
+        allocatedStudents: hallToEdit.allocatedStudents || 0,
+        departments: hallToEdit.departments || '',
+        rollRange: hallToEdit.rollRange || '',
+        invigilator: hallToEdit.invigilator || '',
+        invigilatorDept: hallToEdit.invigilatorDept || 'Computer Science',
+        status: hallToEdit.status || 'Allocated'
+      });
+    } else {
+      setEditingHallId(null);
+      setHallForm({
+        hallName: '',
+        capacity: 60,
+        allocatedStudents: 60,
+        departments: 'Computer Science',
+        rollRange: '',
+        invigilator: '',
+        invigilatorDept: 'Computer Science',
+        status: 'Allocated'
+      });
+    }
+    setIsAddHallOpen(true);
+  };
+
+  const handleSaveHall = async (e) => {
+    e.preventDefault();
+    if (!hallForm.hallName.trim()) {
+      alert('Hall Name is required');
+      return;
+    }
+    try {
+      setIsSubmittingHall(true);
+      const payload = {
+        ...hallForm,
+        capacity: Number(hallForm.capacity) || 60,
+        allocatedStudents: Number(hallForm.allocatedStudents) || 0
+      };
+
+      if (editingHallId) {
+        const res = await fetch(`http://localhost:5000/api/exams/halls/${editingHallId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success && data.hall) {
+          setHallsList(prev => prev.map(h => ((h._id === editingHallId || h.id === editingHallId) ? data.hall : h)));
+        } else {
+          setHallsList(prev => prev.map(h => ((h._id === editingHallId || h.id === editingHallId) ? { ...h, ...payload } : h)));
+        }
+        showToast(`Exam Hall "${payload.hallName}" updated successfully.`);
+      } else {
+        const res = await fetch('http://localhost:5000/api/exams/halls', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success && data.hall) {
+          setHallsList(prev => [data.hall, ...prev]);
+        } else {
+          const newH = { id: `hall-${Date.now()}`, ...payload };
+          setHallsList(prev => [newH, ...prev]);
+        }
+        showToast(`Exam Hall "${payload.hallName}" registered successfully.`);
+      }
+      setIsAddHallOpen(false);
+    } catch (err) {
+      console.error('Error saving exam hall:', err);
+      const newH = { id: `hall-${Date.now()}`, ...hallForm };
+      setHallsList(prev => [newH, ...prev]);
+      showToast('Exam Hall saved.');
+      setIsAddHallOpen(false);
+    } finally {
+      setIsSubmittingHall(false);
+    }
+  };
+
+  const handleDeleteHall = async (hallId, hallName, e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to remove ${hallName || 'this exam hall'}?`)) return;
+    try {
+      await fetch(`http://localhost:5000/api/exams/halls/${hallId}`, { method: 'DELETE' });
+      setHallsList(prev => prev.filter(h => h._id !== hallId && h.id !== hallId));
+      showToast(`${hallName || 'Exam hall'} removed successfully.`);
+    } catch (err) {
+      setHallsList(prev => prev.filter(h => h._id !== hallId && h.id !== hallId));
+      showToast('Exam hall removed.');
+    }
+  };
+
+  const handleAutoAllocateSeating = () => {
+    setHallsList(prev => prev.map(h => {
+      const cap = Number(h.capacity) || 60;
+      return {
+        ...h,
+        allocatedStudents: cap,
+        status: 'Fully Allocated'
+      };
+    }));
+    showToast('Auto-allocated seating plan across all examination halls successfully!');
+  };
+
+  const handleSyncStaffHalls = async () => {
+    try {
+      setIsSyncing(true);
+      const res = await fetch('http://localhost:5000/api/exams/halls');
+      const d = await res.json();
+      if (d.success && Array.isArray(d.halls)) {
+        setHallsList(d.halls);
+        showToast('Synchronized live examination halls from staff portal successfully!');
+      } else {
+        showToast('No examination halls found.');
+      }
+    } catch {
+      showToast('Error syncing examination halls.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const filteredHalls = useMemo(() => {
+    return hallsList.filter(h => {
+      const q = (seatingSearchQuery || '').toLowerCase().trim();
+      const matchesSearch = !q || (
+        String(h.hallName || '').toLowerCase().includes(q) ||
+        String(h.departments || '').toLowerCase().includes(q) ||
+        String(h.rollRange || '').toLowerCase().includes(q) ||
+        String(h.invigilator || '').toLowerCase().includes(q) ||
+        String(h.invigilatorDept || '').toLowerCase().includes(q)
+      );
+      const matchesStatus = seatingStatusFilter === 'ALL' || h.status === seatingStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [hallsList, seatingSearchQuery, seatingStatusFilter]);
+
+  // Update Student CIA Marks dynamically across official register fields
   const handleUpdateMarks = (id, field, value) => {
-    const numVal = Math.max(0, Math.min(field === 'assignment' ? 10 : 50, Number(value) || 0));
     setStudentMarksList(prev => prev.map(s => {
       if (s.id === id) {
-        const updated = { ...s, [field]: numVal };
-        // Recompute Scaled CIA: (CIA1 + CIA2)/100 * 30 + Assignment (out of 10) = 40 max
-        const ciaAvg30 = ((updated.cia1 + updated.cia2) / 100) * 30;
-        const totalCIA = Math.round(ciaAvg30 + updated.assignment);
-        const total = totalCIA + (updated.eseMarks || 0);
+        let parsedVal = value;
+        const upper = String(value).toUpperCase().trim();
+        if (upper === 'AB' || upper === 'A') {
+          parsedVal = 'AB';
+        } else if (upper === '-') {
+          parsedVal = '-';
+        } else if (value === '' || value === null || value === undefined) {
+          parsedVal = null;
+        } else {
+          const n = Number(value);
+          parsedVal = !isNaN(n) ? n : value;
+        }
+
+        const updated = { ...s, [field]: parsedVal };
+        if (field === 'it1') updated.cia1 = parsedVal;
+        if (field === 'it2') updated.cia2 = parsedVal;
+        if (field === 'cia1') updated.it1 = parsedVal;
+        if (field === 'cia2') updated.it2 = parsedVal;
+
+        const numIt1 = typeof updated.it1 === 'number' ? updated.it1 : (typeof updated.cia1 === 'number' ? updated.cia1 : 0);
+        const numIt2 = typeof updated.it2 === 'number' ? updated.it2 : (typeof updated.cia2 === 'number' ? updated.cia2 : 0);
+        const numModel = typeof updated.model === 'number' ? updated.model : 0;
+        const asgSum = (typeof updated.assignment1 === 'number' ? updated.assignment1 : 0) +
+                       (typeof updated.assignment2 === 'number' ? updated.assignment2 : 0) +
+                       (typeof updated.assignment3 === 'number' ? updated.assignment3 : 0) +
+                       (typeof updated.assignment4 === 'number' ? updated.assignment4 : 0);
+        const numAsg = asgSum > 0 ? asgSum : (typeof updated.assignment === 'number' ? updated.assignment : 0);
+
+        // Scaled CIA: IT scaled to 20 + Model scaled to 10 + Assignment scaled to 10 = 40 max
+        const itScaled = ((numIt1 + numIt2) / 50) * 20;
+        const modelScaled = (numModel / 75) * 10;
+        const asgScaled = Math.min(10, (numAsg / 20) * 10);
+        const totalCIA = Math.min(40, Math.round(itScaled + modelScaled + asgScaled));
+        const total = totalCIA + (updated.eseMarks || 52);
 
         let gr = 'U';
         let gp = 0;
@@ -543,18 +804,175 @@ export default function ExaminationManagement({ user }) {
     showToast('Exam timetable exported successfully as CSV!');
   };
 
+  // Official Hall Ticket Printable Document Generator
+  const handlePrintHallTicket = (st) => {
+    if (!st) return;
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('Please allow popups to print/download the official hall ticket.');
+      return;
+    }
+
+    const subs = ((st.subjects && st.subjects.length > 0)
+      ? st.subjects
+      : examsList.filter(e => !e.department || e.department === st.department)
+    );
+
+    const effectiveSubs = subs && subs.length > 0 ? subs : availableSubjects.filter(s => !s.department || s.department === st.department).slice(0, 5);
+
+    const rowsHtml = (effectiveSubs && effectiveSubs.length > 0)
+      ? effectiveSubs.map((sub, idx) => `
+        <tr>
+          <td style="border: 1px solid #334155; padding: 6px 10px; text-align: center;">${idx + 1}</td>
+          <td style="border: 1px solid #334155; padding: 6px 10px; font-weight: bold;">${sub.code || ''}</td>
+          <td style="border: 1px solid #334155; padding: 6px 10px;">${sub.name || ''}</td>
+          <td style="border: 1px solid #334155; padding: 6px 10px; text-align: center;">${sub.date || 'TBD'}</td>
+          <td style="border: 1px solid #334155; padding: 6px 10px; text-align: center;">${sub.session || 'FN'}</td>
+          <td style="border: 1px solid #334155; padding: 6px 10px; text-align: center;">${sub.hall || st.hallNo || 'Hall 101'}</td>
+          <td style="border: 1px solid #334155; padding: 6px 10px; text-align: center; height: 35px;"></td>
+        </tr>
+      `).join('')
+      : `<tr><td colspan="7" style="border: 1px solid #334155; padding: 12px; text-align: center; color: #64748b;">No scheduled examination subjects found.</td></tr>`;
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Hall Ticket - ${st.name} (${st.rollNo})</title>
+        <style>
+          @page { size: A4; margin: 15mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; padding: 20px; color: #0f172a; background: #fff; }
+          .ticket-card { border: 2px solid #0f172a; padding: 24px; border-radius: 8px; max-width: 800px; margin: 0 auto; }
+          .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
+          .inst-name { font-size: 18px; font-weight: 900; letter-spacing: 0.5px; margin: 0; }
+          .inst-sub { font-size: 12px; font-weight: 700; color: #475569; margin-top: 3px; }
+          .doc-badge { display: inline-block; background: #0f172a; color: #fff; padding: 3px 12px; font-size: 11px; font-weight: 800; border-radius: 4px; margin-top: 6px; letter-spacing: 1px; }
+          .info-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px; }
+          .info-table td { padding: 5px 8px; }
+          .info-lbl { font-weight: 700; color: #475569; width: 20%; }
+          .info-val { font-weight: 800; color: #0f172a; width: 30%; }
+          .photo-box { width: 90px; height: 110px; border: 1.5px dashed #64748b; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 9px; font-weight: 700; color: #64748b; margin-left: auto; }
+          .exams-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-bottom: 20px; }
+          .exams-table th { background: #f1f5f9; border: 1px solid #334155; padding: 6px 8px; font-weight: 800; text-align: center; }
+          .rules { font-size: 10px; color: #475569; border: 1px solid #cbd5e1; background: #f8fafc; padding: 10px 14px; border-radius: 6px; margin-bottom: 28px; }
+          .rules-title { font-weight: 800; color: #0f172a; margin-bottom: 4px; text-transform: uppercase; font-size: 10px; }
+          .rules-list { margin: 0; padding-left: 16px; line-height: 1.5; }
+          .sig-row { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 20px; text-align: center; font-size: 11px; font-weight: 700; }
+          .sig-block { width: 220px; }
+          .sig-line { border-top: 1.5px solid #0f172a; padding-top: 4px; }
+          .seal-box { width: 60px; height: 60px; border: 1.5px dashed #94a3b8; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #94a3b8; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="ticket-card">
+          <div class="header">
+            <h1 class="inst-name">VIVEKANANDA COLLEGE OF ARTS AND SCIENCES</h1>
+            <div class="inst-sub">Office of the Controller of Examinations • End Semester Examinations Nov 2026</div>
+            <div class="doc-badge">OFFICIAL EXAMINATION HALL TICKET</div>
+          </div>
+
+          <table style="width: 100%; margin-bottom: 12px;">
+            <tr>
+              <td style="vertical-align: top;">
+                <table class="info-table">
+                  <tr>
+                    <td class="info-lbl">Student Name:</td>
+                    <td class="info-val" style="font-size: 13px;">${st.name}</td>
+                    <td class="info-lbl">Register No:</td>
+                    <td class="info-val">${st.regNo || st.rollNo}</td>
+                  </tr>
+                  <tr>
+                    <td class="info-lbl">Roll Number:</td>
+                    <td class="info-val" style="color: #1d4ed8;">${st.rollNo}</td>
+                    <td class="info-lbl">Department:</td>
+                    <td class="info-val">${st.department}</td>
+                  </tr>
+                  <tr>
+                    <td class="info-lbl">Year & Semester:</td>
+                    <td class="info-val">Year ${st.year || 3} (${st.sem || 'Sem 5'})</td>
+                    <td class="info-lbl">Allotted Hall:</td>
+                    <td class="info-val" style="color: #b91c1c;">${st.hallNo || 'Hall 101'}</td>
+                  </tr>
+                  <tr>
+                    <td class="info-lbl">Seat / Desk No:</td>
+                    <td class="info-val" style="color: #b91c1c;">${st.seatNo || 'A1'}</td>
+                    <td class="info-lbl">Eligibility:</td>
+                    <td class="info-val" style="color: #15803d;">${st.status === 'Eligible' ? '✓ Eligible' : st.status}</td>
+                  </tr>
+                </table>
+              </td>
+              <td style="width: 100px; vertical-align: top; text-align: right;">
+                <div class="photo-box">AFFIX PASSPORT PHOTO</div>
+              </td>
+            </tr>
+          </table>
+
+          <div style="font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 6px; color: #0f172a;">
+            Registered Subject Examination Schedule:
+          </div>
+          <table class="exams-table">
+            <thead>
+              <tr>
+                <th style="width: 35px;">S.No</th>
+                <th style="width: 80px;">Code</th>
+                <th>Subject Name</th>
+                <th style="width: 100px;">Date</th>
+                <th style="width: 65px;">Session</th>
+                <th style="width: 75px;">Hall</th>
+                <th style="width: 110px;">Invigilator Sign</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="rules">
+            <div class="rules-title">Examination Guidelines for Candidate:</div>
+            <ol class="rules-list">
+              <li>Candidate must produce this Hall Ticket along with College Identity Card at each session.</li>
+              <li>Candidates must occupy their allotted seats 15 minutes prior to the commencement of the exam.</li>
+              <li>Possession of mobile phones, smartwatches, or unauthorized study material is strictly prohibited.</li>
+              <li>No candidate will be allowed entry 30 minutes after commencement or allowed to leave before the final bell.</li>
+            </ol>
+          </div>
+
+          <div class="sig-row">
+            <div class="sig-block">
+              <div style="height: 35px;"></div>
+              <div class="sig-line">Signature of Candidate</div>
+            </div>
+            <div class="seal-box">SEAL</div>
+            <div class="sig-block">
+              <div style="height: 35px;"></div>
+              <div class="sig-line">Controller of Examinations</div>
+            </div>
+          </div>
+        </div>
+        <script>
+          window.onload = function() {
+            setTimeout(function() { window.print(); }, 300);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full font-sans animate-fadeIn">
       
       {/* TOAST NOTIFICATION */}
-      {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-800 animate-fadeIn">
+      {toastMessage && typeof document !== 'undefined' && createPortal(
+        <div className="fixed top-6 right-6 z-[99999] bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700 animate-fadeIn pointer-events-auto">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           <span className="text-xs font-semibold">{toastMessage}</span>
-          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white ml-2">
+          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white ml-2 cursor-pointer">
             <X className="w-4 h-4" />
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 1. TOP HEADER & QUICK ACTIONS */}
@@ -656,7 +1074,9 @@ export default function ExaminationManagement({ user }) {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Exam Halls Active</span>
             <p className="text-2xl font-black text-indigo-600">{hallsList.length}</p>
-            <p className="text-[11px] text-slate-500 font-medium mt-1">235 Seats Allocated</p>
+            <p className="text-[11px] text-slate-500 font-medium mt-1">
+              {hallsList.reduce((acc, h) => acc + (Number(h.allocatedStudents) || 0), 0)} Seats Allocated
+            </p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
             <Building2 className="w-5 h-5" />
@@ -940,14 +1360,17 @@ export default function ExaminationManagement({ user }) {
       )}
 
       {/* ========================================================================= */}
-      {/* 6. TAB 3: CIA INTERNAL MARKS ENTRY                                        */}
+      {/* 6. TAB 3: CIA INTERNAL MARKS ENTRY (OFFICIAL REGISTER FORMAT)             */}
       {/* ========================================================================= */}
       {activeTab === 'internal-marks' && (
         <div className="space-y-5">
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="font-extrabold text-sm text-slate-900">Continuous Internal Assessment (CIA) Marks Entry</h3>
-              <p className="text-xs text-slate-500 mt-0.5">CIA 1 (50) + CIA 2 (50) scaled to 30 + Assignment (10) = 40 Total Internal Marks</p>
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                VIVEKANANDA COLLEGE OF ARTS AND SCIENCE • VELLALANKULAM - 627 856
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 mt-0.5">Continuous Internal Assessment (CIA) & Register Marks Entry</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Official College Register: SNAP TEST (ST 1-4) | INTERNAL (IT 1-2) | MODEL | PROJECT/SEMINAR | ASSIGNMENT (1-4)</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -956,7 +1379,7 @@ export default function ExaminationManagement({ user }) {
                   setIsMarksLocked(!isMarksLocked);
                   showToast(isMarksLocked ? 'Marks unlocked for editing.' : 'Marks successfully locked and frozen for CoE evaluation!');
                 }}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2 font-bold text-xs rounded-xl transition-all border ${
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 font-bold text-xs rounded-xl transition-all border cursor-pointer ${
                   isMarksLocked
                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                     : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
@@ -970,68 +1393,153 @@ export default function ExaminationManagement({ user }) {
 
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[850px]">
+              <table className="w-full text-left border-collapse min-w-[1050px]">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="py-4 px-6">STUDENT ROLL & NAME</th>
-                    <th className="py-4 px-4 text-center">CIA-1 (MAX 50)</th>
-                    <th className="py-4 px-4 text-center">CIA-2 (MAX 50)</th>
-                    <th className="py-4 px-4 text-center">ASSIGNMENT (10)</th>
-                    <th className="py-4 px-4 text-center">SCALED CIA (40)</th>
-                    <th className="py-4 px-6 text-right">GRADE</th>
+                  <tr className="border-b border-slate-200 bg-slate-100 text-[10px] font-black text-slate-700 uppercase tracking-wider text-center">
+                    <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 w-12 bg-slate-200/60">S.NO</th>
+                    <th rowSpan={2} className="py-2.5 px-4 text-left border-r border-slate-200 min-w-[180px] bg-slate-200/60">STUDENT ROLL & NAME</th>
+                    <th colSpan={4} className="py-1 px-2 border-r border-slate-200 bg-sky-100/70 text-sky-950 font-black">SNAP TEST</th>
+                    <th colSpan={2} className="py-1 px-2 border-r border-slate-200 bg-indigo-100/70 text-indigo-950 font-black">INTERNAL</th>
+                    <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 bg-purple-100/70 text-purple-950 font-black min-w-[65px]">MODEL</th>
+                    <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 bg-emerald-100/70 text-emerald-950 font-black min-w-[100px]">PROJECT / SEMINAR</th>
+                    <th colSpan={4} className="py-1 px-2 border-r border-slate-200 bg-amber-100/70 text-amber-950 font-black">ASSIGNMENT</th>
+                    <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 bg-blue-100/70 text-blue-950 font-black min-w-[85px]">TOTAL CIA (40)</th>
+                    <th rowSpan={2} className="py-2.5 px-4 text-right">GRADE</th>
+                  </tr>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-600 uppercase text-center">
+                    <th className="py-1 px-1 border-r border-slate-200 bg-sky-50 text-sky-900">ST 1</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-sky-50 text-sky-900">ST 2</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-sky-50 text-sky-900">ST 3</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-sky-50 text-sky-900">ST 4</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-indigo-50 text-indigo-900">IT 1</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-indigo-50 text-indigo-900">IT 2</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-amber-50 text-amber-900">1</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-amber-50 text-amber-900">2</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-amber-50 text-amber-900">3</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-amber-50 text-amber-900">4</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                  {filteredStudents.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/50">
-                      <td className="py-3.5 px-6">
-                        <span className="font-mono font-bold text-blue-600 mr-2">{s.rollNo}</span>
-                        <span className="font-bold text-slate-900">{s.name}</span>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {filteredStudents.map((s, idx) => (
+                    <tr key={s.id} className="hover:bg-slate-50/70">
+                      <td className="py-2 px-3 text-center font-bold text-slate-400 border-r border-slate-100">{idx + 1}</td>
+                      <td className="py-2 px-4 border-r border-slate-100">
+                        <div className="font-mono font-bold text-blue-600 text-[11px]">{s.rollNo}</div>
+                        <div className="font-extrabold text-slate-900">{s.name}</div>
                       </td>
 
-                      <td className="py-3.5 px-4 text-center">
+                      {/* SNAP TESTS ST1 - ST4 */}
+                      {['st1', 'st2', 'st3', 'st4'].map(f => (
+                        <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-sky-50/20">
+                          <input
+                            type="text"
+                            disabled={isMarksLocked}
+                            value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
+                            onChange={(e) => handleUpdateMarks(s.id, f, e.target.value)}
+                            className="w-11 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-sky-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                            placeholder="-"
+                          />
+                        </td>
+                      ))}
+
+                      {/* INTERNAL IT1 - IT2 */}
+                      {['it1', 'it2'].map(f => {
+                        const val = s[f] !== null && s[f] !== undefined ? s[f] : (f === 'it1' ? s.cia1 : s.cia2);
+                        return (
+                          <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-indigo-50/20">
+                            <input
+                              type="text"
+                              disabled={isMarksLocked}
+                              value={val !== null && val !== undefined ? val : ""}
+                              onChange={(e) => handleUpdateMarks(s.id, f, e.target.value)}
+                              className="w-11 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-indigo-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                              placeholder="-"
+                            />
+                          </td>
+                        );
+                      })}
+
+                      {/* MODEL */}
+                      <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-purple-50/20">
                         <input
-                          type="number"
+                          type="text"
                           disabled={isMarksLocked}
-                          value={s.cia1}
-                          onChange={(e) => handleUpdateMarks(s.id, 'cia1', e.target.value)}
-                          className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-slate-900 focus:bg-white focus:border-rose-500 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                          value={s.model !== null && s.model !== undefined ? s.model : ""}
+                          onChange={(e) => handleUpdateMarks(s.id, 'model', e.target.value)}
+                          className="w-12 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-purple-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                          placeholder="-"
                         />
                       </td>
 
-                      <td className="py-3.5 px-4 text-center">
+                      {/* PROJECT / SEMINAR */}
+                      <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-emerald-50/20">
                         <input
-                          type="number"
+                          type="text"
                           disabled={isMarksLocked}
-                          value={s.cia2}
-                          onChange={(e) => handleUpdateMarks(s.id, 'cia2', e.target.value)}
-                          className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-slate-900 focus:bg-white focus:border-rose-500 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                          value={s.project !== null && s.project !== undefined ? s.project : ""}
+                          onChange={(e) => handleUpdateMarks(s.id, 'project', e.target.value)}
+                          className="w-14 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-emerald-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                          placeholder="-"
                         />
                       </td>
 
-                      <td className="py-3.5 px-4 text-center">
-                        <input
-                          type="number"
-                          disabled={isMarksLocked}
-                          value={s.assignment}
-                          onChange={(e) => handleUpdateMarks(s.id, 'assignment', e.target.value)}
-                          className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-slate-900 focus:bg-white focus:border-rose-500 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
-                        />
-                      </td>
+                      {/* ASSIGNMENT 1 - 4 */}
+                      {['assignment1', 'assignment2', 'assignment3', 'assignment4'].map(f => (
+                        <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-amber-50/20">
+                          <input
+                            type="text"
+                            disabled={isMarksLocked}
+                            value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
+                            onChange={(e) => handleUpdateMarks(s.id, f, e.target.value)}
+                            className="w-9 px-0.5 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-amber-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                            placeholder="-"
+                          />
+                        </td>
+                      ))}
 
-                      <td className="py-3.5 px-4 text-center font-black text-sm text-indigo-600">
+                      {/* TOTAL CIA */}
+                      <td className="py-2 px-3 text-center font-black text-sm text-indigo-700 bg-blue-50/30 border-r border-slate-100">
                         {s.ciaTotal} / 40
                       </td>
 
-                      <td className="py-3.5 px-6 text-right">
-                        <span className="px-2.5 py-1 rounded-lg font-black text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                          Grade: {s.grade}
+                      {/* GRADE */}
+                      <td className="py-2 px-4 text-right">
+                        <span className="px-2 py-0.5 rounded-md font-black text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                          {s.grade}
                         </span>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Official Signature Verification Strip matching Vivekananda physical register */}
+            <div className="p-3 bg-slate-50/90 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 text-center text-xs font-bold text-slate-700">
+              <div className="border border-slate-200 rounded-xl p-2.5 bg-white shadow-2xs">
+                <div className="h-6 flex items-end justify-center font-serif italic text-blue-700 font-bold">
+                  Faculty In-Charge
+                </div>
+                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[10px] text-slate-500 font-extrabold mt-1">
+                  STAFF IN-CHARGE
+                </div>
+              </div>
+              <div className="border border-slate-200 rounded-xl p-2.5 bg-white shadow-2xs">
+                <div className="h-6 flex items-end justify-center font-serif italic text-blue-700 font-bold">
+                  {isMarksLocked ? "Dr. Meenakshi C" : "Verified"}
+                </div>
+                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[10px] text-slate-500 font-extrabold mt-1">
+                  HEAD OF DEPARTMENT (HOD)
+                </div>
+              </div>
+              <div className="border border-slate-200 rounded-xl p-2.5 bg-white shadow-2xs">
+                <div className="h-6 flex items-end justify-center font-serif italic text-blue-700 font-bold">
+                  {isMarksLocked ? "Dr. K. Sundararajan" : "Approved"}
+                </div>
+                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[10px] text-slate-500 font-extrabold mt-1">
+                  PRINCIPAL
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1119,49 +1627,275 @@ export default function ExaminationManagement({ user }) {
       )}
 
       {/* ========================================================================= */}
-      {/* 8. TAB 5: SEATING PLAN & INVIGILATION                                     */}
+      {/* 8. TAB 5: HALL SEATING & INVIGILATION                                    */}
       {/* ========================================================================= */}
       {activeTab === 'seating' && (
         <div className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {hallsList.map((h) => (
-              <div key={h.id} className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2.5 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-lg border border-rose-100">
-                      Capacity: {h.capacity} Seats
-                    </span>
-                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200">
-                      {h.status}
-                    </span>
-                  </div>
-
-                  <h3 className="font-extrabold text-base text-slate-900">{h.hallName}</h3>
-                  <p className="text-xs text-slate-500 font-semibold mt-1">Branches: {h.departments}</p>
-
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs my-3 space-y-1.5">
-                    <p className="text-slate-600">
-                      <strong className="text-slate-800">Roll Numbers:</strong> {h.rollRange}
-                    </p>
-                    <p className="text-slate-600">
-                      <strong className="text-slate-800">Chief Invigilator:</strong> {h.invigilator} ({h.invigilatorDept} Dept)
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
-                  <span className="font-bold text-slate-500">{h.allocatedStudents} Students Assigned</span>
-                  <button
-                    onClick={() => showToast(`Door Seating Chart for ${h.hallName} printed.`)}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition-all flex items-center gap-1.5"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print Door Slip</span>
-                  </button>
-                </div>
+          {/* Top Controls & Action Bar */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-indigo-600" />
+                  <span>Exam Hall Seating & Invigilation Duty</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Manage campus exam room capacities, student roll number allocations, and faculty invigilator assignments.
+                </p>
               </div>
-            ))}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAutoAllocateSeating}
+                  className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all border border-indigo-200 flex items-center gap-1.5 cursor-pointer"
+                  title="Auto-balance student allocations across halls"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Auto-Allocate Seats</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncStaffHalls}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5 cursor-pointer"
+                  title="Synchronize live examination halls from staff portal"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>Sync Staff Halls</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddHall(null)}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs shadow-rose-500/20 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Exam Hall</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter and Search */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-1 border-t border-slate-100">
+              <div className="relative flex-1 w-full">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={seatingSearchQuery}
+                  onChange={(e) => setSeatingSearchQuery(e.target.value)}
+                  placeholder="Search hall name, block, branches, roll number, or invigilator..."
+                  className="w-full pl-10 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                />
+                {seatingSearchQuery && (
+                  <button onClick={() => setSeatingSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="w-full sm:w-48 shrink-0">
+                <select
+                  value={seatingStatusFilter}
+                  onChange={(e) => setSeatingStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="Fully Allocated">Fully Allocated</option>
+                  <option value="Allocated">Allocated</option>
+                  <option value="Available">Available</option>
+                </select>
+              </div>
+            </div>
           </div>
+
+          {/* Seating Stats Summary Banner */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Exam Halls</span>
+              <p className="text-xl font-black text-slate-900 mt-0.5">{hallsList.length} Halls</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Across Campus Blocks</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Desk Capacity</span>
+              <p className="text-xl font-black text-indigo-600 mt-0.5">
+                {hallsList.reduce((acc, h) => acc + (Number(h.capacity) || 0), 0)} Seats
+              </p>
+              <p className="text-[11px] text-indigo-600/80 font-medium mt-0.5">Physical Capacity</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Candidates</span>
+              <p className="text-xl font-black text-emerald-600 mt-0.5">
+                {hallsList.reduce((acc, h) => acc + (Number(h.allocatedStudents) || 0), 0)} Students
+              </p>
+              <p className="text-[11px] text-emerald-600/80 font-medium mt-0.5">Seating Allotted</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Faculty Invigilators</span>
+              <p className="text-xl font-black text-purple-600 mt-0.5">
+                {new Set(hallsList.map(h => h.invigilator).filter(Boolean)).size} Assigned
+              </p>
+              <p className="text-[11px] text-purple-600/80 font-medium mt-0.5">Chief Invigilators</p>
+            </div>
+          </div>
+
+          {/* Halls Cards Grid */}
+          {filteredHalls.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {filteredHalls.map((h, hIdx) => {
+                const hallKey = h._id || h.id || `hall-${hIdx}`;
+                const cap = Number(h.capacity) || 60;
+                const alloc = Number(h.allocatedStudents) || 0;
+                const pct = Math.min(100, Math.round((alloc / cap) * 100));
+                const isFull = pct >= 100;
+                return (
+                  <div key={hallKey} className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4 flex flex-col justify-between hover:shadow-md transition-shadow">
+                    <div>
+                      {/* Top Badges */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="px-2.5 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-lg border border-rose-100 flex items-center gap-1.5">
+                          <Users className="w-3 h-3 text-rose-600" />
+                          <span>Capacity: {cap} Seats</span>
+                        </span>
+                        <span className={`px-2.5 py-0.5 font-bold text-xs rounded-lg border ${
+                          h.status === 'Fully Allocated'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : h.status === 'Allocated'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {h.status || (isFull ? 'Fully Allocated' : 'Allocated')}
+                        </span>
+                      </div>
+
+                      <h3 className="font-extrabold text-base text-slate-900 flex items-center justify-between">
+                        <span>{h.hallName}</span>
+                        <span className="text-xs font-mono text-slate-400 font-medium">#{String(hIdx + 1).padStart(2, '0')}</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 font-semibold mt-1">
+                        <strong className="text-slate-700">Departments:</strong> {h.departments || 'Computer Science'}
+                      </p>
+
+                      {/* Capacity Occupancy Bar */}
+                      <div className="my-3 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-bold">
+                          <span className="text-slate-500">Seating Occupancy</span>
+                          <span className={isFull ? 'text-emerald-700' : 'text-blue-700'}>
+                            {alloc} / {cap} Seats ({pct}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              isFull ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-blue-500 to-indigo-500'
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Seating Details Card */}
+                      <div className="bg-slate-50/90 p-3.5 rounded-xl border border-slate-200/70 text-xs my-3 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <span className="w-20 font-bold text-slate-700 shrink-0">Roll Numbers:</span>
+                          <span className="font-mono font-semibold text-slate-800 break-all">{h.rollRange || '22CS001 - 22CS060'}</span>
+                        </div>
+                        <div className="flex items-start gap-2 pt-1 border-t border-slate-200/50">
+                          <span className="w-20 font-bold text-slate-700 shrink-0">Invigilator:</span>
+                          <div className="flex-1">
+                            <span className="font-bold text-slate-900">{h.invigilator || 'Faculty Assigned'}</span>
+                            {h.invigilatorDept && (
+                              <span className="text-[10px] ml-2 px-1.5 py-0.5 bg-white border border-slate-200 text-slate-600 rounded font-semibold">
+                                {h.invigilatorDept}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Footer */}
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
+                      <span className="font-bold text-slate-500 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>{alloc} Students Assigned</span>
+                      </span>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setViewingDoorSlip(h)}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                          title="Print official hall entrance door slip"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Print Door Slip</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAddHall(h)}
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all cursor-pointer"
+                          title="Edit hall details"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteHall(h._id || h.id, h.hallName, e)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                          title="Remove exam hall"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center space-y-4 shadow-xs">
+              <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold">
+                <Building2 className="w-7 h-7" />
+              </div>
+              <div>
+                <h4 className="text-base font-extrabold text-slate-800">No Exam Halls Found</h4>
+                <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                  {seatingSearchQuery || seatingStatusFilter !== 'ALL'
+                    ? 'No examination halls match your search query or filter. Try clearing your search.'
+                    : 'Examination halls have not been configured yet. Initialize campus default halls or add a new exam hall.'}
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                {seatingSearchQuery || seatingStatusFilter !== 'ALL' ? (
+                  <button
+                    onClick={() => { setSeatingSearchQuery(''); setSeatingStatusFilter('ALL'); }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                  >
+                    Clear Filter
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleSyncStaffHalls}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Sync Staff Halls</span>
+                    </button>
+                    <button
+                      onClick={() => handleOpenAddHall(null)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                    >
+                      + Add New Hall
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1380,11 +2114,13 @@ export default function ExaminationManagement({ user }) {
                     Roll: <strong className="text-slate-900">{viewingHallTicketStudent.rollNo}</strong> • Reg: <strong className="text-slate-900">{viewingHallTicketStudent.regNo}</strong>
                   </p>
                   <p className="text-xs text-slate-600 font-semibold">{viewingHallTicketStudent.department} (Year {viewingHallTicketStudent.year} - {viewingHallTicketStudent.sem})</p>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    Allotted Hall: <strong className="text-blue-700">{viewingHallTicketStudent.hallNo || 'Hall 101'}</strong> • Seat: <strong className="text-blue-700">{viewingHallTicketStudent.seatNo || 'A1'}</strong>
+                  </p>
                 </div>
 
-                <div className="p-3 bg-white rounded-xl border border-slate-200 flex flex-col items-center shrink-0">
-                  <QrCode className="w-16 h-16 text-slate-800" />
-                  <span className="text-[9px] font-mono text-slate-400 mt-1">VERIFIED QR</span>
+                <div className="w-20 h-24 border-2 border-dashed border-slate-300 bg-white rounded-xl flex flex-col items-center justify-center text-center text-[9px] text-slate-400 font-bold p-1 shrink-0">
+                  <span>AFFIX PASSPORT PHOTO</span>
                 </div>
               </div>
 
@@ -1401,21 +2137,29 @@ export default function ExaminationManagement({ user }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {((viewingHallTicketStudent.subjects && viewingHallTicketStudent.subjects.length > 0)
-                        ? viewingHallTicketStudent.subjects
-                        : examsList.filter(e => !e.department || e.department === viewingHallTicketStudent.department || e.department === 'Computer Science')
-                      ).slice(0, 5).map((sub, sIdx) => (
-                        <tr key={sIdx}>
-                          <td className="p-2.5 font-bold text-slate-900">{sub.date || 'TBD'} ({sub.session || 'FN'})</td>
-                          <td className="p-2.5 font-semibold text-slate-800">{sub.code} - {sub.name}</td>
-                          <td className="p-2.5 text-slate-600">{sub.hall || viewingHallTicketStudent.hallNo || 'Hall 101'}</td>
-                        </tr>
-                      ))}
-                      {(!viewingHallTicketStudent.subjects || viewingHallTicketStudent.subjects.length === 0) && examsList.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="p-3 text-center text-slate-400 italic">No scheduled exams found.</td>
-                        </tr>
-                      )}
+                      {(() => {
+                        const subs = (viewingHallTicketStudent.subjects && viewingHallTicketStudent.subjects.length > 0)
+                          ? viewingHallTicketStudent.subjects
+                          : examsList.filter(e => !e.department || e.department === viewingHallTicketStudent.department);
+
+                        const effectiveSubs = subs && subs.length > 0 ? subs : availableSubjects.filter(s => !s.department || s.department === viewingHallTicketStudent.department).slice(0, 5);
+
+                        if (effectiveSubs && effectiveSubs.length > 0) {
+                          return effectiveSubs.map((sub, sIdx) => (
+                            <tr key={sIdx}>
+                              <td className="p-2.5 font-bold text-slate-900">{sub.date || 'TBD'} ({sub.session || 'FN'})</td>
+                              <td className="p-2.5 font-semibold text-slate-800">{sub.code} - {sub.name}</td>
+                              <td className="p-2.5 text-slate-600">{sub.hall || viewingHallTicketStudent.hallNo || 'Hall 101'}</td>
+                            </tr>
+                          ));
+                        }
+
+                        return (
+                          <tr>
+                            <td colSpan={3} className="p-3 text-center text-slate-400 italic">No scheduled exams found.</td>
+                          </tr>
+                        );
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -1428,8 +2172,8 @@ export default function ExaminationManagement({ user }) {
                   <span className="font-bold text-slate-700 block border-t border-slate-300 pt-1">Signature of the Student</span>
                 </div>
                 <div>
-                  <div className="h-10 font-serif italic text-blue-800 flex items-center justify-center font-bold text-sm">
-                    Dr. S. K. Narayanan
+                  <div className="h-10 flex items-center justify-center font-bold text-xs text-slate-400 italic">
+                    (Seal & Signature)
                   </div>
                   <span className="font-bold text-slate-700 block border-t border-slate-300 pt-1">Controller of Examinations</span>
                 </div>
@@ -1440,18 +2184,19 @@ export default function ExaminationManagement({ user }) {
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={() => setViewingHallTicketStudent(null)}
-                className="px-5 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs"
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
               >
                 Close
               </button>
               <button
-                onClick={() => showToast(`Printing Hall Ticket for ${viewingHallTicketStudent.name}...`)}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5"
+                onClick={() => handlePrintHallTicket(viewingHallTicketStudent)}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
-                <span>Print Hall Ticket</span>
+                <span>Print / Download Hall Ticket</span>
               </button>
             </div>
+
 
           </div>
         </ModalPortal>
@@ -1542,6 +2287,281 @@ export default function ExaminationManagement({ user }) {
               </button>
             </div>
 
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 12. MODAL: ADD / EDIT EXAM HALL                                           */}
+      {/* ========================================================================= */}
+      {isAddHallOpen && (
+        <ModalPortal isOpen={isAddHallOpen} onClose={() => setIsAddHallOpen(false)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">
+                    {editingHallId ? 'Edit Exam Hall' : 'Add Examination Hall'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">Configure examination room, seating capacity, and invigilation</p>
+                </div>
+              </div>
+              <button onClick={() => setIsAddHallOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveHall} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Hall Name & Block *</label>
+                <input
+                  type="text"
+                  value={hallForm.hallName}
+                  onChange={(e) => setHallForm({ ...hallForm, hallName: e.target.value })}
+                  placeholder="e.g. Hall 101 - Ramanujan Block"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Seating Capacity *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    value={hallForm.capacity}
+                    onChange={(e) => setHallForm({ ...hallForm, capacity: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Allocated Students *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={hallForm.capacity}
+                    value={hallForm.allocatedStudents}
+                    onChange={(e) => setHallForm({ ...hallForm, allocatedStudents: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Allocated Branches / Departments</label>
+                <input
+                  type="text"
+                  value={hallForm.departments}
+                  onChange={(e) => setHallForm({ ...hallForm, departments: e.target.value })}
+                  placeholder="e.g. Computer Science (Sem 5) + Commerce (Sem 3)"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Roll Number Range</label>
+                <input
+                  type="text"
+                  value={hallForm.rollRange}
+                  onChange={(e) => setHallForm({ ...hallForm, rollRange: e.target.value })}
+                  placeholder="e.g. 22CS001 - 22CS030 & 23CM001 - 23CM030"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Chief Invigilator</label>
+                  <input
+                    type="text"
+                    value={hallForm.invigilator}
+                    onChange={(e) => setHallForm({ ...hallForm, invigilator: e.target.value })}
+                    placeholder="e.g. Dr. S. Rajagopalan"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Invigilator Department</label>
+                  <select
+                    value={hallForm.invigilatorDept}
+                    onChange={(e) => setHallForm({ ...hallForm, invigilatorDept: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Commerce">Commerce</option>
+                    <option value="Business Administration (BBA)">Business Administration (BBA)</option>
+                    <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
+                    <option value="English Literature">English Literature</option>
+                    <option value="Mathematics">Mathematics</option>
+                    <option value="Artificial Intelligence (AI)">Artificial Intelligence (AI)</option>
+                    <option value="Physics">Physics</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Status</label>
+                <select
+                  value={hallForm.status}
+                  onChange={(e) => setHallForm({ ...hallForm, status: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="Fully Allocated">Fully Allocated</option>
+                  <option value="Allocated">Allocated</option>
+                  <option value="Available">Available</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddHallOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingHall}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-500/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editingHallId ? 'Update Hall' : 'Register Hall'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 13. MODAL: PRINTABLE DOOR SEATING SLIP                                    */}
+      {/* ========================================================================= */}
+      {viewingDoorSlip && (
+        <ModalPortal isOpen={Boolean(viewingDoorSlip)} onClose={() => setViewingDoorSlip(null)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">Examination Hall Door Slip</h3>
+                <p className="text-xs text-slate-500">Official Candidate Seating Chart & Door Entrance Verification Notice</p>
+              </div>
+              <button onClick={() => setViewingDoorSlip(null)} className="p-2 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Printable Paper Card Frame */}
+            <div className="p-6 bg-slate-50/90 rounded-2xl border-2 border-slate-300 space-y-5 print:border-none print:p-0">
+              {/* Institutional Header */}
+              <div className="text-center border-b-2 border-slate-800 pb-3 space-y-0.5">
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                  VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
+                </h4>
+                <p className="text-[11px] font-bold text-slate-600">Autonomous • Affiliated to University • Vellalankulam Campus</p>
+                <p className="text-xs font-black text-rose-700 uppercase tracking-widest mt-1">
+                  CONTROLLER OF EXAMINATIONS • END SEMESTER EXAMINATIONS (NOV/DEC 2026)
+                </p>
+                <div className="inline-block mt-1 px-3 py-0.5 bg-slate-900 text-white text-[11px] font-black rounded uppercase">
+                  DOOR SEATING ARRANGEMENT SLIP
+                </div>
+              </div>
+
+              {/* Hall Key Information Table */}
+              <div className="grid grid-cols-2 gap-3 text-xs bg-white p-4 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-slate-500 font-bold block text-[10px] uppercase">EXAMINATION HALL</span>
+                  <span className="text-base font-black text-slate-900">{viewingDoorSlip.hallName}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold block text-[10px] uppercase">CAPACITY / ALLOCATED</span>
+                  <span className="text-base font-black text-indigo-700">
+                    {viewingDoorSlip.allocatedStudents || viewingDoorSlip.capacity} / {viewingDoorSlip.capacity} Seats
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold block text-[10px] uppercase">BRANCHES / PROGRAMMES</span>
+                  <span className="font-bold text-slate-800">{viewingDoorSlip.departments || 'Computer Science'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold block text-[10px] uppercase">ROLL NUMBER RANGE</span>
+                  <span className="font-mono font-bold text-slate-900">{viewingDoorSlip.rollRange || '22CS001 - 22CS060'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold block text-[10px] uppercase">CHIEF INVIGILATOR</span>
+                  <span className="font-bold text-slate-900">{viewingDoorSlip.invigilator || 'Faculty Assigned'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold block text-[10px] uppercase">SESSION & TIME</span>
+                  <span className="font-bold text-slate-800">Forenoon (FN) • 09:30 AM - 12:30 PM</span>
+                </div>
+              </div>
+
+              {/* Seating Desk Grid Matrix Preview */}
+              <div>
+                <h5 className="text-[11px] font-black uppercase tracking-wider text-slate-700 mb-2 flex items-center justify-between">
+                  <span>Desk Layout Allocation (Row A to F)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Single candidate per desk</span>
+                </h5>
+                <div className="grid grid-cols-6 gap-2 text-center text-[10px] font-mono">
+                  {Array.from({ length: Math.min(30, Number(viewingDoorSlip.capacity) || 30) }).map((_, i) => (
+                    <div key={i} className="bg-white border border-slate-300 rounded-lg p-2 space-y-0.5 shadow-2xs">
+                      <span className="text-slate-400 font-sans block text-[9px]">Desk {String(i + 1).padStart(2, '0')}</span>
+                      <strong className="text-slate-900 block truncate">
+                        {i % 2 === 0 ? `22CS${String(i + 1).padStart(3, '0')}` : `23CM${String(i).padStart(3, '0')}`}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-400 italic text-center mt-2">
+                  * Showing sample desk grid orientation. Remaining candidate desks arranged sequentially in rows G to L.
+                </p>
+              </div>
+
+              {/* Official Signatures Row */}
+              <div className="pt-6 border-t-2 border-slate-300 grid grid-cols-3 gap-4 text-center text-xs">
+                <div>
+                  <div className="border-b border-dashed border-slate-400 pb-8 font-serif italic text-slate-400">Signature</div>
+                  <span className="font-bold text-[11px] text-slate-700 mt-1 block">Hall Invigilator</span>
+                </div>
+                <div>
+                  <div className="border-b border-dashed border-slate-400 pb-8 font-serif italic text-slate-400">Signature</div>
+                  <span className="font-bold text-[11px] text-slate-700 mt-1 block">Chief Superintendent</span>
+                </div>
+                <div>
+                  <div className="border-b border-dashed border-slate-400 pb-8 font-serif italic text-slate-400">Seal & Signature</div>
+                  <span className="font-bold text-[11px] text-slate-700 mt-1 block">Controller of Examinations</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setViewingDoorSlip(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-all"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.print();
+                  showToast(`Door Slip for ${viewingDoorSlip.hallName} sent to print.`);
+                }}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Door Seating Slip</span>
+              </button>
+            </div>
           </div>
         </ModalPortal>
       )}
