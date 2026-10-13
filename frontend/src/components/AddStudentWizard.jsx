@@ -155,7 +155,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false 
               <div>
                 <h2 className="text-xl sm:text-2xl font-black tracking-tight">Student Admission & Registration</h2>
                 <p className="text-xs text-blue-200 mt-1">
-                  Vivekanandha College of Arts and Sciences for Women (Autonomous) • Student Profile Creation
+                  Vivekanandha College of Arts and Sciences (Affiliated with Manonmaniam Sundaranar University) • Student Profile Creation
                 </p>
               </div>
             </div>

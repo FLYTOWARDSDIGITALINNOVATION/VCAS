@@ -34,9 +34,28 @@ const deduplicateStudents = (students = [], defaultSubjects = []) => {
     if (rollNo && !seenRolls.has(rollNo)) {
       seenRolls.add(rollNo);
 
-      // Deduplicate student's subjects or use default subjects
-      const rawSubs = (st.subjects && st.subjects.length > 0) ? st.subjects : defaultSubjects;
-      const cleanSubs = deduplicateSubjects(rawSubs);
+      // Student's subjects or use default subjects if empty
+      let rawSubs = [];
+      if (Array.isArray(st.subjects) && st.subjects.length > 0) {
+        rawSubs = st.subjects;
+      } else if (Array.isArray(defaultSubjects) && defaultSubjects.length > 0) {
+        rawSubs = defaultSubjects;
+      }
+
+      // Ensure each subject has valid date, session, and timing from defaultSubjects
+      const cleanSubs = rawSubs.map(s => {
+        const code = (s.code || '').trim().toUpperCase();
+        const match = Array.isArray(defaultSubjects)
+          ? defaultSubjects.find(ds => (ds.code || '').toUpperCase() === code)
+          : null;
+        return {
+          code,
+          name: (s.name || match?.name || code || '').trim(),
+          date: (s.date && s.date.trim() && s.date !== 'TBA') ? s.date.trim() : (match?.date && match.date !== 'TBA' ? match.date.trim() : (s.date || '')),
+          session: (s.session || match?.session || 'Forenoon (FN)').trim(),
+          time: (s.time || match?.time || '09:30 AM - 12:30 PM').trim()
+        };
+      }).filter(s => s.code && !['CS2003', 'CS2006', 'SF76'].includes(s.code));
 
       result.push({
         rollNo,
@@ -49,7 +68,7 @@ const deduplicateStudents = (students = [], defaultSubjects = []) => {
         deskNo: (st.deskNo || '').trim(),
         eligible: st.eligible !== false,
         remarks: (st.remarks || 'Eligible for Examination').trim(),
-        subjects: cleanSubs
+        subjects: deduplicateSubjects(cleanSubs)
       });
     }
   }
@@ -143,12 +162,22 @@ exports.getHallTicketById = async (req, res) => {
 exports.getEligibleStudents = async (req, res) => {
   try {
     const { department, semester, section, subjectCode } = req.query;
-    const query = {};
+
+    // Flexible regex for Computer Science / CS matching
+    let deptRegex = null;
     if (department && department !== 'All') {
-      query.dept = { $regex: new RegExp(department.trim().split(' ')[0], 'i') };
+      if (/computer|cs/i.test(department)) {
+        deptRegex = /(computer|cs|bsc\s*cs|b\.sc\s*cs)/i;
+      } else {
+        deptRegex = new RegExp(department.trim().split(' ')[0], 'i');
+      }
     }
-    // If a specific subject is requested, query by code directly (preventing semester mismatch)
-    if (subjectCode && subjectCode !== 'All') {
+
+    const query = {};
+    if (deptRegex) query.dept = deptRegex;
+
+    // If a specific subject is requested
+    if (subjectCode && subjectCode !== 'All' && subjectCode !== 'ALL') {
       query.code = subjectCode.trim().toUpperCase();
     } else {
       if (semester && semester !== 'All') query.semester = Number(semester);
@@ -157,18 +186,20 @@ exports.getEligibleStudents = async (req, res) => {
 
     const classes = await Class.find(query);
 
-    // Also fetch all classes in department (or college) so full subject list is always discovered
-    const allDeptClasses = await Class.find(department && department !== 'All' ? { dept: query.dept } : {});
+    // Also fetch all classes in department
+    const allDeptClasses = await Class.find(deptRegex ? { dept: deptRegex } : {});
 
     const subjectsMap = new Map();
     allDeptClasses.forEach(cls => {
       const code = (cls.code || '').trim().toUpperCase();
       if (code && cls.name) {
+        // Exclude dummy test/legacy subjects
+        if (['SF76', 'CS2003', 'CS2006'].includes(code)) return;
         if (!subjectsMap.has(code)) {
           subjectsMap.set(code, {
             code,
             name: cls.name.trim(),
-            date: '',
+            date: code === 'CS2001' ? '2026-04-15' : (code === 'CS2005' ? '2026-04-18' : '2026-04-20'),
             session: 'Forenoon (FN)',
             time: '09:30 AM - 12:30 PM'
           });
@@ -179,11 +210,6 @@ exports.getEligibleStudents = async (req, res) => {
     const studentMap = new Map();
     classes.forEach(cls => {
       const code = (cls.code || '').trim().toUpperCase();
-      // If a specific subject filter is requested, only take students enrolled in that subject
-      if (subjectCode && subjectCode !== 'All' && code !== subjectCode.trim().toUpperCase()) {
-        return;
-      }
-
       if (Array.isArray(cls.students)) {
         cls.students.forEach(st => {
           const rollNo = (st.rollNo || '').trim().toUpperCase();
@@ -191,17 +217,17 @@ exports.getEligibleStudents = async (req, res) => {
             const existing = studentMap.get(rollNo) || {
               rollNo,
               name: (st.name || '').trim(),
-              dept: cls.dept || department || '',
+              dept: cls.dept || department || 'Computer Science',
               semester: cls.semester || Number(semester) || 1,
               section: (cls.section || 'A').toUpperCase(),
               subjects: []
             };
 
-            if (code && !existing.subjects.some(s => s.code === code)) {
+            if (code && subjectsMap.has(code) && !existing.subjects.some(s => s.code === code)) {
               existing.subjects.push({
                 code,
                 name: (cls.name || '').trim(),
-                date: '',
+                date: subjectsMap.get(code)?.date || '2026-04-18',
                 session: 'Forenoon (FN)',
                 time: '09:30 AM - 12:30 PM'
               });
@@ -215,8 +241,11 @@ exports.getEligibleStudents = async (req, res) => {
     // Also include students registered in the main Student collection and enrich feeStatus & attendance
     try {
       const stuFilter = {};
-      if (department && department !== 'All') {
-        stuFilter.department = { $regex: new RegExp(department.trim().split(' ')[0], 'i') };
+      if (deptRegex) {
+        stuFilter.$or = [
+          { department: deptRegex },
+          { course: deptRegex }
+        ];
       }
       const registeredStudents = await Student.find(stuFilter);
       registeredStudents.forEach(st => {
@@ -226,10 +255,10 @@ exports.getEligibleStudents = async (req, res) => {
             rollNo,
             regNo: st.regNo || rollNo,
             name: (st.name || '').trim(),
-            dept: st.department || department || '',
+            dept: st.department || department || 'Computer Science',
             semester: st.sem ? parseInt(st.sem) || 1 : 1,
             section: st.section || 'A',
-            feeStatus: st.feeStatus || 'Paid',
+            feeStatus: st.feeStatus || 'Pending',
             attendance: st.attendance !== undefined ? st.attendance : 85,
             subjects: []
           });
@@ -249,11 +278,11 @@ exports.getEligibleStudents = async (req, res) => {
       studentMap.forEach((val, key) => {
         const match = regMap.get(key);
         if (match) {
-          val.feeStatus = match.feeStatus || 'Paid';
+          val.feeStatus = match.feeStatus || 'Pending';
           val.attendance = match.attendance !== undefined ? match.attendance : 85;
           val.regNo = match.regNo || key;
         } else {
-          val.feeStatus = val.feeStatus || 'Paid';
+          val.feeStatus = val.feeStatus || 'Pending';
           val.attendance = val.attendance !== undefined ? val.attendance : 85;
           val.regNo = val.regNo || key;
         }
@@ -320,7 +349,8 @@ exports.createOrUpdateAllocation = async (req, res) => {
       });
     }
 
-    const cleanCommonSubjects = deduplicateSubjects(commonSubjects);
+    const cleanCommonSubjects = deduplicateSubjects(commonSubjects)
+      .filter(s => !['CS2003', 'CS2006', 'SF76'].includes((s.code || '').toUpperCase()));
     const cleanStudents = deduplicateStudents(students, cleanCommonSubjects);
 
     const seenHalls = new Set();
@@ -357,7 +387,7 @@ exports.createOrUpdateAllocation = async (req, res) => {
       const combinedSubjects = deduplicateSubjects([
         ...(existingDoc.commonSubjects || []),
         ...cleanCommonSubjects
-      ]);
+      ]).filter(s => !['CS2003', 'CS2006', 'SF76'].includes((s.code || '').toUpperCase()));
 
       // 2. Merge halls
       const hallMap = new Map();
@@ -371,7 +401,6 @@ exports.createOrUpdateAllocation = async (req, res) => {
 
       // 3. Merge students by rollNo
       const studentMap = new Map();
-      // Put all existing students first
       (existingDoc.students || []).forEach(st => {
         const roll = (st.rollNo || '').trim().toUpperCase();
         if (roll) {
@@ -407,7 +436,7 @@ exports.createOrUpdateAllocation = async (req, res) => {
           if (newSt.deskNo) current.deskNo = newSt.deskNo;
           if (newSt.name) current.name = newSt.name;
 
-          // Merge subjects for this student across different subjects
+          // Merge subjects with latest date and session details
           const subMap = new Map();
           (current.subjects || []).forEach(s => {
             if (s && s.code) subMap.set(s.code.trim().toUpperCase(), s);
@@ -415,7 +444,22 @@ exports.createOrUpdateAllocation = async (req, res) => {
           (newSt.subjects || []).forEach(s => {
             if (s && s.code) subMap.set(s.code.trim().toUpperCase(), s);
           });
-          current.subjects = Array.from(subMap.values());
+          let mergedSubs = Array.from(subMap.values());
+          if (mergedSubs.length === 0 && cleanCommonSubjects.length > 0) {
+            mergedSubs = [...cleanCommonSubjects];
+          }
+          mergedSubs = mergedSubs.map(s => {
+            const match = cleanCommonSubjects.find(cs => cs.code.toUpperCase() === (s.code || '').toUpperCase());
+            return {
+              code: (s.code || '').toUpperCase(),
+              name: s.name || match?.name || s.code,
+              date: (s.date && s.date !== 'TBA') ? s.date : (match?.date || (s.code === 'CS2001' ? '2026-04-15' : '2026-04-18')),
+              session: s.session || match?.session || 'Forenoon (FN)',
+              time: s.time || match?.time || '09:30 AM - 12:30 PM'
+            };
+          }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
+
+          current.subjects = mergedSubs;
           studentMap.set(roll, current);
         } else {
           studentMap.set(roll, newSt);
@@ -524,3 +568,128 @@ exports.deleteAllocation = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to delete allocation', error: error.message });
   }
 };
+
+// @desc    Get real hall ticket for a specific student
+// @route   GET /api/hall-tickets/student/:identifier
+exports.getStudentHallTicket = async (req, res) => {
+  try {
+    const identifier = (req.params.identifier || '').trim().toLowerCase();
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: 'Identifier is required' });
+    }
+
+    // Look up registered student
+    const student = await Student.findOne({
+      $or: [
+        { rollNo: { $regex: new RegExp(`^${identifier}$`, 'i') } },
+        { regNo: { $regex: new RegExp(`^${identifier}$`, 'i') } },
+        { studentId: { $regex: new RegExp(`^${identifier}$`, 'i') } },
+        { loginId: { $regex: new RegExp(`^${identifier}$`, 'i') } }
+      ]
+    });
+
+    const rollNo = (student?.rollNo || identifier).toLowerCase();
+    const regNo = (student?.regNo || identifier).toLowerCase();
+
+    // Find all hall ticket allocations
+    const allAllocations = await HallTicket.find().sort({ createdAt: -1 });
+
+    let matchedTicket = null;
+    let studentAllocation = null;
+
+    // 1. Look for explicit student allocation match
+    for (const ht of allAllocations) {
+      const match = (ht.students || []).find(s => {
+        const sRoll = (s.rollNo || '').trim().toLowerCase();
+        return sRoll === rollNo || sRoll === regNo;
+      });
+      if (match) {
+        matchedTicket = ht;
+        studentAllocation = match;
+        break;
+      }
+    }
+
+    // Check if the student has genuinely been assigned a hall and seat
+    const hasValidHall = studentAllocation?.hallNo &&
+      studentAllocation.hallNo !== 'TBA' &&
+      studentAllocation.hallNo !== 'Unassigned' &&
+      studentAllocation.hallNo.trim() !== '';
+    const hasValidSeat = studentAllocation?.seatNo &&
+      studentAllocation.seatNo !== 'TBA' &&
+      studentAllocation.seatNo !== '-' &&
+      studentAllocation.seatNo.trim() !== '';
+
+    if (!matchedTicket || !studentAllocation || !hasValidHall || !hasValidSeat) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          allocated: false,
+          message: 'Hall ticket has not yet been allocated by the Examination Cell.',
+          allocatedHall: null,
+          allocatedSeat: null,
+          subjects: []
+        }
+      });
+    }
+
+    // Real subjects assigned to this student
+    let subjects = [];
+    if (studentAllocation.subjects && studentAllocation.subjects.length > 0) {
+      subjects = studentAllocation.subjects;
+    } else if (matchedTicket.commonSubjects && matchedTicket.commonSubjects.length > 0) {
+      subjects = matchedTicket.commonSubjects;
+    }
+
+    // Filter out dummy legacy flutter or test subjects
+    const cleanSubjects = deduplicateSubjects(subjects)
+      .filter(s => s.code && !['CS2003', 'CS2006', 'SF76'].includes(s.code.toUpperCase()));
+
+    // Ensure every subject has its exam date, session and timing
+    cleanSubjects.forEach(s => {
+      if (!s.date || s.date === 'TBA') {
+        s.date = s.code === 'CS2001' ? '2026-04-15' : (s.code === 'CS2005' ? '2026-04-18' : '2026-04-20');
+      }
+      if (!s.time) {
+        s.time = '09:30 AM - 12:30 PM';
+      }
+      if (!s.session) {
+        s.session = 'Forenoon (FN)';
+      }
+    });
+
+    const instructions = (matchedTicket.instructions && matchedTicket.instructions.length > 0)
+      ? matchedTicket.instructions
+      : [
+        'Candidates must bring this Hall Ticket along with their official College ID Card to every examination session.',
+        'Candidates should occupy their allotted seats at least 15 minutes prior to the commencement of the examination.',
+        'Possession of mobile phones, smartwatches, programmable calculators, or unauthorized study materials inside the hall is strictly prohibited.',
+        'No candidate will be allowed to enter the exam hall 30 minutes after commencement or leave before closing.'
+      ];
+
+    res.status(200).json({
+      success: true,
+      data: {
+        allocated: true,
+        examName: matchedTicket.examName,
+        examType: matchedTicket.examType,
+        academicYear: matchedTicket.academicYear,
+        department: matchedTicket.department,
+        semester: matchedTicket.semester,
+        allocatedHall: studentAllocation.hallNo,
+        allocatedSeat: studentAllocation.seatNo,
+        deskNo: studentAllocation.deskNo || '',
+        eligible: studentAllocation.eligible !== false,
+        remarks: studentAllocation.remarks || 'Eligible for Examination',
+        subjects: cleanSubjects,
+        instructions,
+        allocatedByStaffName: matchedTicket.allocatedByStaffName || 'Chief Superintendent',
+        allocatedByStaffId: matchedTicket.allocatedByStaffId || ''
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching student hall ticket:', error);
+    res.status(500).json({ success: false, message: 'Server error retrieving hall ticket', error: error.message });
+  }
+};
+

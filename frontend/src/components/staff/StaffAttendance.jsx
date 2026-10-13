@@ -28,6 +28,12 @@ export default function StaffAttendance({ staffUser }) {
   const [historyList, setHistoryList] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Quick Student Add & Auto-Import state
+  const [allRegisteredStudents, setAllRegisteredStudents] = useState([]);
+  const [selectedQuickAddRoll, setSelectedQuickAddRoll] = useState('');
+  const [showQuickAddDropdown, setShowQuickAddDropdown] = useState(false);
+  const [isSyncingRoster, setIsSyncingRoster] = useState(false);
+
   // Fetch classes from backend API
   const fetchClasses = async () => {
     if (!staffUser?.staffId) return;
@@ -65,10 +71,81 @@ export default function StaffAttendance({ staffUser }) {
     }
   };
 
+  // Fetch all registered students for quick add
+  const fetchRegisteredStudents = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/students`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setAllRegisteredStudents(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching registered students:', err);
+    }
+  };
+
   useEffect(() => {
     fetchClasses();
     fetchHistory();
+    fetchRegisteredStudents();
   }, [staffUser?.staffId]);
+
+  // Quick Add a registered student directly to this class
+  const handleQuickAddStudentToClass = async (roll) => {
+    if (!roll || !currentClass) return;
+    const student = allRegisteredStudents.find(s => (s.rollNo || s.regNo || s.studentId) === roll);
+    if (!student) return;
+
+    try {
+      setIsSyncingRoster(true);
+      const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${currentClass.code}/students`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rollNo: student.rollNo || student.regNo || student.studentId,
+          name: student.name,
+          phone: student.phone || '',
+          email: student.email || ''
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSavedSuccessMsg(`Added ${student.name} (${student.rollNo || student.regNo}) to roster! You can now mark attendance.`);
+        setSelectedQuickAddRoll('');
+        setShowQuickAddDropdown(false);
+        fetchClasses();
+      } else {
+        setSubmitError(data.message || 'Failed to add student to class.');
+      }
+    } catch (err) {
+      setSubmitError('Error adding student: ' + err.message);
+    } finally {
+      setIsSyncingRoster(false);
+    }
+  };
+
+  // 1-Click Auto Import all department students into class roster
+  const handleAutoImportDeptStudents = async () => {
+    if (!currentClass) return;
+    try {
+      setIsSyncingRoster(true);
+      setSubmitError('');
+      const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${currentClass.code}/auto-enroll`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSavedSuccessMsg(data.message || 'Department students imported successfully!');
+        fetchClasses();
+      } else {
+        setSubmitError(data.message || 'Auto-import failed.');
+      }
+    } catch (err) {
+      setSubmitError('Error importing students: ' + err.message);
+    } finally {
+      setIsSyncingRoster(false);
+    }
+  };
 
   // Current active class object
   const currentClass = useMemo(() => {
@@ -431,30 +508,104 @@ export default function StaffAttendance({ staffUser }) {
                 <button
                   type="button"
                   onClick={() => handleMarkAll('Present')}
-                  className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-all"
+                  className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
                 >
                   Mark All Present
                 </button>
                 <button
                   type="button"
                   onClick={() => handleMarkAll('Absent')}
-                  className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-all"
+                  className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
                 >
                   Mark All Absent
                 </button>
+
+                <button
+                  type="button"
+                  disabled={isSyncingRoster}
+                  onClick={handleAutoImportDeptStudents}
+                  className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Auto-import registered department students"
+                >
+                  ⚡ Auto-Import Students
+                </button>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAddDropdown(prev => !prev)}
+                    className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add Student</span>
+                  </button>
+
+                  {showQuickAddDropdown && (
+                    <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 z-30 space-y-2 animate-in zoom-in-95 text-left">
+                      <p className="text-[11px] font-extrabold text-slate-800">Quick Add Registered Student</p>
+                      <select
+                        value={selectedQuickAddRoll}
+                        onChange={(e) => {
+                          setSelectedQuickAddRoll(e.target.value);
+                          if (e.target.value) handleQuickAddStudentToClass(e.target.value);
+                        }}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none"
+                      >
+                        <option value="">-- Choose student --</option>
+                        {allRegisteredStudents.map(st => {
+                          const roll = st.rollNo || st.regNo || st.studentId;
+                          return (
+                            <option key={st._id || roll} value={roll}>
+                              {roll} - {st.name}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickAddDropdown(false)}
+                        className="w-full text-center text-[10px] text-slate-400 hover:text-slate-600 font-bold pt-1 cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Student Roster Table */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               {classStudents.length === 0 ? (
-                <div className="p-10 text-center space-y-2">
-                  <p className="text-xs font-semibold text-slate-500">
-                    No students have been enrolled in <strong>{currentClass.name}</strong> yet.
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Go to <strong>My Classes</strong> tab to add students to this class.
-                  </p>
+                <div className="p-10 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-extrabold text-slate-800">
+                      No students enrolled in <strong>{currentClass.name}</strong> yet.
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      You can instantly auto-import all registered department students or pick an existing student below.
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      disabled={isSyncingRoster}
+                      onClick={handleAutoImportDeptStudents}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center gap-2"
+                    >
+                      <span>⚡ Auto-Import Department Students</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickAddDropdown(true)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      + Pick Individual Student
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>

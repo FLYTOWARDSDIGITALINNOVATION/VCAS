@@ -12,8 +12,18 @@ const {
   updateStudentSubmissionStatus,
   quickSetSubmissionsCount,
   removeStudentFromAssignment,
-  importStudentsFromClass
+  importStudentsFromClass,
+  getStudentAssignments,
+  submitStudentAssignment
 } = require("../controllers/assignmentController");
+
+// Student-scoped routes (Registered before :staffId to prevent greedy param matching)
+// GET    /api/assignments/student/:identifier     - list assignments for student
+router.get("/student/:identifier",                 getStudentAssignments);
+
+// POST   /api/assignments/:id/student/:identifier/submit - student submits assignment
+router.post("/:id/student/:identifier/submit",     submitStudentAssignment);
+router.post("/:id/submit",                         submitStudentAssignment);
 
 // Admin routes
 // GET    /api/assignments                         - list all across all staff

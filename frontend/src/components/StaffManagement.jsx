@@ -170,7 +170,8 @@ export default function StaffManagement({ user }) {
   const handleDownloadStaffCredentials = (staff) => {
     const slipText = `
 ================================================================================
-          VIVEKANANDA COLLEGE OF ARTS AND SCIENCE (AUTONOMOUS)
+          VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
+          (AFFILIATED TO MANONMANIAM SUNDARANAR UNIVERSITY)
                       VELLALANKULAM, TAMIL NADU
                  CONFIDENTIAL STAFF CREDENTIAL SLIP
 ================================================================================
@@ -264,7 +265,7 @@ is authorized to export or issue this credential sheet.
       <body>
         <div class="header">
           <div class="title">Vivekananda College of Arts and Science</div>
-          <div class="subtitle">Autonomous Institution • Affiliated with MS University • Vellalankulam</div>
+          <div class="subtitle">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</div>
           <div class="badge">Official Staff Access Pass & Security Credentials</div>
         </div>
         <div class="meta-bar">

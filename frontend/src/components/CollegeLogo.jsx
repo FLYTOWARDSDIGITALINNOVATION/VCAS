@@ -123,18 +123,21 @@ export default function CollegeLogo({
 
       {/* College Title & Campus Information */}
       {showText && (
-        <div className={`leading-tight ${textClassName}`}>
-          <div className="flex items-center gap-1.5">
-            <h1 className="font-extrabold tracking-tight text-slate-900 text-xs sm:text-sm">
-              Vivekanandha College
-            </h1>
-            <span className="text-[9px] font-black uppercase px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded border border-amber-300">
-              Autonomous
+        <div className={`leading-tight min-w-0 flex-1 ${textClassName}`}>
+          <h1 className="font-extrabold tracking-tight text-slate-900 text-xs sm:text-sm truncate leading-snug">
+            Vivekanandha College
+          </h1>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span 
+              className="text-[9px] font-bold uppercase px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200 shrink-0"
+              title="Affiliated with Manonmaniam Sundaranar University"
+            >
+              MSU Affiliated
+            </span>
+            <span className="text-[10px] text-slate-400 font-semibold truncate">
+              VCAS
             </span>
           </div>
-          <p className="text-[10px] text-slate-500 font-semibold leading-tight mt-0.5">
-            of Arts and Sciences • VCAS
-          </p>
         </div>
       )}
     </div>

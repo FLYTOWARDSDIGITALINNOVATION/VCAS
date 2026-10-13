@@ -7,11 +7,15 @@ const {
   toggleLock,
   listMarksheets,
   syncAssignmentsToInternalMarks,
-  getAllInternalMarks
+  getAllInternalMarks,
+  getStudentInternalMarks
 } = require("../controllers/internalMarksController");
 
 // GET  /api/internal-marks                              - get all marksheets for Admin & Super-Admin
 router.get("/",                                   getAllInternalMarks);
+
+// GET  /api/internal-marks/student/:identifier           - get all internal marks for a specific student
+router.get("/student/:identifier",                 getStudentInternalMarks);
 
 // GET  /api/internal-marks/:staffId                     - list all marksheets (no students)
 router.get("/:staffId",                           listMarksheets);

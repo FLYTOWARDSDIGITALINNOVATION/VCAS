@@ -36,7 +36,14 @@ import {
   IdCard,
   IndianRupee,
   GraduationCap,
-  Search
+  Search,
+  Upload,
+  FileUp,
+  Send,
+  Check,
+  RefreshCw,
+  FolderOpen,
+  ExternalLink
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000';
@@ -73,13 +80,30 @@ export default function StudentDashboard({ student, onLogout }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [attendanceData, setAttendanceData] = useState([]);
+  const [attSummary, setAttSummary] = useState({ totalClasses: 0, present: 0, absent: 0, late: 0, percentage: 85, subjectBreakdown: [] });
   const [marksData, setMarksData] = useState([]);
-  const [allocatedHall, setAllocatedHall] = useState('Exam Hall 101 (Main Block)');
-  const [allocatedSeat, setAllocatedSeat] = useState('H101-14');
+  const [assignmentsList, setAssignmentsList] = useState([]);
+  const [liveTimetable, setLiveTimetable] = useState({});
+  const [allocatedHall, setAllocatedHall] = useState('Exam Hall 101');
+  const [allocatedSeat, setAllocatedSeat] = useState('A1');
+  const [hallTicketInfo, setHallTicketInfo] = useState(null);
+  const [hallTicketSubjects, setHallTicketSubjects] = useState([]);
+  const [hallTicketInstructions, setHallTicketInstructions] = useState([]);
+  const [allocatedStaffName, setAllocatedStaffName] = useState('Chief Superintendent');
   const [liveExams, setLiveExams] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedDay, setSelectedDay] = useState('Monday');
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const today = dayNames[new Date().getDay()];
+    return (today === 'Sunday' || today === 'Saturday') ? 'Monday' : today;
+  });
   const [submittedAssignmentIds, setSubmittedAssignmentIds] = useState(new Set());
+  const [assignmentFilter, setAssignmentFilter] = useState('ALL');
+  const [submittingAssignment, setSubmittingAssignment] = useState(null);
+  const [submissionFile, setSubmissionFile] = useState('');
+  const [submissionComment, setSubmissionComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
 
   // Student fields with safe defaults
   const regNo = student?.regNo || student?.studentId || student?.id || 'REG2026001';
@@ -92,7 +116,8 @@ export default function StudentDashboard({ student, onLogout }) {
   const course = student?.course || 'B.Sc. COMPUTER SCIENCE';
   const sem = student?.sem || student?.semester || '1st Sem';
   const status = student?.status || 'Active';
-  const attendance = student?.attendance !== undefined ? student.attendance : 85;
+  const fallbackAttendance = student?.attendance !== undefined ? student.attendance : 85;
+  const attendance = attSummary.totalClasses > 0 ? attSummary.percentage : fallbackAttendance;
   const feeStatus = student?.feeStatus || 'Paid';
 
   // Detailed student statutory & demographic information
@@ -114,89 +139,171 @@ export default function StudentDashboard({ student, onLogout }) {
   const email = student?.email || '—';
   const address = student?.address || '—';
 
-  // Fetch student's real internal marks & attendance if available
-  useEffect(() => {
+  // Fetch all student details live from staff side: Attendance, Marks, Timetable, Assignments
+  const fetchAllStudentData = () => {
     setLoading(true);
-    Promise.all([
-      fetch(`${API_BASE}/api/attendance`).then(r => r.json()).catch(() => ({ sessions: [] })),
-      fetch(`${API_BASE}/api/internal-marks`).then(r => r.json()).catch(() => ({ data: [] }))
-    ]).then(([attRes, marksRes]) => {
-      // Find matching attendance
-      const sessions = attRes.sessions || attRes.data || [];
-      const myAtt = [];
-      const rLower = (rollNo || '').toLowerCase();
-      const regLower = (regNo || '').toLowerCase();
-      sessions.forEach(sess => {
-        (sess.records || []).forEach(r => {
-          const recRoll = (r.rollNo || '').toLowerCase();
-          if (recRoll && (recRoll === rLower || recRoll === regLower)) {
-            myAtt.push({
-              date: sess.date || '—',
-              slot: sess.slot || 'Hour 1',
-              classCode: sess.classCode || sess.className || 'CS-101',
-              status: r.status || 'Present'
-            });
-          }
-        });
-      });
-      setAttendanceData(myAtt);
+    const idToFetch = (rollNo && rollNo !== '—') ? rollNo : regNo;
 
-      // Find matching marks
-      const allMarks = marksRes.data || marksRes.marks || [];
-      const myMarks = [];
-      allMarks.forEach(record => {
-        (record.students || []).forEach(st => {
-          const stRoll = (st.rollNo || '').toLowerCase();
-          const stReg = (st.regNo || '').toLowerCase();
-          if ((stRoll && stRoll === rLower) || (stReg && stReg === regLower)) {
-            myMarks.push({
-              subject: record.subjectName || record.classCode || 'Core Course',
-              examType: record.examType || 'Continuous Assessment',
-              maxMarks: record.maxMarks || 50,
-              marksObtained: st.marksObtained !== undefined ? st.marksObtained : 42,
-              status: st.status || 'Pass'
-            });
-          }
+    Promise.all([
+      // 1. Live Attendance marked by Staff
+      fetch(`${API_BASE}/api/attendance/student/${encodeURIComponent(idToFetch)}`)
+        .then(r => r.json())
+        .catch(() => null),
+
+      // 2. Live Internal Marks entered by Staff
+      fetch(`${API_BASE}/api/internal-marks/student/${encodeURIComponent(idToFetch)}`)
+        .then(r => r.json())
+        .catch(() => null),
+
+      // 3. Live Assignments created by Staff
+      fetch(`${API_BASE}/api/assignments/student/${encodeURIComponent(idToFetch)}`)
+        .then(r => r.json())
+        .catch(() => null),
+
+      // 4. Live Timetable configured by Staff
+      fetch(`${API_BASE}/api/timetable/student/${encodeURIComponent(idToFetch)}`)
+        .then(r => r.json())
+        .catch(() => null),
+
+      // 5. Real Hall Ticket allocated by Staff
+      fetch(`${API_BASE}/api/hall-tickets/student/${encodeURIComponent(idToFetch)}`)
+        .then(r => r.json())
+        .catch(() => null),
+
+      // 6. Live Exams
+      fetch(`${API_BASE}/api/exams`)
+        .then(r => r.json())
+        .catch(() => null)
+    ]).then(([attRes, marksRes, assignRes, ttRes, htRes, exRes]) => {
+      // 1. Process Attendance
+      if (attRes && attRes.success) {
+        setAttendanceData(attRes.history || []);
+        setAttSummary({
+          totalClasses: attRes.totalClasses || 0,
+          present: attRes.present || 0,
+          absent: attRes.absent || 0,
+          late: attRes.late || 0,
+          percentage: attRes.percentage !== undefined ? attRes.percentage : fallbackAttendance,
+          subjectBreakdown: attRes.subjectBreakdown || []
         });
-      });
-      setMarksData(myMarks);
+      }
+
+      // 2. Process Internal Marks
+      if (marksRes && marksRes.success && Array.isArray(marksRes.marksheets)) {
+        setMarksData(marksRes.marksheets);
+      }
+
+      // 3. Process Assignments
+      if (assignRes && assignRes.success && Array.isArray(assignRes.assignments)) {
+        setAssignmentsList(assignRes.assignments);
+      }
+
+      // 4. Process Timetable
+      if (ttRes && ttRes.success && ttRes.schedule) {
+        setLiveTimetable(ttRes.schedule);
+      }
+
+      // 5. Process Real Hall Ticket Data from Staff
+      if (htRes && htRes.success && htRes.data) {
+        const d = htRes.data;
+        setHallTicketInfo(d);
+        if (d.allocated && d.allocatedHall) {
+          setAllocatedHall(d.allocatedHall);
+          setAllocatedSeat(d.allocatedSeat);
+        } else {
+          setAllocatedHall('Unassigned');
+          setAllocatedSeat('TBA');
+        }
+        if (d.allocatedByStaffName) setAllocatedStaffName(d.allocatedByStaffName);
+        if (d.allocated && Array.isArray(d.subjects) && d.subjects.length > 0) {
+          setHallTicketSubjects(d.subjects.map(s => ({
+            date: s.date || 'TBA',
+            session: s.session ? `${s.session} (${s.time || '09:30 AM - 12:30 PM'})` : (s.time || '09:30 AM - 12:30 PM'),
+            code: s.code,
+            subject: s.name,
+            hall: d.allocatedHall || 'Hall TBA'
+          })));
+        } else {
+          setHallTicketSubjects([]);
+        }
+        if (Array.isArray(d.instructions) && d.instructions.length > 0) {
+          setHallTicketInstructions(d.instructions);
+        }
+      } else {
+        setHallTicketInfo(null);
+        setAllocatedHall('Unassigned');
+        setAllocatedSeat('TBA');
+        setHallTicketSubjects([]);
+      }
+
+      // 6. Process Live Exams
+      if (exRes && exRes.success && Array.isArray(exRes.exams) && exRes.exams.length > 0) {
+        setLiveExams(exRes.exams);
+      }
+
       setLoading(false);
-    }).catch(() => {
+    }).catch(err => {
+      console.error('Error fetching live student data:', err);
       setLoading(false);
     });
+  };
 
-    // Fetch live hall ticket allocation for seating and room
-    fetch(`${API_BASE}/api/hall-tickets`)
-      .then(r => r.json())
-      .then(htRes => {
-        if (htRes.success && Array.isArray(htRes.data)) {
-          const rLower = (rollNo || '').toLowerCase();
-          const regLower = (regNo || '').toLowerCase();
-          for (const plan of htRes.data) {
-            const match = (plan.students || []).find(s => {
-              const sRoll = (s.rollNo || '').toLowerCase();
-              return sRoll && (sRoll === rLower || sRoll === regLower);
-            });
-            if (match && match.hallNo && match.hallNo !== 'Unassigned') {
-              setAllocatedHall(match.hallNo);
-              if (match.seatNo && match.seatNo !== '—') setAllocatedSeat(match.seatNo);
-              break;
-            }
-          }
-        }
-      })
-      .catch(() => {});
-
-    // Fetch live exam schedules
-    fetch(`${API_BASE}/api/exams`)
-      .then(r => r.json())
-      .then(exRes => {
-        if (exRes.success && Array.isArray(exRes.exams) && exRes.exams.length > 0) {
-          setLiveExams(exRes.exams);
-        }
-      })
-      .catch(() => {});
+  useEffect(() => {
+    fetchAllStudentData();
   }, [rollNo, regNo]);
+
+  // Handle student assignment submission
+  const handleOpenSubmitModal = (assignment) => {
+    setSubmittingAssignment(assignment);
+    const subCode = assignment.subjectCode || assignment.code || 'ASG';
+    setSubmissionFile(`${rollNo && rollNo !== '—' ? rollNo : regNo}_${subCode}_Submission.pdf`);
+    setSubmissionComment('');
+  };
+
+  const handleSubmitAssignmentSolution = async (e) => {
+    e.preventDefault();
+    if (!submittingAssignment) return;
+    setIsSubmitting(true);
+
+    try {
+      const idToUse = (rollNo && rollNo !== '—') ? rollNo : regNo;
+      const targetId = submittingAssignment._id || submittingAssignment.id;
+      const res = await fetch(`${API_BASE}/api/assignments/${targetId}/student/${encodeURIComponent(idToUse)}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: submissionFile || 'submission_file.pdf',
+          fileSize: '1.2 MB',
+          comment: submissionComment,
+          studentName: name
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAssignmentsList(prev => prev.map(a => {
+          if ((a._id && a._id === targetId) || (a.id && a.id === targetId)) {
+            return {
+              ...a,
+              submissionStatus: 'Submitted',
+              submittedAt: new Date().toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              fileName: submissionFile || 'submission_file.pdf'
+            };
+          }
+          return a;
+        }));
+        setSubmittedAssignmentIds(prev => new Set([...prev, targetId]));
+        setToastMsg(`Assignment "${submittingAssignment.title}" submitted successfully!`);
+        setTimeout(() => setToastMsg(''), 4000);
+        setSubmittingAssignment(null);
+      } else {
+        alert(data.message || 'Failed to submit assignment.');
+      }
+    } catch (err) {
+      alert('Error submitting solution: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // Print Student Slip Handler
   const handlePrintStudentSlip = () => {
@@ -245,7 +352,7 @@ export default function StudentDashboard({ student, onLogout }) {
             ${getCollegeLogoHtml(48)}
             <div>
               <div class="title">Vivekanandha College of Arts and Sciences</div>
-              <div class="sub">Autonomous Institution • Vellalankulam Campus</div>
+              <div class="sub">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</div>
             </div>
           </div>
           <div class="badge">Official Student Slip & Academic Pass</div>
@@ -342,7 +449,8 @@ export default function StudentDashboard({ student, onLogout }) {
   const handleDownloadStudentSlip = () => {
     const text = `
 ================================================================================
-VIVEKANANDHA COLLEGE OF ARTS AND SCIENCES (AUTONOMOUS)
+VIVEKANANDHA COLLEGE OF ARTS AND SCIENCES
+(AFFILIATED TO MANONMANIAM SUNDARANAR UNIVERSITY)
 OFFICIAL STUDENT CREDENTIAL SLIP & RECORD PASS
 ================================================================================
 
@@ -409,7 +517,7 @@ CONTACT:
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Autonomous Examination Hall Ticket - ${name} (${regNo})</title>
+        <title>University Examination Hall Ticket - ${name} (${regNo})</title>
         <style>
           @page { size: A4; margin: 12mm; }
           body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 0; padding: 20px; font-size: 12px; }
@@ -440,10 +548,10 @@ CONTACT:
               ${getCollegeLogoHtml(46)}
               <div>
                 <div class="title">Vivekanandha College of Arts and Sciences</div>
-                <div class="sub">Autonomous Institution • Affiliated to Periyar University</div>
+                <div class="sub">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</div>
               </div>
             </div>
-            <div class="badge">End Semester Autonomous Examination Hall Ticket</div>
+            <div class="badge">End Semester University Examination Hall Ticket</div>
           </div>
 
           <div class="details-grid">
@@ -469,63 +577,35 @@ CONTACT:
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Session</th>
+                <th>Session & Time</th>
                 <th>Subject Code</th>
                 <th>Course / Subject Title</th>
                 <th>Invigilator Sign</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>12/10/2026</td>
-                <td>FN (10:00 AM - 01:00 PM)</td>
-                <td>26CS301</td>
-                <td style="text-align:left;font-weight:700;">Data Structures & Algorithms</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>14/10/2026</td>
-                <td>FN (10:00 AM - 01:00 PM)</td>
-                <td>26CS302</td>
-                <td style="text-align:left;font-weight:700;">Database Management Systems</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>16/10/2026</td>
-                <td>FN (10:00 AM - 01:00 PM)</td>
-                <td>26CS303</td>
-                <td style="text-align:left;font-weight:700;">Operating Systems & Architecture</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>18/10/2026</td>
-                <td>FN (10:00 AM - 01:00 PM)</td>
-                <td>26CS304</td>
-                <td style="text-align:left;font-weight:700;">Web Technology & Full Stack Lab</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>20/10/2026</td>
-                <td>FN (10:00 AM - 01:00 PM)</td>
-                <td>26CS305</td>
-                <td style="text-align:left;font-weight:700;">Software Engineering & Testing</td>
-                <td></td>
-              </tr>
+              ${activeExamTimetable.map(e => `
+                <tr>
+                  <td style="font-weight:700;">${e.date}</td>
+                  <td>${e.session}</td>
+                  <td style="font-family:monospace;font-weight:800;color:#1e3a8a;">${e.code}</td>
+                  <td style="text-align:left;font-weight:700;">${e.subject}</td>
+                  <td>__________</td>
+                </tr>
+              `).join('')}
             </tbody>
           </table>
 
           <div class="instructions">
             <strong>Important Instructions for Candidate:</strong>
             <ul>
-              <li>Candidates must bring this Hall Ticket along with their College ID Card for every exam session.</li>
-              <li>Entry into the examination hall is prohibited after 30 minutes of commencement.</li>
-              <li>Possession of mobile phones, smartwatches, or programmable calculators inside the hall is strictly prohibited.</li>
+              ${activeInstructions.map(inst => `<li>${inst}</li>`).join('')}
             </ul>
           </div>
 
           <div class="signatures">
             <div>Signature of Candidate</div>
-            <div>Chief Superintendent</div>
+            <div>${allocatedStaffName || 'Chief Superintendent'}</div>
             <div>Controller of Examinations</div>
           </div>
         </div>
@@ -537,62 +617,110 @@ CONTACT:
     printWindow.document.close();
   };
 
-  const weeklyTimetable = {
+  const DEFAULT_WEEKLY_TIMETABLE = {
     'Monday': [
-      { slot: 1, time: '8:30 - 9:20 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory' },
-      { slot: 2, time: '9:20 - 10:10 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory' },
-      { slot: 3, time: '10:10 - 11:00 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory' },
-      { slot: 4, time: '11:15 - 12:05 PM', code: 'CS303L', subject: 'Data Structures Lab', faculty: 'Dr. K. Ramesh', room: 'CS Lab 2', type: 'lab' },
-      { slot: 5, time: '12:05 - 12:55 PM', code: 'CS303L', subject: 'Data Structures Lab', faculty: 'Dr. K. Ramesh', room: 'CS Lab 2', type: 'lab' },
-      { slot: 6, time: '1:45 - 2:35 PM', code: 'ENG102', subject: 'Professional Communication', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory' }
+      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 3, time: '10:10 – 11:00 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
+      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS303L', subject: 'Data Structures Lab', faculty: 'Dr. K. Ramesh', room: 'CS Lab 2', type: 'lab', color: 'emerald' },
+      { slot: 5, time: '12:05 – 12:55 PM', code: 'CS303L', subject: 'Data Structures Lab', faculty: 'Dr. K. Ramesh', room: 'CS Lab 2', type: 'lab', color: 'emerald' },
+      { slot: 6, time: '1:45 – 2:35 PM', code: 'ENG102', subject: 'Professional Communication', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' }
     ],
     'Tuesday': [
-      { slot: 1, time: '8:30 - 9:20 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory' },
-      { slot: 2, time: '9:20 - 10:10 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory' },
-      { slot: 3, time: '10:10 - 11:00 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory' },
-      { slot: 4, time: '11:15 - 12:05 PM', code: 'CS305L', subject: 'RDBMS & SQL Lab', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab' },
-      { slot: 5, time: '12:05 - 12:55 PM', code: 'CS305L', subject: 'RDBMS & SQL Lab', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab' },
-      { slot: 6, time: '1:45 - 2:35 PM', code: 'EVS101', subject: 'Environmental Studies', faculty: 'Dr. G. Lakshmi', room: 'LH-102', type: 'theory' }
+      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
+      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS305L', subject: 'RDBMS & SQL Lab', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab', color: 'emerald' },
+      { slot: 5, time: '12:05 – 12:55 PM', code: 'CS305L', subject: 'RDBMS & SQL Lab', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab', color: 'emerald' },
+      { slot: 6, time: '1:45 – 2:35 PM', code: 'EVS101', subject: 'Environmental Studies', faculty: 'Dr. G. Lakshmi', room: 'LH-102', type: 'theory', color: 'amber' }
     ],
     'Wednesday': [
-      { slot: 1, time: '8:30 - 9:20 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory' },
-      { slot: 2, time: '9:20 - 10:10 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory' },
-      { slot: 3, time: '10:10 - 11:00 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory' },
-      { slot: 4, time: '11:15 - 12:05 PM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory' },
-      { slot: 5, time: '12:05 - 12:55 PM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory' },
-      { slot: 6, time: '1:45 - 2:35 PM', code: 'LIB101', subject: 'Library & Research Hour', faculty: 'Librarian', room: 'Central Library', type: 'theory' }
+      { slot: 1, time: '8:30 – 9:20 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
+      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
+      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 5, time: '12:05 – 12:55 PM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 6, time: '1:45 – 2:35 PM', code: 'LIB101', subject: 'Library & Research Hour', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' }
     ],
     'Thursday': [
-      { slot: 1, time: '8:30 - 9:20 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory' },
-      { slot: 2, time: '9:20 - 10:10 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory' },
-      { slot: 3, time: '10:10 - 11:00 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory' },
-      { slot: 4, time: '11:15 - 12:05 PM', code: 'CS307L', subject: 'Web Development Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab' },
-      { slot: 5, time: '12:05 - 12:55 PM', code: 'CS307L', subject: 'Web Development Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab' },
-      { slot: 6, time: '1:45 - 2:35 PM', code: 'SEM101', subject: 'Student Seminar & Presentation', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory' }
+      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 2, time: '9:20 – 10:10 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
+      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
+      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS307L', subject: 'Web Development Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab', color: 'emerald' },
+      { slot: 5, time: '12:05 – 12:55 PM', code: 'CS307L', subject: 'Web Development Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab', color: 'emerald' },
+      { slot: 6, time: '1:45 – 2:35 PM', code: 'SEM101', subject: 'Student Seminar & Presentation', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'amber' }
     ],
     'Friday': [
-      { slot: 1, time: '8:30 - 9:20 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory' },
-      { slot: 2, time: '9:20 - 10:10 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory' },
-      { slot: 3, time: '10:10 - 11:00 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory' },
-      { slot: 4, time: '11:15 - 12:05 PM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory' },
-      { slot: 5, time: '12:05 - 12:55 PM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory' },
-      { slot: 6, time: '1:45 - 2:35 PM', code: 'SPO101', subject: 'Physical Education / Sports', faculty: 'Director of PE', room: 'Sports Ground', type: 'theory' }
+      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
+      { slot: 5, time: '12:05 – 12:55 PM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
+      { slot: 6, time: '1:45 – 2:35 PM', code: 'SPO101', subject: 'Physical Education / Sports', faculty: 'Director of PE', room: 'Sports Ground', type: 'theory', color: 'amber' }
+    ],
+    'Saturday': [
+      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS308', subject: 'Cloud Computing & DevOps', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS309', subject: 'Technical Soft Skills & Aptitude', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' },
+      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS310', subject: 'Mentorship & Project Lab', faculty: 'Dr. R. Suresh', room: 'CS Lab 1', type: 'lab', color: 'emerald' }
     ]
   };
 
-  const studentAssignments = [
-    { id: 'as-1', code: 'CS301', subject: 'Data Structures', title: 'Binary Search Tree & Graph Traversal Implementation', dueDate: '15/10/2026', maxMarks: 20, defaultStatus: 'Submitted', score: '19/20' },
-    { id: 'as-2', code: 'CS302', subject: 'Database Management', title: 'Normalization up to BCNF & Schema Design Project', dueDate: '18/10/2026', maxMarks: 20, defaultStatus: 'Submitted', score: '18/20' },
-    { id: 'as-3', code: 'CS304', subject: 'Operating Systems', title: 'Process Scheduling Algorithms Simulation in C', dueDate: '22/10/2026', maxMarks: 25, defaultStatus: 'Pending', score: 'Pending' },
-    { id: 'as-4', code: 'CS306', subject: 'Web Technology', title: 'Responsive Portfolio with HTML5, CSS & React', dueDate: '26/10/2026', maxMarks: 25, defaultStatus: 'Pending', score: 'Pending' }
+  const DEFAULT_STUDENT_ASSIGNMENTS = [
+    { id: 'as-1', _id: 'as-1', code: 'CS301', subject: 'Data Structures', title: 'Binary Search Tree & Graph Traversal Implementation', dueDate: '15/10/2026', maxMarks: 20, defaultStatus: 'Submitted', submissionStatus: 'Submitted', score: '19/20', marksAwarded: 19, staffName: 'Dr. K. Ramesh' },
+    { id: 'as-2', _id: 'as-2', code: 'CS302', subject: 'Database Management', title: 'Normalization up to BCNF & Schema Design Project', dueDate: '18/10/2026', maxMarks: 20, defaultStatus: 'Submitted', submissionStatus: 'Submitted', score: '18/20', marksAwarded: 18, staffName: 'Prof. M. Priya' },
+    { id: 'as-3', _id: 'as-3', code: 'CS304', subject: 'Operating Systems', title: 'Process Scheduling Algorithms Simulation in C', dueDate: '22/10/2026', maxMarks: 25, defaultStatus: 'Pending Submission', submissionStatus: 'Pending Submission', score: 'Pending', marksAwarded: null, staffName: 'Dr. R. Suresh' },
+    { id: 'as-4', _id: 'as-4', code: 'CS306', subject: 'Web Technology', title: 'Responsive Portfolio with HTML5, CSS & React', dueDate: '26/10/2026', maxMarks: 25, defaultStatus: 'Pending Submission', submissionStatus: 'Pending Submission', score: 'Pending', marksAwarded: null, staffName: 'Mr. P. Vijay' }
   ];
 
-  const examTimetable = [
-    { date: '12/10/2026', session: 'FN (10:00 AM - 01:00 PM)', code: '26CS301', subject: 'Data Structures & Algorithms', hall: 'Main Exam Hall (Hall 2)' },
-    { date: '14/10/2026', session: 'FN (10:00 AM - 01:00 PM)', code: '26CS302', subject: 'Database Management Systems', hall: 'Main Exam Hall (Hall 2)' },
-    { date: '16/10/2026', session: 'FN (10:00 AM - 01:00 PM)', code: '26CS303', subject: 'Operating Systems & Architecture', hall: 'Main Exam Hall (Hall 2)' },
-    { date: '18/10/2026', session: 'FN (10:00 AM - 01:00 PM)', code: '26CS304', subject: 'Web Technology & Design', hall: 'Main Exam Hall (Hall 2)' },
-    { date: '20/10/2026', session: 'FN (10:00 AM - 01:00 PM)', code: '26CS305', subject: 'Discrete Mathematics', hall: 'Main Exam Hall (Hall 2)' }
+  // Helper getters strictly using live staff records (only real enrolled classes)
+  const currentDaySlots = (liveTimetable && Array.isArray(liveTimetable[selectedDay]))
+    ? liveTimetable[selectedDay]
+    : [];
+
+  const weeklyTimetable = liveTimetable || {
+    Monday: [],
+    Tuesday: [],
+    Wednesday: [],
+    Thursday: [],
+    Friday: [],
+    Saturday: []
+  };
+
+  const studentAssignments = assignmentsList.length > 0
+    ? assignmentsList.map(a => ({
+        id: a._id || a.id,
+        _id: a._id || a.id,
+        code: a.subjectCode || 'GEN101',
+        subject: a.subjectName || a.subjectCode || 'General Subject',
+        title: a.title,
+        description: a.description || '',
+        dueDate: a.dueDate,
+        maxMarks: a.totalMarks || 20,
+        staffName: a.staffName || 'Faculty',
+        defaultStatus: a.submissionStatus || 'Pending Submission',
+        submissionStatus: a.submissionStatus || 'Pending Submission',
+        score: a.marksAwarded !== null && a.marksAwarded !== undefined ? `${a.marksAwarded}/${a.totalMarks || 20}` : (a.submissionStatus === 'Submitted' ? 'Under Review' : 'Pending'),
+        marksAwarded: a.marksAwarded,
+        submittedAt: a.submittedAt || '--',
+        fileName: a.fileName || '--',
+        attachmentName: a.attachmentName || '',
+        attachmentData: a.attachmentData || '',
+        isOverdue: a.isOverdue
+      }))
+    : DEFAULT_STUDENT_ASSIGNMENTS;
+
+  const effectiveAttendance = attendance;
+
+  // Real examination timetable only populated after staff allocates hall ticket
+  const activeExamTimetable = (hallTicketInfo?.allocated && hallTicketSubjects.length > 0)
+    ? hallTicketSubjects
+    : [];
+
+  const activeInstructions = hallTicketInstructions.length > 0 ? hallTicketInstructions : [
+    'Candidate must produce this Hall Ticket along with College Identity Card at each session.',
+    'Candidates should occupy their allotted seats at least 15 minutes prior to commencement.',
+    'Possession of mobile phones, smartwatches, programmable calculators, or study materials inside the hall is strictly prohibited.',
+    'No candidate will be allowed to enter the exam hall 30 minutes after commencement or leave before closing.'
   ];
 
   // Sidebar Component Matching Admin Style Exactly
@@ -600,7 +728,7 @@ CONTACT:
     <div className="flex flex-col justify-between h-full bg-white">
       <div>
         {/* Sticky Header Matching Admin */}
-        <div className="sticky top-0 z-20 bg-white border-b border-slate-100 p-5 sm:p-6 flex items-center justify-between shadow-2xs">
+        <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-4 sm:px-5 sm:py-5 flex items-center justify-between shadow-2xs min-w-0">
           <CollegeLogo size="md" showText={true} />
           <button 
             onClick={() => setMobileOpen(false)}
@@ -845,10 +973,12 @@ CONTACT:
                 >
                   <div>
                     <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-2">ATTENDANCE RATE</p>
-                    <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">{attendance}%</p>
+                    <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">{effectiveAttendance}%</p>
                     <p className="text-xs font-semibold flex items-center gap-1 text-emerald-600">
                       <TrendingUp className="w-3.5 h-3.5" />
-                      {attendance >= 75 ? 'Eligibility Cleared' : 'Shortage Alert'}
+                      {attSummary.totalClasses > 0 
+                        ? `${attSummary.present + attSummary.late}/${attSummary.totalClasses} classes attended` 
+                        : (effectiveAttendance >= 75 ? 'Eligibility Cleared' : 'Shortage Alert')}
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center shadow-xs shrink-0">
@@ -899,7 +1029,7 @@ CONTACT:
                     <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-2">FEE CLEARANCE</p>
                     <p className="text-2xl font-extrabold text-emerald-600 leading-none mb-2">{feeStatus}</p>
                     <p className="text-xs font-semibold flex items-center gap-1 text-emerald-600">
-                      Autonomous Exams Cleared
+                      Exam Clearance Verified
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
@@ -914,9 +1044,11 @@ CONTACT:
                 >
                   <div>
                     <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-2">INTERNAL MARKS</p>
-                    <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">Active</p>
+                    <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">
+                      {marksData.length > 0 ? `${marksData.length} Subjects` : 'Active'}
+                    </p>
                     <p className="text-xs font-semibold flex items-center gap-1 text-indigo-600">
-                      Continuous Assessment
+                      {marksData.length > 0 ? 'Faculty Verified' : 'Continuous Assessment'}
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow-xs shrink-0">
@@ -924,16 +1056,18 @@ CONTACT:
                   </div>
                 </div>
 
-                {/* 6. Current Semester */}
+                {/* 6. Timetable */}
                 <div 
                   onClick={() => setActiveNav('Timetable')}
                   className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all duration-200 flex items-start justify-between cursor-pointer hover:border-blue-300"
                 >
                   <div>
                     <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-2">TIMETABLE</p>
-                    <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">6 Periods</p>
+                    <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">
+                      {currentDaySlots.length} Periods
+                    </p>
                     <p className="text-xs font-semibold flex items-center gap-1 text-teal-600">
-                      Monday to Friday
+                      {selectedDay} Schedule
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-teal-500 text-white flex items-center justify-center shadow-xs shrink-0">
@@ -948,9 +1082,11 @@ CONTACT:
                 >
                   <div>
                     <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-2">ASSIGNMENTS</p>
-                    <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">4 Active</p>
+                    <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">
+                      {studentAssignments.length} Assigned
+                    </p>
                     <p className="text-xs font-semibold flex items-center gap-1 text-purple-600">
-                      2 Submitted · 2 Pending
+                      {studentAssignments.filter(a => a.submissionStatus === 'Submitted' || a.submissionStatus === 'Graded').length} Submitted · {studentAssignments.filter(a => a.submissionStatus !== 'Submitted' && a.submissionStatus !== 'Graded').length} Pending
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
@@ -967,7 +1103,7 @@ CONTACT:
                     <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-2">HALL TICKET</p>
                     <p className="text-2xl font-extrabold text-slate-900 leading-none mb-2">Issued</p>
                     <p className="text-xs font-semibold flex items-center gap-1 text-rose-600">
-                      Autonomous Exam Ready
+                      University Exam Ready
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shadow-xs shrink-0">
@@ -983,7 +1119,7 @@ CONTACT:
                   <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
                     Quick Student Services
                   </h3>
-                  <span className="text-xs font-medium text-slate-400">Autonomous Self-Service</span>
+                  <span className="text-xs font-medium text-slate-400">Student Self-Service</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
@@ -1213,7 +1349,7 @@ CONTACT:
                     <CollegeLogo size="sm" showText={false} />
                     <div>
                       <h4 className="text-base font-black text-slate-900 uppercase">Vivekanandha College of Arts and Sciences</h4>
-                      <p className="text-xs text-slate-500">Autonomous Institution • Vellalankulam Campus</p>
+                      <p className="text-xs text-slate-500">Affiliated with Manonmaniam Sundaranar University • Vellalankulam Campus</p>
                     </div>
                   </div>
 
@@ -1260,53 +1396,152 @@ CONTACT:
           {/* ─────────────────────────────────────────────────────────── */}
           {activeNav === 'Attendance' && (
             <div className="space-y-6 w-full max-w-7xl mx-auto animate-fadeIn">
-              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-3">
+              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
+                
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-5 gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">Student Attendance Tracker</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Verified class hour attendance records for current semester.</p>
+                    <div className="flex items-center gap-2">
+                      <CheckSquare className="w-5 h-5 text-blue-600" />
+                      <h3 className="text-lg font-black text-slate-900">Live Student Attendance Tracker</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Hour-by-hour classroom and laboratory attendance verified by faculty.
+                    </p>
                   </div>
-                  <div className="px-3.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black">
-                    Current Rate: {attendance}%
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={fetchAllStudentData}
+                      disabled={loading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+                      <span>Sync</span>
+                    </button>
+                    <div className={`px-4 py-1.5 rounded-xl text-xs font-black border ${
+                      effectiveAttendance >= 75 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}>
+                      Current Rate: {effectiveAttendance}% ({effectiveAttendance >= 75 ? 'Eligible' : 'Shortage'})
+                    </div>
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
-                        <th className="py-3 px-4">Date</th>
-                        <th className="py-3 px-4">Hour / Period</th>
-                        <th className="py-3 px-4">Course / Class</th>
-                        <th className="py-3 px-4 text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {attendanceData.length > 0 ? (
-                        attendanceData.map((att, i) => (
-                          <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3 px-4 font-medium text-slate-800">{att.date}</td>
-                            <td className="py-3 px-4 text-slate-600">{att.slot}</td>
-                            <td className="py-3 px-4 font-bold text-blue-700">{att.classCode}</td>
-                            <td className="py-3 px-4 text-right">
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                att.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
-                              }`}>
-                                {att.status}
-                              </span>
+                {/* 4 Attendance Metric Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4">
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">TOTAL SESSIONS</p>
+                    <p className="text-2xl font-black text-slate-900 mt-1">{attSummary.totalClasses || attendanceData.length}</p>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">Class Hours Conducted</p>
+                  </div>
+                  <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-4">
+                    <p className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider">PRESENT</p>
+                    <p className="text-2xl font-black text-emerald-800 mt-1">{attSummary.present}</p>
+                    <p className="text-[11px] text-emerald-600 font-medium mt-0.5">Sessions Attended</p>
+                  </div>
+                  <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-4">
+                    <p className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider">LATE / PERMITTED</p>
+                    <p className="text-2xl font-black text-amber-800 mt-1">{attSummary.late}</p>
+                    <p className="text-[11px] text-amber-600 font-medium mt-0.5">With Permission</p>
+                  </div>
+                  <div className="bg-rose-50/60 border border-rose-200/80 rounded-2xl p-4">
+                    <p className="text-[10px] font-extrabold text-rose-700 uppercase tracking-wider">ABSENT</p>
+                    <p className="text-2xl font-black text-rose-800 mt-1">{attSummary.absent}</p>
+                    <p className="text-[11px] text-rose-600 font-medium mt-0.5">Leave / Unexcused</p>
+                  </div>
+                </div>
+
+                {/* Subject-Wise Breakdown if available */}
+                {attSummary.subjectBreakdown && attSummary.subjectBreakdown.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                      Subject-Wise Attendance Breakdown
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {attSummary.subjectBreakdown.map((sub, i) => (
+                        <div key={i} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-xs text-blue-700">{sub.code}</span>
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                              sub.percentage >= 75 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              {sub.percentage}%
+                            </span>
+                          </div>
+                          <p className="font-extrabold text-xs text-slate-900 truncate">{sub.name}</p>
+                          <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${sub.percentage >= 75 ? 'bg-emerald-500' : 'bg-rose-500'}`} 
+                              style={{ width: `${Math.min(100, sub.percentage)}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[11px] text-slate-500 font-medium pt-0.5">
+                            <span>Attended: {sub.present + sub.late}/{sub.total}</span>
+                            <span>{sub.staffName ? `Prof. ${sub.staffName}` : ''}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Attendance Log Table */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                    Detailed Attendance Register Log
+                  </h4>
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
+                          <th className="py-3 px-4">Date</th>
+                          <th className="py-3 px-4">Hour / Slot</th>
+                          <th className="py-3 px-4">Course / Class</th>
+                          <th className="py-3 px-4">Faculty In-Charge</th>
+                          <th className="py-3 px-4 text-center">Status</th>
+                          <th className="py-3 px-4 text-right">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {attendanceData.length > 0 ? (
+                          attendanceData.map((att, i) => (
+                            <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-3 px-4 font-mono font-bold text-slate-800">{att.date}</td>
+                              <td className="py-3 px-4 text-slate-600 font-medium">{att.slot || 'Period 1'}</td>
+                              <td className="py-3 px-4">
+                                <span className="font-mono font-bold text-blue-700">{att.classCode}</span>
+                                {att.className && <span className="text-slate-500 ml-1.5 font-medium">· {att.className}</span>}
+                              </td>
+                              <td className="py-3 px-4 text-slate-600 font-medium">{att.staffName || 'Staff Member'}</td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                                  (att.status || '').toLowerCase() === 'present' 
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                    : (att.status || '').toLowerCase() === 'late'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}>
+                                  {att.status || 'Present'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right text-slate-500 italic">
+                                {att.remarks || 'Regular Hour'}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="py-8 text-center text-slate-400 font-medium">
+                              No attendance sessions registered for this student yet. Overall standing: {effectiveAttendance}%.
                             </td>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="4" className="py-8 text-center text-slate-400 font-medium">
-                            No attendance discrepancies recorded. Total estimated attendance: {attendance}%.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
+
               </div>
             </div>
           )}
@@ -1316,53 +1551,159 @@ CONTACT:
           {/* ─────────────────────────────────────────────────────────── */}
           {activeNav === 'Internal Marks' && (
             <div className="space-y-6 w-full max-w-7xl mx-auto animate-fadeIn">
-              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-3">
+              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
+                
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-5 gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">Internal Assessment Marks & Continuous Evaluation</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Verified scores registered by faculty members.</p>
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-5 h-5 text-purple-600" />
+                      <h3 className="text-lg font-black text-slate-900">Internal Continuous Assessment Register</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Snap Tests (ST), Continuous Internal Assessments (CIA), Model Examinations & Consolidated Marks.
+                    </p>
                   </div>
-                  <span className="text-xs font-bold px-3 py-1 bg-purple-50 text-purple-700 rounded-xl border border-purple-200">
-                    Reg No: {regNo}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={fetchAllStudentData}
+                      disabled={loading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-purple-600' : ''}`} />
+                      <span>Sync Marks</span>
+                    </button>
+                    <span className="text-xs font-bold px-3.5 py-1.5 bg-purple-50 text-purple-700 rounded-xl border border-purple-200 font-mono">
+                      Reg No: {regNo}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
-                        <th className="py-3 px-4">Subject</th>
-                        <th className="py-3 px-4">Exam Type</th>
-                        <th className="py-3 px-4 text-center">Max Marks</th>
-                        <th className="py-3 px-4 text-center">Marks Obtained</th>
-                        <th className="py-3 px-4 text-right">Result</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {marksData.length > 0 ? (
-                        marksData.map((m, i) => (
-                          <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3 px-4 font-bold text-slate-900">{m.subject}</td>
-                            <td className="py-3 px-4 text-slate-600">{m.examType}</td>
-                            <td className="py-3 px-4 text-center font-mono">{m.maxMarks}</td>
-                            <td className="py-3 px-4 text-center font-mono font-bold text-blue-700">{m.marksObtained}</td>
-                            <td className="py-3 px-4 text-right">
-                              <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                {m.status}
+                {/* Marksheets Table / Cards */}
+                {marksData.length > 0 ? (
+                  <div className="space-y-4">
+                    {marksData.map((ms, idx) => {
+                      const m = ms.marks || {};
+                      const max = ms.maxMarks || {};
+                      const pass = ms.passMarks || {};
+
+                      const scoreList = [
+                        { name: 'ST 1', val: m.st1, max: max.st1 || 20, pass: pass.st1 || 8 },
+                        { name: 'ST 2', val: m.st2, max: max.st2 || 20, pass: pass.st2 || 8 },
+                        { name: 'ST 3', val: m.st3, max: max.st3 || 20, pass: pass.st3 || 8 },
+                        { name: 'ST 4', val: m.st4, max: max.st4 || 20, pass: pass.st4 || 8 },
+                        { name: 'CIA 1 / IT 1', val: m.cia1 ?? m.it1, max: max.cia1 || max.it1 || 50, pass: pass.cia1 || pass.it1 || 20 },
+                        { name: 'CIA 2 / IT 2', val: m.cia2 ?? m.it2, max: max.cia2 || max.it2 || 50, pass: pass.cia2 || pass.it2 || 20 },
+                        { name: 'Model Exam', val: m.model, max: max.model || 75, pass: pass.model || 30 },
+                        { name: 'Assignment', val: m.assignment ?? m.assignment1, max: max.assignment || 20, pass: pass.assignment || 8 },
+                        { name: 'Attendance', val: m.attendance, max: max.attendance || 5, pass: pass.attendance || 2 },
+                        { name: 'Consolidated', val: m.consolidated, max: max.consolidated || 25, pass: pass.consolidated || 10, isHighlight: true }
+                      ];
+
+                      return (
+                        <div key={idx} className="border border-slate-200/90 rounded-2xl overflow-hidden bg-slate-50/30 shadow-2xs">
+                          {/* Subject Header */}
+                          <div className="bg-gradient-to-r from-slate-50 to-blue-50/40 p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-md">
+                                  {ms.subjectCode}
+                                </span>
+                                <h4 className="font-extrabold text-sm text-slate-900">{ms.subjectName || ms.subjectCode}</h4>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Faculty: <strong className="text-slate-700">{ms.staffName || 'Department Faculty'}</strong> • Sem: {ms.semester || '1'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {ms.isLocked && (
+                                <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                  <Lock className="w-3 h-3" /> Locked & Verified
+                                </span>
+                              )}
+                              <span className="text-xs font-black bg-purple-100 text-purple-800 px-3 py-1 rounded-xl">
+                                Consolidated: {m.consolidated !== null && m.consolidated !== undefined ? `${m.consolidated}/${max.consolidated || 25}` : 'In Progress'}
                               </span>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="5" className="py-8 text-center text-slate-400 font-medium">
-                            Internal examination scores are updated periodically by your department.
-                          </td>
+                            </div>
+                          </div>
+
+                          {/* Scores Grid */}
+                          <div className="p-4 grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2.5 text-center">
+                            {scoreList.map((sc, sIdx) => {
+                              const hasScore = sc.val !== null && sc.val !== undefined && sc.val !== '';
+                              const isNum = !isNaN(Number(sc.val));
+                              const numVal = isNum ? Number(sc.val) : null;
+                              const isPassed = numVal !== null ? numVal >= sc.pass : true;
+
+                              return (
+                                <div 
+                                  key={sIdx} 
+                                  className={`p-2.5 rounded-xl border transition-all ${
+                                    sc.isHighlight 
+                                      ? 'bg-purple-50/80 border-purple-200 font-bold' 
+                                      : 'bg-white border-slate-200/80'
+                                  }`}
+                                >
+                                  <p className="text-[9.5px] font-extrabold text-slate-400 uppercase truncate" title={sc.name}>
+                                    {sc.name}
+                                  </p>
+                                  <p className={`text-sm font-black my-0.5 ${
+                                    hasScore 
+                                      ? (isPassed ? 'text-slate-900' : 'text-rose-600') 
+                                      : 'text-slate-300'
+                                  }`}>
+                                    {hasScore ? sc.val : '—'}
+                                  </p>
+                                  <p className="text-[9px] text-slate-400 font-mono">
+                                    Max: {sc.max}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
+                          <th className="py-3 px-4">Subject</th>
+                          <th className="py-3 px-4">Evaluation Type</th>
+                          <th className="py-3 px-4 text-center">Max Marks</th>
+                          <th className="py-3 px-4 text-center">Marks Obtained</th>
+                          <th className="py-3 px-4 text-right">Result</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="py-3 px-4 font-bold text-slate-900">CS301 · Data Structures & Algorithms</td>
+                          <td className="py-3 px-4 text-slate-600">Continuous Assessment (CIA)</td>
+                          <td className="py-3 px-4 text-center font-mono">25</td>
+                          <td className="py-3 px-4 text-center font-mono font-bold text-blue-700">22</td>
+                          <td className="py-3 px-4 text-right"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Pass</span></td>
+                        </tr>
+                        <tr>
+                          <td className="py-3 px-4 font-bold text-slate-900">CS302 · Database Management Systems</td>
+                          <td className="py-3 px-4 text-slate-600">Continuous Assessment (CIA)</td>
+                          <td className="py-3 px-4 text-center font-mono">25</td>
+                          <td className="py-3 px-4 text-center font-mono font-bold text-blue-700">21</td>
+                          <td className="py-3 px-4 text-right"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Pass</span></td>
+                        </tr>
+                        <tr>
+                          <td className="py-3 px-4 font-bold text-slate-900">MAT201 · Discrete Mathematics</td>
+                          <td className="py-3 px-4 text-slate-600">Continuous Assessment (CIA)</td>
+                          <td className="py-3 px-4 text-center font-mono">25</td>
+                          <td className="py-3 px-4 text-center font-mono font-bold text-blue-700">20</td>
+                          <td className="py-3 px-4 text-right"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Pass</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
               </div>
             </div>
           )}
@@ -1372,24 +1713,27 @@ CONTACT:
           {/* ─────────────────────────────────────────────────────────── */}
           {activeNav === 'Timetable' && (
             <div className="space-y-6 w-full max-w-7xl mx-auto animate-fadeIn">
-              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs">
+              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
                 
-                {/* Header matching Admin */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-3">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-5 gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">Weekly Academic Timetable</h3>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-teal-600" />
+                      <h3 className="text-lg font-black text-slate-900">Weekly Academic Timetable</h3>
+                    </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Class schedule for {course} ({year} • {sem})
+                      Class schedule for {course} ({year} • {sem}) — Synchronized with Faculty Timetable.
                     </p>
                   </div>
                   
                   {/* Day Pills */}
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
                       <button
                         key={day}
                         onClick={() => setSelectedDay(day)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           selectedDay === day
                             ? 'bg-blue-600 text-white shadow-xs'
                             : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -1401,8 +1745,8 @@ CONTACT:
                   </div>
                 </div>
 
-                {/* Timetable Table Matching Admin */}
-                <div className="overflow-x-auto">
+                {/* Timetable Table */}
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
@@ -1416,23 +1760,33 @@ CONTACT:
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {(weeklyTimetable[selectedDay] || []).map((slot, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3.5 px-4 font-bold text-slate-800">Hour {slot.slot}</td>
-                          <td className="py-3.5 px-4 text-slate-500 font-medium">{slot.time}</td>
-                          <td className="py-3.5 px-4 font-mono font-bold text-blue-700">{slot.code}</td>
-                          <td className="py-3.5 px-4 font-extrabold text-slate-900">{slot.subject}</td>
-                          <td className="py-3.5 px-4 text-slate-600 font-medium">{slot.faculty}</td>
-                          <td className="py-3.5 px-4 font-medium text-slate-700">{slot.room}</td>
-                          <td className="py-3.5 px-4 text-right">
-                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              slot.type === 'lab' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
-                            }`}>
-                              {slot.type.toUpperCase()}
-                            </span>
+                      {currentDaySlots.length > 0 ? (
+                        currentDaySlots.map((slot, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-800">Hour {slot.slot}</td>
+                            <td className="py-3.5 px-4 text-slate-500 font-medium">{slot.time}</td>
+                            <td className="py-3.5 px-4 font-mono font-bold text-blue-700">{slot.code}</td>
+                            <td className="py-3.5 px-4 font-extrabold text-slate-900">{slot.subject}</td>
+                            <td className="py-3.5 px-4 text-slate-600 font-medium">{slot.faculty}</td>
+                            <td className="py-3.5 px-4 font-medium text-slate-700">{slot.room}</td>
+                            <td className="py-3.5 px-4 text-right">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                (slot.type || '').toLowerCase() === 'lab' 
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                  : 'bg-blue-50 text-blue-700 border border-blue-200'
+                              }`}>
+                                {(slot.type || 'theory').toUpperCase()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="7" className="py-8 text-center text-slate-400 font-medium">
+                            No scheduled classes for {selectedDay}.
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1446,69 +1800,138 @@ CONTACT:
           {/* ─────────────────────────────────────────────────────────── */}
           {activeNav === 'Assignments' && (
             <div className="space-y-6 w-full max-w-7xl mx-auto animate-fadeIn">
-              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs">
+              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
                 
-                {/* Header matching Admin */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-3">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-5 gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">Assignments & Course Projects</h3>
+                    <div className="flex items-center gap-2">
+                      <BookMarked className="w-5 h-5 text-indigo-600" />
+                      <h3 className="text-lg font-black text-slate-900">Assignments & Coursework Submissions</h3>
+                    </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Assigned coursework, continuous assessment submissions, and project status.
+                      Coursework assigned by your subject faculty. Submit solutions and review marks.
                     </p>
                   </div>
-                  <span className="text-xs font-bold px-3 py-1 bg-purple-50 text-purple-700 rounded-xl border border-purple-200">
-                    {studentAssignments.length} Continuous Coursework(s)
-                  </span>
+                  <div className="flex items-center gap-2.5">
+                    {/* Status filter pills */}
+                    {['ALL', 'PENDING', 'SUBMITTED'].map(filter => (
+                      <button
+                        key={filter}
+                        onClick={() => setAssignmentFilter(filter)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          assignmentFilter === filter
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold px-3 py-1.5 bg-purple-50 text-purple-700 rounded-xl border border-purple-200">
+                      {studentAssignments.length} Task(s)
+                    </span>
+                  </div>
                 </div>
 
-                {/* Assignments Table Matching Admin */}
-                <div className="overflow-x-auto">
+                {/* Toast Notification */}
+                {toastMsg && (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{toastMsg}</span>
+                  </div>
+                )}
+
+                {/* Assignments Table */}
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
                         <th className="py-3 px-4">Subject</th>
-                        <th className="py-3 px-4">Assignment Title</th>
+                        <th className="py-3 px-4">Assignment Title & Instructions</th>
+                        <th className="py-3 px-4">Faculty</th>
                         <th className="py-3 px-4">Due Date</th>
                         <th className="py-3 px-4 text-center">Max Marks</th>
-                        <th className="py-3 px-4 text-center">Score / Grade</th>
-                        <th className="py-3 px-4 text-right">Submission Status</th>
+                        <th className="py-3 px-4 text-center">Score Awarded</th>
+                        <th className="py-3 px-4 text-right">Status & Submission</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {studentAssignments.map((a) => {
-                        const isSubmitted = submittedAssignmentIds.has(a.id) || a.defaultStatus === 'Submitted';
-                        return (
-                          <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3.5 px-4 font-mono font-bold text-blue-700">
-                              {a.code} · <span className="font-sans font-medium text-slate-600">{a.subject}</span>
-                            </td>
-                            <td className="py-3.5 px-4 font-extrabold text-slate-900 max-w-xs">{a.title}</td>
-                            <td className="py-3.5 px-4 font-medium text-slate-600">{a.dueDate}</td>
-                            <td className="py-3.5 px-4 text-center font-mono font-bold">{a.maxMarks}</td>
-                            <td className="py-3.5 px-4 text-center font-mono font-bold text-purple-700">
-                              {isSubmitted ? (a.score === 'Pending' ? 'Under Review' : a.score) : '—'}
-                            </td>
-                            <td className="py-3.5 px-4 text-right">
-                              {isSubmitted ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  Submitted
+                      {studentAssignments
+                        .filter(a => {
+                          if (assignmentFilter === 'ALL') return true;
+                          const isSub = a.submissionStatus === 'Submitted' || a.submissionStatus === 'Graded';
+                          if (assignmentFilter === 'SUBMITTED') return isSub;
+                          if (assignmentFilter === 'PENDING') return !isSub;
+                          return true;
+                        })
+                        .map((a) => {
+                          const isSubmitted = a.submissionStatus === 'Submitted' || a.submissionStatus === 'Graded' || submittedAssignmentIds.has(a.id);
+                          const isGraded = a.submissionStatus === 'Graded' || (a.marksAwarded !== null && a.marksAwarded !== undefined);
+
+                          return (
+                            <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-3.5 px-4">
+                                <span className="font-mono font-bold text-blue-700">{a.code}</span>
+                                <p className="text-[11px] text-slate-600 font-medium mt-0.5">{a.subject}</p>
+                              </td>
+                              <td className="py-3.5 px-4 max-w-sm">
+                                <p className="font-extrabold text-slate-900">{a.title}</p>
+                                {a.description && (
+                                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{a.description}</p>
+                                )}
+                                {a.attachmentName && (
+                                  <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-indigo-700 font-semibold bg-indigo-50 px-2 py-0.5 rounded-md w-fit">
+                                    <FolderOpen className="w-3 h-3" />
+                                    <span>Faculty Material: {a.attachmentName}</span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-slate-600 font-medium">{a.staffName || 'Faculty'}</td>
+                              <td className="py-3.5 px-4">
+                                <span className={`font-mono font-medium ${a.isOverdue ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
+                                  {a.dueDate}
                                 </span>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setSubmittedAssignmentIds(prev => new Set([...prev, a.id]));
-                                    alert(`Assignment "${a.title}" marked as submitted!`);
-                                  }}
-                                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold shadow-xs transition-all cursor-pointer"
-                                >
-                                  Submit Solution
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                                {a.isOverdue && (
+                                  <span className="block text-[10px] text-rose-500 font-bold">Past Due</span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-800">{a.maxMarks}</td>
+                              <td className="py-3.5 px-4 text-center font-mono font-bold">
+                                {isGraded ? (
+                                  <span className="text-purple-700 text-sm font-black">{a.marksAwarded}/{a.maxMarks}</span>
+                                ) : isSubmitted ? (
+                                  <span className="text-amber-600 text-[11px]">Under Review</span>
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                {isSubmitted ? (
+                                  <div className="inline-flex flex-col items-end gap-1">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      {isGraded ? 'Graded' : 'Submitted'}
+                                    </span>
+                                    {a.submittedAt && a.submittedAt !== '--' && (
+                                      <span className="text-[9.5px] text-slate-400 font-mono">
+                                        {a.submittedAt}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => handleOpenSubmitModal(a)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                                  >
+                                    <FileUp className="w-3.5 h-3.5" />
+                                    <span>Submit Solution</span>
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
@@ -1527,8 +1950,8 @@ CONTACT:
                 {/* Header matching Admin */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-5 mb-6 gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">Autonomous Examination Hall Ticket</h3>
-                    <p className="text-xs text-slate-500">Official admit card for End Semester Autonomous Examinations.</p>
+                    <h3 className="text-lg font-black text-slate-900">University Examination Hall Ticket</h3>
+                    <p className="text-xs text-slate-500">Official admit card for End Semester University Examinations.</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <button
@@ -1557,7 +1980,7 @@ CONTACT:
                       </div>
                       <div>
                         <h4 className="text-xs sm:text-sm font-extrabold text-blue-950">
-                          Autonomous Exam Eligibility Clearance &amp; Seating Allotment
+                          University Exam Eligibility Clearance &amp; Seating Allotment
                         </h4>
                         <p className="text-[11px] text-blue-800">
                           Verified automatically based on Institutional No Due (Fees) and Attendance records.
@@ -1597,7 +2020,18 @@ CONTACT:
                   </div>
                 </div>
 
-                {/* Printable Hall Ticket Preview Card */}
+                {/* Printable Hall Ticket Preview Card or Pending Notice */}
+                {!hallTicketInfo?.allocated || activeExamTimetable.length === 0 ? (
+                  <div className="border-2 border-dashed border-amber-300 rounded-2xl p-8 bg-amber-50/60 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-extrabold text-base text-amber-950">Hall Ticket Allocation Pending</h4>
+                    <p className="text-xs text-amber-800 max-w-md mx-auto">
+                      Your examination hall, seat allotment, and course schedule have not yet been allocated by the Department Examination Cell. Please check back after faculty in-charge completes your hall ticket allocation.
+                    </p>
+                  </div>
+                ) : (
                 <div className="border-2 border-blue-900/40 rounded-2xl p-6 sm:p-8 bg-white space-y-6 shadow-xs">
                   
                   {/* College Header */}
@@ -1606,11 +2040,11 @@ CONTACT:
                       <CollegeLogo size="sm" showText={false} />
                       <div>
                         <h4 className="text-base font-black text-blue-950 uppercase tracking-wide">Vivekanandha College of Arts and Sciences</h4>
-                        <p className="text-[11px] font-bold text-slate-600">Autonomous Institution • Affiliated to Periyar University</p>
+                        <p className="text-[11px] font-bold text-slate-600">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</p>
                       </div>
                     </div>
                     <span className="inline-block bg-blue-900 text-white px-4 py-1 rounded-md text-[11px] font-extrabold uppercase tracking-wider mt-1">
-                      End Semester Autonomous Examination Hall Ticket
+                      {hallTicketInfo?.examName || 'End Semester University Examination Hall Ticket'}
                     </span>
                   </div>
 
@@ -1662,14 +2096,14 @@ CONTACT:
                         <thead>
                           <tr className="bg-slate-100 text-[10px] font-extrabold uppercase text-blue-900 border-b border-slate-200">
                             <th className="py-2.5 px-3">Date</th>
-                            <th className="py-2.5 px-3">Session & Time</th>
+                            <th className="py-2.5 px-3">Session &amp; Time</th>
                             <th className="py-2.5 px-3">Subject Code</th>
                             <th className="py-2.5 px-3">Subject Title</th>
                             <th className="py-2.5 px-3 text-right">Invigilator Sign</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {examTimetable.map((e, idx) => (
+                          {activeExamTimetable.map((e, idx) => (
                             <tr key={idx}>
                               <td className="py-2.5 px-3 font-bold text-slate-800">{e.date}</td>
                               <td className="py-2.5 px-3 text-slate-600 font-medium">{e.session}</td>
@@ -1687,18 +2121,21 @@ CONTACT:
                   <div className="border-t border-slate-200 pt-4 text-[11px] text-slate-600 space-y-4">
                     <div>
                       <strong className="text-slate-800">Important Instructions:</strong>
-                      <p className="text-[10px] text-slate-500 mt-0.5">
-                        1. Candidate must produce this hall ticket and college identity card at every examination session. 2. Electronic devices, smartwatches, and study notes are strictly forbidden.
-                      </p>
+                      <ol className="text-[10px] text-slate-500 mt-1 space-y-1 list-decimal list-inside">
+                        {activeInstructions.map((inst, i) => (
+                          <li key={i}>{inst}</li>
+                        ))}
+                      </ol>
                     </div>
                     <div className="flex justify-between pt-6 px-4 font-bold text-xs text-slate-800">
                       <div>Signature of Candidate</div>
-                      <div>Chief Superintendent</div>
+                      <div>{allocatedStaffName || 'Chief Superintendent'}</div>
                       <div>Controller of Examinations</div>
                     </div>
                   </div>
 
                 </div>
+                )}
 
               </div>
             </div>
@@ -1706,6 +2143,128 @@ CONTACT:
 
         </main>
       </div>
+
+      {/* Interactive Assignment Submission Modal */}
+      {submittingAssignment && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => !isSubmitting && setSubmittingAssignment(null)} />
+          <div className="relative bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-lg z-10 border border-slate-200 animate-scaleUp max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <FileUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Submit Assignment Solution</h3>
+                  <p className="text-xs text-slate-500">{submittingAssignment.code || submittingAssignment.subjectCode} · {submittingAssignment.subject}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSubmittingAssignment(null)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitAssignmentSolution} className="space-y-4 text-xs">
+              {/* Assignment Details Overview */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-800 text-sm">{submittingAssignment.title}</span>
+                  <span className="font-mono text-purple-700 font-bold bg-purple-50 px-2.5 py-0.5 rounded-md border border-purple-200">
+                    Max: {submittingAssignment.maxMarks} Marks
+                  </span>
+                </div>
+                {submittingAssignment.description && (
+                  <p className="text-slate-600 text-xs leading-relaxed">{submittingAssignment.description}</p>
+                )}
+                <div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 font-medium">
+                  <span>Faculty: <strong>{submittingAssignment.staffName || 'Department Faculty'}</strong></span>
+                  <span>Due: <strong className={submittingAssignment.isOverdue ? 'text-rose-600' : 'text-slate-800'}>{submittingAssignment.dueDate}</strong></span>
+                </div>
+              </div>
+
+              {/* Submission File Name / Document */}
+              <div>
+                <label className="block text-slate-700 font-bold text-xs mb-1.5">
+                  Submission File / Report Name <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={submissionFile}
+                    onChange={(e) => setSubmissionFile(e.target.value)}
+                    placeholder="e.g. 24BCS001_DataStructures_Assignment.pdf"
+                    className="w-full pl-3.5 pr-20 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-medium focus:border-indigo-500 focus:outline-none shadow-2xs"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">
+                    PDF / DOCX
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Format: RollNumber_CourseCode_Solution (.pdf, .docx, .zip)
+                </p>
+              </div>
+
+              {/* Optional Comments / Notes */}
+              <div>
+                <label className="block text-slate-700 font-bold text-xs mb-1.5">
+                  Submission Notes or Online Solution (Optional)
+                </label>
+                <textarea
+                  rows="3"
+                  value={submissionComment}
+                  onChange={(e) => setSubmissionComment(e.target.value)}
+                  placeholder="Add any notes for your faculty evaluator or paste solution summary..."
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:border-indigo-500 focus:outline-none shadow-2xs resize-none"
+                />
+              </div>
+
+              {/* Student Identity Confirmation */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200/70 rounded-xl flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-2 text-blue-900 font-medium">
+                  <IdCard className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Submitting as: <strong>{name}</strong> ({rollNo && rollNo !== '—' ? rollNo : regNo})</span>
+                </div>
+                <span className="text-[10px] bg-blue-200/70 text-blue-900 px-2 py-0.5 rounded-full font-bold">
+                  Verified
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setSubmittingAssignment(null)}
+                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Submit Solution</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Logout Confirmation Modal Matching Admin */}
       {showLogoutModal && (

@@ -1,5 +1,6 @@
 const Assignment = require("../models/Assignment");
 const Class = require("../models/Class");
+const Student = require("../models/Student");
 const { syncSubjectAssignmentMarksToInternal } = require("../services/internalMarksSyncService");
 
 // Helper to ensure an assignment has student submissions initialized from its class
@@ -519,6 +520,169 @@ const importStudentsFromClass = async (req, res) => {
   }
 };
 
+// GET /api/assignments/student/:identifier - Get all assignments for a student
+const getStudentAssignments = async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: "Student identifier required" });
+    }
+    const idClean = identifier.trim();
+    const idRegex = new RegExp('^' + idClean + '$', 'i');
+
+    const student = await Student.findOne({
+      $or: [
+        { rollNo: idRegex },
+        { regNo: idRegex },
+        { studentId: idRegex },
+        { loginId: idRegex },
+        { admNo: idRegex }
+      ]
+    });
+
+    const rollNo = student ? (student.rollNo || idClean) : idClean;
+    const regNo = student ? (student.regNo || idClean) : idClean;
+    const dept = student ? (student.department || student.course || '') : '';
+
+    // Find enrolled classes if any
+    const enrolledClasses = await Class.find({
+      $or: [
+        { 'students.rollNo': new RegExp('^' + rollNo + '$', 'i') },
+        { 'students.rollNo': new RegExp('^' + regNo + '$', 'i') }
+      ]
+    });
+    const classCodes = enrolledClasses.map(c => c.code.toUpperCase());
+
+    // Find assignments where student is in studentSubmissions OR matching enrolled classes OR matching dept
+    const query = {
+      $or: [
+        { 'studentSubmissions.rollNo': new RegExp('^' + rollNo + '$', 'i') },
+        { 'studentSubmissions.regNo': new RegExp('^' + regNo + '$', 'i') },
+        { 'studentSubmissions.rollNo': idRegex },
+        { 'studentSubmissions.regNo': idRegex }
+      ]
+    };
+    if (classCodes.length > 0) {
+      query.$or.push({ subjectCode: { $in: classCodes } });
+    }
+    if (dept) {
+      query.$or.push({ department: new RegExp(dept, 'i') });
+    }
+
+    const assignments = await Assignment.find(query).sort({ dueDate: 1, createdAt: -1 });
+
+    const formatted = assignments.map(a => {
+      let sub = (a.studentSubmissions || []).find(s => {
+        const r = (s.rollNo || '').toLowerCase();
+        const rg = (s.regNo || '').toLowerCase();
+        return r === rollNo.toLowerCase() || r === regNo.toLowerCase() || r === idClean.toLowerCase() ||
+               rg === rollNo.toLowerCase() || rg === regNo.toLowerCase() || rg === idClean.toLowerCase();
+      });
+
+      const isPastDue = a.dueDate ? new Date(a.dueDate + 'T23:59:59') < new Date() : false;
+      const status = sub ? sub.status : (isPastDue ? 'Not Submitted (Overdue)' : 'Pending Submission');
+
+      return {
+        _id: a._id,
+        id: a._id.toString(),
+        staffId: a.staffId,
+        staffName: a.staffName,
+        subjectCode: a.subjectCode,
+        subjectName: a.subjectName,
+        department: a.department,
+        semester: a.semester,
+        academicYear: a.academicYear,
+        title: a.title,
+        description: a.description,
+        dueDate: a.dueDate,
+        totalMarks: a.totalMarks,
+        assignmentStatus: a.status,
+        attachmentName: a.attachmentName || '',
+        attachmentData: a.attachmentData || '',
+        attachmentSize: a.attachmentSize || '',
+        attachmentType: a.attachmentType || '',
+        submissionStatus: status,
+        submittedAt: sub ? sub.submittedAt : '--',
+        fileName: sub ? sub.fileName : '--',
+        fileSize: sub ? sub.fileSize : '--',
+        marksAwarded: sub ? sub.marksAwarded : null,
+        feedback: sub ? sub.feedback : '',
+        isOverdue: isPastDue && (!sub || (sub.status !== 'Submitted' && sub.status !== 'Graded'))
+      };
+    });
+
+    res.json({
+      success: true,
+      count: formatted.length,
+      assignments: formatted
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/assignments/:id/student/:identifier/submit - Submit assignment solution
+const submitStudentAssignment = async (req, res) => {
+  try {
+    const { id, identifier } = req.params;
+    const { fileName, fileSize, comment, studentName } = req.body;
+
+    const assignment = await Assignment.findById(id);
+    if (!assignment) {
+      return res.status(404).json({ success: false, message: "Assignment not found." });
+    }
+
+    const idClean = identifier.trim();
+    const idLower = idClean.toLowerCase();
+
+    let subIndex = (assignment.studentSubmissions || []).findIndex(s => {
+      const r = (s.rollNo || '').toLowerCase();
+      const rg = (s.regNo || '').toLowerCase();
+      return r === idLower || rg === idLower;
+    });
+
+    const nowStr = new Date().toLocaleString('en-IN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+
+    if (subIndex >= 0) {
+      assignment.studentSubmissions[subIndex].status = 'Submitted';
+      assignment.studentSubmissions[subIndex].submittedAt = nowStr;
+      if (fileName) assignment.studentSubmissions[subIndex].fileName = fileName;
+      if (fileSize) assignment.studentSubmissions[subIndex].fileSize = fileSize;
+      if (comment) assignment.studentSubmissions[subIndex].feedback = comment;
+    } else {
+      assignment.studentSubmissions.push({
+        rollNo: idClean.toUpperCase(),
+        regNo: idClean.toUpperCase(),
+        studentName: studentName || idClean,
+        department: assignment.department || '',
+        submittedAt: nowStr,
+        fileName: fileName || 'submission_file.pdf',
+        fileSize: fileSize || '1.5 MB',
+        status: 'Submitted',
+        marksAwarded: null,
+        feedback: comment || ''
+      });
+    }
+
+    assignment.submissions = assignment.studentSubmissions.filter(
+      s => s.status === 'Submitted' || s.status === 'Graded'
+    ).length;
+
+    await assignment.save();
+
+    res.json({
+      success: true,
+      message: "Assignment submitted successfully!",
+      assignment
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = { 
   getAllAssignments, 
   listAssignments, 
@@ -531,7 +695,9 @@ module.exports = {
   updateStudentSubmissionStatus,
   quickSetSubmissionsCount,
   removeStudentFromAssignment,
-  importStudentsFromClass
+  importStudentsFromClass,
+  getStudentAssignments,
+  submitStudentAssignment
 };
 
 

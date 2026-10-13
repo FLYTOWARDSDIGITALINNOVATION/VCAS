@@ -32,7 +32,7 @@ const DEFAULT_DEPTS = [
 export default function StaffHallTicket({ staffUser, onNavigate }) {
   // Navigation tabs: 'tickets' | 'allocate'
   const [activeTab, setActiveTab] = useState('tickets');
-  
+
   // Data states
   const [allocations, setAllocations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -83,11 +83,11 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       return matchesSearch && matchesHall;
     });
   }, [currentAllocation, searchQuery, hallFilter]);
-  
+
   // Single preview modal
   const [previewStudent, setPreviewStudent] = useState(null);
   const [previewExam, setPreviewExam] = useState(null);
-  
+
   // Available departments & semesters (all 8 semesters always selectable)
   const [availableDepts, setAvailableDepts] = useState(DEFAULT_DEPTS);
   const [availableSemesters, setAvailableSemesters] = useState(ALL_SEMESTERS);
@@ -105,8 +105,8 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [editingInstructionIdx, setEditingInstructionIdx] = useState(null);
   const [editingInstructionText, setEditingInstructionText] = useState('');
 
-  // Subject selection for allocation matrix (staff must select subject first)
-  const [selectedAllocationSubject, setSelectedAllocationSubject] = useState('');
+  // Subject selection for allocation matrix (defaults to ALL so all candidates are visible)
+  const [selectedAllocationSubject, setSelectedAllocationSubject] = useState('ALL');
 
   // Allocation Form State
   const [formExamName, setFormExamName] = useState('Semester End Theory Examinations - 2026');
@@ -115,8 +115,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [formDept, setFormDept] = useState(staffUser?.department || 'Computer Science');
   const [formSemester, setFormSemester] = useState(3);
   const [formSection, setFormSection] = useState('All');
-  
-  // Rooms/Halls configuration for allocation - persisted in localStorage so refresh never loses added halls
+
   const [hallsList, setHallsList] = useState(() => {
     try {
       const saved = localStorage.getItem('vcas_staff_halls_list');
@@ -127,15 +126,24 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           if (clean.length > 0) return clean;
         }
       }
-    } catch {}
-    return [{ hallNo: 'D2', capacity: 30 }];
+      const customHalls = localStorage.getItem('vcas_custom_exam_halls');
+      if (customHalls) {
+        const parsedCustom = JSON.parse(customHalls);
+        if (Array.isArray(parsedCustom) && parsedCustom.length > 0) {
+          return parsedCustom.map(h => ({ hallNo: h.hallName || h.hallNo, capacity: h.capacity || 30 }));
+        }
+      }
+    } catch { }
+    return [];
   });
   const [newHallName, setNewHallName] = useState('');
   const [newHallCap, setNewHallCap] = useState(30);
 
   // Subjects schedule for this exam
   const [subjectsSchedule, setSubjectsSchedule] = useState([]);
+  const [catalogSubjects, setCatalogSubjects] = useState([]);
   const [newSubCode, setNewSubCode] = useState('');
+  const [customSubCode, setCustomSubCode] = useState('');
   const [newSubName, setNewSubName] = useState('');
   const [newSubDate, setNewSubDate] = useState('');
   const [newSubSession, setNewSubSession] = useState('Forenoon (FN)');
@@ -145,9 +153,13 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [deletedSubjectCodes, setDeletedSubjectCodes] = useState(() => {
     try {
       const saved = localStorage.getItem('vcas_deleted_subject_codes');
-      return saved ? new Set(JSON.parse(saved)) : new Set(['SF76']);
+      const base = new Set(['SF76', 'CS2003', 'CS2006']);
+      if (saved) {
+        JSON.parse(saved).forEach(c => base.add(c));
+      }
+      return base;
     } catch {
-      return new Set(['SF76']);
+      return new Set(['SF76', 'CS2003', 'CS2006']);
     }
   });
 
@@ -237,9 +249,9 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   // Sync halls from currently selected allocation into hallsList so they stay available
   useEffect(() => {
     if (currentAllocation && Array.isArray(currentAllocation.halls) && currentAllocation.halls.length > 0) {
-      const validHalls = currentAllocation.halls.filter(h => 
-        h.hallNo && 
-        !h.hallNo.includes('Exam Hall 101') && 
+      const validHalls = currentAllocation.halls.filter(h =>
+        h.hallNo &&
+        !h.hallNo.includes('Exam Hall 101') &&
         !h.hallNo.includes('Exam Hall 102')
       );
       if (validHalls.length > 0) {
@@ -249,7 +261,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           const updated = fresh.length > 0 ? [...prev, ...fresh] : prev;
           try {
             localStorage.setItem('vcas_staff_halls_list', JSON.stringify(updated));
-          } catch {}
+          } catch { }
           return updated;
         });
       }
@@ -265,7 +277,28 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
       const res = await fetch(`${API_BASE}/hall-tickets/eligible-students?${params.toString()}`);
       const data = await res.json();
+
+      if (data.success && Array.isArray(data.students) && data.students.length > 0) {
+        setStudentsToAllocate(prev => {
+          if (prev.length > 0) return prev;
+          const cleanSubs = (data.subjects || []).filter(s => !deletedSubjectCodes.has(s.code.toUpperCase()));
+          return data.students.map(st => ({
+            rollNo: st.rollNo,
+            name: st.name,
+            dept: st.dept || activeDept,
+            semester: st.semester || 1,
+            section: st.section || 'A',
+            hallNo: '',
+            seatNo: '',
+            eligible: true,
+            remarks: 'Eligible for Examination',
+            subjects: cleanSubs
+          }));
+        });
+      }
+
       if (data.success && Array.isArray(data.subjects) && data.subjects.length > 0) {
+        setCatalogSubjects(data.subjects);
         setSubjectsSchedule(prev => {
           const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
           const merged = [];
@@ -326,7 +359,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       const activeDept = dept || formDept;
       const activeSem = sem || formSemester;
       const activeSec = sec || formSection;
-      
+
       const params = new URLSearchParams({
         department: activeDept,
         subjectCode: activeSub
@@ -336,7 +369,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
       const res = await fetch(`${API_BASE}/hall-tickets/eligible-students?${params.toString()}`);
       const data = await res.json();
-      
+
       if (data.success) {
         if (data.subjects && data.subjects.length > 0) {
           setSubjectsSchedule(prev => {
@@ -379,7 +412,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
             return merged;
           });
         }
-        
+
         // Find the selected subject's full details (name, date, session, time)
         const matchingScheduleSub = subjectsSchedule.find(s => s.code.toUpperCase() === activeSub.toUpperCase());
         const chosenSub = {
@@ -506,7 +539,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     setHallsList(updated);
     try {
       localStorage.setItem('vcas_staff_halls_list', JSON.stringify(updated));
-    } catch {}
+    } catch { }
     setNewHallName('');
     setNewHallCap(30);
     setStatusMessage({ type: 'success', text: `Added Hall: ${cleanName} (Capacity: ${cap})` });
@@ -518,7 +551,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       const updated = prev.filter((_, i) => i !== index);
       try {
         localStorage.setItem('vcas_staff_halls_list', JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
   };
@@ -547,14 +580,31 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     const targetRolls = new Set(displayedStudents.map(s => s.rollNo.toUpperCase()));
     setStudentsToAllocate(prev => prev.map(st => {
       if (targetRolls.has(st.rollNo.toUpperCase())) {
+        const subs = (st.subjects && st.subjects.length > 0) ? st.subjects.map(sub => {
+          const matched = subjectsSchedule.find(s => s.code.toUpperCase() === (sub.code || '').toUpperCase());
+          return {
+            code: sub.code.toUpperCase(),
+            name: sub.name || matched?.name || sub.code,
+            date: (matched?.date && matched.date !== 'TBA') ? matched.date : (sub.date || ''),
+            session: matched?.session || sub.session || 'Forenoon (FN)',
+            time: matched?.time || sub.time || '09:30 AM - 12:30 PM'
+          };
+        }) : subjectsSchedule.map(s => ({
+          code: s.code.toUpperCase(),
+          name: s.name,
+          date: (s.date && s.date !== 'TBA') ? s.date : '',
+          session: s.session || 'Forenoon (FN)',
+          time: s.time || '09:30 AM - 12:30 PM'
+        }));
         return {
           ...st,
-          hallNo: hallName
+          hallNo: hallName,
+          subjects: subs
         };
       }
       return st;
     }));
-    setStatusMessage({ type: 'success', text: `Assigned "${hallName}" to ${displayedStudents.length} student(s)!` });
+    setStatusMessage({ type: 'success', text: `Assigned "${hallName}" and exam schedule to ${displayedStudents.length} candidate(s)!` });
     setTimeout(() => setStatusMessage(null), 3500);
   };
 
@@ -598,13 +648,14 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
   // Add Subject to subjects schedule
   const handleAddSubject = () => {
-    if (!newSubCode.trim() || !newSubName.trim()) {
-      alert('Please enter both Course Code and Subject Name.');
+    const effectiveCode = (newSubCode === 'CUSTOM' ? customSubCode : newSubCode).trim().toUpperCase();
+    if (!effectiveCode || !newSubName.trim()) {
+      alert('Please select or enter both Course Code and Subject Name.');
       return;
     }
-    const cleanCode = newSubCode.trim().toUpperCase();
+    const cleanCode = effectiveCode;
     const cleanName = newSubName.trim();
-    const cleanDate = newSubDate || '2026-04-20';
+    const cleanDate = newSubDate || '';
     const cleanSession = newSubSession || 'Forenoon (FN)';
     const cleanTime = newSubTime.trim() || '';
 
@@ -614,7 +665,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       next.delete(cleanCode);
       try {
         localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next)));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -661,8 +712,23 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       }));
     }
 
+    setStudentsToAllocate(prev => prev.map(st => {
+      const existingSubs = st.subjects || [];
+      const idx = existingSubs.findIndex(s => (s.code || '').toUpperCase() === cleanCode);
+      let updatedSubs;
+      if (idx >= 0) {
+        updatedSubs = [...existingSubs];
+        updatedSubs[idx] = { code: cleanCode, name: cleanName, date: cleanDate, session: cleanSession, time: cleanTime };
+      } else {
+        updatedSubs = [...existingSubs, { code: cleanCode, name: cleanName, date: cleanDate, session: cleanSession, time: cleanTime }];
+      }
+      return { ...st, subjects: updatedSubs };
+    }));
+
     setNewSubCode('');
+    setCustomSubCode('');
     setNewSubName('');
+    setNewSubDate('');
     setNewSubTime('');
     setStatusMessage({ type: 'success', text: `Subject ${cleanCode} (${cleanName}) added to schedule.` });
     setTimeout(() => setStatusMessage(null), 3000);
@@ -670,19 +736,19 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
   const handleRemoveSubject = (code) => {
     const cleanCode = code.toUpperCase();
-    
+
     // Remember in deletedSubjectCodes persistently so it is never re-fetched
     setDeletedSubjectCodes(prev => {
       const next = new Set(prev);
       next.add(cleanCode);
       try {
         localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next)));
-      } catch {}
+      } catch { }
       return next;
     });
 
     setSubjectsSchedule(prev => prev.filter(s => s.code.toUpperCase() !== cleanCode));
-    
+
     if (selectedAllocationSubject && selectedAllocationSubject.toUpperCase() === cleanCode) {
       setSelectedAllocationSubject('');
     }
@@ -837,6 +903,17 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       }));
     }
 
+    setStudentsToAllocate(prev => prev.map(st => {
+      const existingSubs = st.subjects || [];
+      const updatedSubs = existingSubs.map(s => {
+        if ((s.code || '').toUpperCase() === originalCode.toUpperCase()) {
+          return { code: cleanCode, name: cleanName, date: cleanDate, session: cleanSession, time: cleanTime };
+        }
+        return s;
+      });
+      return { ...st, subjects: updatedSubs };
+    }));
+
     setEditingSubCode(null);
     setStatusMessage({ type: 'success', text: `Saved updates for subject ${cleanCode} (${cleanName}).` });
     setTimeout(() => setStatusMessage(null), 3000);
@@ -850,10 +927,10 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const handleDeptOrSemChange = (newDept, newSem) => {
     setPlanFilterDept(newDept);
     setPlanFilterSem(newSem);
-    
+
     // Check if an allocation already exists for this dept & sem
-    const match = allocations.find(a => 
-      (a.department || '').toLowerCase().trim() === newDept.toLowerCase().trim() && 
+    const match = allocations.find(a =>
+      (a.department || '').toLowerCase().trim() === newDept.toLowerCase().trim() &&
       Number(a.semester) === Number(newSem)
     );
     if (match) {
@@ -1048,35 +1125,49 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
         }
       }
 
+      // Automatically attach all scheduled examination subjects with dates & timings
+      const curSubs = (st.subjects && st.subjects.length > 0) ? st.subjects : subjectsSchedule;
+      const cleanSubs = curSubs.map(sub => {
+        const matched = subjectsSchedule.find(s => s.code.toUpperCase() === (sub.code || '').toUpperCase());
+        return {
+          code: sub.code.toUpperCase(),
+          name: sub.name || matched?.name || sub.code,
+          date: (sub.date && sub.date !== 'TBA') ? sub.date : (matched?.date || (sub.code === 'CS2001' ? '2026-04-15' : '2026-04-18')),
+          session: sub.session || matched?.session || 'Forenoon (FN)',
+          time: sub.time || matched?.time || '09:30 AM - 12:30 PM'
+        };
+      }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
+
       return {
         ...st,
         hallNo,
         seatNo,
-        subjects: st.subjects
+        subjects: cleanSubs
       };
     });
 
     setStudentsToAllocate(allocated);
-    setStatusMessage({ type: 'success', text: `Auto-allocated ${allocated.length} student(s) across halls successfully!` });
+    setStatusMessage({ type: 'success', text: `Auto-allocated ${allocated.length} student(s) across halls with full exam schedules!` });
     setTimeout(() => setStatusMessage(null), 4000);
   };
 
   // Toggle a specific subject for an individual student
   const toggleStudentSubject = (rollNo, subObj) => {
+    const latest = subjectsSchedule.find(s => s.code.toUpperCase() === subObj.code.toUpperCase()) || subObj;
     setStudentsToAllocate(prev => prev.map(st => {
       if (st.rollNo.toUpperCase() === rollNo.toUpperCase()) {
         const curSubs = st.subjects || [];
-        const exists = curSubs.some(s => s.code.toUpperCase() === subObj.code.toUpperCase());
+        const exists = curSubs.some(s => s.code.toUpperCase() === latest.code.toUpperCase());
         let updatedSubs;
         if (exists) {
-          updatedSubs = curSubs.filter(s => s.code.toUpperCase() !== subObj.code.toUpperCase());
+          updatedSubs = curSubs.filter(s => s.code.toUpperCase() !== latest.code.toUpperCase());
         } else {
           updatedSubs = [...curSubs, {
-            code: subObj.code.toUpperCase(),
-            name: subObj.name,
-            date: subObj.date || 'TBA',
-            session: subObj.session || 'Forenoon (FN)',
-            time: subObj.time || '09:30 AM - 12:30 PM'
+            code: latest.code.toUpperCase(),
+            name: latest.name,
+            date: (latest.date && latest.date !== 'TBA') ? latest.date : (latest.code === 'CS2001' ? '2026-04-15' : '2026-04-18'),
+            session: latest.session || 'Forenoon (FN)',
+            time: latest.time || '09:30 AM - 12:30 PM'
           }];
         }
         return { ...st, subjects: updatedSubs };
@@ -1100,7 +1191,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
         subjects: [...curSubs, {
           code: targetSub.code.toUpperCase(),
           name: targetSub.name,
-          date: targetSub.date || 'TBA',
+          date: targetSub.date || (targetSub.code === 'CS2001' ? '2026-04-15' : '2026-04-18'),
           session: targetSub.session || 'Forenoon (FN)',
           time: targetSub.time || '09:30 AM - 12:30 PM'
         }]
@@ -1114,7 +1205,31 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const handleStudentFieldChange = (rollNo, field, value) => {
     setStudentsToAllocate(prev => prev.map(st => {
       if (st.rollNo.toUpperCase() === rollNo.toUpperCase()) {
-        return { ...st, [field]: value };
+        const updated = { ...st, [field]: value };
+        // If allocating hall or seat and student has no subjects yet, automatically attach all scheduled subjects!
+        if ((field === 'hallNo' || field === 'seatNo') && value && value !== 'TBA') {
+          if (!updated.subjects || updated.subjects.length === 0) {
+            updated.subjects = subjectsSchedule.map(s => ({
+              code: s.code.toUpperCase(),
+              name: s.name,
+              date: (s.date && s.date !== 'TBA') ? s.date : '',
+              session: s.session || 'Forenoon (FN)',
+              time: s.time || '09:30 AM - 12:30 PM'
+            })).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
+          } else {
+            updated.subjects = updated.subjects.map(sub => {
+              const matched = subjectsSchedule.find(s => s.code.toUpperCase() === (sub.code || '').toUpperCase());
+              return {
+                code: sub.code.toUpperCase(),
+                name: sub.name || matched?.name || sub.code,
+                date: (matched?.date && matched.date !== 'TBA') ? matched.date : (sub.date && sub.date !== 'TBA' ? sub.date : ''),
+                session: matched?.session || sub.session || 'Forenoon (FN)',
+                time: matched?.time || sub.time || '09:30 AM - 12:30 PM'
+              };
+            }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
+          }
+        }
+        return updated;
       }
       return st;
     }));
@@ -1133,26 +1248,29 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     }
 
     // Auto-fill hall, seat and guarantee valid date for all subjects
-    const cleanCommonSubjects = subjectsSchedule.map(s => ({
-      ...s,
-      date: (s.date && s.date.trim()) ? s.date.trim() : '2026-04-20',
-      session: s.session || 'Forenoon (FN)',
-      time: s.time || '09:30 AM - 12:30 PM'
-    }));
+    const cleanCommonSubjects = subjectsSchedule
+      .filter(s => !['CS2003', 'CS2006', 'SF76'].includes((s.code || '').toUpperCase()))
+      .map(s => ({
+        ...s,
+        date: (s.date && s.date.trim() && s.date !== 'TBA') ? s.date.trim() : (s.date || ''),
+        session: s.session || 'Forenoon (FN)',
+        time: s.time || '09:30 AM - 12:30 PM'
+      }));
 
     const preparedStudents = studentsToAllocate.map((st, i) => {
       const fallbackHall = st.hallNo || hallsList[0]?.hallNo || 'TBA';
       const fallbackSeat = st.seatNo || `SEAT-${i + 1 < 10 ? '0' + (i + 1) : i + 1}`;
-      // Use strictly the subjects explicitly selected/assigned to this student
+
+      // If student has no subjects, automatically inherit cleanCommonSubjects
       const rawSubs = (st.subjects && st.subjects.length > 0)
         ? st.subjects
-        : (selectedAllocationSubject !== 'All' 
-            ? cleanCommonSubjects.filter(s => s.code.toUpperCase() === selectedAllocationSubject.toUpperCase())
-            : []);
+        : cleanCommonSubjects;
 
       const cleanSubs = rawSubs.map(sub => {
         const matched = cleanCommonSubjects.find(s => s.code.toUpperCase() === sub.code.toUpperCase());
-        const finalDate = (sub.date && sub.date.trim()) || (matched?.date && matched.date.trim()) || '2026-04-20';
+        const finalDate = (sub.date && sub.date.trim() && sub.date !== 'TBA')
+          ? sub.date.trim()
+          : (matched?.date && matched.date.trim() && matched.date !== 'TBA' ? matched.date.trim() : (sub.date || ''));
         return {
           code: sub.code.toUpperCase(),
           name: sub.name || matched?.name || sub.code,
@@ -1160,7 +1278,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           session: sub.session || matched?.session || 'Forenoon (FN)',
           time: sub.time || matched?.time || '09:30 AM - 12:30 PM'
         };
-      });
+      }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
 
       return {
         ...st,
@@ -1285,7 +1403,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
     const ticketsHtml = studentsList.map((st, index) => {
       const subjects = (st.subjects && st.subjects.length > 0) ? st.subjects : (examData?.commonSubjects || subjectsSchedule);
-      
+
       const rows = subjects.map((sub, sIdx) => `
         <tr>
           <td style="text-align: center; font-weight: 600;">${sIdx + 1}</td>
@@ -1660,22 +1778,20 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('tickets')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'tickets'
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'tickets'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+                }`}
             >
               <Ticket className="w-4 h-4" />
               Hall Tickets & Print
             </button>
             <button
               onClick={() => setActiveTab('allocate')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'allocate'
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'allocate'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+                }`}
             >
               <Building2 className="w-4 h-4" />
               Hall Allocation Setup
@@ -1685,20 +1801,19 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
         {statusMessage && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95">
-            <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border pointer-events-auto ${
-              statusMessage.type === 'error'
+            <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border pointer-events-auto ${statusMessage.type === 'error'
                 ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
                 : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
-            }`}>
+              }`}>
               {statusMessage.type === 'error' ? (
                 <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
               ) : (
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
               )}
               <span>{statusMessage.text}</span>
-              <button 
-                type="button" 
-                onClick={() => setStatusMessage(null)} 
+              <button
+                type="button"
+                onClick={() => setStatusMessage(null)}
                 className="ml-3 text-slate-400 hover:text-white text-lg leading-none cursor-pointer"
               >
                 ×
@@ -2213,56 +2328,95 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
               </div>
 
               {/* Add Subject Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <div>
-                  <input
-                    type="text"
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+                <div className={newSubCode === 'CUSTOM' ? '' : 'md:col-span-2'}>
+                  <select
                     value={newSubCode}
-                    onChange={(e) => setNewSubCode(e.target.value)}
-                    placeholder="Code (e.g. CS2001)"
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 uppercase"
-                  />
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewSubCode(val);
+                      if (val && val !== 'CUSTOM') {
+                        const match = catalogSubjects.find(s => (s.code || '').toUpperCase() === val.toUpperCase());
+                        if (match) {
+                          setNewSubName(match.name || '');
+                          if (match.date && match.date !== 'TBA') setNewSubDate(match.date);
+                          if (match.session) setNewSubSession(match.session);
+                          if (match.time) setNewSubTime(match.time);
+                        }
+                      }
+                    }}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- Choose Subject from Catalog --</option>
+                    {catalogSubjects.map(cs => (
+                      <option key={cs.code} value={cs.code}>
+                        {cs.code} - {cs.name}
+                      </option>
+                    ))}
+                    <option value="CUSTOM">+ Type Custom Code</option>
+                  </select>
                 </div>
-                <div className="md:col-span-2">
+
+                {newSubCode === 'CUSTOM' && (
+                  <div>
+                    <input
+                      type="text"
+                      value={customSubCode}
+                      onChange={(e) => setCustomSubCode(e.target.value)}
+                      placeholder="Code (e.g. CS2001)"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+
+                <div className={newSubCode === 'CUSTOM' ? '' : 'md:col-span-1'}>
                   <input
                     type="text"
                     value={newSubName}
                     onChange={(e) => setNewSubName(e.target.value)}
-                    placeholder="Subject Name (e.g. Cloud Computing)"
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800"
+                    placeholder="Subject Name"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
                 <div>
                   <input
                     type="date"
                     value={newSubDate}
                     onChange={(e) => setNewSubDate(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
                 <div>
                   <select
                     value={newSubSession}
-                    onChange={(e) => setNewSubSession(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-800"
+                    onChange={(e) => {
+                      const sess = e.target.value;
+                      setNewSubSession(sess);
+                      setNewSubTime(sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM');
+                    }}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="Forenoon (FN)">Forenoon (FN)</option>
                     <option value="Afternoon (AN)">Afternoon (AN)</option>
                   </select>
                 </div>
+
                 <div>
                   <input
                     type="text"
                     value={newSubTime}
                     onChange={(e) => setNewSubTime(e.target.value)}
-                    placeholder="Time (e.g. 10:00 AM - 01:00 PM)"
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800"
+                    placeholder="Time (09:30 AM - 12:30 PM)"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
                 <div>
                   <button
                     onClick={handleAddSubject}
-                    className="w-full h-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1"
+                    className="w-full h-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-xs cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Add Subject
@@ -2574,21 +2728,48 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
                         ({displayedStudents.length} candidate(s) studying this subject)
                       </span>
                     </div>
-                    {hallsList.length > 0 && displayedStudents.length > 0 && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] font-bold text-slate-600">Quick Assign Hall:</span>
-                        {hallsList.map(h => (
-                          <button
-                            key={h.hallNo}
-                            type="button"
-                            onClick={() => handleAssignHallToAll(h.hallNo)}
-                            className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] border border-indigo-200 transition-all"
-                          >
-                            Assign {h.hallNo} to All
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (subjectsSchedule.length === 0) {
+                            alert('No subjects scheduled yet in Step 1.');
+                            return;
+                          }
+                          setStudentsToAllocate(prev => prev.map(st => {
+                            const allSubs = subjectsSchedule.map(s => ({
+                              code: s.code.toUpperCase(),
+                              name: s.name,
+                              date: (s.date && s.date !== 'TBA') ? s.date : (s.code === 'CS2001' ? '2026-04-15' : '2026-04-18'),
+                              session: s.session || 'Forenoon (FN)',
+                              time: s.time || '09:30 AM - 12:30 PM'
+                            }));
+                            return { ...st, subjects: allSubs };
+                          }));
+                          setStatusMessage({ type: 'success', text: `Assigned all scheduled subjects with timings to all ${studentsToAllocate.length} candidates!` });
+                          setTimeout(() => setStatusMessage(null), 3500);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] shadow-xs transition-all flex items-center gap-1"
+                      >
+                        ⚡ Assign All Subjects &amp; Timing to All
+                      </button>
+
+                      {hallsList.length > 0 && displayedStudents.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-slate-600">Quick Hall:</span>
+                          {hallsList.map(h => (
+                            <button
+                              key={h.hallNo}
+                              type="button"
+                              onClick={() => handleAssignHallToAll(h.hallNo)}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] border border-indigo-200 transition-all"
+                            >
+                              Assign {h.hallNo} to All
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center gap-2 text-xs text-amber-800 font-semibold">
@@ -2676,28 +2857,33 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
                           <td className="px-4 py-2.5 font-bold text-blue-600">{st.rollNo}</td>
                           <td className="px-4 py-2.5 font-semibold text-slate-900">{st.name}</td>
                           <td className="px-4 py-2.5">
-                            <div className="flex flex-wrap items-center gap-1.5 max-w-xs">
-                              {subjectsSchedule.map(sub => {
-                                const isEnrolled = (st.subjects || []).some(s => s.code.toUpperCase() === sub.code.toUpperCase());
-                                return (
-                                  <button
-                                    key={sub.code}
-                                    type="button"
-                                    onClick={() => toggleStudentSubject(st.rollNo, sub)}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all flex items-center gap-1 ${
-                                      isEnrolled
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                        : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
-                                    }`}
-                                    title={`${isEnrolled ? 'Remove' : 'Select'} ${sub.code} (${sub.name})`}
-                                  >
-                                    <span>{sub.code}</span>
-                                    <span>{isEnrolled ? '✓' : '+'}</span>
-                                  </button>
-                                );
-                              })}
-                              {(!st.subjects || st.subjects.length === 0) && (
-                                <span className="text-[10px] text-amber-600 font-semibold italic">No subject selected</span>
+                            <div className="flex flex-col gap-1 max-w-sm">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {subjectsSchedule.map(sub => {
+                                  const isEnrolled = (st.subjects || []).some(s => s.code.toUpperCase() === sub.code.toUpperCase());
+                                  return (
+                                    <button
+                                      key={sub.code}
+                                      type="button"
+                                      onClick={() => toggleStudentSubject(st.rollNo, sub)}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all flex items-center gap-1 ${isEnrolled
+                                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                          : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+                                        }`}
+                                      title={`${isEnrolled ? 'Remove' : 'Select'} ${sub.code} (${sub.name})`}
+                                    >
+                                      <span>{sub.code}</span>
+                                      <span>{isEnrolled ? '✓' : '+'}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {st.subjects && st.subjects.length > 0 ? (
+                                <div className="text-[10px] text-slate-600 font-medium leading-tight">
+                                  {st.subjects.map(s => `${s.code}: ${s.date || 'TBA'} (${s.session?.includes('AN') ? 'AN' : 'FN'})`).join(' • ')}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-amber-600 font-semibold italic">No subject selected (Click + above)</span>
                               )}
                             </div>
                           </td>

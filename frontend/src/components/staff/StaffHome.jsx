@@ -138,7 +138,7 @@ export default function StaffHome({ staffUser, onNavigate }) {
     {
       title: 'HALL TICKETS',
       value: 'Generated',
-      change: 'Autonomous exams',
+      change: 'University exams',
       isUp: true,
       icon: Ticket,
       bg: 'bg-rose-500',
@@ -200,7 +200,7 @@ export default function StaffHome({ staffUser, onNavigate }) {
           <div>
             <h3 className="text-xs sm:text-sm font-extrabold text-blue-900 flex items-center gap-2">
               Faculty Academic Session Active
-              <span className="text-[10px] bg-blue-200/80 text-blue-800 px-2 py-0.5 rounded-full font-bold">Autonomous Faculty</span>
+              <span className="text-[10px] bg-blue-200/80 text-blue-800 px-2 py-0.5 rounded-full font-bold">MSU Affiliated Faculty</span>
             </h3>
             <p className="text-[11px] text-blue-700 font-medium mt-0.5">
               {staffUser?.designation || 'Faculty'} • {staffUser?.department || 'Department'} • Staff ID: <span className="font-mono font-bold text-slate-900">{staffUser?.staffId || '—'}</span>

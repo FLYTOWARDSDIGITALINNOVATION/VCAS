@@ -439,3 +439,69 @@ exports.removeStudent = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Auto enroll all students matching class department & semester
+// @route   POST /api/classes/staff/:staffId/:classCode/auto-enroll
+exports.autoEnrollDeptStudents = async (req, res) => {
+  try {
+    const identifier = req.params.classCode || req.params.idOrCode;
+    const staffId = req.params.staffId || null;
+
+    const targetClass = await findClassByIdOrCode(identifier, staffId);
+    if (!targetClass) {
+      return res.status(404).json({ success: false, message: `Class "${identifier}" not found.` });
+    }
+
+    const deptPrefix = (targetClass.dept || '').trim().split(' ')[0] || '';
+    const filter = {};
+    if (deptPrefix) {
+      filter.$or = [
+        { department: { $regex: new RegExp(deptPrefix, 'i') } },
+        { course: { $regex: new RegExp(deptPrefix, 'i') } }
+      ];
+    }
+
+    const eligibleStudents = await Student.find(filter);
+    let addedCount = 0;
+
+    eligibleStudents.forEach(st => {
+      const roll = (st.rollNo || st.studentId || st.regNo || '').trim().toUpperCase();
+      if (roll && !targetClass.students.some(s => s.rollNo.toUpperCase() === roll)) {
+        targetClass.students.push({
+          rollNo: roll,
+          name: st.name || 'Student',
+          phone: st.phone || '',
+          email: st.email || '',
+          present: true
+        });
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      await targetClass.save();
+      // Sync to staff embedded
+      if (targetClass.staffId) {
+        const staff = await Staff.findOne({ staffId: targetClass.staffId });
+        if (staff && staff.classes) {
+          const staffCls = staff.classes.find(c => c.code.toUpperCase() === targetClass.code.toUpperCase());
+          if (staffCls) {
+            staffCls.enrolledStudents = targetClass.students;
+            staffCls.totalStudents = targetClass.students.length;
+            await staff.save();
+          }
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Enrolled ${addedCount} student(s) into ${targetClass.code}. Total enrolled: ${targetClass.students.length}.`,
+      totalStudents: targetClass.students.length,
+      class: targetClass
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+

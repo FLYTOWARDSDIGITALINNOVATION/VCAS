@@ -235,7 +235,7 @@ export default function FeeStructureView() {
       <body>
         <div class="header">
           <div class="title">Vivekananda College of Arts and Science</div>
-          <div class="sub">Autonomous Institution • Affiliated with MS University • Vellalankulam</div>
+          <div class="sub">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</div>
           <div class="badge">Official UG Fee Structure & Scholarship Quotation (2025–2026)</div>
         </div>
 
@@ -728,7 +728,7 @@ export default function FeeStructureView() {
               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">Model Exam</span>
             </div>
             <p className="text-slate-500 leading-relaxed text-[11px]">
-              Comprehensive full-syllabus simulation before autonomous end-semester university boards.
+              Comprehensive full-syllabus simulation before university end-semester boards.
             </p>
           </div>
 

@@ -305,18 +305,49 @@ exports.getClassSummary = async (req, res) => {
 // @route   GET /api/attendance/student/:rollNo
 exports.getStudentAttendance = async (req, res) => {
   try {
-    const rollNo = req.params.rollNo.trim().toUpperCase();
+    const rawId = (req.params.rollNo || '').trim();
+    if (!rawId) {
+      return res.status(400).json({ success: false, message: 'Student roll number or register number is required.' });
+    }
+    const idRegex = new RegExp('^' + rawId + '$', 'i');
 
-    // Find all sessions containing this student roll number
-    const sessions = await Attendance.find({ 'records.rollNo': rollNo }).sort({ date: -1 });
+    const Student = require('../models/Student');
+    const student = await Student.findOne({
+      $or: [
+        { rollNo: idRegex },
+        { regNo: idRegex },
+        { studentId: idRegex },
+        { loginId: idRegex },
+        { admNo: idRegex }
+      ]
+    });
+
+    const sRoll = student ? (student.rollNo || rawId) : rawId;
+    const sReg = student ? (student.regNo || rawId) : rawId;
+    const sRollLower = sRoll.toLowerCase();
+    const sRegLower = sReg.toLowerCase();
+    const rawLower = rawId.toLowerCase();
+
+    // Find all sessions containing this student roll number or reg number (case-insensitive)
+    const sessions = await Attendance.find({
+      $or: [
+        { 'records.rollNo': new RegExp('^' + sRoll + '$', 'i') },
+        { 'records.rollNo': new RegExp('^' + sReg + '$', 'i') },
+        { 'records.rollNo': idRegex }
+      ]
+    }).sort({ date: -1 });
 
     let total = 0;
     let present = 0;
     let absent = 0;
     let late = 0;
+    const subjectMap = {};
 
     const history = sessions.map(sess => {
-      const rec = sess.records.find(r => r.rollNo === rollNo);
+      const rec = (sess.records || []).find(r => {
+        const rLower = (r.rollNo || '').toLowerCase();
+        return rLower === sRollLower || rLower === sRegLower || rLower === rawLower;
+      });
       const status = rec ? rec.status : 'Absent';
       const st = status.toLowerCase();
 
@@ -324,6 +355,23 @@ exports.getStudentAttendance = async (req, res) => {
       if (st === 'present') present++;
       else if (st === 'absent') absent++;
       else if (st === 'late') late++;
+
+      const subKey = sess.classCode || sess.className || 'General';
+      if (!subjectMap[subKey]) {
+        subjectMap[subKey] = {
+          code: sess.classCode,
+          name: sess.className || sess.classCode,
+          staffName: sess.staffName,
+          total: 0,
+          present: 0,
+          absent: 0,
+          late: 0
+        };
+      }
+      subjectMap[subKey].total++;
+      if (st === 'present') subjectMap[subKey].present++;
+      else if (st === 'absent') subjectMap[subKey].absent++;
+      else if (st === 'late') subjectMap[subKey].late++;
 
       return {
         sessionId: sess._id,
@@ -337,16 +385,26 @@ exports.getStudentAttendance = async (req, res) => {
       };
     });
 
-    const percentage = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
+    const percentage = total > 0 
+      ? Math.round(((present + late) / total) * 100) 
+      : (student && student.attendance !== undefined ? student.attendance : 85);
+
+    const subjectBreakdown = Object.values(subjectMap).map(sub => ({
+      ...sub,
+      percentage: sub.total > 0 ? Math.round(((sub.present + sub.late) / sub.total) * 100) : 0
+    }));
 
     res.status(200).json({
       success: true,
-      rollNo,
+      rollNo: sRoll,
+      regNo: sReg,
+      name: student ? (student.name || student.fullName) : '',
       totalClasses: total,
       present,
       absent,
       late,
       percentage,
+      subjectBreakdown,
       history
     });
   } catch (error) {

@@ -103,6 +103,8 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   const [selectedFeeStatus, setSelectedFeeStatus] = useState('All Statuses');
   const [selectedRows, setSelectedRows] = useState([]);
   const [showAddWizard, setShowAddWizard] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [selectedExportFields, setSelectedExportFields] = useState(['regNo', 'rollNo', 'name', 'aadhaar']);
   const [selectedStudentProfile, setSelectedStudentProfile] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
   const [deleteModalStudent, setDeleteModalStudent] = useState(null);
@@ -300,7 +302,8 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
     const content = `
 ================================================================================
-          VIVEKANANDHA COLLEGE OF ARTS AND SCIENCES (AUTONOMOUS)
+          VIVEKANANDHA COLLEGE OF ARTS AND SCIENCES
+          (AFFILIATED TO MANONMANIAM SUNDARANAR UNIVERSITY)
                       VELLALANKULAM, TAMIL NADU
                   OFFICIAL STUDENT SLIP & CREDENTIAL PASS
 ================================================================================
@@ -418,7 +421,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
             ${getCollegeLogoHtml(44)}
             <div>
               <div class="title">Vivekanandha College of Arts and Sciences</div>
-              <div class="subtitle">Autonomous Institution • Affiliated with MS University • Vellalankulam</div>
+              <div class="subtitle">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</div>
             </div>
           </div>
           <div class="badge">Official Student Slip & Academic Credentials Pass</div>
@@ -527,71 +530,87 @@ Unauthorized reproduction or distribution is strictly prohibited.
     printWindow.document.close();
   };
 
-  const handleExportAllStudentsCSV = () => {
-    const headers = [
-      'Register Number (Reg No)', 
-      'Roll Number', 
-      'Year', 
-      'Login ID', 
-      'Password (DOB)', 
-      'Name', 
-      'Gender', 
-      'Course', 
-      'Department', 
-      'Father Name', 
-      'Nationality', 
-      'Religion', 
-      'Caste', 
-      'Aadhaar', 
-      'PAN', 
-      'Bank Name', 
-      'Account No', 
-      'IFSC Code', 
-      'Branch', 
-      'Driving License', 
-      'EMIS Number', 
-      '10th Marks', 
-      '12th Marks', 
-      'Donation', 
-      'Admission Date', 
-      'Academic Status'
-    ];
-    const rows = filteredStudents.map(s => [
-      `"${s.regNo || s.id}"`,
-      `"${s.rollNo || ''}"`,
-      `"${s.year || '1st Year'}"`,
-      `"${s.loginId || s.regNo || s.id}"`,
-      `"${s.dob || ''}"`,
-      `"${s.name}"`,
-      `"${s.gender || 'Male'}"`,
-      `"${s.course || s.courseAdmitted || s.department}"`,
-      `"${s.department}"`,
-      `"${s.fatherName || ''}"`,
-      `"${s.nationality || 'Indian'}"`,
-      `"${s.religion || 'Hindu'}"`,
-      `"${s.caste || s.casteCommunity || ''}"`,
-      `"${s.aadhaar || ''}"`,
-      `"${s.pan || ''}"`,
-      `"${s.bankName || ''}"`,
-      `"${s.bankAccountNo || ''}"`,
-      `"${s.ifscCode || ''}"`,
-      `"${s.bankBranch || ''}"`,
-      `"${s.drivingLicense || ''}"`,
-      `"${s.emisNumber || ''}"`,
-      `"${s.tenthMarks || ''}"`,
-      `"${s.twelfthMarks || ''}"`,
-      `"${s.donation || '0'}"`,
-      `"${s.dateOfAdmission || ''}"`,
-      `"${s.status || 'Active'}"`
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const EXPORT_COLUMNS_CONFIG = [
+    { id: 'aadhaar', label: 'Aadhaar Number', group: 'Statutory / Identity', getVal: s => s.aadhaar || '' },
+    { id: 'pan', label: 'PAN Card Number', group: 'Statutory / Identity', getVal: s => s.pan || '' },
+    { id: 'emisNumber', label: 'EMIS Number', group: 'Statutory / Identity', getVal: s => s.emisNumber || '' },
+    { id: 'drivingLicense', label: 'Driving License', group: 'Statutory / Identity', getVal: s => s.drivingLicense || '' },
+    
+    { id: 'regNo', label: 'Register Number (Reg No)', group: 'Basic Profile', getVal: s => s.regNo || s.id || '' },
+    { id: 'rollNo', label: 'Roll Number', group: 'Basic Profile', getVal: s => s.rollNo || '' },
+    { id: 'name', label: 'Student Full Name', group: 'Basic Profile', getVal: s => s.name || s.fullName || '' },
+    { id: 'gender', label: 'Gender', group: 'Basic Profile', getVal: s => s.gender || 'Male' },
+    { id: 'dob', label: 'Date of Birth (DOB / Password)', group: 'Basic Profile', getVal: s => s.dob || '' },
+    { id: 'loginId', label: 'Portal Login ID', group: 'Basic Profile', getVal: s => s.loginId || s.regNo || s.id || '' },
+
+    { id: 'course', label: 'Course Admitted', group: 'Academic Details', getVal: s => s.course || s.courseAdmitted || s.department || '' },
+    { id: 'department', label: 'Department', group: 'Academic Details', getVal: s => s.department || '' },
+    { id: 'year', label: 'Academic Year', group: 'Academic Details', getVal: s => s.year || '1st Year' },
+    { id: 'sem', label: 'Semester', group: 'Academic Details', getVal: s => s.sem || s.semester || '1st Sem' },
+    { id: 'dateOfAdmission', label: 'Date of Admission', group: 'Academic Details', getVal: s => s.dateOfAdmission || '' },
+    { id: 'status', label: 'Academic Status', group: 'Academic Details', getVal: s => s.status || 'Active' },
+    { id: 'attendance', label: 'Attendance %', group: 'Academic Details', getVal: s => `${s.attendance !== undefined ? s.attendance : 85}%` },
+
+    { id: 'bankName', label: 'Bank Name', group: 'Bank & Financials', getVal: s => s.bankName || '' },
+    { id: 'bankAccountNo', label: 'Bank Account Number', group: 'Bank & Financials', getVal: s => s.bankAccountNo || '' },
+    { id: 'ifscCode', label: 'IFSC Code', group: 'Bank & Financials', getVal: s => s.ifscCode || '' },
+    { id: 'bankBranch', label: 'Bank Branch', group: 'Bank & Financials', getVal: s => s.bankBranch || '' },
+    { id: 'feeStatus', label: 'Fee Clearance Status', group: 'Bank & Financials', getVal: s => s.feeStatus || 'Pending' },
+    { id: 'donation', label: 'Donation / Quota', group: 'Bank & Financials', getVal: s => s.donation || 'Nil' },
+
+    { id: 'fatherName', label: "Father's Name", group: 'Family & Contact', getVal: s => s.fatherName || '' },
+    { id: 'motherName', label: "Mother's Name", group: 'Family & Contact', getVal: s => s.motherName || '' },
+    { id: 'phone', label: 'Student Mobile / Phone', group: 'Family & Contact', getVal: s => s.phone || s.mobile || '' },
+    { id: 'email', label: 'Email Address', group: 'Family & Contact', getVal: s => s.email || '' },
+    { id: 'nationality', label: 'Nationality', group: 'Family & Contact', getVal: s => s.nationality || 'Indian' },
+    { id: 'religion', label: 'Religion', group: 'Family & Contact', getVal: s => s.religion || 'Hindu' },
+    { id: 'caste', label: 'Caste / Community', group: 'Family & Contact', getVal: s => s.caste || s.casteCommunity || '' },
+    { id: 'address', label: 'Address', group: 'Family & Contact', getVal: s => s.address || '' },
+    { id: 'tenthMarks', label: '10th Marks / Board', group: 'Academic Details', getVal: s => s.tenthMarks || '' },
+    { id: 'twelfthMarks', label: '12th Marks / Board', group: 'Academic Details', getVal: s => s.twelfthMarks || '' },
+  ];
+
+  const handleExportFields = (fieldIds, customFileName) => {
+    if (!fieldIds || fieldIds.length === 0) {
+      showToast('Please select at least one field to export.');
+      return;
+    }
+    const selectedCols = EXPORT_COLUMNS_CONFIG.filter(c => fieldIds.includes(c.id));
+    const headers = selectedCols.map(c => `"${c.label}"`);
+    const rows = filteredStudents.map(s => {
+      return selectedCols.map(c => `"${String(c.getVal(s) || '').replace(/"/g, '""')}"`);
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
+    const timestamp = new Date().toISOString().split('T')[0];
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `VCAS_Student_Master_Registry_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `${customFileName || 'VCAS_Student_Export'}_${timestamp}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast(`✓ Downloaded ${rows.length} student records (${selectedCols.length} fields)`);
+  };
+
+  const handleQuickExport = (presetKey) => {
+    if (presetKey === 'aadhaar_only') {
+      handleExportFields(['regNo', 'rollNo', 'name', 'aadhaar'], 'VCAS_Students_Aadhaar_Only');
+    } else if (presetKey === 'pan_only') {
+      handleExportFields(['regNo', 'rollNo', 'name', 'pan'], 'VCAS_Students_PAN_Only');
+    } else if (presetKey === 'bank_only') {
+      handleExportFields(['regNo', 'rollNo', 'name', 'bankName', 'bankAccountNo', 'ifscCode', 'bankBranch'], 'VCAS_Students_Bank_Accounts_Only');
+    } else if (presetKey === 'fees_only') {
+      handleExportFields(['regNo', 'rollNo', 'name', 'course', 'year', 'feeStatus', 'donation'], 'VCAS_Students_Fee_Status_Only');
+    } else if (presetKey === 'credentials_only') {
+      handleExportFields(['regNo', 'rollNo', 'name', 'loginId', 'dob'], 'VCAS_Students_Portal_Credentials_Only');
+    } else if (presetKey === 'all') {
+      handleExportFields(EXPORT_COLUMNS_CONFIG.map(c => c.id), 'VCAS_Student_Master_Registry');
+    }
+  };
+
+  const handleExportAllStudentsCSV = () => {
+    handleQuickExport('all');
   };
 
   const handleSaveEdit = async (e) => {
@@ -665,6 +684,10 @@ Unauthorized reproduction or distribution is strictly prohibited.
           return next;
         });
 
+        try {
+          window.dispatchEvent(new Event('vcas_students_updated'));
+        } catch (_) {}
+
         if (selectedStudentProfile) {
           setSelectedStudentProfile(updated);
         }
@@ -698,6 +721,9 @@ Unauthorized reproduction or distribution is strictly prohibited.
           } catch (e) {}
           return next;
         });
+        try {
+          window.dispatchEvent(new Event('vcas_students_updated'));
+        } catch (_) {}
         showToast(`Student "${deleteModalStudent.name}" deleted successfully.`);
         setDeleteModalStudent(null);
       } else {
@@ -746,7 +772,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         course: (newStudentData.courseAdmitted || newStudentData.course || '').trim(),
         status: 'Active',
         attendance: 100,
-        feeStatus: 'Paid'
+        feeStatus: newStudentData.feeStatus || 'Pending'
       };
 
       const res = await fetch(`${API_BASE}/api/students`, {
@@ -764,6 +790,9 @@ Unauthorized reproduction or distribution is strictly prohibited.
           } catch (e) {}
           return next;
         });
+        try {
+          window.dispatchEvent(new Event('vcas_students_updated'));
+        } catch (_) {}
         setShowAddWizard(false);
         showToast(`Student "${created.name}" registered successfully!`);
       } else {
@@ -843,13 +872,24 @@ Unauthorized reproduction or distribution is strictly prohibited.
             <span className="hidden sm:inline">Refresh</span>
           </button>
           {isSuperAdmin && (
-            <button 
-              onClick={handleExportAllStudentsCSV}
-              className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs border border-purple-200 shadow-xs flex items-center gap-2 transition-all cursor-pointer"
-            >
-              <Download className="w-4 h-4 text-purple-600" />
-              <span>Export Student CSV</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => handleQuickExport('aadhaar_only')}
+                className="hidden lg:inline-flex px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-xs border border-emerald-200 shadow-xs items-center gap-1.5 transition-all cursor-pointer"
+                title="Download Aadhaar numbers with student identification"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>⚡ Aadhaar Only</span>
+              </button>
+              <button 
+                onClick={() => setShowExportModal(true)}
+                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                title="Download specific individual fields or configure custom export"
+              >
+                <Download className="w-4 h-4 text-white" />
+                <span>Download / Export Fields</span>
+              </button>
+            </div>
           )}
           <button 
             onClick={() => setShowAddWizard(true)}
@@ -1693,6 +1733,249 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* CUSTOM FIELD EXPORT MODAL */}
+      {showExportModal && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden my-auto">
+              
+              {/* Header */}
+              <div className="p-5 sm:p-6 bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                    <Download className="w-6 h-6 text-purple-300" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black tracking-tight">Custom Student Field Download</h3>
+                    <p className="text-xs text-purple-200">
+                      Download specific fields separately (Aadhaar alone, PAN alone, Bank details, etc.)
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowExportModal(false)}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1 text-slate-800">
+
+                {/* 1-Click Fast Presets */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                      ⚡ Instant 1-Click Field Downloads ({filteredStudents.length} Students)
+                    </span>
+                    <span className="text-[11px] font-semibold text-purple-600">Direct CSV Download</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickExport('aadhaar_only');
+                        setShowExportModal(false);
+                      }}
+                      className="p-3 rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 text-left transition-all group cursor-pointer shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-emerald-900">Aadhaar Only</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-800 font-bold">Govt ID</span>
+                      </div>
+                      <p className="text-[11px] text-emerald-700 mt-1">Reg No + Roll No + Name + Aadhaar</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickExport('pan_only');
+                        setShowExportModal(false);
+                      }}
+                      className="p-3 rounded-2xl border-2 border-blue-200 bg-blue-50/60 hover:bg-blue-100/80 text-left transition-all group cursor-pointer shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-blue-900">PAN Only</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-200 text-blue-800 font-bold">Tax ID</span>
+                      </div>
+                      <p className="text-[11px] text-blue-700 mt-1">Reg No + Roll No + Name + PAN</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickExport('bank_only');
+                        setShowExportModal(false);
+                      }}
+                      className="p-3 rounded-2xl border-2 border-amber-200 bg-amber-50/60 hover:bg-amber-100/80 text-left transition-all group cursor-pointer shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-amber-900">Bank Accounts</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800 font-bold">Finance</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700 mt-1">Account No + IFSC + Bank + Branch</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickExport('fees_only');
+                        setShowExportModal(false);
+                      }}
+                      className="p-3 rounded-2xl border-2 border-purple-200 bg-purple-50/60 hover:bg-purple-100/80 text-left transition-all group cursor-pointer shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-purple-900">Fee Status</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-200 text-purple-800 font-bold">Accounts</span>
+                      </div>
+                      <p className="text-[11px] text-purple-700 mt-1">Paid / Pending Status + Donation</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickExport('credentials_only');
+                        setShowExportModal(false);
+                      }}
+                      className="p-3 rounded-2xl border-2 border-rose-200 bg-rose-50/60 hover:bg-rose-100/80 text-left transition-all group cursor-pointer shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-rose-900">Portal Credentials</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-200 text-rose-800 font-bold">Security</span>
+                      </div>
+                      <p className="text-[11px] text-rose-700 mt-1">Login ID + Default Password (DOB)</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickExport('all');
+                        setShowExportModal(false);
+                      }}
+                      className="p-3 rounded-2xl border-2 border-slate-300 bg-slate-100 hover:bg-slate-200 text-left transition-all group cursor-pointer shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-900">Full Master Sheet</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-300 text-slate-800 font-bold">All 33 Cols</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-1">Complete Student Master Registry</p>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-200 pt-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-600">
+                        Custom Field Selection ({selectedExportFields.length} Selected)
+                      </h4>
+                      <p className="text-[11px] text-slate-500">Pick any individual fields to include in your customized export.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedExportFields(EXPORT_COLUMNS_CONFIG.map(c => c.id))}
+                        className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 cursor-pointer"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedExportFields(['regNo', 'rollNo', 'name'])}
+                        className="px-2.5 py-1 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 cursor-pointer"
+                      >
+                        Reset to Basic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedExportFields([])}
+                        className="px-2.5 py-1 text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 cursor-pointer"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Groups */}
+                  <div className="space-y-4">
+                    {['Statutory / Identity', 'Basic Profile', 'Academic Details', 'Bank & Financials', 'Family & Contact'].map(groupName => {
+                      const groupFields = EXPORT_COLUMNS_CONFIG.filter(c => c.group === groupName);
+                      return (
+                        <div key={groupName} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                          <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
+                            {groupName}
+                          </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            {groupFields.map(field => {
+                              const isChecked = selectedExportFields.includes(field.id);
+                              return (
+                                <label
+                                  key={field.id}
+                                  className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                                    isChecked
+                                      ? 'bg-purple-50 border-purple-300 text-purple-900 font-bold shadow-2xs'
+                                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedExportFields(prev => [...prev, field.id]);
+                                      } else {
+                                        setSelectedExportFields(prev => prev.filter(x => x !== field.id));
+                                      }
+                                    }}
+                                    className="w-3.5 h-3.5 text-purple-600 rounded border-slate-300 focus:ring-purple-500"
+                                  />
+                                  <span className="truncate">{field.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+                <span className="text-xs font-semibold text-slate-600">
+                  Exporting <strong className="text-purple-700">{selectedExportFields.length}</strong> fields for <strong className="text-slate-900">{filteredStudents.length}</strong> students
+                </span>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowExportModal(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={selectedExportFields.length === 0}
+                    onClick={() => {
+                      handleExportFields(selectedExportFields, 'VCAS_Custom_Student_Export');
+                      setShowExportModal(false);
+                    }}
+                    className="px-5 py-2.5 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download Selected CSV</span>
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         </ModalPortal>

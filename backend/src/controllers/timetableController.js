@@ -176,3 +176,128 @@ exports.clearSlot = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Get complete weekly timetable for a student
+// @route   GET /api/timetable/student/:identifier
+exports.getStudentTimetable = async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: 'Student identifier required.' });
+    }
+    const idClean = identifier.trim();
+    const idRegex = new RegExp('^' + idClean + '$', 'i');
+
+    const Student = require('../models/Student');
+    const Class = require('../models/Class');
+
+    const student = await Student.findOne({
+      $or: [
+        { rollNo: idRegex },
+        { regNo: idRegex },
+        { studentId: idRegex },
+        { loginId: idRegex },
+        { admNo: idRegex }
+      ]
+    });
+
+    const rollNo = student ? (student.rollNo || idClean) : idClean;
+    const regNo = student ? (student.regNo || idClean) : idClean;
+    const dept = student ? (student.department || student.course || '') : '';
+    const semester = student ? (student.sem || student.semester || '1st Sem') : '1st Sem';
+    const course = student ? (student.course || dept) : dept;
+
+    // 1. Find classes student is strictly enrolled in
+    const enrolledClasses = await Class.find({
+      $or: [
+        { 'students.rollNo': new RegExp('^' + rollNo + '$', 'i') },
+        { 'students.rollNo': new RegExp('^' + regNo + '$', 'i') },
+        { 'students.studentId': new RegExp('^' + rollNo + '$', 'i') },
+        { 'students.studentId': new RegExp('^' + regNo + '$', 'i') }
+      ]
+    });
+
+    const enrolledClassMap = {};
+    enrolledClasses.forEach(c => {
+      if (c.code) enrolledClassMap[c.code.toUpperCase().trim()] = c;
+    });
+
+    // 2. Fetch all staff timetables
+    const allTimetables = await Timetable.find({});
+
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const slotTimes = {
+      1: '8:30 – 9:20 AM',
+      2: '9:20 – 10:10 AM',
+      3: '10:10 – 11:00 AM',
+      4: '11:15 AM – 12:05 PM',
+      5: '12:05 – 12:55 PM',
+      6: '1:45 – 2:35 PM',
+      7: '2:35 – 3:25 PM',
+      8: '3:25 – 4:15 PM'
+    };
+
+    const studentSchedule = {
+      Monday: [],
+      Tuesday: [],
+      Wednesday: [],
+      Thursday: [],
+      Friday: [],
+      Saturday: []
+    };
+
+    days.forEach(day => {
+      for (let s = 1; s <= 8; s++) {
+        const slotKey = String(s);
+        let foundSlot = null;
+
+        for (const tt of allTimetables) {
+          const sched = tt.schedule instanceof Map ? Object.fromEntries(tt.schedule) : (tt.schedule || {});
+          const daySched = sched[day] || {};
+          const slotItem = daySched[slotKey];
+
+          if (slotItem && (slotItem.code || slotItem.name)) {
+            const itemCode = (slotItem.code || '').toUpperCase().trim();
+            const matchedClass = enrolledClassMap[itemCode];
+            const isEnrolled = Boolean(matchedClass);
+
+            // Only display timetable slot if student is explicitly enrolled in this subject
+            if (isEnrolled) {
+              foundSlot = {
+                slot: s,
+                time: slotTimes[s] || `Period ${s}`,
+                code: matchedClass ? matchedClass.code : (slotItem.code || itemCode),
+                subject: (matchedClass && matchedClass.name) ? matchedClass.name : (slotItem.name || slotItem.code || 'Core Course'),
+                faculty: (matchedClass && matchedClass.staffName) ? matchedClass.staffName : (tt.staffName || 'Faculty'),
+                room: (matchedClass && matchedClass.room && matchedClass.room.trim()) ? matchedClass.room : (slotItem.room || 'LH-101'),
+                type: (slotItem.type || 'theory').toLowerCase(),
+                color: (slotItem.color || 'blue').toLowerCase()
+              };
+              break;
+            }
+          }
+        }
+
+        if (foundSlot) {
+          studentSchedule[day].push(foundSlot);
+        }
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      student: {
+        rollNo,
+        regNo,
+        name: student ? (student.name || student.fullName) : '',
+        course,
+        department: dept,
+        semester
+      },
+      schedule: studentSchedule
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+

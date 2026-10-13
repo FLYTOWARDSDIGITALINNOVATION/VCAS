@@ -94,7 +94,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
     <div className="flex flex-col justify-between h-full bg-white">
       <div>
         {/* Sticky Header Matching Admin */}
-        <div className="sticky top-0 z-20 bg-white border-b border-slate-100 p-5 sm:p-6 flex items-center justify-between shadow-2xs">
+        <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-4 sm:px-5 sm:py-5 flex items-center justify-between shadow-2xs min-w-0">
           <CollegeLogo size="md" showText={true} />
           <button 
             onClick={() => setMobileOpen(false)}

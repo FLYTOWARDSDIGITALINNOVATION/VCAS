@@ -31,6 +31,9 @@ export default function StaffMyClasses({ staffUser }) {
   const [enrollingClassCode, setEnrollingClassCode] = useState(null);
   const [isSubmittingStudent, setIsSubmittingStudent] = useState(false);
   const [studentError, setStudentError] = useState('');
+  const [registeredStudents, setRegisteredStudents] = useState([]);
+  const [selectedRegisteredRoll, setSelectedRegisteredRoll] = useState('');
+  const [enrollMode, setEnrollMode] = useState('select'); // 'select' | 'manual'
   const [newStudent, setNewStudent] = useState({
     rollNo: '',
     name: '',
@@ -71,9 +74,63 @@ export default function StaffMyClasses({ staffUser }) {
     }
   };
 
+  // Fetch registered students from main Student database
+  const fetchRegisteredStudents = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/students`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setRegisteredStudents(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching registered students:', err);
+    }
+  };
+
   useEffect(() => {
     fetchClasses();
+    fetchRegisteredStudents();
   }, [staffUser?.staffId]);
+
+  // Handle selecting an already registered student
+  const handleSelectRegisteredStudent = (roll) => {
+    setSelectedRegisteredRoll(roll);
+    setStudentError('');
+    const found = registeredStudents.find(s => (s.rollNo || s.regNo || s.studentId) === roll);
+    if (found) {
+      setNewStudent({
+        rollNo: found.rollNo || found.regNo || found.studentId || '',
+        name: found.name || '',
+        phone: found.phone || '',
+        email: found.email || ''
+      });
+    }
+  };
+
+  // 1-Click Auto Enroll all matching department students
+  const handleAutoEnrollDept = async (classCode) => {
+    if (!classCode) return;
+    try {
+      setIsSubmittingStudent(true);
+      setStudentError('');
+      const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${classCode}/auto-enroll`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        showFeedback(data.message || `Students auto-enrolled successfully!`);
+        fetchClasses();
+        setEnrollingClassCode(null);
+        setSelectedRegisteredRoll('');
+      } else {
+        setStudentError(data.message || 'Auto-enroll failed.');
+      }
+    } catch (err) {
+      setStudentError('Network error: ' + err.message);
+    } finally {
+      setIsSubmittingStudent(false);
+    }
+  };
 
   // Handle Add Class
   const handleCreateClass = async (e) => {
@@ -856,18 +913,60 @@ export default function StaffMyClasses({ staffUser }) {
       {/* ============================================================ */}
       {enrollingClassCode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 max-w-sm w-full space-y-4 animate-in zoom-in-95">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 max-w-md w-full space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="font-extrabold text-slate-900 text-sm">Enroll Student</h3>
+                <h3 className="font-extrabold text-slate-900 text-sm">Enroll Student into Subject</h3>
                 <p className="text-[11px] text-blue-600 font-bold">Class: {enrollingClassCode}</p>
               </div>
               <button
                 type="button"
-                onClick={() => setEnrollingClassCode(null)}
-                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg"
+                onClick={() => { setEnrollingClassCode(null); setSelectedRegisteredRoll(''); }}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick 1-Click Auto Enroll Action Banner */}
+            <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[11.5px] font-extrabold text-blue-950">⚡ 1-Click Auto Enroll</p>
+                <p className="text-[10px] text-blue-800">Enroll all registered department students automatically.</p>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmittingStudent}
+                onClick={() => handleAutoEnrollDept(enrollingClassCode)}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shrink-0 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                Auto-Enroll All
+              </button>
+            </div>
+
+            {/* Mode Selector Tabs */}
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setEnrollMode('select')}
+                className={`flex-1 py-1.5 rounded-xl transition-all cursor-pointer ${
+                  enrollMode === 'select'
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                ✓ Pick Existing Student ({registeredStudents.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnrollMode('manual')}
+                className={`flex-1 py-1.5 rounded-xl transition-all cursor-pointer ${
+                  enrollMode === 'manual'
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                + Manual Entry
               </button>
             </div>
 
@@ -878,6 +977,32 @@ export default function StaffMyClasses({ staffUser }) {
             )}
 
             <form onSubmit={handleEnrollStudent} className="space-y-3">
+              {enrollMode === 'select' && (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Select Registered Student <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={selectedRegisteredRoll}
+                    onChange={(e) => handleSelectRegisteredStudent(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-600"
+                  >
+                    <option value="">-- Choose a registered student --</option>
+                    {registeredStudents.map(st => {
+                      const roll = st.rollNo || st.regNo || st.studentId;
+                      return (
+                        <option key={st._id || roll} value={roll}>
+                          {roll} — {st.name} ({st.department || st.course || 'Dept'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Selecting a student automatically pulls their credentials without re-entering anything.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">Roll Number *</label>
                 <input
@@ -916,15 +1041,15 @@ export default function StaffMyClasses({ staffUser }) {
               <div className="flex items-center gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setEnrollingClassCode(null)}
-                  className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600"
+                  onClick={() => { setEnrollingClassCode(null); setSelectedRegisteredRoll(''); }}
+                  className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingStudent}
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs disabled:opacity-50"
+                  disabled={isSubmittingStudent || !newStudent.rollNo || !newStudent.name}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmittingStudent ? 'Enrolling...' : 'Enroll Student'}
                 </button>

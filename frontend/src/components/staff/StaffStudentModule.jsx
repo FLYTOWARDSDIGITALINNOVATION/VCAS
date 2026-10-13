@@ -23,7 +23,9 @@ import {
   UserPlus,
   ChevronRight,
   Download,
-  KeyRound
+  KeyRound,
+  BookOpen,
+  CheckSquare
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from '../CollegeLogo';
@@ -69,6 +71,13 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
   const [showCreatedModal, setShowCreatedModal] = useState(null); // Newly created student credentials modal
   const [editModalTab, setEditModalTab] = useState('sheet1');
   const [viewModalTab, setViewModalTab] = useState('sheet1');
+
+  // Assign Subjects Modal State
+  const [assigningStudent, setAssigningStudent] = useState(null);
+  const [staffClasses, setStaffClasses] = useState([]);
+  const [loadingStaffClasses, setLoadingStaffClasses] = useState(false);
+  const [selectedClassCodes, setSelectedClassCodes] = useState(new Set());
+  const [savingClasses, setSavingClasses] = useState(false);
 
   // Form State for Adding / Editing Student
   const initialForm = {
@@ -236,6 +245,74 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
   useEffect(() => {
     fetchStudents();
   }, []);
+
+  // Open modal to assign subjects for a student
+  const handleOpenAssignModal = async (student) => {
+    setAssigningStudent(student);
+    setLoadingStaffClasses(true);
+    try {
+      const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.classes)) {
+        setStaffClasses(data.classes);
+        const rollUpper = (student.rollNo || student.regNo || '').toUpperCase();
+        const activeSet = new Set();
+        data.classes.forEach(c => {
+          const isEnrolled = (c.students || []).some(s => s.rollNo.toUpperCase() === rollUpper);
+          if (isEnrolled) activeSet.add(c.code);
+        });
+        setSelectedClassCodes(activeSet);
+      }
+    } catch (err) {
+      console.error('Error fetching staff classes:', err);
+    } finally {
+      setLoadingStaffClasses(false);
+    }
+  };
+
+  const handleToggleClass = (classCode) => {
+    setSelectedClassCodes(prev => {
+      const next = new Set(prev);
+      if (next.has(classCode)) next.delete(classCode);
+      else next.add(classCode);
+      return next;
+    });
+  };
+
+  const handleSaveStudentClasses = async () => {
+    if (!assigningStudent) return;
+    setSavingClasses(true);
+    const rollNo = (assigningStudent.rollNo || assigningStudent.regNo || '').toUpperCase();
+    try {
+      for (const cls of staffClasses) {
+        const isCurrentlyEnrolled = (cls.students || []).some(s => s.rollNo.toUpperCase() === rollNo);
+        const shouldBeEnrolled = selectedClassCodes.has(cls.code);
+
+        if (shouldBeEnrolled && !isCurrentlyEnrolled) {
+          await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${cls.code}/students`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rollNo,
+              name: assigningStudent.name,
+              phone: assigningStudent.phone || '',
+              email: assigningStudent.email || ''
+            })
+          });
+        } else if (!shouldBeEnrolled && isCurrentlyEnrolled) {
+          await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}/${cls.code}/students/${rollNo}`, {
+            method: 'DELETE'
+          });
+        }
+      }
+      showToast(`Subjects updated for ${assigningStudent.name}!`);
+      setAssigningStudent(null);
+    } catch (err) {
+      alert('Error saving subjects: ' + err.message);
+    } finally {
+      setSavingClasses(false);
+    }
+  };
 
   // Filtered Students
   const filteredStudents = useMemo(() => {
@@ -408,7 +485,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
             ${getCollegeLogoHtml(44)}
             <div>
               <div class="title">Vivekanandha College of Arts and Sciences</div>
-              <div class="sub">Autonomous Institution • Affiliated to Periyar University</div>
+              <div class="sub">Affiliated with Manonmaniam Sundaranar University • VCAS</div>
             </div>
           </div>
           <div class="badge">Official Student Registration &amp; Information Slip</div>
@@ -698,7 +775,25 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => handleOpenAssignModal(st)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer border border-indigo-200"
+                              title="Assign Subjects / Classes"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Subjects</span>
+                            </button>
+                            {onNavigate && (
+                              <button
+                                onClick={() => onNavigate('Attendance')}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer border border-emerald-200"
+                                title="Mark Attendance"
+                              >
+                                <CheckSquare className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Attendance</span>
+                              </button>
+                            )}
                             <button
                               onClick={() => handlePrintStudentSlip(st)}
                               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
@@ -2272,19 +2367,137 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const st = showCreatedModal;
+                    setShowCreatedModal(null);
+                    handleOpenAssignModal(st);
+                  }}
+                  className="py-2.5 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>Assign Subjects</span>
+                </button>
                 <button
                   onClick={() => handlePrintStudentSlip(showCreatedModal)}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Print Student Slip</span>
+                  <span>Print Slip</span>
                 </button>
                 <button
                   onClick={() => setShowCreatedModal(null)}
-                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+                  className="py-2.5 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
                 >
                   Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────────── */}
+      {/* MODAL: ASSIGN SUBJECTS TO STUDENT                                */}
+      {/* ───────────────────────────────────────────────────────────────── */}
+      {assigningStudent && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => !savingClasses && setAssigningStudent(null)} />
+            <div className="relative bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-lg z-10 border border-slate-200 animate-scaleUp space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-sm">Assign Subjects to Student</h3>
+                    <p className="text-[11px] text-blue-600 font-bold">
+                      {assigningStudent.name} ({assigningStudent.rollNo || assigningStudent.regNo})
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssigningStudent(null)}
+                  className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Check the subjects taught by you to enroll this student. Click "Save Subjects" to finalize.
+              </p>
+
+              {loadingStaffClasses ? (
+                <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                  <span>Loading your subjects...</span>
+                </div>
+              ) : staffClasses.length === 0 ? (
+                <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-xs">
+                  You have not created any classes/subjects yet. Please create a class in "My Classes" first.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {staffClasses.map(cls => {
+                    const isChecked = selectedClassCodes.has(cls.code);
+                    return (
+                      <div
+                        key={cls._id || cls.code}
+                        onClick={() => handleToggleClass(cls.code)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                          isChecked
+                            ? 'bg-blue-50/80 border-blue-300 text-blue-950 font-bold'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div>
+                          <span className="font-mono text-xs font-black text-blue-700 mr-2">{cls.code}</span>
+                          <span className="text-xs font-extrabold">{cls.name}</span>
+                          <p className="text-[10px] text-slate-400 font-normal">
+                            {cls.dept} · Sem {cls.semester} · Sec {cls.section} · {(cls.students || []).length} enrolled
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          readOnly
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 pointer-events-none"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setAssigningStudent(null)}
+                  className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingClasses || staffClasses.length === 0}
+                  onClick={handleSaveStudentClasses}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {savingClasses ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save Subjects</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

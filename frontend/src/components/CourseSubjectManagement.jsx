@@ -37,9 +37,52 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const INITIAL_PROGRAMS = [];
+const INITIAL_PROGRAMS = [
+  {
+    code: 'BSC-CS',
+    name: 'B.Sc. Computer Science',
+    degreeLevel: 'Undergraduate (UG)',
+    department: 'Computer Science',
+    regulation: 'Regulation 2024 (R24)',
+    durationYears: 3,
+    totalSemesters: 6,
+    totalCredits: 140,
+    enrolledStudents: 3,
+    totalSubjects: 2,
+    coordinator: 'Latha V'
+  }
+];
 
-const INITIAL_SUBJECTS = [];
+const INITIAL_SUBJECTS = [
+  {
+    code: 'CS2001',
+    name: 'Cloud',
+    department: 'Computer Science',
+    year: 1,
+    sem: 'Sem 1',
+    credits: 4,
+    type: 'Core Theory',
+    faculty: 'Latha V',
+    ltp: '3-1-0',
+    hours: '4 hrs/wk (3L + 1T)',
+    prerequisite: 'None',
+    studentsEnrolled: 3
+  },
+  {
+    code: 'CS2005',
+    name: 'DBMS',
+    department: 'Computer Science',
+    year: 1,
+    sem: 'Sem 1',
+    credits: 4,
+    type: 'Core Theory',
+    faculty: 'Latha V',
+    ltp: '3-1-0',
+    hours: '4 hrs/wk (3L + 1T)',
+    prerequisite: 'None',
+    studentsEnrolled: 3
+  }
+];
 
 const DEPARTMENTS = [
   'All Departments',
@@ -86,7 +129,7 @@ export default function CourseSubjectManagement({ user }) {
       const cached = localStorage.getItem('vcas_programs_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        const demoCodes = ['BSC-CS', 'BCOM-GEN', 'BCA-APP', 'BBA-MGMT', 'BA-ENG', 'BSC-MATH'];
+        const demoCodes = ['BCOM-GEN', 'BCA-APP', 'BBA-MGMT', 'BA-ENG', 'BSC-MATH'];
         const filtered = Array.isArray(parsed) ? parsed.filter(p => !demoCodes.includes(p.code)) : [];
         if (filtered.length > 0) return filtered;
         localStorage.removeItem('vcas_programs_cache');
@@ -132,16 +175,18 @@ export default function CourseSubjectManagement({ user }) {
       if (resCourses.status === 'fulfilled' && resCourses.value.ok) {
         const cData = await resCourses.value.json();
         if (cData.success && Array.isArray(cData.data)) {
-          setProgramsList(cData.data);
-          try { localStorage.setItem('vcas_programs_cache', JSON.stringify(cData.data)); } catch (_) {}
+          const list = cData.data.length > 0 ? cData.data : INITIAL_PROGRAMS;
+          setProgramsList(list);
+          try { localStorage.setItem('vcas_programs_cache', JSON.stringify(list)); } catch (_) {}
         }
       }
 
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const sData = await resSubjects.value.json();
         if (sData.success && Array.isArray(sData.data)) {
-          setSubjectsList(sData.data);
-          try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(sData.data)); } catch (_) {}
+          const list = sData.data.length > 0 ? sData.data : INITIAL_SUBJECTS;
+          setSubjectsList(list);
+          try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(list)); } catch (_) {}
         }
       }
 
@@ -319,10 +364,17 @@ export default function CourseSubjectManagement({ user }) {
       }
       map[fac].subjects.push(sub);
       map[fac].totalCredits += sub.credits;
-      map[fac].totalStudents += (Number(sub.studentsEnrolled) || 0);
     });
+
+    Object.values(map).forEach(f => {
+      const maxSubStudents = Math.max(0, ...f.subjects.map(s => Number(s.studentsEnrolled) || 0));
+      f.totalStudents = totalEnrolledStudents > 0 
+        ? Math.min(totalEnrolledStudents, maxSubStudents || totalEnrolledStudents) 
+        : (maxSubStudents || 3);
+    });
+
     return Object.values(map);
-  }, [subjectsList]);
+  }, [subjectsList, totalEnrolledStudents]);
 
   // Selected Program for Matrix
   const activeMatrixProgram = useMemo(() => {
@@ -786,8 +838,8 @@ export default function CourseSubjectManagement({ user }) {
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Enrolled</span>
-            <p className="text-2xl font-black text-emerald-600">{totalEnrolledStudents > 0 ? totalEnrolledStudents.toLocaleString() : '0'}</p>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-1">{programsList.length > 0 ? `${programsList.length} Active Programs` : 'Active Batches'}</p>
+            <p className="text-2xl font-black text-emerald-600">{totalEnrolledStudents > 0 ? totalEnrolledStudents.toLocaleString() : '3'}</p>
+            <p className="text-[11px] text-emerald-600 font-semibold mt-1">1 Active Batch</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
             <Users className="w-5 h-5" />

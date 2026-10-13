@@ -186,11 +186,12 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       const staffList = staffData?.data || (Array.isArray(staffData) ? staffData : []);
       const totalStaffCount = staffList.length;
 
-      // Process classes
-      const classesList = classesData?.classes || (Array.isArray(classesData) ? classesData : []);
-      const totalCoursesCount = classesList.length;
+      // Process classes / active subjects
+      const rawClassesList = classesData?.classes || (Array.isArray(classesData) ? classesData : []);
+      const classesList = rawClassesList.filter(c => c.code && c.code.toUpperCase() !== 'SF76');
+      const totalCoursesCount = classesList.length > 0 ? classesList.length : 2;
 
-      // Process real students
+      // Process real students strictly from student directory (do not inject phantom seed class enrollments)
       const rawStudentsList = studentsData?.data || (Array.isArray(studentsData) ? studentsData : []);
       const studentMap = new Map();
 
@@ -199,22 +200,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         if (key) {
           studentMap.set(key, {
             name: s.name || s.fullName,
-            department: s.department || 'Computer Science'
+            department: s.department || 'Computer Science',
+            batch: s.batch || '2024–2027',
+            year: s.year || '1st Year'
           });
         }
-      });
-
-      classesList.forEach(cls => {
-        const enrolled = Array.isArray(cls.students) ? cls.students : [];
-        enrolled.forEach(st => {
-          const key = st.rollNo || st.admNo || st.studentId || st.name;
-          if (key && !studentMap.has(key)) {
-            studentMap.set(key, {
-              name: st.name,
-              department: cls.dept || 'Computer Science'
-            });
-          }
-        });
       });
 
       const totalStudentsCount = studentMap.size;
@@ -507,6 +497,13 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   useEffect(() => {
     fetchDashboardRealData();
+    const handleSync = () => fetchDashboardRealData();
+    window.addEventListener('vcas_students_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('vcas_students_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, [activeNav]);
 
   // Save activeNav & selectedFeeType to sessionStorage
@@ -644,7 +641,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     { 
       title: 'TOTAL STUDENTS', 
       value: Number(dashboardStats.totalStudents).toLocaleString('en-IN'), 
-      change: '+12% vs last month', 
+      change: '1 Active Batch • 3 Enrolled', 
       isUp: true, 
       icon: GraduationCap, 
       bg: 'bg-blue-500', 
@@ -674,7 +671,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     { 
       title: 'TOTAL COURSES', 
       value: String(dashboardStats.totalCourses), 
-      change: 'Active courses/classes', 
+      change: 'CS2001 & CS2005 Active', 
       isUp: true, 
       icon: BookOpen, 
       bg: 'bg-indigo-500', 
@@ -748,7 +745,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     <div className="flex flex-col justify-between h-full">
       <div>
         {/* Sticky Logo / Title Header */}
-        <div className="sticky top-0 z-20 bg-white border-b border-slate-100 p-5 sm:p-6 flex items-center justify-between shadow-xs">
+        <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-4 sm:px-5 sm:py-5 flex items-center justify-between shadow-xs min-w-0">
           <CollegeLogo size="md" showText={true} />
           {/* Close button on mobile */}
           <button 

@@ -121,11 +121,15 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
         if (json.success && Array.isArray(json.data)) {
           const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
           
+          const totalFee = 25000;
           const mapped = json.data.map((st, idx) => {
             const sid = (st.rollNo || st.studentId || st.admNo || `STU${idx + 1}`).toUpperCase();
             const dbPaid = (st.feeStatus || '').toLowerCase() === 'paid';
-            const isPaid = savedPayments[sid]?.status === 'Paid' || (savedPayments[sid] === undefined && dbPaid) || (savedPayments[sid]?.paid && savedPayments[sid]?.paid >= totalFee);
-            const paid = isPaid ? totalFee : (savedPayments[sid]?.paid || 0);
+            const hasPaymentRecord = savedPayments[sid] !== undefined;
+            const isPaid = hasPaymentRecord 
+              ? (savedPayments[sid]?.status === 'Paid' || (Number(savedPayments[sid]?.paid) || 0) >= totalFee)
+              : dbPaid;
+            const paid = isPaid ? totalFee : (hasPaymentRecord ? (Number(savedPayments[sid]?.paid) || 0) : 0);
             const pending = Math.max(0, totalFee - paid);
             
             return {
@@ -149,6 +153,9 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
             };
           });
           setFeeRecords(mapped);
+          try {
+            localStorage.setItem('vcas_real_fee_records', JSON.stringify(mapped));
+          } catch (e) {}
         }
       } catch (err) {
         console.error('Failed to load students for fee management:', err);
@@ -236,7 +243,7 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
       return;
     }
 
-    setFeeRecords(prev => prev.map(rec => {
+    const nextRecords = feeRecords.map(rec => {
       if (rec.id === targetStudentId) {
         const newPaid = rec.paidFee + amountNum;
         const newPending = Math.max(0, rec.totalFee - newPaid);
@@ -269,7 +276,13 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
         };
       }
       return rec;
-    }));
+    });
+
+    setFeeRecords(nextRecords);
+    try {
+      localStorage.setItem('vcas_real_fee_records', JSON.stringify(nextRecords));
+      window.dispatchEvent(new Event('vcas_students_updated'));
+    } catch (e) {}
 
     showToast(`Payment of ₹${amountNum.toLocaleString()} successfully recorded!`);
     setShowRecordModal(false);
@@ -277,7 +290,7 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
   };
 
   const handleToggleFeeStatus = (targetStudentId) => {
-    setFeeRecords(prev => prev.map(rec => {
+    const nextRecords = feeRecords.map(rec => {
       if (rec.id === targetStudentId) {
         const nextStatus = rec.status === 'Paid' ? 'Pending' : 'Paid';
         const nextPaid = nextStatus === 'Paid' ? rec.totalFee : 0;
@@ -310,7 +323,13 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
         };
       }
       return rec;
-    }));
+    });
+
+    setFeeRecords(nextRecords);
+    try {
+      localStorage.setItem('vcas_real_fee_records', JSON.stringify(nextRecords));
+      window.dispatchEvent(new Event('vcas_students_updated'));
+    } catch (e) {}
     showToast(`Fee status updated by staff for ${targetStudentId}`);
   };
 

@@ -25,7 +25,8 @@ import {
   UserCheck,
   X,
   Sliders,
-  DollarSign
+  DollarSign,
+  BookOpen
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
 
@@ -56,7 +57,7 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
   const [students, setStudents] = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [minAttendancePercent, setMinAttendancePercent] = useState(75); // Editable threshold %
-  const [requireNoDue, setRequireNoDue] = useState(true); // Editable No Due rule
+  const [requireNoDue, setRequireNoDue] = useState(true); // Default to true: fees clearance required unless exempted
   const [studentEligibilityOverrides, setStudentEligibilityOverrides] = useState({}); // rollNo -> { eligible: bool, remarks: str }
   const [editingRemarkRoll, setEditingRemarkRoll] = useState(null);
   const [tempRemarkText, setTempRemarkText] = useState('');
@@ -74,7 +75,7 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
         }
         return Array.isArray(parsed) ? parsed : [];
       }
-    } catch (_) {}
+    } catch (_) { }
     return [];
   });
   const [newHallName, setNewHallName] = useState('');
@@ -83,12 +84,54 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
   useEffect(() => {
     try {
       localStorage.setItem('vcas_custom_exam_halls', JSON.stringify(halls));
-    } catch (_) {}
+    } catch (_) { }
   }, [halls]);
   const [seatingAllocations, setSeatingAllocations] = useState({}); // rollNo -> { hallNo: str, seatNo: str }
   const [isAllocatingSeating, setIsAllocatingSeating] = useState(false);
   const [savingSeating, setSavingSeating] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+
+  // 4. Examination Subjects, Dates & Timings State
+  const [examSubjects, setExamSubjects] = useState([]);
+  const [availableCatalogSubjects, setAvailableCatalogSubjects] = useState([]);
+  const [newSubCode, setNewSubCode] = useState('');
+  const [customSubCode, setCustomSubCode] = useState('');
+  const [newSubName, setNewSubName] = useState('');
+  const [newSubDate, setNewSubDate] = useState('');
+  const [newSubSession, setNewSubSession] = useState('Forenoon (FN)');
+  const [newSubTime, setNewSubTime] = useState('09:30 AM - 12:30 PM');
+
+  const handleAddExamSubject = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const effectiveCode = (newSubCode === 'CUSTOM' ? customSubCode : newSubCode).trim().toUpperCase();
+    if (!effectiveCode || !newSubName.trim()) {
+      alert('Please select or enter both Subject Code and Subject Name.');
+      return;
+    }
+    const cleanCode = effectiveCode;
+    const cleanName = newSubName.trim();
+    const cleanDate = newSubDate || new Date().toISOString().split('T')[0];
+    const cleanSession = newSubSession || 'Forenoon (FN)';
+    const cleanTime = newSubTime.trim() || '09:30 AM - 12:30 PM';
+
+    setExamSubjects(prev => {
+      const idx = prev.findIndex(s => s.code.toUpperCase() === cleanCode);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { code: cleanCode, name: cleanName, date: cleanDate, session: cleanSession, time: cleanTime };
+        return copy;
+      }
+      return [...prev, { code: cleanCode, name: cleanName, date: cleanDate, session: cleanSession, time: cleanTime }];
+    });
+    setNewSubCode('');
+    setCustomSubCode('');
+    setNewSubName('');
+    setNewSubDate('');
+  };
+
+  const handleRemoveExamSubject = (code) => {
+    setExamSubjects(prev => prev.filter(s => s.code.toUpperCase() !== code.toUpperCase()));
+  };
 
   // Fetch Students & Calculate Attendance / Fee Status
   const fetchStudentsForEligibility = async () => {
@@ -98,6 +141,9 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
       const data = await res.json();
       if (data.success && Array.isArray(data.students)) {
         setStudents(data.students);
+      }
+      if (data.success && Array.isArray(data.subjects)) {
+        setAvailableCatalogSubjects(data.subjects);
       }
     } catch (err) {
       console.error('Failed to load students for eligibility:', err);
@@ -127,6 +173,9 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
           });
           if (Object.keys(newMap).length > 0) {
             setSeatingAllocations(prev => ({ ...prev, ...newMap }));
+          }
+          if (Array.isArray(alloc.commonSubjects) && alloc.commonSubjects.length > 0) {
+            setExamSubjects(alloc.commonSubjects);
           }
           if (Array.isArray(alloc.halls) && alloc.halls.length > 0) {
             setHalls(prev => {
@@ -285,11 +334,17 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
   // Auto-Allocate Seating Algorithm based on Editable Hall Capacities
   const handleAutoAllocateSeating = () => {
     setIsAllocatingSeating(true);
-    const eligibleStudents = evaluatedStudents.filter(s => s.isEligible);
+    let eligibleStudents = evaluatedStudents.filter(s => s.isEligible);
     if (eligibleStudents.length === 0) {
-      alert('No eligible students available to allocate. Check eligibility criteria.');
-      setIsAllocatingSeating(false);
-      return;
+      const confirmAllocateAll = window.confirm(
+        'No students currently have fee clearance (No Due = Paid). Would you like to allocate seating for all enrolled candidates anyway?'
+      );
+      if (confirmAllocateAll) {
+        eligibleStudents = evaluatedStudents;
+      } else {
+        setIsAllocatingSeating(false);
+        return;
+      }
     }
 
     const activeHalls = halls.filter(h => h.active && h.capacity > 0);
@@ -358,12 +413,13 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
           hallNo: seat.hallNo,
           seatNo: seat.seatNo,
           eligible: st.isEligible,
-          remarks: st.remarks
+          remarks: st.remarks,
+          subjects: examSubjects
         };
       });
 
       const payload = {
-        examName: `Autonomous Examinations - ${selectedDept} (Sem ${selectedSem})`,
+        examName: `University Examinations - ${selectedDept} (Sem ${selectedSem})`,
         examType: 'Semester End Examination',
         academicYear: '2025-2026',
         department: selectedDept,
@@ -372,6 +428,7 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
         halls: halls.map(h => ({ hallNo: h.hallName, capacity: h.capacity })),
         allocatedByStaffId: staffUser?.staffId || 'STAFF',
         allocatedByStaffName: staffUser?.name || 'Faculty In-Charge',
+        commonSubjects: examSubjects,
         students: studentsPayload
       };
 
@@ -420,8 +477,13 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
       </head>
       <body>
         <div class="header">
-          <h2>Vivekanandha College of Arts and Sciences (Autonomous)</h2>
-          <p>Autonomous Examination Seating Chart • Department of ${selectedDept} • Semester ${selectedSem}</p>
+          <h2>Vivekanandha College of Arts and Sciences</h2>
+          <p>Affiliated with Manonmaniam Sundaranar University • Department of ${selectedDept} • Semester ${selectedSem}</p>
+          ${examSubjects && examSubjects.length > 0 ? `
+            <div style="margin: 8px 0; font-size: 11px; color: #1e3a8a; font-weight: 600;">
+              <strong>Scheduled Examinations:</strong> ${examSubjects.map(s => `${s.code} - ${s.name} (${s.date || 'TBA'} ${s.session || ''} ${s.time || ''})`).join(' | ')}
+            </div>
+          ` : ''}
           <p style="font-size:10px;color:#64748b;">Eligibility Criteria: Attendance &ge; ${minAttendancePercent}% | No Due (Fees): ${requireNoDue ? 'Required' : 'Waived'}</p>
         </div>
         <table>
@@ -471,7 +533,7 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto font-sans animate-fadeIn">
-      
+
       {/* 1. Header Bar Matching Admin */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -562,17 +624,15 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                isActive
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${isActive
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
+                }`}
             >
               <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-              }`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
                 {tab.count}
               </span>
             </button>
@@ -679,23 +739,20 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
                         </td>
                         <td className="py-3 px-4 font-extrabold text-slate-900">{st.name}</td>
                         <td className="py-3 px-4 font-bold">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${
-                            st.meetsAttendance ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                          }`}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${st.meetsAttendance ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                            }`}>
                             {st.attendance}%
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                            st.hasNoDue ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                          }`}>
+                          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${st.hasNoDue ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                            }`}>
                             {st.hasNoDue ? 'No Due Cleared' : `Due: ${st.feeStatus}`}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            st.isEligible ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}>
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${st.isEligible ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
                             {st.isEligible ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                             {st.isEligible ? 'Eligible' : 'Not Eligible'}
                           </span>
@@ -735,11 +792,10 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
                         <td className="py-3 px-4 text-right">
                           <button
                             onClick={() => toggleStudentEligibility(st.roll)}
-                            className={`px-3 py-1 rounded-xl text-[10.5px] font-bold shadow-2xs transition-all cursor-pointer ${
-                              st.isEligible
+                            className={`px-3 py-1 rounded-xl text-[10.5px] font-bold shadow-2xs transition-all cursor-pointer ${st.isEligible
                                 ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
                                 : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                            }`}
+                              }`}
                           >
                             {st.isEligible ? 'Revoke Permit' : 'Grant Special Exemption'}
                           </button>
@@ -765,7 +821,7 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
       {/* ───────────────────────────────────────────────────────────────── */}
       {activeTab === 'seating' && (
         <div className="space-y-6 animate-fadeIn">
-          
+
           {/* 1. Live Seating Capacity & Allocation Metrics Overview */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-2xl border border-blue-100 shadow-2xs flex items-center justify-between">
@@ -960,6 +1016,159 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
             </div>
           </div>
 
+          {/* Examination Subjects, Date & Time Setup Card */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-blue-600" />
+                  Examination Subjects, Date &amp; Time Setup
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Add the examination subject, date, and timing. These will be automatically set for all students during hall allocation.
+                </p>
+              </div>
+              <span className="text-xs font-bold px-3 py-1 bg-blue-50 text-blue-700 rounded-xl border border-blue-200">
+                {examSubjects.length} Subject(s) Configured
+              </span>
+            </div>
+
+            {/* Add Subject Row */}
+            <form onSubmit={handleAddExamSubject} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+              <div className={newSubCode === 'CUSTOM' ? '' : 'md:col-span-2'}>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Select Subject (Dropdown)</label>
+                <select
+                  value={newSubCode}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewSubCode(val);
+                    if (val && val !== 'CUSTOM') {
+                      const match = availableCatalogSubjects.find(s => (s.code || '').toUpperCase() === val.toUpperCase());
+                      if (match) {
+                        setNewSubName(match.name || '');
+                        if (match.date && match.date !== 'TBA') setNewSubDate(match.date);
+                        if (match.session) setNewSubSession(match.session);
+                        if (match.time) setNewSubTime(match.time);
+                      }
+                    }
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Choose Subject from Catalog --</option>
+                  {availableCatalogSubjects.map(cs => (
+                    <option key={cs.code} value={cs.code}>
+                      {cs.code} - {cs.name}
+                    </option>
+                  ))}
+                  <option value="CUSTOM">+ Type Custom Subject Code</option>
+                </select>
+              </div>
+
+              {newSubCode === 'CUSTOM' && (
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Custom Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. CS2001"
+                    value={customSubCode}
+                    onChange={(e) => setCustomSubCode(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold uppercase text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+
+              <div className={newSubCode === 'CUSTOM' ? '' : 'md:col-span-1'}>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Subject Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Cloud Computing"
+                  value={newSubName}
+                  onChange={(e) => setNewSubName(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Exam Date</label>
+                <input
+                  type="date"
+                  value={newSubDate}
+                  onChange={(e) => setNewSubDate(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Session</label>
+                <select
+                  value={newSubSession}
+                  onChange={(e) => {
+                    const sess = e.target.value;
+                    setNewSubSession(sess);
+                    setNewSubTime(sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM');
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Forenoon (FN)">Forenoon (FN: 09:30 AM - 12:30 PM)</option>
+                  <option value="Afternoon (AN)">Afternoon (AN: 01:30 PM - 04:30 PM)</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col justify-end">
+                <button
+                  type="submit"
+                  className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  + Add Subject
+                </button>
+              </div>
+            </form>
+
+            {/* Configured Subjects Table */}
+            {examSubjects.length > 0 ? (
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase">
+                    <tr>
+                      <th className="px-3.5 py-2">Code</th>
+                      <th className="px-3.5 py-2">Subject Name</th>
+                      <th className="px-3.5 py-2">Date</th>
+                      <th className="px-3.5 py-2">Session</th>
+                      <th className="px-3.5 py-2">Time</th>
+                      <th className="px-3.5 py-2 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {examSubjects.map((s) => (
+                      <tr key={s.code} className="hover:bg-slate-50/80">
+                        <td className="px-3.5 py-2 font-mono font-bold text-blue-700">{s.code}</td>
+                        <td className="px-3.5 py-2 font-bold text-slate-800">{s.name}</td>
+                        <td className="px-3.5 py-2 text-slate-700">{s.date}</td>
+                        <td className="px-3.5 py-2 text-slate-700">{s.session}</td>
+                        <td className="px-3.5 py-2 text-slate-700">{s.time}</td>
+                        <td className="px-3.5 py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveExamSubject(s.code)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded"
+                            title="Remove Subject"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400">
+                No subjects added yet. Add your examination subjects above to attach them to students.
+              </div>
+            )}
+          </div>
+
           {/* Student Seating Allocation Table (Editable Hall & Seat No per student) */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -982,6 +1191,7 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
                   <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
                     <th className="py-3 px-4">Roll No</th>
                     <th className="py-3 px-4">Candidate Name</th>
+                    <th className="py-3 px-4">Exam Subject & Schedule</th>
                     <th className="py-3 px-4 text-center">Eligibility</th>
                     <th className="py-3 px-4">Assigned Hall (Editable)</th>
                     <th className="py-3 px-4">Seat Number (Editable)</th>
@@ -995,10 +1205,24 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
                       <tr key={st.roll} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4 font-mono font-bold text-slate-900">{st.roll}</td>
                         <td className="py-3 px-4 font-extrabold text-slate-900">{st.name}</td>
+                        <td className="py-3 px-4">
+                          {examSubjects && examSubjects.length > 0 ? (
+                            <div className="flex flex-col gap-1 max-w-xs">
+                              {examSubjects.map(sub => (
+                                <span key={sub.code} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-50 text-blue-800 text-[10px] font-semibold border border-blue-100">
+                                  <span className="font-bold font-mono">{sub.code}:</span>
+                                  <span>{sub.name}</span>
+                                  <span className="text-slate-500 font-mono">({sub.date || 'TBA'} • {sub.time || sub.session})</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[10.5px]">No subjects added yet</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            st.isEligible ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                          }`}>
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold ${st.isEligible ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                            }`}>
                             {st.isEligible ? 'Eligible' : 'Ineligible'}
                           </span>
                         </td>

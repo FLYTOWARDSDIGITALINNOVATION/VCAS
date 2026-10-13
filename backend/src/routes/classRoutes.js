@@ -8,7 +8,8 @@ const {
   updateClass,
   deleteClass,
   enrollStudent,
-  removeStudent
+  removeStudent,
+  autoEnrollDeptStudents
 } = require('../controllers/classController');
 
 // ── General Class Routes ─────────────────────────────────
@@ -24,6 +25,7 @@ router.delete('/staff/:staffId/:classCode', deleteClass);
 
 // Student Enrollment in Staff-scoped routes
 router.post('/staff/:staffId/:classCode/students', enrollStudent);
+router.post('/staff/:staffId/:classCode/auto-enroll', autoEnrollDeptStudents);
 router.delete('/staff/:staffId/:classCode/students/:rollNo', removeStudent);
 
 // ── Specific Class Routes by Code / ID ───────────────────

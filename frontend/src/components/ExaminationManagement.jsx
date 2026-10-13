@@ -2212,7 +2212,7 @@ export default function ExaminationManagement({ user }) {
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-xl font-black text-slate-900">Official Semester Grade Sheet</h3>
-                <p className="text-xs text-slate-500">Autonomous Degree Regulations • Result Publication Nov 2026</p>
+                <p className="text-xs text-slate-500">MSU Degree Regulations • Result Publication Nov 2026</p>
               </div>
               <button onClick={() => setViewingGradeCardStudent(null)} className="p-2 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-xl">
                 <X className="w-5 h-5" />
@@ -2464,7 +2464,7 @@ export default function ExaminationManagement({ user }) {
                 <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">
                   VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
                 </h4>
-                <p className="text-[11px] font-bold text-slate-600">Autonomous • Affiliated to University • Vellalankulam Campus</p>
+                <p className="text-[11px] font-bold text-slate-600">Affiliated with Manonmaniam Sundaranar University • Vellalankulam Campus</p>
                 <p className="text-xs font-black text-rose-700 uppercase tracking-widest mt-1">
                   CONTROLLER OF EXAMINATIONS • END SEMESTER EXAMINATIONS (NOV/DEC 2026)
                 </p>

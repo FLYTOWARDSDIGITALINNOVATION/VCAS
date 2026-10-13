@@ -79,7 +79,7 @@ export const BANNER_THEMES = [
 ];
 
 export const DEFAULT_COLLEGES = [
-  'Vidyapeeth College of Arts and Science (Autonomous)',
+  'Vidyapeeth College of Arts and Science',
   'PSG College of Technology, Coimbatore',
   'Loyola College, Chennai',
   'Madras Christian College (MCC), Chennai',
@@ -315,7 +315,7 @@ export default function EventsManagement() {
         passNo: 'PASS-TARANG-2026-8841',
         studentName: 'Aditya Kapoor',
         rollNo: 'VCAS23CS042',
-        collegeName: 'Vidyapeeth College of Arts and Science (Autonomous)',
+        collegeName: 'Vidyapeeth College of Arts and Science',
         department: 'Computer Science & Engineering',
         year: '3rd Year (Semester 5/6)',
         email: 'aditya.k@vcas.edu',
@@ -409,7 +409,7 @@ export default function EventsManagement() {
   const [regStudentForm, setRegStudentForm] = useState({
     studentName: '',
     rollNo: '',
-    collegeName: 'Vidyapeeth College of Arts and Science (Autonomous)',
+    collegeName: 'Vidyapeeth College of Arts and Science',
     department: 'Commerce',
     year: '3rd Year (Semester 5/6)',
     email: '',
@@ -599,7 +599,7 @@ export default function EventsManagement() {
     setRegStudentForm({
       studentName: '',
       rollNo: '',
-      collegeName: 'Vidyapeeth College of Arts and Science (Autonomous)',
+      collegeName: 'Vidyapeeth College of Arts and Science',
       department: (ev && ev.department !== 'All' && DEPARTMENTS.includes(ev.department)) ? ev.department : 'Commerce',
       year: '3rd Year (Semester 5/6)',
       email: '',
@@ -612,7 +612,7 @@ export default function EventsManagement() {
   };
 
   const SAMPLE_STUDENTS = [
-    { name: 'Aditya Kapoor', roll: 'VCAS23CS042', college: 'Vidyapeeth College of Arts and Science (Autonomous)', dept: 'Computer Science', email: 'aditya.k@vcas.edu', phone: '+91 98401 11223', year: '3rd Year (Semester 5/6)', type: 'Team Leader', team: 'Cosmic Beats' },
+    { name: 'Aditya Kapoor', roll: 'VCAS23CS042', college: 'Vidyapeeth College of Arts and Science', dept: 'Computer Science', email: 'aditya.k@vcas.edu', phone: '+91 98401 11223', year: '3rd Year (Semester 5/6)', type: 'Team Leader', team: 'Cosmic Beats' },
     { name: 'Priya Sharma', roll: 'LOY23CM014', college: 'Loyola College of Arts & Science, Chennai', dept: 'Commerce', email: 'priya.s@loyola.edu', phone: '+91 98841 22334', year: '3rd Year (Semester 5/6)', type: 'Individual Contestant', team: '' },
     { name: 'Vikramaditya Rao', roll: 'PSG24EN008', college: 'PSG College of Arts and Science, Coimbatore', dept: 'English Literature', email: 'vikram.rao@psgcas.ac.in', phone: '+91 97901 33445', year: '2nd Year (Semester 3/4)', type: 'Audience / Attendee', team: '' },
     { name: 'Kavitha Ramaswamy', roll: 'MCC23BB098', college: 'Madras Christian College (MCC), Chennai', dept: 'Business Administration (BBA)', email: 'kavitha.r@mcc.edu.in', phone: '+91 98410 66778', year: '3rd Year (Semester 5/6)', type: 'Team Member', team: 'ByteBenders' }

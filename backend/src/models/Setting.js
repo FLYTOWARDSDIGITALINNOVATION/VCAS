@@ -4,67 +4,67 @@ const settingsSchema = new mongoose.Schema({
   // Institutional Profile
   collegeName: {
     type: String,
-    default: 'Vidyapeeth College of Arts and Sciences',
+    default: '',
     trim: true
   },
   collegeCode: {
     type: String,
-    default: 'VCAS-2008',
+    default: '',
     trim: true
   },
   accreditation: {
     type: String,
-    default: 'NAAC A++ Grade (CGPA 3.82) | Autonomous',
+    default: '',
     trim: true
   },
   affiliation: {
     type: String,
-    default: 'State Technical & Arts University',
+    default: '',
     trim: true
   },
   address: {
     type: String,
-    default: '42, Vidyapeeth Knowledge Corridor, Chennai Highway',
+    default: '',
     trim: true
   },
   city: {
     type: String,
-    default: 'Chennai',
+    default: '',
     trim: true
   },
   state: {
     type: String,
-    default: 'Tamil Nadu',
+    default: '',
     trim: true
   },
   pincode: {
     type: String,
-    default: '600044',
+    default: '',
     trim: true
   },
   officialEmail: {
     type: String,
-    default: 'registrar@vcas.edu',
+    default: '',
     trim: true
   },
   helpdeskPhone: {
     type: String,
-    default: '+91 44 2855 1200',
+    default: '',
     trim: true
   },
   websiteUrl: {
     type: String,
-    default: 'https://vcas.edu.in',
+    default: '',
     trim: true
   },
   currentAcademicYear: {
     type: String,
-    default: '2025-2026',
+    default: '',
     trim: true
   },
   currentSemesterCycle: {
     type: String,
-    default: 'Even Semester (Sem 2, 4, 6, 8)',
+    default: '',
     trim: true
   },
   timezone: {

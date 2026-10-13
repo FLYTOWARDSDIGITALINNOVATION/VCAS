@@ -87,22 +87,44 @@ const getMarksheet = async (req, res) => {
       }
     }
 
+    const Student = require("../models/Student");
+    const classDoc = await Class.findOne({
+      $or: [{ code: subRegex }, { name: nameRegex }]
+    });
+
+    // Fetch real registered students from Student collection
+    const realStudents = await Student.find({});
+    const realRollMap = new Map();
+    realStudents.forEach(st => {
+      if (st.rollNo) realRollMap.set(st.rollNo.toUpperCase().trim(), st);
+      if (st.regNo) realRollMap.set(st.regNo.toUpperCase().trim(), st);
+    });
+
     if (!record) {
-      // Check if Class exists with students roster
-      const classDoc = await Class.findOne({
-        $or: [{ code: subRegex }, { name: nameRegex }]
-      });
       const classStudents = (classDoc && Array.isArray(classDoc.students))
-        ? classDoc.students.map(s => ({
-            rollNo: s.rollNo,
-            name: s.name,
-            cia1: null,
-            cia2: null,
-            model: null,
-            assignment: null,
-            attendance: null,
-            consolidated: null
-          }))
+        ? classDoc.students
+            .filter(s => s.rollNo && realRollMap.has(s.rollNo.toUpperCase().trim()))
+            .map(s => ({
+              rollNo: s.rollNo,
+              name: realRollMap.get(s.rollNo.toUpperCase().trim())?.name || s.name,
+              st1: null,
+              st2: null,
+              st3: null,
+              st4: null,
+              it1: null,
+              it2: null,
+              cia1: null,
+              cia2: null,
+              model: null,
+              project: null,
+              assignment1: null,
+              assignment2: null,
+              assignment3: null,
+              assignment4: null,
+              assignment: null,
+              attendance: null,
+              consolidated: null
+            }))
         : [];
 
       const canonicalCode = classDoc ? classDoc.code : cleanSub.toUpperCase();
@@ -112,7 +134,7 @@ const getMarksheet = async (req, res) => {
         staffId: classDoc?.staffId || staffId || "EMP001",
         subjectCode: canonicalCode,
         subjectName: canonicalName,
-        department: classDoc ? classDoc.dept : "",
+        department: classDoc ? classDoc.dept : "Computer Science",
         semester: classDoc ? classDoc.semester : 1,
         students: classStudents,
         isLocked: false,
@@ -122,6 +144,62 @@ const getMarksheet = async (req, res) => {
     } else {
       if (!record.maxMarks) record.maxMarks = DEFAULT_MAX_MARKS;
       if (!record.passMarks) record.passMarks = DEFAULT_PASS_MARKS;
+
+      // 1. Filter out phantom students not in the real registered students directory (e.g. 22UCS025)
+      const validExisting = (record.students || []).filter(s => {
+        const roll = (s.rollNo || '').toUpperCase().trim();
+        return realRollMap.has(roll);
+      });
+
+      const studentMap = new Map();
+      validExisting.forEach(s => {
+        const roll = s.rollNo.toUpperCase().trim();
+        const realInfo = realRollMap.get(roll);
+        studentMap.set(roll, {
+          ...(s.toObject ? s.toObject() : s),
+          name: realInfo ? realInfo.name : s.name
+        });
+      });
+
+      // 2. Add enrolled class students if not already in marksheet
+      if (classDoc && Array.isArray(classDoc.students)) {
+        classDoc.students.forEach(cs => {
+          const roll = (cs.rollNo || '').toUpperCase().trim();
+          if (roll && realRollMap.has(roll) && !studentMap.has(roll)) {
+            studentMap.set(roll, {
+              rollNo: cs.rollNo,
+              name: realRollMap.get(roll)?.name || cs.name,
+              st1: null,
+              st2: null,
+              st3: null,
+              st4: null,
+              it1: null,
+              it2: null,
+              cia1: null,
+              cia2: null,
+              model: null,
+              project: null,
+              assignment1: null,
+              assignment2: null,
+              assignment3: null,
+              assignment4: null,
+              assignment: null,
+              attendance: null,
+              consolidated: null
+            });
+          }
+        });
+      }
+
+      record.students = Array.from(studentMap.values());
+
+      // Save sanitized students back to the marksheet
+      if (record._id) {
+        await InternalMarks.findByIdAndUpdate(record._id, { 
+          students: record.students,
+          subjectName: classDoc?.name || record.subjectName
+        });
+      }
     }
     res.json({ success: true, data: record });
   } catch (err) {
@@ -387,6 +465,105 @@ const getAllInternalMarks = async (req, res) => {
   }
 };
 
+// @desc    Get all internal marks records for an individual student
+// @route   GET /api/internal-marks/student/:identifier
+const getStudentInternalMarks = async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: "Student identifier required." });
+    }
+    const idClean = identifier.trim();
+    const idRegex = new RegExp('^' + idClean + '$', 'i');
+
+    const Student = require("../models/Student");
+    const student = await Student.findOne({
+      $or: [
+        { rollNo: idRegex },
+        { regNo: idRegex },
+        { studentId: idRegex },
+        { loginId: idRegex },
+        { admNo: idRegex }
+      ]
+    });
+
+    const rollNo = student ? (student.rollNo || idClean) : idClean;
+    const regNo = student ? (student.regNo || idClean) : idClean;
+    const rLower = rollNo.toLowerCase();
+    const regLower = regNo.toLowerCase();
+
+    const marksheets = await InternalMarks.find({}).sort({ subjectCode: 1 });
+
+    const studentMarksList = [];
+
+    marksheets.forEach(ms => {
+      const stRec = (ms.students || []).find(s => {
+        const sr = (s.rollNo || '').toLowerCase();
+        const srg = (s.regNo || '').toLowerCase();
+        return sr === rLower || sr === regLower || srg === rLower || srg === regLower || sr === idClean.toLowerCase();
+      });
+
+      const isDeptMatch = student && ms.department && (
+        ms.department.toLowerCase().includes((student.department || '').toLowerCase()) ||
+        (student.department || '').toLowerCase().includes(ms.department.toLowerCase())
+      );
+
+      if (stRec || isDeptMatch) {
+        const max = ms.maxMarks || DEFAULT_MAX_MARKS;
+        const pass = ms.passMarks || DEFAULT_PASS_MARKS;
+        const marks = stRec || {};
+
+        studentMarksList.push({
+          marksheetId: ms._id,
+          subjectCode: ms.subjectCode,
+          subjectName: ms.subjectName,
+          staffId: ms.staffId,
+          staffName: ms.staffName,
+          department: ms.department,
+          semester: ms.semester,
+          academicYear: ms.academicYear,
+          isLocked: ms.isLocked,
+          maxMarks: max,
+          passMarks: pass,
+          marks: {
+            st1: marks.st1 ?? null,
+            st2: marks.st2 ?? null,
+            st3: marks.st3 ?? null,
+            st4: marks.st4 ?? null,
+            it1: marks.it1 ?? null,
+            it2: marks.it2 ?? null,
+            cia1: marks.cia1 ?? null,
+            cia2: marks.cia2 ?? null,
+            model: marks.model ?? null,
+            project: marks.project ?? null,
+            assignment1: marks.assignment1 ?? null,
+            assignment2: marks.assignment2 ?? null,
+            assignment3: marks.assignment3 ?? null,
+            assignment4: marks.assignment4 ?? null,
+            assignment: marks.assignment ?? null,
+            attendance: marks.attendance ?? null,
+            consolidated: marks.consolidated ?? null
+          }
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      student: {
+        rollNo,
+        regNo,
+        name: student ? (student.name || student.fullName) : ''
+      },
+      count: studentMarksList.length,
+      marksheets: studentMarksList,
+      data: studentMarksList
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = { 
   getMarksheet, 
   saveMarksheet, 
@@ -394,6 +571,7 @@ module.exports = {
   toggleLock, 
   listMarksheets,
   syncAssignmentsToInternalMarks,
-  getAllInternalMarks
+  getAllInternalMarks,
+  getStudentInternalMarks
 };
 

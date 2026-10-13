@@ -653,7 +653,7 @@ exports.studentLogin = async (req, res) => {
         religion: student.religion || 'Hindu',
         donation: student.donation || 'Nil',
         attendance: student.attendance !== undefined ? student.attendance : 85,
-        feeStatus: student.feeStatus || 'Paid',
+        feeStatus: student.feeStatus || 'Pending',
         status: student.status || 'Active'
       }
     });
@@ -758,7 +758,7 @@ exports.studentRegister = async (req, res) => {
       sem: '1st Sem',
       status: 'Active',
       attendance: 100,
-      feeStatus: 'Paid'
+      feeStatus: 'Pending'
     });
 
     await newStudent.save();

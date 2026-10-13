@@ -575,6 +575,15 @@ export default function TimetableManagement({ user }) {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            onClick={() => handleOpenEditSlot('Monday', 1, null)}
+            title="Assign or Edit Timetable Slot"
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs shadow-blue-500/20 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-white" />
+            <span>Assign / Edit Slot</span>
+          </button>
+
+          <button
             onClick={() => handleOpenEditTimings()}
             title="Edit Period Timings"
             className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all border border-indigo-200 shadow-xs cursor-pointer"
@@ -1235,6 +1244,61 @@ export default function TimetableManagement({ user }) {
             </div>
 
             <form onSubmit={handleSaveSlot} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Day of Week *</label>
+                  <select
+                    value={slotForm.day}
+                    onChange={(e) => setSlotForm({ ...slotForm, day: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 cursor-pointer"
+                  >
+                    {DAYS.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Period Slot *</label>
+                  <select
+                    value={slotForm.period}
+                    onChange={(e) => setSlotForm({ ...slotForm, period: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 cursor-pointer"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
+                      <option key={p} value={p}>Period {p} {getPeriodTime(p) ? `(${getPeriodTime(p)})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Quick Select Common Subjects */}
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Fill:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSlotForm(prev => ({ ...prev, code: 'CS2001', name: 'Cloud', room: 'LH-101', type: 'theory' }))}
+                    className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold border border-blue-200 cursor-pointer"
+                  >
+                    CS2001 - Cloud
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSlotForm(prev => ({ ...prev, code: 'CS2005', name: 'DBMS', room: 'LH-102', type: 'theory' }))}
+                    className="px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 cursor-pointer"
+                  >
+                    CS2005 - DBMS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSlotForm(prev => ({ ...prev, code: 'CS2005', name: 'DBMS Lab', room: 'AI & ML Lab', type: 'lab' }))}
+                    className="px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200 cursor-pointer"
+                  >
+                    CS2005 Lab
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name *</label>
                 <input
