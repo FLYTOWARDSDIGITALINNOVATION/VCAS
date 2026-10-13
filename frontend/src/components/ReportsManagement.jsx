@@ -157,52 +157,59 @@ export default function ReportsManagement({ user }) {
 
   // Compute live departmental academic results from real students and marks
   const academicDeptResults = useMemo(() => {
+    const validDepts = (departments && departments.length > 0)
+      ? departments.map(d => d.name)
+      : ['BSc. Computer science', 'computer application'];
+
     const deptMap = new Map();
-
-    students.forEach(st => {
-      const deptName = st.department || 'Computer Science';
-      if (!deptMap.has(deptName)) {
-        deptMap.set(deptName, {
-          dept: deptName,
-          students: 0,
-          cgpaSum: 0,
-          distinctions: 0,
-          backlogs: 0,
-          passCount: 0,
-          topperName: st.name || st.fullName || 'Student',
-          topperGpa: 0
-        });
-      }
-      const entry = deptMap.get(deptName);
-      entry.students++;
-      const gpa = Number(st.cgpa) || 8.2;
-      entry.cgpaSum += gpa;
-      if (gpa >= 8.5) entry.distinctions++;
-      if (gpa >= 5.0) entry.passCount++;
-      else entry.backlogs++;
-
-      if (gpa > entry.topperGpa) {
-        entry.topperGpa = gpa;
-        entry.topperName = `${st.name || st.fullName} (${gpa.toFixed(2)} CGPA)`;
-      }
+    validDepts.forEach(dName => {
+      deptMap.set(dName, {
+        dept: dName,
+        students: 0,
+        distinctions: 0,
+        backlogs: 0,
+        passCount: 0,
+        topperName: 'None',
+        topperScore: 0
+      });
     });
 
-    if (deptMap.size === 0) {
-      return [
-        { dept: 'Computer Science', students: 1, passRate: 100, avgGpa: 8.5, distinctions: 1, backlogs: 0, topper: 'LATHA (8.5 CGPA)' }
-      ];
-    }
+    students.forEach(st => {
+      const rawDept = (st.department || '').toLowerCase().trim();
+      let matchedDept = validDepts[0];
+
+      if (rawDept.includes('app') || rawDept.includes('bca') || rawDept.includes('ca')) {
+        matchedDept = validDepts.find(d => d.toLowerCase().includes('app') || d.toLowerCase().includes('bca') || d.toLowerCase().includes('ca')) || validDepts[1] || validDepts[0];
+      } else if (rawDept.includes('comp') || rawDept.includes('cs') || rawDept.includes('b.sc')) {
+        matchedDept = validDepts.find(d => d.toLowerCase().includes('comp') || d.toLowerCase().includes('cs') || d.toLowerCase().includes('b.sc')) || validDepts[0];
+      } else {
+        matchedDept = validDepts.find(d => d.toLowerCase() === rawDept) || validDepts[0];
+      }
+
+      const entry = deptMap.get(matchedDept);
+      if (entry) {
+        entry.students++;
+        const gpa = Number(st.cgpa) || 8.2;
+        if (gpa >= 8.5) entry.distinctions++;
+        if (gpa >= 5.0) entry.passCount++;
+        else entry.backlogs++;
+
+        if (gpa > entry.topperScore) {
+          entry.topperScore = gpa;
+          entry.topperName = st.name || st.fullName || 'Student';
+        }
+      }
+    });
 
     return Array.from(deptMap.values()).map(d => ({
       dept: d.dept,
       students: d.students,
       passRate: d.students > 0 ? parseFloat(((d.passCount / d.students) * 100).toFixed(1)) : 100,
-      avgGpa: d.students > 0 ? parseFloat((d.cgpaSum / d.students).toFixed(2)) : 8.0,
       distinctions: d.distinctions,
       backlogs: d.backlogs,
-      topper: d.topperName
+      topper: d.topperName === 'None' ? '--' : d.topperName
     }));
-  }, [students]);
+  }, [students, departments]);
 
   // Compute live attendance defaulters from real students (< 75%)
   const defaultersList = useMemo(() => {
@@ -615,7 +622,7 @@ export default function ReportsManagement({ user }) {
                       <span className="w-2.5 h-2.5 rounded-full bg-cyan-600"></span>
                       {dept.dept} ({dept.students} Students)
                     </span>
-                    <span className="font-extrabold text-slate-900">{dept.passRate}% Pass Rate • Avg CGPA {dept.avgGpa}</span>
+                    <span className="font-extrabold text-slate-900">{dept.passRate}% Pass Rate</span>
                   </div>
                   <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
                     <div 
@@ -644,7 +651,6 @@ export default function ReportsManagement({ user }) {
                     <th className="py-3.5 px-4">Department</th>
                     <th className="py-3.5 px-4">Enrolled</th>
                     <th className="py-3.5 px-4">Pass %</th>
-                    <th className="py-3.5 px-4">Avg CGPA</th>
                     <th className="py-3.5 px-4">Distinctions</th>
                     <th className="py-3.5 px-4">Active Backlogs</th>
                     <th className="py-3.5 px-4">Department Topper</th>
@@ -660,7 +666,6 @@ export default function ReportsManagement({ user }) {
                           {r.passRate}%
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800">{r.avgGpa}</td>
                       <td className="py-3.5 px-4 font-semibold text-blue-600">{r.distinctions}</td>
                       <td className="py-3.5 px-4 font-semibold text-rose-600">{r.backlogs}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900">{r.topper}</td>
