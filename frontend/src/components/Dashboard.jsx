@@ -1187,7 +1187,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         ) : activeNav === 'Fees' ? (
           canViewFees ? (
             <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-              <FeeManagement defaultFeeType={selectedFeeType} />
+              <FeeManagement defaultFeeType={selectedFeeType} user={user} />
             </main>
           ) : (
             <main className="flex-1 p-6 flex items-center justify-center">

@@ -680,45 +680,17 @@ export default function StaffMyClasses({ staffUser }) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Classroom / Lab Venue (Optional)</label>
-                <select
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Classroom / Lab Venue (Optional)
+                  <span className="ml-1 text-[11px] font-normal text-slate-400">— Type your college room or lab</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Room 204, Lecture Hall 1, Computer Lab 2, Physics Lab"
                   value={newClass.room}
                   onChange={(e) => setNewClass({ ...newClass, room: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 cursor-pointer"
-                >
-                  <option value="">-- Select Classroom or Lab --</option>
-                  <optgroup label="Classrooms / Lecture Halls">
-                    <option value="LH-101">LH-101 (Lecture Hall 1)</option>
-                    <option value="LH-102">LH-102 (Lecture Hall 2)</option>
-                    <option value="LH-201">LH-201 (Lecture Hall 3)</option>
-                    <option value="LH-202">LH-202 (Lecture Hall 4)</option>
-                    <option value="LH-301">LH-301 (Lecture Hall 5)</option>
-                    <option value="LH-302">LH-302 (Lecture Hall 6)</option>
-                    <option value="Room 101">Room 101</option>
-                    <option value="Room 102">Room 102</option>
-                    <option value="Room 201">Room 201</option>
-                    <option value="Room 202">Room 202</option>
-                    <option value="Seminar Hall 1">Seminar Hall 1</option>
-                    <option value="Seminar Hall 2">Seminar Hall 2</option>
-                  </optgroup>
-                  <optgroup label="Laboratories">
-                    <option value="Computer Lab 1">Computer Lab 1</option>
-                    <option value="Computer Lab 2">Computer Lab 2</option>
-                    <option value="Computer Lab 3">Computer Lab 3</option>
-                    <option value="AI & ML Lab">AI & ML Lab</option>
-                    <option value="Data Science Lab">Data Science Lab</option>
-                    <option value="IoT & Embedded Lab">IoT & Embedded Lab</option>
-                    <option value="Electronics Lab">Electronics Lab</option>
-                    <option value="Hardware Lab">Hardware Lab</option>
-                    <option value="Network Lab">Network Lab</option>
-                    <option value="Project Lab">Project Lab</option>
-                  </optgroup>
-                  {newClass.room && !['LH-101', 'LH-102', 'LH-201', 'LH-202', 'LH-301', 'LH-302', 'Room 101', 'Room 102', 'Room 201', 'Room 202', 'Seminar Hall 1', 'Seminar Hall 2', 'Computer Lab 1', 'Computer Lab 2', 'Computer Lab 3', 'AI & ML Lab', 'Data Science Lab', 'IoT & Embedded Lab', 'Electronics Lab', 'Hardware Lab', 'Network Lab', 'Project Lab'].includes(newClass.room) && (
-                    <optgroup label="Custom Venue">
-                      <option value={newClass.room}>{newClass.room}</option>
-                    </optgroup>
-                  )}
-                </select>
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 transition-all"
+                />
               </div>
 
               <div className="flex items-center gap-3 pt-2">
@@ -846,45 +818,17 @@ export default function StaffMyClasses({ staffUser }) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Classroom / Lab Venue (Optional)</label>
-                <select
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Classroom / Lab Venue (Optional)
+                  <span className="ml-1 text-[11px] font-normal text-slate-400">— Type your college room or lab</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Room 204, Lecture Hall 1, Computer Lab 2, Physics Lab"
                   value={editForm.room}
                   onChange={(e) => setEditForm({ ...editForm, room: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-amber-500 cursor-pointer"
-                >
-                  <option value="">-- Select Classroom or Lab --</option>
-                  <optgroup label="Classrooms / Lecture Halls">
-                    <option value="LH-101">LH-101 (Lecture Hall 1)</option>
-                    <option value="LH-102">LH-102 (Lecture Hall 2)</option>
-                    <option value="LH-201">LH-201 (Lecture Hall 3)</option>
-                    <option value="LH-202">LH-202 (Lecture Hall 4)</option>
-                    <option value="LH-301">LH-301 (Lecture Hall 5)</option>
-                    <option value="LH-302">LH-302 (Lecture Hall 6)</option>
-                    <option value="Room 101">Room 101</option>
-                    <option value="Room 102">Room 102</option>
-                    <option value="Room 201">Room 201</option>
-                    <option value="Room 202">Room 202</option>
-                    <option value="Seminar Hall 1">Seminar Hall 1</option>
-                    <option value="Seminar Hall 2">Seminar Hall 2</option>
-                  </optgroup>
-                  <optgroup label="Laboratories">
-                    <option value="Computer Lab 1">Computer Lab 1</option>
-                    <option value="Computer Lab 2">Computer Lab 2</option>
-                    <option value="Computer Lab 3">Computer Lab 3</option>
-                    <option value="AI & ML Lab">AI & ML Lab</option>
-                    <option value="Data Science Lab">Data Science Lab</option>
-                    <option value="IoT & Embedded Lab">IoT & Embedded Lab</option>
-                    <option value="Electronics Lab">Electronics Lab</option>
-                    <option value="Hardware Lab">Hardware Lab</option>
-                    <option value="Network Lab">Network Lab</option>
-                    <option value="Project Lab">Project Lab</option>
-                  </optgroup>
-                  {editForm.room && !['LH-101', 'LH-102', 'LH-201', 'LH-202', 'LH-301', 'LH-302', 'Room 101', 'Room 102', 'Room 201', 'Room 202', 'Seminar Hall 1', 'Seminar Hall 2', 'Computer Lab 1', 'Computer Lab 2', 'Computer Lab 3', 'AI & ML Lab', 'Data Science Lab', 'IoT & Embedded Lab', 'Electronics Lab', 'Hardware Lab', 'Network Lab', 'Project Lab'].includes(editForm.room) && (
-                    <optgroup label="Current Assigned Venue">
-                      <option value={editForm.room}>{editForm.room}</option>
-                    </optgroup>
-                  )}
-                </select>
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-amber-500 transition-all"
+                />
               </div>
 
               <div className="flex items-center gap-3 pt-2">

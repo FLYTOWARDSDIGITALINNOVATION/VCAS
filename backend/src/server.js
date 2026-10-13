@@ -28,6 +28,7 @@ const courseRoutes           = require('./routes/courseRoutes');
 const subjectRoutes          = require('./routes/subjectRoutes');
 const settingsRoutes         = require('./routes/settingsRoutes');
 const examRoutes             = require('./routes/examRoutes');
+const feeStructureRoutes     = require('./routes/feeStructureRoutes');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -75,6 +76,7 @@ app.use('/api/courses',         courseRoutes);
 app.use('/api/subjects',        subjectRoutes);
 app.use('/api/settings',        settingsRoutes);
 app.use('/api/exams',           examRoutes);
+app.use('/api/fee-structure',   feeStructureRoutes);
 
 // 404
 app.use((req, res) => {

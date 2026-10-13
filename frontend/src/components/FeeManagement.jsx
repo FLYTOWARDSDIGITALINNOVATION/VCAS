@@ -30,7 +30,7 @@ import TransportFeesManagement from './TransportFeesManagement';
 import FeeStructureView from './FeeStructureView';
 import { Building2 } from 'lucide-react';
 
-export default function FeeManagement({ defaultFeeType = 'All' }) {
+export default function FeeManagement({ defaultFeeType = 'All', user }) {
   // Mode state: 'list' or 'form'
   const [viewMode, setViewMode] = useState('list');
   const [activeTab, setActiveTab] = useState('Exam Fees');
@@ -602,7 +602,7 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
       {viewMode === 'form' ? (
         <div className="space-y-6">
           {activeTab === 'Fee Structure' ? (
-            <FeeStructureView />
+            <FeeStructureView user={user} />
           ) : activeTab === 'Transport Fees' ? (
             <TransportFeesManagement 
               entryFormData={entryFormData}
