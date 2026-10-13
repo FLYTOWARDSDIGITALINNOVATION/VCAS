@@ -62,7 +62,7 @@ export default function StaffAssignments({ staffUser }) {
   const [newSubjectCode, setNewSubjectCode]   = useState("");
   const [newSubjectName, setNewSubjectName]   = useState("");
   const [newDueDate, setNewDueDate]           = useState("");
-  const [newMarks, setNewMarks]               = useState("20");
+  const [newMarks, setNewMarks]               = useState("");
   const [newDescription, setNewDescription]   = useState("");
 
   // Attachment state
@@ -239,7 +239,7 @@ export default function StaffAssignments({ staffUser }) {
     setShowModal(false);
     setEditingId(null);
     setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
-    setNewDescription(""); setNewDueDate(""); setNewMarks("20");
+    setNewDescription(""); setNewDueDate(""); setNewMarks("");
     setAttachmentName(""); setAttachmentData(""); setAttachmentSize(""); setAttachmentType("");
   };
 
@@ -778,7 +778,7 @@ export default function StaffAssignments({ staffUser }) {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Total Marks</label>
-                  <input type="number" min="5" max="100" value={newMarks} onChange={(e) => setNewMarks(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                  <input type="number" min="5" max="100" placeholder="e.g. 20" value={newMarks} onChange={(e) => setNewMarks(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                 </div>
               </div>
 

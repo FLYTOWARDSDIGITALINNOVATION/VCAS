@@ -151,7 +151,8 @@ export default function CourseSubjectManagement({ user }) {
           'BCA101', 'BCA201', 'BCA301', 'BCA401', 'BCA501', 'BCA601',
           'BBA101', 'BBA201', 'BBA301', 'BBA401', 'BBA501', 'BBA601'
         ];
-        const filtered = Array.isArray(parsed) ? parsed.filter(s => !demoSubjectCodes.includes(s.code)) : [];
+        const fakeFacultyNames = ['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'];
+        const filtered = Array.isArray(parsed) ? parsed.filter(s => !demoSubjectCodes.includes(s.code) && !fakeFacultyNames.includes(s.faculty)) : [];
         if (filtered.length > 0) return filtered;
         localStorage.removeItem('vcas_subjects_cache');
       }
@@ -184,7 +185,8 @@ export default function CourseSubjectManagement({ user }) {
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const sData = await resSubjects.value.json();
         if (sData.success && Array.isArray(sData.data)) {
-          const list = sData.data.length > 0 ? sData.data : INITIAL_SUBJECTS;
+          const clean = sData.data.filter(s => s.code && !['SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()) && !['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'].includes(s.faculty));
+          const list = clean.length > 0 ? clean : INITIAL_SUBJECTS;
           setSubjectsList(list);
           try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(list)); } catch (_) {}
         }
@@ -351,8 +353,10 @@ export default function CourseSubjectManagement({ user }) {
   // Distinct Faculty Teaching Workload
   const facultyWorkload = useMemo(() => {
     const map = {};
+    const fakeFaculty = ['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'];
     subjectsList.forEach(sub => {
-      const fac = sub.faculty || 'Unassigned';
+      const fac = (sub.faculty || '').trim();
+      if (!fac || fac === 'Unassigned' || fakeFaculty.includes(fac)) return;
       if (!map[fac]) {
         map[fac] = {
           name: fac,

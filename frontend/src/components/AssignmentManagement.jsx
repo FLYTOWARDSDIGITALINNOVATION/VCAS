@@ -65,6 +65,7 @@ export default function AssignmentManagement({ user }) {
   const [assignmentsList, setAssignmentsList] = useState(INITIAL_ASSIGNMENTS);
   const [submissionsList, setSubmissionsList] = useState(INITIAL_SUBMISSIONS);
   const [availableClasses, setAvailableClasses] = useState([]);
+  const [availableDepartments, setAvailableDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Selected Assignment for Submissions view
@@ -166,10 +167,16 @@ export default function AssignmentManagement({ user }) {
   const fetchAssignments = async () => {
     setLoading(true);
     try {
-      const [resAsgts, resClasses] = await Promise.all([
+      const [resAsgts, resClasses, resDepts] = await Promise.all([
         fetch(`${API_BASE}/assignments`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
-        fetch(`${API_BASE}/classes`).then(r => r.json()).catch(() => ({ success: false, classes: [] }))
+        fetch(`${API_BASE}/classes`).then(r => r.json()).catch(() => ({ success: false, classes: [] })),
+        fetch(`${API_BASE}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] }))
       ]);
+
+      if (resDepts.success && Array.isArray(resDepts.data)) {
+        const dNames = resDepts.data.map(d => d.name).filter(Boolean);
+        setAvailableDepartments(dNames);
+      }
 
       const classesList = resClasses.classes || resClasses.data || [];
       setAvailableClasses(Array.isArray(classesList) ? classesList : []);
@@ -279,14 +286,14 @@ export default function AssignmentManagement({ user }) {
     title: '',
     code: '',
     subject: '',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    faculty: 'Admin / Faculty',
-    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    dueTime: '11:59 PM',
-    maxMarks: 25,
-    weightage: '10% CIA',
+    department: '',
+    year: 1,
+    sem: 'Sem 1',
+    faculty: '',
+    dueDate: '',
+    dueTime: '',
+    maxMarks: '',
+    weightage: '',
     description: '',
     type: 'Code & Report'
   });
@@ -402,14 +409,14 @@ export default function AssignmentManagement({ user }) {
     title: '',
     code: '',
     subject: '',
-    department: 'Computer Science',
-    year: 3,
-    sem: 'Sem 5',
-    faculty: 'Admin / Faculty',
-    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    dueTime: '11:59 PM',
-    maxMarks: 25,
-    weightage: '10% CIA',
+    department: '',
+    year: 1,
+    sem: 'Sem 1',
+    faculty: '',
+    dueDate: '',
+    dueTime: '',
+    maxMarks: '',
+    weightage: '',
     description: '',
     type: 'Code & Report'
   };
@@ -1031,7 +1038,8 @@ export default function AssignmentManagement({ user }) {
                   onChange={(e) => setSelectedDept(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                 >
-                  {DEPARTMENTS.map(d => (
+                  <option value="All Departments">All Departments</option>
+                  {availableDepartments.map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
@@ -1855,9 +1863,13 @@ export default function AssignmentManagement({ user }) {
                   onChange={(e) => setAssignmentForm({ ...assignmentForm, department: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                 >
-                  {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
+                  {availableDepartments.length === 0 ? (
+                    <option value="">No departments added yet</option>
+                  ) : (
+                    availableDepartments.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -1878,8 +1890,9 @@ export default function AssignmentManagement({ user }) {
                   <input
                     type="number"
                     value={assignmentForm.maxMarks}
-                    onChange={(e) => setAssignmentForm({ ...assignmentForm, maxMarks: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:border-purple-500 focus:outline-none"
+                    placeholder="e.g. 25"
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, maxMarks: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:border-purple-500 focus:outline-none placeholder:text-slate-400"
                     required
                   />
                 </div>

@@ -42,18 +42,6 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const DEPARTMENTS = [
-  'All Departments',
-  'Commerce',
-  'Computer Science',
-  'English Literature',
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Mathematics',
-  'Administrative Office',
-  'Accounts & Finance'
-];
-
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -93,17 +81,30 @@ export default function AttendanceManagement({ user }) {
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [dbSessions, setDbSessions] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [availableDepartments, setAvailableDepartments] = useState([]);
 
-  // Fetch all real attendance sessions, students, staff, and leaves from backend
+  // Fetch all real attendance sessions, students, staff, leaves, and departments from backend
   const fetchAllAttendanceData = async () => {
     try {
       setIsSyncing(true);
-      const [resSessions, resStudents, resStaff, resLeaves] = await Promise.allSettled([
+      const [resSessions, resStudents, resStaff, resLeaves, resDepartments] = await Promise.allSettled([
         fetch('http://localhost:5000/api/attendance'),
         fetch('http://localhost:5000/api/students'),
         fetch('http://localhost:5000/api/staff'),
-        fetch('http://localhost:5000/api/leave')
+        fetch('http://localhost:5000/api/leave'),
+        fetch('http://localhost:5000/api/departments')
       ]);
+
+      if (resDepartments.status === 'fulfilled' && resDepartments.value.ok) {
+        const d = await resDepartments.value.json();
+        if (d.success && Array.isArray(d.data)) {
+          const deptNames = d.data.map(dept => dept.name).filter(Boolean);
+          setAvailableDepartments(deptNames);
+          if (deptNames.length > 0) {
+            setRollDept(prev => (prev && deptNames.includes(prev)) ? prev : deptNames[0]);
+          }
+        }
+      }
 
       let sessionsList = [];
       if (resSessions.status === 'fulfilled' && resSessions.value.ok) {
@@ -174,9 +175,7 @@ export default function AttendanceManagement({ user }) {
               status: 'Present',
               periodsAttended: 6,
               totalPeriodsToday: 6,
-              subjectWise: subjectWise.length > 0 ? subjectWise : [
-                { code: 'CS2001', name: 'Cloud Computing', total: 10, attended: 9, percent: 90.0 }
-              ]
+              subjectWise: subjectWise
             };
           });
           setStudents(mappedStudents);
@@ -313,12 +312,12 @@ export default function AttendanceManagement({ user }) {
   };
 
   // Roll Call Selection States
-  const [rollDept, setRollDept] = useState('Computer Science');
-  const [rollYear, setRollYear] = useState(3);
-  const [rollSem, setRollSem] = useState('Sem 5');
-  const [rollSubject, setRollSubject] = useState('CS401 - Web Development');
+  const [rollDept, setRollDept] = useState('');
+  const [rollYear, setRollYear] = useState(1);
+  const [rollSem, setRollSem] = useState('Sem 1');
+  const [rollSubject, setRollSubject] = useState('');
   const [rollPeriod, setRollPeriod] = useState('Period 1 (09:00 AM - 10:00 AM)');
-  const [classTopic, setClassTopic] = useState('Responsive Frontend Architecture & Layouts');
+  const [classTopic, setClassTopic] = useState('');
 
   // Restore any saved session statuses for roll call
   React.useEffect(() => {
@@ -532,7 +531,16 @@ export default function AttendanceManagement({ user }) {
   // Handlers for Roll Call & Actions
   // -------------------------------------------------------------
   const rollCallStudents = useMemo(() => {
-    return students.filter(s => s.department === rollDept && s.year === Number(rollYear));
+    const cleanDept = (rollDept || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return students.filter(s => {
+      const sDept = (s.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchDept = sDept === cleanDept || 
+        (cleanDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
+        (cleanDept && sDept.includes(cleanDept)) || 
+        (sDept && cleanDept.includes(sDept));
+      const matchYear = Number(s.year) === Number(rollYear);
+      return matchDept && matchYear;
+    });
   }, [students, rollDept, rollYear]);
 
   const rollTally = useMemo(() => {
@@ -546,8 +554,9 @@ export default function AttendanceManagement({ user }) {
   }, [rollCallStudents]);
 
   const filteredRegisterStudents = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim();
+    const cleanFilterDept = (filterDept || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     return students.filter(s => {
-      const q = (searchQuery || '').toLowerCase().trim();
       const matchesSearch = !q || (
         String(s.name || '').toLowerCase().includes(q) ||
         String(s.rollNo || '').toLowerCase().includes(q) ||
@@ -555,8 +564,13 @@ export default function AttendanceManagement({ user }) {
         String(s.department || '').toLowerCase().includes(q)
       );
 
-      const matchesDept = filterDept === 'All Departments' || s.department === filterDept;
-      const matchesYear = filterYear === 'ALL' || s.year === Number(filterYear);
+      const sDept = (s.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchesDept = filterDept === 'All Departments' || 
+        sDept === cleanFilterDept ||
+        (cleanFilterDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
+        sDept.includes(cleanFilterDept) || cleanFilterDept.includes(sDept);
+
+      const matchesYear = filterYear === 'ALL' || Number(s.year) === Number(filterYear);
 
       let matchesRange = true;
       if (filterAttendanceRange === 'good') matchesRange = s.attendancePercent >= 85;
@@ -576,8 +590,14 @@ export default function AttendanceManagement({ user }) {
   };
 
   const handleMarkAll = (status) => {
+    const cleanDept = (rollDept || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     setStudents(prev => prev.map(s => {
-      if (s.department === rollDept && s.year === Number(rollYear)) {
+      const sDept = (s.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchDept = sDept === cleanDept || 
+        (cleanDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
+        (cleanDept && sDept.includes(cleanDept)) || 
+        (sDept && cleanDept.includes(sDept));
+      if (matchDept && Number(s.year) === Number(rollYear)) {
         return { ...s, status };
       }
       return s;
@@ -1128,7 +1148,8 @@ export default function AttendanceManagement({ user }) {
                     onChange={(e) => setFilterDept(e.target.value)}
                     className="w-full sm:w-44 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                   >
-                    {DEPARTMENTS.map(d => (
+                    <option value="All Departments">All Departments</option>
+                    {availableDepartments.map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
@@ -1251,9 +1272,13 @@ export default function AttendanceManagement({ user }) {
                       onChange={(e) => setRollDept(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                     >
-                      {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
+                      {availableDepartments.length === 0 ? (
+                        <option value="">No departments added yet</option>
+                      ) : (
+                        availableDepartments.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))
+                      )}
                     </select>
                   </div>
 

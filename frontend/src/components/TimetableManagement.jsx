@@ -216,10 +216,10 @@ export default function TimetableManagement({ user }) {
   const [slotForm, setSlotForm] = useState({
     day: 'Monday',
     period: 1,
-    code: 'CS401',
-    name: 'Cloud Computing & DevOps',
+    code: '',
+    name: '',
     faculty: '',
-    room: 'LH-101',
+    room: '',
     type: 'theory'
   });
 
@@ -343,15 +343,15 @@ export default function TimetableManagement({ user }) {
   const handleOpenEditSlot = (day, periodNum, currentSlot) => {
     const defaultFaculty = viewMode === 'faculty'
       ? (currentStaff?.name ? `${currentStaff.name} (${currentStaff.staffId})` : selectedStaffId)
-      : (currentSlot?.faculty || 'Assigned Faculty');
+      : (currentSlot?.faculty || '');
 
     setSlotForm({
       day,
       period: periodNum,
-      code: currentSlot?.code || 'CS2005',
-      name: currentSlot?.name || 'Cloud Computing & DevOps',
-      faculty: currentSlot?.faculty || defaultFaculty,
-      room: currentSlot?.room || 'LH-101',
+      code: currentSlot?.code || '',
+      name: currentSlot?.name || '',
+      faculty: currentSlot?.faculty || defaultFaculty || '',
+      room: currentSlot?.room || '',
       type: currentSlot?.type || 'theory'
     });
     setIsEditSlotOpen(true);
@@ -1271,34 +1271,6 @@ export default function TimetableManagement({ user }) {
                 </div>
               </div>
 
-              {/* Quick Select Common Subjects */}
-              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Fill:</span>
-                  <button
-                    type="button"
-                    onClick={() => setSlotForm(prev => ({ ...prev, code: 'CS2001', name: 'Cloud', room: 'LH-101', type: 'theory' }))}
-                    className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold border border-blue-200 cursor-pointer"
-                  >
-                    CS2001 - Cloud
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSlotForm(prev => ({ ...prev, code: 'CS2005', name: 'DBMS', room: 'LH-102', type: 'theory' }))}
-                    className="px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 cursor-pointer"
-                  >
-                    CS2005 - DBMS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSlotForm(prev => ({ ...prev, code: 'CS2005', name: 'DBMS Lab', room: 'AI & ML Lab', type: 'lab' }))}
-                    className="px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200 cursor-pointer"
-                  >
-                    CS2005 Lab
-                  </button>
-                </div>
-              </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name *</label>
                 <input
@@ -1342,12 +1314,14 @@ export default function TimetableManagement({ user }) {
                 </div>
               </div>
 
-              {/* CLASSROOM OR LAB VENUE DROPDOWN SELECTOR */}
+              {/* CLASSROOM OR LAB VENUE TYPING INPUT */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Classroom / Lab Venue *
+                  Classroom / Lab Venue
+                  <span className="ml-1 text-[11px] font-normal text-slate-400">— Type your college room or lab</span>
                 </label>
-                <select
+                <input
+                  type="text"
                   value={slotForm.room}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -1358,42 +1332,9 @@ export default function TimetableManagement({ user }) {
                       type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
                     }));
                   }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
-                  required
-                >
-                  <option value="">-- Choose Classroom or Lab --</option>
-                  <optgroup label="Classrooms / Lecture Halls">
-                    <option value="LH-101">LH-101 (Lecture Hall 1)</option>
-                    <option value="LH-102">LH-102 (Lecture Hall 2)</option>
-                    <option value="LH-201">LH-201 (Lecture Hall 3)</option>
-                    <option value="LH-202">LH-202 (Lecture Hall 4)</option>
-                    <option value="LH-301">LH-301 (Lecture Hall 5)</option>
-                    <option value="LH-302">LH-302 (Lecture Hall 6)</option>
-                    <option value="Room 101">Room 101</option>
-                    <option value="Room 102">Room 102</option>
-                    <option value="Room 201">Room 201</option>
-                    <option value="Room 202">Room 202</option>
-                    <option value="Seminar Hall 1">Seminar Hall 1</option>
-                    <option value="Seminar Hall 2">Seminar Hall 2</option>
-                  </optgroup>
-                  <optgroup label="Laboratories">
-                    <option value="Computer Lab 1">Computer Lab 1</option>
-                    <option value="Computer Lab 2">Computer Lab 2</option>
-                    <option value="Computer Lab 3">Computer Lab 3</option>
-                    <option value="AI & ML Lab">AI & ML Lab</option>
-                    <option value="Data Science Lab">Data Science Lab</option>
-                    <option value="IoT & Embedded Lab">IoT & Embedded Lab</option>
-                    <option value="Electronics Lab">Electronics Lab</option>
-                    <option value="Hardware Lab">Hardware Lab</option>
-                    <option value="Network Lab">Network Lab</option>
-                    <option value="Project Lab">Project Lab</option>
-                  </optgroup>
-                  {slotForm.room && !['LH-101','LH-102','LH-201','LH-202','LH-301','LH-302','Room 101','Room 102','Room 201','Room 202','Seminar Hall 1','Seminar Hall 2','Computer Lab 1','Computer Lab 2','Computer Lab 3','AI & ML Lab','Data Science Lab','IoT & Embedded Lab','Electronics Lab','Hardware Lab','Network Lab','Project Lab'].includes(slotForm.room) && (
-                    <optgroup label="Current Assigned Venue">
-                      <option value={slotForm.room}>{slotForm.room}</option>
-                    </optgroup>
-                  )}
-                </select>
+                  placeholder="e.g. Room 101, LH-1, Computer Lab"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
+                />
               </div>
 
               {viewMode === 'class' && (

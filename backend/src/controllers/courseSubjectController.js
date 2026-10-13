@@ -193,52 +193,8 @@ exports.getSubjects = async (req, res) => {
       } catch (_) {}
     }
 
-    // Auto-ensure CS401 (Operating Systems) exists
-    const hasCS401 = subjects.some(s => s.code && s.code.toUpperCase() === 'CS401');
-    if (!hasCS401) {
-      try {
-        const cs401 = await Subject.create({
-          code: 'CS401',
-          name: 'Operating Systems',
-          department: 'Computer Science',
-          year: 2,
-          sem: 'Sem 4',
-          credits: 4,
-          type: 'Core Theory',
-          faculty: 'Dr. Ramesh Kumar',
-          ltp: '3-1-0',
-          hours: '4 hrs/wk (3L + 1T)',
-          prerequisite: 'CS2001',
-          studentsEnrolled: 60
-        });
-        subjects.push(cs401);
-      } catch (_) {}
-    }
-
-    // Auto-ensure CS402 (Design and Analysis of Algorithms) exists
-    const hasCS402 = subjects.some(s => s.code && s.code.toUpperCase() === 'CS402');
-    if (!hasCS402) {
-      try {
-        const cs402 = await Subject.create({
-          code: 'CS402',
-          name: 'Design and Analysis of Algorithms',
-          department: 'Computer Science',
-          year: 2,
-          sem: 'Sem 4',
-          credits: 4,
-          type: 'Core Theory',
-          faculty: 'Dr. Ananya Sharma',
-          ltp: '3-1-0',
-          hours: '4 hrs/wk (3L + 1T)',
-          prerequisite: 'CS2005',
-          studentsEnrolled: 60
-        });
-        subjects.push(cs402);
-      } catch (_) {}
-    }
-
     // Filter out dummy/test subjects
-    subjects = subjects.filter(s => s.code && s.code.toUpperCase() !== 'SF76');
+    subjects = subjects.filter(s => s.code && !['SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()));
 
     res.status(200).json({
       success: true,

@@ -70,6 +70,7 @@ export default function ExaminationManagement({ user }) {
   const [studentMarksList, setStudentMarksList] = useState([]);
   const [hallsList, setHallsList] = useState([]);
   const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [availableDepartments, setAvailableDepartments] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [internalMarksheets, setInternalMarksheets] = useState([]);
 
@@ -77,15 +78,24 @@ export default function ExaminationManagement({ user }) {
   const fetchAllExaminationData = async () => {
     try {
       setIsSyncing(true);
-      const [resExams, resMarks, resHalls, resStudents, resTickets, resSubjects, resClasses] = await Promise.allSettled([
+      const [resExams, resMarks, resHalls, resStudents, resTickets, resSubjects, resClasses, resDepts] = await Promise.allSettled([
         fetch('http://localhost:5000/api/exams'),
         fetch('http://localhost:5000/api/internal-marks'),
         fetch('http://localhost:5000/api/exams/halls'),
         fetch('http://localhost:5000/api/students'),
         fetch('http://localhost:5000/api/hall-tickets'),
         fetch('http://localhost:5000/api/subjects'),
-        fetch('http://localhost:5000/api/classes')
+        fetch('http://localhost:5000/api/classes'),
+        fetch('http://localhost:5000/api/departments')
       ]);
+
+      if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
+        const d = await resDepts.value.json();
+        if (d.success && Array.isArray(d.data)) {
+          const names = d.data.map(dept => dept.name).filter(Boolean);
+          setAvailableDepartments(names);
+        }
+      }
 
       // 1. Process Exams
       let realExams = [];
@@ -404,7 +414,7 @@ export default function ExaminationManagement({ user }) {
   const [scheduleForm, setScheduleForm] = useState({
     code: '',
     name: '',
-    department: 'Computer Science',
+    department: '',
     year: 1,
     sem: 'Sem 1',
     date: '',
@@ -566,12 +576,12 @@ export default function ExaminationManagement({ user }) {
 
   const [hallForm, setHallForm] = useState({
     hallName: '',
-    capacity: 60,
-    allocatedStudents: 60,
-    departments: 'Computer Science',
+    capacity: '',
+    allocatedStudents: '',
+    departments: '',
     rollRange: '',
     invigilator: '',
-    invigilatorDept: 'Computer Science',
+    invigilatorDept: '',
     status: 'Allocated'
   });
 
@@ -580,24 +590,24 @@ export default function ExaminationManagement({ user }) {
       setEditingHallId(hallToEdit._id || hallToEdit.id);
       setHallForm({
         hallName: hallToEdit.hallName || '',
-        capacity: hallToEdit.capacity || 60,
-        allocatedStudents: hallToEdit.allocatedStudents || 0,
+        capacity: hallToEdit.capacity || '',
+        allocatedStudents: hallToEdit.allocatedStudents || '',
         departments: hallToEdit.departments || '',
         rollRange: hallToEdit.rollRange || '',
         invigilator: hallToEdit.invigilator || '',
-        invigilatorDept: hallToEdit.invigilatorDept || 'Computer Science',
+        invigilatorDept: hallToEdit.invigilatorDept || '',
         status: hallToEdit.status || 'Allocated'
       });
     } else {
       setEditingHallId(null);
       setHallForm({
         hallName: '',
-        capacity: 60,
-        allocatedStudents: 60,
-        departments: 'Computer Science',
+        capacity: '',
+        allocatedStudents: '',
+        departments: '',
         rollRange: '',
         invigilator: '',
-        invigilatorDept: 'Computer Science',
+        invigilatorDept: '',
         status: 'Allocated'
       });
     }
