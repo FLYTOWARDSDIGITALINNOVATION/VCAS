@@ -201,22 +201,143 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
     }));
   };
 
-  // Form Submission -> Triggers Confirmation Modal with Print & OK buttons
-  const handleSaveEntrySubmit = (e) => {
+  // Form Submission -> Persists entry to feeRecords, localStorage & MongoDB backend, then Triggers Confirmation Modal
+  const handleSaveEntrySubmit = async (e) => {
     e.preventDefault();
-    const amountNum = parseFloat(entryFormData.amount || entryFormData.totalAmount) || 5000;
-    const feeTypeName = entryFormData.feeType || activeTab || 'Exam Fees';
-    const formattedAmount = `₹${amountNum.toLocaleString('en-IN')}`;
+    const baseAmount = parseFloat(entryFormData.amount || entryFormData.totalAmount) || 0;
+    const fineAmount = parseFloat(entryFormData.fine) || 0;
+    const totalAmount = baseAmount + fineAmount;
+    const paidAmount = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
+      ? parseFloat(entryFormData.paidAmount) || 0
+      : totalAmount;
+    const pendingAmount = Math.max(0, totalAmount - paidAmount);
+    const feeStatus = pendingAmount === 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
+    const feeTypeName = entryFormData.feeType || activeTab || 'Tuition Fees';
+    const rollNo = (entryFormData.rollNo || '').trim();
+    const studentName = (entryFormData.studentName || '').trim();
+    const course = entryFormData.course || 'UG Program';
+    const txnRef = entryFormData.referenceNo || 'TXN' + Math.floor(1000000000 + Math.random() * 9000000000);
+    const payDate = entryFormData.paymentDate || entryFormData.dueDate || new Date().toISOString().split('T')[0];
 
+    // Find and update existing student record, or prepend new fee entry
+    let matched = false;
+    let targetMongoId = null;
+
+    const nextRecords = feeRecords.map(rec => {
+      const matchRoll = rollNo && (
+        String(rec.rollNo || '').toLowerCase() === rollNo.toLowerCase() ||
+        String(rec.id || '').toLowerCase() === rollNo.toLowerCase()
+      );
+      const matchName = studentName && String(rec.name || '').toLowerCase() === studentName.toLowerCase();
+
+      if (matchRoll || matchName) {
+        matched = true;
+        targetMongoId = rec.mongoId;
+        const newPaid = (rec.paidFee || 0) + paidAmount;
+        const newTotal = Math.max(rec.totalFee || 0, totalAmount);
+        const newPending = Math.max(0, newTotal - newPaid);
+        const newStatus = newPending === 0 ? 'Paid' : (newPaid > 0 ? 'Partial' : 'Pending');
+
+        return {
+          ...rec,
+          feeType: feeTypeName,
+          baseAmount: baseAmount,
+          fine: fineAmount,
+          paidFee: newPaid,
+          paidFeeDisplay: newPaid >= 1000 ? `₹${(newPaid / 1000).toFixed(0)}K` : `₹${newPaid}`,
+          totalFee: newTotal,
+          pendingFee: newPending,
+          pendingFeeDisplay: newPending === 0 ? '-' : (newPending >= 1000 ? `₹${(newPending / 1000).toFixed(0)}K` : `₹${newPending}`),
+          status: newStatus,
+          lastPaymentDate: payDate,
+          paymentMode: entryFormData.paymentMode || 'Online'
+        };
+      }
+      return rec;
+    });
+
+    let finalRecords = nextRecords;
+    if (matched) {
+      // Move the updated record to the very top so user sees the added student immediately
+      const updatedItem = nextRecords.find(r => 
+        (rollNo && (String(r.rollNo || '').toLowerCase() === rollNo.toLowerCase() || String(r.id || '').toLowerCase() === rollNo.toLowerCase())) ||
+        (studentName && String(r.name || '').toLowerCase() === studentName.toLowerCase())
+      );
+      if (updatedItem) {
+        finalRecords = [updatedItem, ...nextRecords.filter(r => r !== updatedItem)];
+      }
+    } else {
+      const newRec = {
+        id: rollNo || `STU${Date.now().toString().slice(-4)}`,
+        name: studentName || 'Student',
+        rollNo: rollNo || 'STU001',
+        course,
+        feeType: feeTypeName,
+        baseAmount: baseAmount,
+        fine: fineAmount,
+        totalFee: totalAmount,
+        paidFee: paidAmount,
+        pendingFee: pendingAmount,
+        paidFeeDisplay: paidAmount >= 1000 ? `₹${(paidAmount / 1000).toFixed(0)}K` : `₹${paidAmount}`,
+        pendingFeeDisplay: pendingAmount === 0 ? '-' : (pendingAmount >= 1000 ? `₹${(pendingAmount / 1000).toFixed(0)}K` : `₹${pendingAmount}`),
+        status: feeStatus,
+        dueDate: entryFormData.dueDate || payDate,
+        lastPaymentDate: payDate,
+        paymentMode: entryFormData.paymentMode || 'Online',
+        paymentRef: txnRef
+      };
+      finalRecords = [newRec, ...nextRecords];
+    }
+
+    setFeeRecords(finalRecords);
+
+    // Save to localStorage
+    try {
+      localStorage.setItem('vcas_real_fee_records', JSON.stringify(finalRecords));
+      const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
+      savedPayments[rollNo || studentName] = {
+        paid: paidAmount,
+        pending: pendingAmount,
+        status: feeStatus,
+        date: payDate
+      };
+      localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
+      window.dispatchEvent(new Event('vcas_students_updated'));
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error('Failed to save to localStorage:', err);
+    }
+
+    // Persist to backend MongoDB via PUT /api/students/:id
+    try {
+      const studentLookupId = targetMongoId || rollNo || studentName;
+      if (studentLookupId) {
+        await fetch(`http://localhost:5000/api/students/${studentLookupId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            feeStatus,
+            paidFee: paidAmount,
+            pendingFee: pendingAmount,
+            lastPaymentDate: payDate
+          })
+        });
+      }
+    } catch (apiErr) {
+      console.warn('Backend sync warning (saved locally):', apiErr);
+    }
+
+    const formattedAmount = `₹${paidAmount.toLocaleString('en-IN')}`;
     setSavedSuccessData({
-      message: `${feeTypeName} entry of ${formattedAmount} saved successfully!`,
-      studentName: entryFormData.studentName || 'Priya Mehta',
-      rollNo: entryFormData.rollNo || 'STU002',
-      course: entryFormData.course || 'B.Com',
+      message: `${feeTypeName} collection of ${formattedAmount} saved successfully!`,
+      studentName: studentName || 'Student',
+      rollNo: rollNo || 'STU001',
+      course,
       feeType: feeTypeName,
       amount: formattedAmount,
-      date: entryFormData.dueDate || entryFormData.paymentDate || new Date().toISOString().split('T')[0],
-      referenceNo: entryFormData.referenceNo || 'TXN1234567890',
+      balance: `₹${pendingAmount.toLocaleString('en-IN')}`,
+      date: payDate,
+      referenceNo: txnRef,
       paymentMode: entryFormData.paymentMode || 'Online'
     });
   };
@@ -487,18 +608,24 @@ export default function FeeManagement({ defaultFeeType = 'All' }) {
               entryFormData={entryFormData}
               setEntryFormData={setEntryFormData}
               handleSaveEntrySubmit={handleSaveEntrySubmit}
+              studentOptions={feeRecords}
+              recordsList={feeRecords}
             />
           ) : activeTab === 'Tuition Fees' ? (
             <TuitionFeesManagement 
               entryFormData={entryFormData}
               setEntryFormData={setEntryFormData}
               handleSaveEntrySubmit={handleSaveEntrySubmit}
+              studentOptions={feeRecords}
+              recordsList={feeRecords}
             />
           ) : (
             <ExamFeesManagement 
               entryFormData={entryFormData}
               setEntryFormData={setEntryFormData}
               handleSaveEntrySubmit={handleSaveEntrySubmit}
+              studentOptions={feeRecords}
+              recordsList={feeRecords}
             />
           )}
         </div>

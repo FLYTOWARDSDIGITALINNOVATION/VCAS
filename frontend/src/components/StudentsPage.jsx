@@ -93,7 +93,7 @@ function normalizeStudent(s) {
   };
 }
 
-export default function StudentsPage({ user, canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff') }) {
+export default function StudentsPage({ user, canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.role === 'Super Admin' || user?.isSuperAdmin) }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
   const [credentialModalStudent, setCredentialModalStudent] = useState(null);
   const [copiedStudentCred, setCopiedStudentCred] = useState(false);

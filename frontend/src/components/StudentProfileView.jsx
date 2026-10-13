@@ -31,7 +31,7 @@ export default function StudentProfileView({
   student, 
   onBack, 
   user, 
-  canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff'), 
+  canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.role === 'Super Admin' || user?.isSuperAdmin), 
   onDownloadCredentials, 
   onPrintCredentials, 
   onEdit 

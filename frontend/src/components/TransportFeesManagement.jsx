@@ -1,20 +1,63 @@
-import React from 'react';
-import { Bus, Save, Info } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bus, Save, User, CreditCard, Clock, AlertCircle } from 'lucide-react';
 
 export default function TransportFeesManagement({ 
   entryFormData, 
   setEntryFormData, 
-  handleSaveEntrySubmit 
+  handleSaveEntrySubmit,
+  studentOptions = [],
+  recordsList = []
 }) {
+  const [isCustomStudent, setIsCustomStudent] = useState(false);
+
+  // Auto-fill student details from dropdown
+  const handleStudentSelect = (selectedKey) => {
+    if (!selectedKey) {
+      setEntryFormData(prev => ({
+        ...prev,
+        studentName: '',
+        rollNo: ''
+      }));
+      return;
+    }
+
+    const found = (studentOptions || []).find(s => 
+      s.rollNo === selectedKey || s.id === selectedKey || s.name === selectedKey
+    );
+
+    if (found) {
+      const baseAmt = parseFloat(entryFormData.amount) || 800;
+      const fineAmt = parseFloat(entryFormData.fine) || 0;
+      const total = baseAmt + fineAmt;
+
+      setEntryFormData(prev => ({
+        ...prev,
+        studentName: found.name,
+        rollNo: found.rollNo || found.id,
+        course: found.course || prev.course || 'B.Com',
+        academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
+        amount: prev.amount || '800',
+        totalAmount: String(total),
+        paidAmount: prev.paidAmount !== undefined ? prev.paidAmount : String(total),
+        balance: String(Math.max(0, total - (parseFloat(prev.paidAmount !== undefined ? prev.paidAmount : total) || 0)))
+      }));
+    }
+  };
+
+  // Filter transport fee records to list added students
+  const transportRecords = (recordsList || []).filter(r => 
+    (r.feeType || '').toLowerCase().includes('transport')
+  );
+
   return (
-    <div className="w-full">
+    <div className="space-y-6">
       
-      {/* TRANSPORT FEE ENTRY FORM */}
-      <div className="w-full bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+      {/* FORM CARD */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
         
         {/* Header */}
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200">
             <Bus className="w-5 h-5" />
           </div>
           <div>
@@ -22,7 +65,7 @@ export default function TransportFeesManagement({
               Add Transport Fee Entry
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Enter the details to record transport fee payment.
+              Select student from dropdown to auto-fill details, route assignment, fine additions, and balance.
             </p>
           </div>
         </div>
@@ -31,20 +74,49 @@ export default function TransportFeesManagement({
           
           {/* ROW 1: Student, Roll No., Course, Academic Year, Fee Type */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Student <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={entryFormData.studentName}
-                onChange={(e) => setEntryFormData({...entryFormData, studentName: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
-                placeholder="Enter student name"
-                required
-              />
+            
+            {/* Student Dropdown */}
+            <div className="lg:col-span-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-slate-800 font-bold">
+                  Student <span className="text-rose-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomStudent(!isCustomStudent)}
+                  className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition-colors cursor-pointer"
+                >
+                  {isCustomStudent ? '← Dropdown' : '+ Custom'}
+                </button>
+              </div>
+
+              {!isCustomStudent ? (
+                <select
+                  value={entryFormData.rollNo || ''}
+                  onChange={(e) => handleStudentSelect(e.target.value)}
+                  className="w-full p-2.5 bg-blue-50/50 border border-blue-300 rounded-xl text-slate-900 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
+                  required
+                >
+                  <option value="">-- Select Student ({studentOptions?.length || 0}) --</option>
+                  {(studentOptions || []).map((s, idx) => (
+                    <option key={idx} value={s.rollNo || s.id}>
+                      {s.name} ({s.rollNo || s.id}) • {s.course}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={entryFormData.studentName}
+                  onChange={(e) => setEntryFormData({...entryFormData, studentName: e.target.value})}
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                  placeholder="Enter student name"
+                  required
+                />
+              )}
             </div>
 
+            {/* Roll No */}
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
                 Roll No. <span className="text-rose-500">*</span>
@@ -53,12 +125,13 @@ export default function TransportFeesManagement({
                 type="text"
                 value={entryFormData.rollNo}
                 onChange={(e) => setEntryFormData({...entryFormData, rollNo: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
-                placeholder="e.g., STU008"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-semibold focus:border-blue-500 focus:outline-none shadow-2xs"
+                placeholder="Auto-filled"
                 required
               />
             </div>
 
+            {/* Course */}
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
                 Course <span className="text-rose-500">*</span>
@@ -66,7 +139,7 @@ export default function TransportFeesManagement({
               <select
                 value={entryFormData.course}
                 onChange={(e) => setEntryFormData({...entryFormData, course: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               >
                 <option value="">Select course...</option>
@@ -79,6 +152,7 @@ export default function TransportFeesManagement({
               </select>
             </div>
 
+            {/* Academic Year */}
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
                 Academic Year <span className="text-rose-500">*</span>
@@ -93,17 +167,6 @@ export default function TransportFeesManagement({
               />
             </div>
 
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Fee Type <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value="Transport Fees"
-                readOnly
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold shadow-2xs cursor-not-allowed select-none"
-              />
-            </div>
           </div>
 
           {/* ROW 2: Route / Stop, Transport Vehicle / No., Due Date */}
@@ -117,7 +180,7 @@ export default function TransportFeesManagement({
                 value={entryFormData.routeStop}
                 onChange={(e) => setEntryFormData({...entryFormData, routeStop: e.target.value})}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
-                placeholder="e.g., Adyar - Main Campus"
+                placeholder="e.g., Central Station - Gate 2"
                 required
               />
             </div>
@@ -128,20 +191,12 @@ export default function TransportFeesManagement({
               </label>
               <input
                 type="text"
-                list="vehicle-no-options"
                 value={entryFormData.vehicleNo}
                 onChange={(e) => setEntryFormData({...entryFormData, vehicleNo: e.target.value.toUpperCase()})}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs uppercase font-mono"
                 placeholder="e.g., TN 09 AB 1234 or Bus 04"
                 required
               />
-              <datalist id="vehicle-no-options">
-                <option value="TN 09 AB 1234" />
-                <option value="TN 09 AB 5678" />
-                <option value="TN 09 AB 9012" />
-                <option value="Bus No. 01" />
-                <option value="Bus No. 02" />
-              </datalist>
             </div>
 
             <div>
@@ -150,84 +205,158 @@ export default function TransportFeesManagement({
               </label>
               <input
                 type="date"
-                value={entryFormData.dueDate}
+                value={entryFormData.dueDate || ''}
                 onChange={(e) => setEntryFormData({...entryFormData, dueDate: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               />
             </div>
           </div>
 
-          {/* ROW 3: Amount, Fine, Total Amount */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* ROW 3: Base Amount, Fine, Paid Amount, Balance */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Amount */}
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
                 Amount (₹) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
-                value={entryFormData.amount}
+                value={entryFormData.amount || ''}
                 onChange={(e) => {
-                  const val = e.target.value;
+                  const amtVal = e.target.value;
+                  const baseAmt = parseFloat(amtVal) || 0;
+                  const fineNum = parseFloat(entryFormData.fine) || 0;
+                  const total = baseAmt + fineNum;
+                  const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
+                    ? parseFloat(entryFormData.paidAmount) || 0
+                    : total;
                   setEntryFormData(prev => ({
                     ...prev,
-                    amount: val,
-                    totalAmount: val
+                    amount: amtVal,
+                    totalAmount: String(total),
+                    balance: String(Math.max(0, total - currentPaid))
                   }));
                 }}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-semibold focus:border-blue-500 focus:outline-none shadow-2xs"
-                placeholder="800"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:border-blue-500 focus:outline-none shadow-2xs"
+                placeholder="e.g. 800"
                 required
               />
             </div>
 
+            {/* Fine (Auto-adds to Total) */}
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Fine (₹)
+              <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                <span>Fine (₹)</span>
+                <span className="text-[10px] text-rose-500 font-bold">+ Auto-adds to Total</span>
               </label>
               <input
                 type="number"
-                value={entryFormData.fine}
-                onChange={(e) => setEntryFormData({...entryFormData, fine: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                value={entryFormData.fine || ''}
+                onChange={(e) => {
+                  const fineVal = e.target.value;
+                  const fineNum = parseFloat(fineVal) || 0;
+                  const baseAmt = parseFloat(entryFormData.amount) || 0;
+                  const total = baseAmt + fineNum;
+                  const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
+                    ? parseFloat(entryFormData.paidAmount) || 0
+                    : baseAmt;
+                  setEntryFormData(prev => ({
+                    ...prev,
+                    fine: fineVal,
+                    totalAmount: String(total),
+                    balance: String(Math.max(0, total - currentPaid))
+                  }));
+                }}
+                className="w-full p-2.5 bg-white border border-rose-200 focus:border-rose-400 rounded-xl text-slate-800 font-bold focus:outline-none shadow-2xs"
                 placeholder="0"
               />
-              <p className="text-[10px] text-slate-400 mt-1">Enter fine amount if any</p>
+              <div className="mt-1.5 p-1.5 bg-rose-50/80 border border-rose-100 rounded-lg flex items-center justify-between text-[11px]">
+                <span className="text-slate-600 font-medium">Total with Fine:</span>
+                <span className="text-rose-700 font-black">
+                  ₹{((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0)).toLocaleString('en-IN')}
+                </span>
+              </div>
             </div>
 
+            {/* Paid Amount */}
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Total Amount (₹)
+              <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                <span>Paid Amount (₹) <span className="text-rose-500">*</span></span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const total = (parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0);
+                    setEntryFormData(prev => ({
+                      ...prev,
+                      paidAmount: String(total),
+                      balance: '0'
+                    }));
+                  }}
+                  className="text-[10px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
+                >
+                  Pay Full (₹{((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0)).toLocaleString('en-IN')})
+                </button>
               </label>
               <input
                 type="number"
-                value={entryFormData.totalAmount || entryFormData.amount}
-                onChange={(e) => setEntryFormData({...entryFormData, totalAmount: e.target.value})}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:border-blue-500 focus:outline-none shadow-2xs"
-                placeholder="800"
-                readOnly
+                value={entryFormData.paidAmount !== undefined ? entryFormData.paidAmount : (entryFormData.amount || '')}
+                onChange={(e) => {
+                  const paid = e.target.value;
+                  const total = (parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0);
+                  const paidVal = paid === '' ? 0 : parseFloat(paid) || 0;
+                  const bal = Math.max(0, total - paidVal);
+                  setEntryFormData(prev => ({
+                    ...prev,
+                    paidAmount: paid,
+                    balance: String(bal)
+                  }));
+                }}
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:border-blue-500 focus:outline-none shadow-2xs"
+                placeholder="e.g. 800"
+                required
               />
-              <p className="text-[10px] text-slate-400 mt-1">Auto calculated</p>
             </div>
+
+            {/* Balance */}
+            <div>
+              <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                <span>Balance Due (₹)</span>
+                <span className="text-[10px] text-amber-600 font-bold">Auto-calculated</span>
+              </label>
+              <input
+                type="number"
+                value={
+                  entryFormData.balance !== undefined
+                    ? entryFormData.balance
+                    : String(Math.max(0, ((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0)) - (parseFloat(entryFormData.paidAmount !== undefined ? entryFormData.paidAmount : entryFormData.amount) || 0)))
+                }
+                readOnly
+                className="w-full p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl text-amber-950 font-black shadow-2xs cursor-not-allowed"
+                placeholder="0"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">Total (Base + Fine) − Paid</p>
+            </div>
+
           </div>
 
-          {/* ROW 4: Payment Mode, Payment Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* ROW 4: Payment Mode, Payment Date, Remarks */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
                 Payment Mode <span className="text-rose-500">*</span>
               </label>
               <select
-                value={entryFormData.paymentMode}
+                value={entryFormData.paymentMode || 'UPI'}
                 onChange={(e) => setEntryFormData({...entryFormData, paymentMode: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               >
-                <option value="UPI">UPI</option>
-                <option value="Cash">Cash</option>
-                <option value="Online">Online</option>
-                <option value="Bank">Bank</option>
-                <option value="Card">Card</option>
+                <option value="UPI">UPI / GPay / PhonePe</option>
+                <option value="Online">Online NetBanking</option>
+                <option value="Cash">Cash at Bus Office</option>
+                <option value="Bank">Bank Challan</option>
               </select>
             </div>
 
@@ -237,34 +366,128 @@ export default function TransportFeesManagement({
               </label>
               <input
                 type="date"
-                value={entryFormData.paymentDate}
+                value={entryFormData.paymentDate || new Date().toISOString().split('T')[0]}
                 onChange={(e) => setEntryFormData({...entryFormData, paymentDate: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               />
             </div>
-          </div>
 
-          {/* BOTTOM ROW: Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <button
-              type="submit"
-              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all text-xs"
-            >
-              <Save className="w-4 h-4" />
-              <span>Save Entry</span>
-            </button>
+            <div className="flex items-end justify-end">
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all text-xs cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Transport Entry</span>
+              </button>
+            </div>
           </div>
 
         </form>
 
-        {/* BOTTOM BLUE NOTE BANNER FOR TRANSPORT */}
-        <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-2xl flex items-center gap-3 text-xs text-blue-800 font-medium">
-          <Info className="w-4 h-4 text-blue-600 shrink-0" />
-          <span><strong>Note:</strong> Transport fee is usually collected monthly or term-wise based on the route.</span>
+      </div>
+
+      {/* BELOW: ADDED STUDENTS & COLLECTIONS LIST */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span>📋 Added Transport Fee Students & Collections</span>
+              <span className="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-bold">
+                {transportRecords.length} Records
+              </span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Live list of all students with transport fee collections recorded. Newly saved students appear right at the top.
+            </p>
+          </div>
         </div>
 
+        {transportRecords.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+            <User className="w-8 h-8 mx-auto mb-2 opacity-40 text-emerald-500" />
+            <p className="text-xs font-semibold text-slate-600">No transport entries added yet</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Select a student above and click "Save Transport Entry" to record collections.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200 text-[11px]">
+                  <th className="py-3 px-3">Student Name</th>
+                  <th className="py-3 px-3">Roll No</th>
+                  <th className="py-3 px-3">Course</th>
+                  <th className="py-3 px-3 text-right">Base Amount</th>
+                  <th className="py-3 px-3 text-right">Fine</th>
+                  <th className="py-3 px-3 text-right">Total Payable</th>
+                  <th className="py-3 px-3 text-right">Paid Amount</th>
+                  <th className="py-3 px-3 text-right">Balance Due</th>
+                  <th className="py-3 px-3 text-center">Status</th>
+                  <th className="py-3 px-3">Payment Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {transportRecords.map((r, i) => {
+                  const fineVal = Number(r.fine) || 0;
+                  const totalVal = Number(r.totalFee) || (Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0);
+                  const baseVal = r.baseAmount !== undefined ? Number(r.baseAmount) : (totalVal - fineVal);
+                  const paidVal = Number(r.paidFee) || 0;
+                  const pendVal = Number(r.pendingFee) || Math.max(0, totalVal - paidVal);
+
+                  return (
+                    <tr key={i} className="hover:bg-emerald-50/40 transition-colors">
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-[11px] shrink-0">
+                            {(r.name || 'S').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-900 block">{r.name}</span>
+                            <span className="text-[10px] text-slate-400">{r.id || r.rollNo}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 font-semibold text-slate-700">{r.rollNo || r.id}</td>
+                      <td className="py-3 px-3 text-slate-600">{r.course || 'Degree'}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-slate-800">₹{baseVal.toLocaleString('en-IN')}</td>
+                      <td className="py-3 px-3 text-right">
+                        {fineVal > 0 ? (
+                          <span className="font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded text-[11px]">
+                            +₹{fineVal.toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">₹0</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right font-black text-slate-900">₹{totalVal.toLocaleString('en-IN')}</td>
+                      <td className="py-3 px-3 text-right font-bold text-emerald-600">₹{paidVal.toLocaleString('en-IN')}</td>
+                      <td className="py-3 px-3 text-right font-bold text-amber-600">
+                        {pendVal === 0 ? '₹0' : `₹${pendVal.toLocaleString('en-IN')}`}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                          r.status === 'Paid' 
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                            : r.status === 'Partial'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                            : 'bg-amber-100 text-amber-700 border border-amber-200'
+                        }`}>
+                          {r.status || (pendVal === 0 ? 'Paid' : 'Pending')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-slate-500 text-[11px]">
+                        {r.lastPaymentDate || r.dueDate || 'Recent'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
     </div>
   );
 }
