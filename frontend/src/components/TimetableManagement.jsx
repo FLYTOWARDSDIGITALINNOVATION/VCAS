@@ -189,6 +189,7 @@ export default function TimetableManagement({ user }) {
   });
   const [availableDepartments, setAvailableDepartments] = useState([]);
   const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [availableRooms, setAvailableRooms] = useState([]);
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedYear, setSelectedYear] = useState(3);
   const [selectedSem, setSelectedSem] = useState('Sem 5');
@@ -210,6 +211,7 @@ export default function TimetableManagement({ user }) {
   const [isEditSlotOpen, setIsEditSlotOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [editingInitialSlot, setEditingInitialSlot] = useState(null);
 
   // Slot Form State
   const [slotForm, setSlotForm] = useState({
@@ -247,11 +249,12 @@ export default function TimetableManagement({ user }) {
   // Fetch all staff members & live timetables on mount
   const fetchStaffAndTimetables = async () => {
     try {
-      const [sRes, tRes, dRes, subRes] = await Promise.all([
+      const [sRes, tRes, dRes, subRes, cRes] = await Promise.all([
         fetch(`${API_BASE}/staff`),
         fetch(`${API_BASE}/timetable`),
         fetch(`${API_BASE}/departments`).catch(() => null),
-        fetch(`${API_BASE}/subjects`).catch(() => null)
+        fetch(`${API_BASE}/subjects`).catch(() => null),
+        fetch(`${API_BASE}/classes`).catch(() => null)
       ]);
       const sData = await sRes.json();
       const tData = await tRes.json();
@@ -278,6 +281,13 @@ export default function TimetableManagement({ user }) {
         const subData = await subRes.json();
         const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
         setAvailableSubjects(rawSubs);
+      }
+
+      if (cRes && cRes.ok) {
+        const cData = await cRes.json();
+        const classes = cData?.classes || cData?.data || (Array.isArray(cData) ? cData : []);
+        const rooms = classes.map(c => c.room).filter(Boolean);
+        setAvailableRooms(rooms);
       }
 
       // Auto-select staff: prefer one who already has timetable data, or EMP001, or first staff
@@ -375,6 +385,30 @@ export default function TimetableManagement({ user }) {
     return list;
   }, [availableSubjects]);
 
+  // Derive list of ONLY the real classrooms added by staff or admin
+  const allVenues = useMemo(() => {
+    const set = new Set();
+    // 1. From database classes (added by staff/admin)
+    availableRooms.forEach(r => {
+      if (r && typeof r === 'string' && r.trim()) set.add(r.trim());
+    });
+    // 2. From allTimetables (assigned by staff/admin)
+    allTimetables.forEach(t => {
+      const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+      Object.values(sched).forEach(day => {
+        if (day && typeof day === 'object') {
+          Object.values(day).forEach(slot => {
+            if (slot?.room && typeof slot.room === 'string' && slot.room.trim()) {
+              set.add(slot.room.trim());
+            }
+          });
+        }
+      });
+    });
+
+    return Array.from(set);
+  }, [availableRooms, allTimetables]);
+
   // Get active schedule for Class View: aggregates live assigned slots across faculty + class overrides
   const activeClassSchedule = useMemo(() => {
     const userDeptSchedule = schedules[selectedDept]?.[selectedYear] || {};
@@ -424,13 +458,15 @@ export default function TimetableManagement({ user }) {
       ? (currentStaff?.name ? `${currentStaff.name} (${currentStaff.staffId})` : selectedStaffId)
       : (currentSlot?.faculty || '');
 
+    setEditingInitialSlot(currentSlot || null);
+
     setSlotForm({
       day,
       period: periodNum,
       code: currentSlot?.code || '',
       name: currentSlot?.name || '',
       faculty: currentSlot?.faculty || defaultFaculty || '',
-      room: currentSlot?.room || '',
+      room: currentSlot?.room || (allVenues[0] || ''),
       type: currentSlot?.type || 'theory'
     });
     setIsEditSlotOpen(true);
@@ -440,11 +476,87 @@ export default function TimetableManagement({ user }) {
   const handleSaveSlot = async (e) => {
     e.preventDefault();
 
+    if (!slotForm.code || !slotForm.name) {
+      showToast('Please select a subject or provide subject code & name.');
+      return;
+    }
+
+    const targetStaffId = viewMode === 'faculty' 
+      ? selectedStaffId 
+      : (staffList.find(s => `${s.name} (${s.staffId})` === slotForm.faculty)?.staffId || slotForm.faculty);
+
+    // ── 1. CHECK IF PERIOD IS ALREADY ASSIGNED IN THIS CLASS (Class View) ──
+    if (viewMode === 'class') {
+      const existingSlot = activeClassSchedule[slotForm.day]?.[slotForm.period];
+      if (existingSlot && existingSlot.code) {
+        // If it was already assigned and we are not editing that same slot
+        const isEditingSame = editingInitialSlot && (editingInitialSlot.code === existingSlot.code);
+        if (!isEditingSame) {
+          const assignedTo = existingSlot.faculty || 'another faculty member';
+          const msg = `⚠️ Period Conflict: Period ${slotForm.period} on ${slotForm.day} is already assigned to ${assignedTo}!`;
+          showToast(msg);
+          alert(`⚠️ Period Already Assigned:\n\nPeriod ${slotForm.period} on ${slotForm.day} is already assigned to ${assignedTo} for ${existingSlot.code} (${existingSlot.name}).\n\nPlease clear the existing period first or select another time slot.`);
+          return;
+        }
+      }
+    }
+
+    // ── 2. CHECK IF THIS FACULTY IS ALREADY ASSIGNED TO ANOTHER CLASS AT THIS SAME PERIOD ──
+    if (targetStaffId) {
+      const facultyClash = allTimetables.find(t => {
+        const matchesStaff = (t.staffId === targetStaffId) || (slotForm.faculty && slotForm.faculty.includes(t.staffId));
+        if (!matchesStaff) return false;
+
+        const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+        const daySched = sched[slotForm.day] || {};
+        const existing = daySched[String(slotForm.period)];
+        if (!existing || !existing.code) return false;
+
+        if (viewMode === 'faculty' && editingInitialSlot && editingInitialSlot.code === existing.code) {
+          return false;
+        }
+        return true;
+      });
+
+      if (facultyClash) {
+        const sched = facultyClash.schedule instanceof Map ? Object.fromEntries(facultyClash.schedule) : (facultyClash.schedule || {});
+        const existing = sched[slotForm.day]?.[String(slotForm.period)];
+        const staffObj = staffList.find(s => s.staffId === facultyClash.staffId);
+        const staffName = staffObj?.name || facultyClash.staffName || facultyClash.staffId;
+        const msg = `⚠️ Conflict: ${staffName} is already assigned on ${slotForm.day} Period ${slotForm.period}!`;
+        showToast(msg);
+        alert(`⚠️ Period Already Assigned:\n\n${staffName} is already assigned to Period ${slotForm.period} on ${slotForm.day} for ${existing?.code || 'another subject'} (${existing?.name || ''}) in ${existing?.room || 'Room'}.\n\nThis faculty member cannot be assigned to two classes at the same time.`);
+        return;
+      }
+    }
+
+    // ── 3. CHECK IF THE ROOM/VENUE IS ALREADY OCCUPIED BY SOMEONE ELSE AT THIS PERIOD ──
+    if (slotForm.room) {
+      const targetRoom = slotForm.room.trim().toLowerCase();
+      const roomClash = allTimetables.find(t => {
+        if (viewMode === 'faculty' && t.staffId === selectedStaffId) return false;
+        const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+        const existing = sched[slotForm.day]?.[String(slotForm.period)];
+        return existing && existing.room && existing.room.trim().toLowerCase() === targetRoom;
+      });
+
+      if (roomClash) {
+        const sched = roomClash.schedule instanceof Map ? Object.fromEntries(roomClash.schedule) : (roomClash.schedule || {});
+        const existing = sched[slotForm.day]?.[String(slotForm.period)];
+        const staffObj = staffList.find(s => s.staffId === roomClash.staffId);
+        const staffName = staffObj?.name || roomClash.staffName || roomClash.staffId;
+        const msg = `⚠️ Venue Conflict: Venue "${slotForm.room}" is already booked on ${slotForm.day} Period ${slotForm.period} by ${staffName}!`;
+        showToast(msg);
+        alert(`⚠️ Room Already Assigned:\n\nVenue "${slotForm.room}" is already occupied on ${slotForm.day} Period ${slotForm.period} by ${staffName} for ${existing?.code || ''}.\n\nPlease select another room.`);
+        return;
+      }
+    }
+
     const updatedSlot = {
       code: slotForm.code.trim().toUpperCase(),
       name: slotForm.name.trim(),
       faculty: slotForm.faculty,
-      room: slotForm.room.trim() || 'LH-101',
+      room: slotForm.room.trim() || (allVenues[0] || ''),
       type: slotForm.type,
       color: COLOR_MAP[slotForm.type] || 'blue'
     };
@@ -1436,12 +1548,33 @@ export default function TimetableManagement({ user }) {
                 </div>
               </div>
 
-              {/* CLASSROOM OR LAB VENUE TYPING INPUT */}
+              {/* CLASSROOM OR LAB VENUE DROPDOWN */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Classroom / Lab Venue
-                  <span className="ml-1 text-[11px] font-normal text-slate-400">— Type your college room or lab</span>
+                  Classroom / Lab Venue <span className="text-[11px] font-normal text-indigo-600">(Dropdown Option)</span>
                 </label>
+                <select
+                  value={slotForm.room}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const isLab = val.toLowerCase().includes('lab');
+                    setSlotForm(prev => ({
+                      ...prev,
+                      room: val,
+                      type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
+                    }));
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold text-indigo-950 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer transition-all mb-1.5"
+                >
+                  <option value="">-- Choose Classroom / Lab Venue --</option>
+                  {allVenues.length === 0 ? (
+                    <option value="" disabled>No added classrooms found</option>
+                  ) : (
+                    allVenues.map(venue => (
+                      <option key={venue} value={venue}>{venue}</option>
+                    ))
+                  )}
+                </select>
                 <input
                   type="text"
                   value={slotForm.room}
@@ -1454,8 +1587,8 @@ export default function TimetableManagement({ user }) {
                       type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
                     }));
                   }}
-                  placeholder="e.g. Room 101, LH-1, Computer Lab"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
+                  placeholder="Or type custom classroom / lab room"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                 />
               </div>
 
