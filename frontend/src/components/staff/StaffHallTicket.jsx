@@ -1422,15 +1422,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           <div class="header-table">
             <div class="logo-box">
               <div class="logo-circle">
-                <svg viewBox="0 0 100 100" style="width:46px;height:46px;" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="50" cy="50" r="46" stroke="#d97706" stroke-width="2.5" stroke-dasharray="3 2" />
-                  <path d="M50 23 C52 28, 56 31, 56 36 C56 40, 53 43, 50 44 C47 43, 44 40, 44 36 C44 31, 48 28, 50 23 Z" fill="#d97706" />
-                  <path d="M44 44 Q50 42 56 44 L55 48 Q50 49 45 48 Z" fill="#b45309" />
-                  <path d="M50 56 Q36 50 24 53 L24 67 Q36 64 50 70 Q64 64 76 67 L76 53 Q64 50 50 56 Z" fill="#0f1e3c" stroke="#cbd5e1" stroke-width="1" />
-                  <path d="M32 72 Q50 82 68 72 Q59 86 50 87 Q41 86 32 72 Z" fill="#d97706" stroke="#b45309" stroke-width="0.6" />
-                  <rect x="36" y="86" width="28" height="5.5" rx="2" fill="#0f172a" />
-                  <text x="50" y="90.5" text-anchor="middle" fill="#fde047" font-size="4.2" font-weight="900" font-family="sans-serif">VCAS</text>
-                </svg>
+                <img src="/vcas-logo.png" style="width:52px;height:52px;object-fit:contain;" alt="VCAS Official Logo" />
               </div>
             </div>
             <div class="header-text">
@@ -1568,7 +1560,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
             gap: 10px;
           }
           .logo-box { width: 65px; text-align: center; }
-          .logo-circle { width: 55px; height: 55px; font-size: 32px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 50%; border: 1.5px solid #0f1e3c; }
+          .logo-circle { width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; }
           .header-text { flex: 1; text-align: center; }
           .college-title { font-size: 15px; font-weight: 900; color: #0f1e3c; letter-spacing: 0.5px; }
           .college-sub { font-size: 9.5px; font-weight: 600; color: #475569; margin-top: 1px; }

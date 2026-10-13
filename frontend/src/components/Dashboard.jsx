@@ -949,7 +949,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
       
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col shrink-0 h-full overflow-y-auto">
+      <aside className="hidden lg:flex w-72 bg-white border-r border-slate-200 flex-col shrink-0 h-full overflow-y-auto">
         <SidebarContent />
       </aside>
 

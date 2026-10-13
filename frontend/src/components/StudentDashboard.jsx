@@ -818,7 +818,7 @@ CONTACT:
   return (
     <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
       {/* Desktop Sidebar (Crisp White Layout Matching Admin) */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-white border-r border-slate-200 shadow-xs overflow-y-auto">
+      <aside className="hidden lg:flex flex-col w-72 shrink-0 bg-white border-r border-slate-200 shadow-xs overflow-y-auto">
         <SidebarContent />
       </aside>
 
