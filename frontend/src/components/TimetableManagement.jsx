@@ -28,16 +28,6 @@ import ModalPortal from './ModalPortal';
 
 const API_BASE = 'http://localhost:5000/api';
 
-const DEPARTMENTS = [
-  'All Departments',
-  'Commerce',
-  'Computer Science',
-  'English Literature',
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Mathematics'
-];
-
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const DEFAULT_FACULTY_PERIODS = [
@@ -189,8 +179,17 @@ export default function TimetableManagement({ user }) {
   const [isSavingSlot, setIsSavingSlot] = useState(false);
 
   // Class Schedules Matrix State
-  const [schedules, setSchedules] = useState(INITIAL_SCHEDULES);
-  const [selectedDept, setSelectedDept] = useState('Computer Science');
+  const [schedules, setSchedules] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vcas_class_schedules');
+      return saved ? JSON.parse(saved) : INITIAL_SCHEDULES;
+    } catch {
+      return INITIAL_SCHEDULES;
+    }
+  });
+  const [availableDepartments, setAvailableDepartments] = useState([]);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [selectedDept, setSelectedDept] = useState('');
   const [selectedYear, setSelectedYear] = useState(3);
   const [selectedSem, setSelectedSem] = useState('Sem 5');
   const [selectedSection, setSelectedSection] = useState('Section A');
@@ -248,9 +247,11 @@ export default function TimetableManagement({ user }) {
   // Fetch all staff members & live timetables on mount
   const fetchStaffAndTimetables = async () => {
     try {
-      const [sRes, tRes] = await Promise.all([
+      const [sRes, tRes, dRes, subRes] = await Promise.all([
         fetch(`${API_BASE}/staff`),
-        fetch(`${API_BASE}/timetable`)
+        fetch(`${API_BASE}/timetable`),
+        fetch(`${API_BASE}/departments`).catch(() => null),
+        fetch(`${API_BASE}/subjects`).catch(() => null)
       ]);
       const sData = await sRes.json();
       const tData = await tRes.json();
@@ -260,6 +261,24 @@ export default function TimetableManagement({ user }) {
 
       const timetablesArr = tData?.timetables || [];
       setAllTimetables(timetablesArr);
+
+      if (dRes && dRes.ok) {
+        const dData = await dRes.json();
+        const rawDepts = dData?.departments || dData?.data || (Array.isArray(dData) ? dData : []);
+        const deptList = rawDepts
+          .map(d => (typeof d === 'string' ? d : d.name || d.departmentName))
+          .filter(Boolean);
+        setAvailableDepartments(deptList);
+        if (deptList.length > 0) {
+          setSelectedDept(prev => (prev && deptList.includes(prev) ? prev : deptList[0]));
+        }
+      }
+
+      if (subRes && subRes.ok) {
+        const subData = await subRes.json();
+        const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
+        setAvailableSubjects(rawSubs);
+      }
 
       // Auto-select staff: prefer one who already has timetable data, or EMP001, or first staff
       if (!selectedStaffId && staffArr.length > 0) {
@@ -331,13 +350,73 @@ export default function TimetableManagement({ user }) {
     return count;
   };
 
-  // Get active schedule for Class View
+  // Derive list of all known subjects from database and existing timetable records
+  // Derive list of ONLY the real added subjects and codes from the database
+  const allKnownSubjects = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    // Strictly from database /api/subjects (only real added subjects)
+    availableSubjects.forEach(s => {
+      const code = (s.code || s.subjectCode || '').trim().toUpperCase();
+      const name = (s.name || s.subjectName || '').trim();
+      if (code && !seen.has(code)) {
+        seen.add(code);
+        list.push({
+          code,
+          name: name || code,
+          type: (s.type && s.type.toLowerCase().includes('lab')) ? 'lab' : 'theory',
+          department: s.department || '',
+          faculty: s.faculty || ''
+        });
+      }
+    });
+
+    return list;
+  }, [availableSubjects]);
+
+  // Get active schedule for Class View: aggregates live assigned slots across faculty + class overrides
   const activeClassSchedule = useMemo(() => {
-    if (schedules[selectedDept] && schedules[selectedDept][selectedYear]) {
-      return schedules[selectedDept][selectedYear];
-    }
-    return schedules['Computer Science']?.[3] || {};
-  }, [schedules, selectedDept, selectedYear]);
+    const userDeptSchedule = schedules[selectedDept]?.[selectedYear] || {};
+    
+    // Aggregate live faculty slots from allTimetables
+    const aggregated = {};
+    DAYS.forEach(day => {
+      aggregated[day] = {};
+    });
+
+    allTimetables.forEach(t => {
+      const staffMember = staffList.find(s => s.staffId === t.staffId);
+      const staffLabel = staffMember?.name ? `${staffMember.name} (${t.staffId})` : (t.staffId || 'Faculty');
+      const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+      
+      Object.entries(sched).forEach(([day, daySlots]) => {
+        if (daySlots && typeof daySlots === 'object') {
+          Object.entries(daySlots).forEach(([periodNum, slot]) => {
+            if (slot && slot.code) {
+              if (!aggregated[day]) aggregated[day] = {};
+              aggregated[day][periodNum] = {
+                ...slot,
+                faculty: slot.faculty || staffLabel,
+                color: slot.color || COLOR_MAP[slot.type] || 'blue'
+              };
+            }
+          });
+        }
+      });
+    });
+
+    // Merge: custom class schedule overrides aggregated slots
+    const merged = {};
+    DAYS.forEach(day => {
+      merged[day] = {
+        ...(aggregated[day] || {}),
+        ...(userDeptSchedule[day] || {})
+      };
+    });
+
+    return merged;
+  }, [schedules, selectedDept, selectedYear, allTimetables, staffList]);
 
   // Open Edit Slot Modal (supports both Faculty Mode and Class Mode)
   const handleOpenEditSlot = (day, periodNum, currentSlot) => {
@@ -1048,9 +1127,13 @@ export default function TimetableManagement({ user }) {
                   onChange={(e) => setSelectedDept(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
                 >
-                  {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
+                  {availableDepartments.length === 0 ? (
+                    <option value="">No departments added</option>
+                  ) : (
+                    availableDepartments.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -1271,6 +1354,45 @@ export default function TimetableManagement({ user }) {
                 </div>
               </div>
 
+              {/* SUBJECT SELECTION DROPDOWN */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Select Subject <span className="text-[11px] font-normal text-indigo-600">(Dropdown Option)</span>
+                </label>
+                <select
+                  value={allKnownSubjects.some(s => s.code === slotForm.code) ? slotForm.code : (slotForm.code ? '__custom__' : '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '__custom__') {
+                      // Keep current values for manual editing
+                    } else if (val) {
+                      const sel = allKnownSubjects.find(s => s.code === val);
+                      if (sel) {
+                        setSlotForm(prev => ({
+                          ...prev,
+                          code: sel.code,
+                          name: sel.name,
+                          type: sel.type || prev.type,
+                          room: prev.room || (sel.type === 'lab' ? 'Computer Lab 1' : 'LH-101')
+                        }));
+                      }
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold text-indigo-950 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer transition-all mb-2"
+                >
+                  <option value="">-- Choose Subject from Dropdown --</option>
+                  {allKnownSubjects.length === 0 ? (
+                    <option value="" disabled>No added subjects found</option>
+                  ) : (
+                    allKnownSubjects.map(sub => (
+                      <option key={sub.code} value={sub.code}>
+                        {sub.code} — {sub.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name *</label>
                 <input
@@ -1337,18 +1459,37 @@ export default function TimetableManagement({ user }) {
                 />
               </div>
 
-              {viewMode === 'class' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Assigned Faculty</label>
-                  <input
-                    type="text"
-                    value={slotForm.faculty}
-                    onChange={(e) => setSlotForm({ ...slotForm, faculty: e.target.value })}
-                    placeholder="e.g. Prof. Faculty In-Charge"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
-                  />
-                </div>
-              )}
+              {/* FACULTY / STAFF DROPDOWN SELECTION */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Faculty / Staff <span className="text-[11px] font-normal text-indigo-600">(Dropdown Option)</span>
+                </label>
+                <select
+                  value={slotForm.faculty}
+                  onChange={(e) => setSlotForm({ ...slotForm, faculty: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold text-indigo-950 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer transition-all"
+                >
+                  <option value="">-- Select Faculty / Staff Member --</option>
+                  {staffList.map(s => {
+                    const label = `${s.name} (${s.staffId})`;
+                    return (
+                      <option key={s.staffId || s._id} value={label}>
+                        {s.name} — {s.staffId} {s.department ? `• ${s.department}` : ''}
+                      </option>
+                    );
+                  })}
+                  {slotForm.faculty && !staffList.some(s => `${s.name} (${s.staffId})` === slotForm.faculty) && (
+                    <option value={slotForm.faculty}>{slotForm.faculty} (Current)</option>
+                  )}
+                </select>
+                <input
+                  type="text"
+                  value={slotForm.faculty}
+                  onChange={(e) => setSlotForm({ ...slotForm, faculty: e.target.value })}
+                  placeholder="Or type custom faculty name"
+                  className="w-full mt-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
+                />
+              </div>
 
               <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
                 <button
