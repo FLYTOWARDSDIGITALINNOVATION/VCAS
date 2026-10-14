@@ -605,6 +605,8 @@ const getStudentAssignments = async (req, res) => {
         submittedAt: sub ? sub.submittedAt : '--',
         fileName: sub ? sub.fileName : '--',
         fileSize: sub ? sub.fileSize : '--',
+        fileData: sub ? (sub.fileData || '') : '',
+        fileType: sub ? (sub.fileType || '') : '',
         marksAwarded: sub ? sub.marksAwarded : null,
         feedback: sub ? sub.feedback : '',
         isOverdue: isPastDue && (!sub || (sub.status !== 'Submitted' && sub.status !== 'Graded'))
@@ -625,7 +627,7 @@ const getStudentAssignments = async (req, res) => {
 const submitStudentAssignment = async (req, res) => {
   try {
     const { id, identifier } = req.params;
-    const { fileName, fileSize, comment, studentName } = req.body;
+    const { fileName, fileSize, comment, studentName, fileData, fileType } = req.body;
 
     const assignment = await Assignment.findById(id);
     if (!assignment) {
@@ -651,6 +653,8 @@ const submitStudentAssignment = async (req, res) => {
       assignment.studentSubmissions[subIndex].submittedAt = nowStr;
       if (fileName) assignment.studentSubmissions[subIndex].fileName = fileName;
       if (fileSize) assignment.studentSubmissions[subIndex].fileSize = fileSize;
+      if (fileData) assignment.studentSubmissions[subIndex].fileData = fileData;
+      if (fileType) assignment.studentSubmissions[subIndex].fileType = fileType;
       if (comment) assignment.studentSubmissions[subIndex].feedback = comment;
     } else {
       assignment.studentSubmissions.push({
@@ -661,6 +665,8 @@ const submitStudentAssignment = async (req, res) => {
         submittedAt: nowStr,
         fileName: fileName || 'submission_file.pdf',
         fileSize: fileSize || '1.5 MB',
+        fileData: fileData || '',
+        fileType: fileType || '',
         status: 'Submitted',
         marksAwarded: null,
         feedback: comment || ''

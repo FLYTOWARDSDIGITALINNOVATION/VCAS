@@ -8,6 +8,8 @@ const studentSubmissionSchema = new mongoose.Schema({
   submittedAt:  { type: String, default: "--" },
   fileName:     { type: String, default: "--" },
   fileSize:     { type: String, default: "--" },
+  fileData:     { type: String, default: "" },
+  fileType:     { type: String, default: "" },
   status:       { type: String, default: "Not Submitted" },
   marksAwarded: { type: Number, default: null },
   feedback:     { type: String, default: "" }

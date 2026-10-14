@@ -84,20 +84,6 @@ const INITIAL_SUBJECTS = [
   }
 ];
 
-const DEPARTMENTS = [
-  'All Departments',
-  'Commerce',
-  'Computer Science',
-  'English Literature',
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Mathematics'
-];
-
-export const DEPARTMENT_HEADS = {};
-
-export const DEPARTMENT_FACULTY_MEMBERS = {};
-
 const SUBJECT_TYPES = [
   'All Types',
   'Core Theory',
@@ -118,11 +104,16 @@ const SEMESTERS = [
   'Sem 6'
 ];
 
+export const DEPARTMENT_HEADS = {};
+export const DEPARTMENT_FACULTY_MEMBERS = {};
+
 export default function CourseSubjectManagement({ user }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
   // Tabs: 'subjects', 'programs', 'matrix', 'allocation'
   const [activeTab, setActiveTab] = useState('subjects');
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'grid'
+
+  const [departmentsList, setDepartmentsList] = useState([]);
 
   const [programsList, setProgramsList] = useState(() => {
     try {
@@ -166,12 +157,22 @@ export default function CourseSubjectManagement({ user }) {
   // Fetch real data from backend API
   const fetchCoursesAndSubjects = async () => {
     try {
-      const [resCourses, resSubjects, resStaff, resStudents] = await Promise.allSettled([
+      const [resCourses, resSubjects, resStaff, resStudents, resDepts] = await Promise.allSettled([
         fetch('http://localhost:5000/api/courses'),
         fetch('http://localhost:5000/api/subjects'),
         fetch('http://localhost:5000/api/staff'),
-        fetch('http://localhost:5000/api/students')
+        fetch('http://localhost:5000/api/students'),
+        fetch('http://localhost:5000/api/departments')
       ]);
+
+      let realDepts = [];
+      if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
+        const dData = await resDepts.value.json();
+        if (dData.success && Array.isArray(dData.data)) {
+          realDepts = dData.data;
+          setDepartmentsList(dData.data);
+        }
+      }
 
       if (resCourses.status === 'fulfilled' && resCourses.value.ok) {
         const cData = await resCourses.value.json();
@@ -186,7 +187,39 @@ export default function CourseSubjectManagement({ user }) {
         const sData = await resSubjects.value.json();
         if (sData.success && Array.isArray(sData.data)) {
           const clean = sData.data.filter(s => s.code && !['SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()) && !['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'].includes(s.faculty));
-          const list = clean.length > 0 ? clean : INITIAL_SUBJECTS;
+          
+          // Also bring in any subjects added under real departments
+          const deptSubjects = [];
+          if (realDepts.length > 0) {
+            realDepts.forEach(d => {
+              if (Array.isArray(d.coursesList)) {
+                d.coursesList.forEach((c, idx) => {
+                  const already = clean.some(s => s.code && s.code.toUpperCase() === (c.code || '').toUpperCase());
+                  if (!already && c.name) {
+                    deptSubjects.push({
+                      id: `dept_${d._id || d.code}_${c.code || idx}`,
+                      _id: `dept_${d._id || d.code}_${c.code || idx}`,
+                      code: c.code || `SUB${idx + 1}`,
+                      name: c.name || c.title || 'Untitled Subject',
+                      department: d.name,
+                      year: c.year || 1,
+                      sem: c.sem || 'Sem 1',
+                      credits: Number(c.credits) || 4,
+                      type: 'Core Theory',
+                      faculty: c.handledStaff || d.hod || 'Unassigned',
+                      ltp: '3-1-0',
+                      hours: '4 hrs/wk (3L + 1T)',
+                      prerequisite: 'None',
+                      studentsEnrolled: c.appearedCount || 0
+                    });
+                  }
+                });
+              }
+            });
+          }
+
+          const combined = [...clean, ...deptSubjects];
+          const list = combined.length > 0 ? combined : INITIAL_SUBJECTS;
           setSubjectsList(list);
           try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(list)); } catch (_) {}
         }
@@ -206,7 +239,7 @@ export default function CourseSubjectManagement({ user }) {
         }
       }
     } catch (err) {
-      console.error('Error fetching courses/subjects/staff from backend:', err);
+      console.error('Error fetching courses/subjects/staff/departments from backend:', err);
     }
   };
 

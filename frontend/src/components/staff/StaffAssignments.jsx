@@ -1284,6 +1284,32 @@ export default function StaffAssignments({ staffUser }) {
                                 </span>
                                 <span>{std.studentName}</span>
                               </div>
+                              {std.fileName && std.fileName !== '--' && (
+                                <div className="flex items-center gap-1.5 mt-1 text-[11px] text-indigo-700 font-medium">
+                                  <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                  <span className="truncate max-w-[200px]" title={std.fileName}>{std.fileName}</span>
+                                  {std.fileData ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const link = document.createElement("a");
+                                        link.href = std.fileData;
+                                        link.download = std.fileName;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                      }}
+                                      className="text-[11px] text-blue-600 hover:text-blue-800 underline font-bold ml-1 cursor-pointer flex items-center gap-0.5"
+                                      title="Download student solution file"
+                                    >
+                                      <Download className="w-3 h-3" />
+                                      <span>Download</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-normal">({std.fileSize || 'PDF'})</span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td className="py-3 px-3 text-slate-500 font-mono text-[11px]">
                               {std.regNo || std.rollNo}
