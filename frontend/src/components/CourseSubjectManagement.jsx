@@ -850,7 +850,7 @@ export default function CourseSubjectManagement({ user }) {
             <span className="text-xs text-slate-500 font-semibold">NEP 2020 Aligned</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-            <span>Courses & Subjects</span>
+            <span>Subjects</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
             Configure degree programs, semester curriculum matrix, syllabus units, prerequisites, and faculty allocations.
