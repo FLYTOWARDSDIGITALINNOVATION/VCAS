@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   Ticket, Building2, Users, Calendar, Clock, Download, Printer,
   Search, Filter, Plus, Trash2, CheckCircle2, AlertCircle, RefreshCw,
@@ -7,7 +8,7 @@ import {
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
 
-const API_BASE = 'http://localhost:5000/api';
+// API_BASE imported from apiConfig
 
 const DEFAULT_INSTRUCTIONS = [
   'Candidates must bring this Hall Ticket along with their official College Identity Card to every examination session.',

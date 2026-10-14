@@ -1,7 +1,8 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/questionPaperController");
 
+router.get("/", ctrl.getAllPapers);
 router.get("/staff/:staffId", ctrl.getMyPapers);
 router.get("/:id", ctrl.getPaper);
 router.post("/", ctrl.createPaper);

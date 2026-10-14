@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { 
   Building, 
   Save, 
@@ -37,7 +38,7 @@ export default function SettingsManagement() {
   const fetchSettings = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('http://localhost:5000/api/settings');
+      const res = await fetch(`${API_BASE}/settings`);
       const data = await res.json();
       if (data.success && data.settings) {
         setSettings(prev => ({
@@ -72,7 +73,7 @@ export default function SettingsManagement() {
     if (e && e.preventDefault) e.preventDefault();
     setIsSaving(true);
     try {
-      const res = await fetch('http://localhost:5000/api/settings', {
+      const res = await fetch(`${API_BASE}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)

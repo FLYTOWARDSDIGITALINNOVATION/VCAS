@@ -37,8 +37,28 @@ const PORT = process.env.PORT || 5000;
 connectDB();
 
 // Middleware
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://localhost:5174',
+  ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL] : []),
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) : [])
+];
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://localhost:5174'],
+  origin: (origin, callback) => {
+    // Allow non-browser requests (mobile apps, Postman, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    // Allow if origin is explicitly in list, or in dev/permissive mode, or matches localhost
+    const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+    const isAllowed = allowedOrigins.includes(origin) || allowedOrigins.includes('*');
+    if (isAllowed || isLocalhost || process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    // Production fallback: allow request with credentials
+    return callback(null, true);
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));

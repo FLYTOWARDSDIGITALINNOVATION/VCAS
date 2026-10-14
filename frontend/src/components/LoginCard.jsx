@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BACKEND_URL } from '../apiConfig';
 import { 
   GraduationCap, 
   Lock, 
@@ -22,7 +23,7 @@ import {
 } from 'lucide-react';
 import CollegeLogo from './CollegeLogo';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = BACKEND_URL;
 
 const DEPARTMENTS = [
   'Computer Science',

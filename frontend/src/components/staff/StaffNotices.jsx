@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import { 
   Bell, 
   Plus, 
@@ -42,8 +43,8 @@ export default function StaffNotices({ staffUser = {} }) {
     try {
       setLoading(true);
       const url = selectedTag && selectedTag !== 'ALL'
-        ? `http://localhost:5000/api/notices?tag=${encodeURIComponent(selectedTag)}`
-        : 'http://localhost:5000/api/notices';
+        ? `${API_BASE}/notices?tag=${encodeURIComponent(selectedTag)}`
+        : '${API_BASE}/notices';
 
       const res = await fetch(url);
       const data = await res.json();
@@ -95,7 +96,7 @@ export default function StaffNotices({ staffUser = {} }) {
     setErrorMsg('');
 
     try {
-      const res = await fetch('http://localhost:5000/api/notices', {
+      const res = await fetch(`${API_BASE}/notices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -133,7 +134,7 @@ export default function StaffNotices({ staffUser = {} }) {
     setErrorMsg('');
 
     try {
-      const res = await fetch(`http://localhost:5000/api/notices/${editingId}`, {
+      const res = await fetch(`${API_BASE}/notices/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -164,7 +165,7 @@ export default function StaffNotices({ staffUser = {} }) {
     if (!window.confirm('Are you sure you want to delete this notice?')) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/notices/${noticeId}`, {
+      const res = await fetch(`${API_BASE}/notices/${noticeId}`, {
         method: 'DELETE'
       });
       const data = await res.json();

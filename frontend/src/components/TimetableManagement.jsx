@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import {
   Calendar,
@@ -26,7 +27,7 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const API_BASE = 'http://localhost:5000/api';
+// API_BASE imported from apiConfig
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 

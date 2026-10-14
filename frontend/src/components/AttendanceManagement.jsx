@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import { 
   CheckSquare, 
@@ -88,11 +89,11 @@ export default function AttendanceManagement({ user }) {
     try {
       setIsSyncing(true);
       const [resSessions, resStudents, resStaff, resLeaves, resDepartments] = await Promise.allSettled([
-        fetch('http://localhost:5000/api/attendance'),
-        fetch('http://localhost:5000/api/students'),
-        fetch('http://localhost:5000/api/staff'),
-        fetch('http://localhost:5000/api/leave'),
-        fetch('http://localhost:5000/api/departments')
+        fetch(`${API_BASE}/attendance`),
+        fetch(`${API_BASE}/students`),
+        fetch(`${API_BASE}/staff`),
+        fetch(`${API_BASE}/leave`),
+        fetch(`${API_BASE}/departments`)
       ]);
 
       if (resDepartments.status === 'fulfilled' && resDepartments.value.ok) {
@@ -624,7 +625,7 @@ export default function AttendanceManagement({ user }) {
         records
       };
 
-      const res = await fetch('http://localhost:5000/api/attendance', {
+      const res = await fetch(`${API_BASE}/attendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1361,8 +1362,8 @@ export default function AttendanceManagement({ user }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
-                      {rollCallStudents.map(s => (
-                        <tr key={s.id} className="hover:bg-slate-50/50">
+                      {rollCallStudents.map((s, idx) => (
+                        <tr key={s._id || s.id || s.rollNo || idx} className="hover:bg-slate-50/50">
                           <td className="py-3 px-5">
                             <span className="font-bold text-slate-900 mr-2">{s.name}</span>
                             <span className="font-mono text-[11px] text-blue-600">{s.rollNo}</span>
@@ -1442,8 +1443,8 @@ export default function AttendanceManagement({ user }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                    {filteredRegisterStudents.map(s => (
-                      <tr key={s.id} className="hover:bg-slate-50/50">
+                    {filteredRegisterStudents.map((s, idx) => (
+                      <tr key={s._id || s.id || s.rollNo || idx} className="hover:bg-slate-50/50">
                         <td className="py-3.5 px-5">
                           <p className="font-bold text-slate-900">{s.name}</p>
                           <span className="font-mono text-[11px] text-blue-600">{s.rollNo}</span>
@@ -1598,8 +1599,8 @@ export default function AttendanceManagement({ user }) {
                         </td>
                       </tr>
                     ) : (
-                      filteredStaffAttendance.map(st => (
-                        <tr key={st.id} className="hover:bg-slate-50/50">
+                      filteredStaffAttendance.map((st, idx) => (
+                        <tr key={st._id || st.id || st.empId || idx} className="hover:bg-slate-50/50">
                           <td className="py-3.5 px-5">
                             <p className="font-bold text-slate-900">{st.name}</p>
                             <span className="text-[11px] text-slate-400 font-mono">{st.empId} • {st.designation}</span>

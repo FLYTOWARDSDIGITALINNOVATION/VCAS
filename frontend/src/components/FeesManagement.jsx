@@ -186,8 +186,8 @@ export default function FeesManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-              {filteredTransactions.map(t => (
-                <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
+              {filteredTransactions.map((t, idx) => (
+                <tr key={t._id || t.id || t.receiptNo || idx} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-3 px-4 font-mono font-bold text-slate-900">{t.receiptNo}</td>
                   <td className="py-3 px-4">
                     <p className="font-bold text-slate-900">{t.studentName}</p>

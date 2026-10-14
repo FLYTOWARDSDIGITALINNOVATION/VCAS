@@ -1,4 +1,18 @@
-﻿const QuestionPaper = require("../models/QuestionPaper");
+const QuestionPaper = require("../models/QuestionPaper");
+
+// GET all papers (with optional filters)
+exports.getAllPapers = async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.staffId) filter.staffId = req.query.staffId;
+    if (req.query.department) filter.department = req.query.department;
+    if (req.query.semester) filter.semester = req.query.semester;
+    const papers = await QuestionPaper.find(filter).sort({ updatedAt: -1 });
+    res.json({ success: true, count: papers.length, data: papers });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
 
 // GET all papers for a staff member
 exports.getMyPapers = async (req, res) => {

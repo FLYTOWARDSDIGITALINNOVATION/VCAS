@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BACKEND_URL } from '../../apiConfig';
 import { 
   GraduationCap, 
   Briefcase, 
@@ -22,7 +23,7 @@ import {
   Award
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = BACKEND_URL;
 
 const BLOOD_GROUPS = ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'];
 

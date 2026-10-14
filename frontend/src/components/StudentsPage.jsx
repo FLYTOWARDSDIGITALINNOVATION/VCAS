@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BACKEND_URL } from '../apiConfig';
 import AddStudentWizard from './AddStudentWizard';
 import StudentProfileView from './StudentProfileView';
 import { 
@@ -25,7 +26,7 @@ import {
 import ModalPortal from './ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = BACKEND_URL;
 
 function normalizeStudent(s) {
   if (!s) return null;
@@ -1040,10 +1041,10 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   </td>
                 </tr>
               ) : (
-                filteredStudents.map((student) => {
+                filteredStudents.map((student, idx) => {
                   const isChecked = selectedRows.includes(student.id);
                   return (
-                    <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={student._id || student.id || student.rollNo || idx} className="hover:bg-slate-50/80 transition-colors">
                       
                       {/* Checkbox */}
                       <td className="py-3.5 px-4 text-center">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BACKEND_URL } from '../apiConfig';
 import { 
   ArrowLeft, 
   UserPlus, 
@@ -17,7 +18,7 @@ import {
 } from 'lucide-react';
 import CollegeLogo from './CollegeLogo';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = BACKEND_URL;
 
 export default function AddStudentWizard({ onBack, onComplete, isSaving = false }) {
   const [departmentsList, setDepartmentsList] = useState([]);

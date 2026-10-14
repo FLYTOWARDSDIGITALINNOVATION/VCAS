@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import { 
   BookOpen, 
@@ -167,10 +168,10 @@ export default function CourseSubjectManagement({ user }) {
   const fetchCoursesAndSubjects = async () => {
     try {
       const [resCourses, resSubjects, resStaff, resStudents] = await Promise.allSettled([
-        fetch('http://localhost:5000/api/courses'),
-        fetch('http://localhost:5000/api/subjects'),
-        fetch('http://localhost:5000/api/staff'),
-        fetch('http://localhost:5000/api/students')
+        fetch(`${API_BASE}/courses`),
+        fetch(`${API_BASE}/subjects`),
+        fetch(`${API_BASE}/staff`),
+        fetch(`${API_BASE}/students`)
       ]);
 
       if (resCourses.status === 'fulfilled' && resCourses.value.ok) {
@@ -553,7 +554,7 @@ export default function CourseSubjectManagement({ user }) {
       showToast(`Subject ${updated.code} updated successfully.`);
 
       // Sync with MongoDB backend
-      fetch(`http://localhost:5000/api/subjects/${targetId}`, {
+      fetch(`${API_BASE}/subjects/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
@@ -584,7 +585,7 @@ export default function CourseSubjectManagement({ user }) {
       showToast(`New subject ${newSubj.code} added to catalog.`);
 
       // Sync with MongoDB backend
-      fetch('http://localhost:5000/api/subjects', {
+      fetch(`${API_BASE}/subjects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSubj)
@@ -606,7 +607,7 @@ export default function CourseSubjectManagement({ user }) {
       showToast(`Subject ${deletingSubject.code} removed.`);
 
       // Sync with MongoDB backend
-      fetch(`http://localhost:5000/api/subjects/${targetId}`, {
+      fetch(`${API_BASE}/subjects/${targetId}`, {
         method: 'DELETE'
       }).catch(err => console.error('Error deleting subject in backend:', err));
 
@@ -677,7 +678,7 @@ export default function CourseSubjectManagement({ user }) {
       showToast(`Degree Program ${updated.code} updated.`);
 
       // Sync with MongoDB backend
-      fetch(`http://localhost:5000/api/courses/${targetId}`, {
+      fetch(`${API_BASE}/courses/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
@@ -702,7 +703,7 @@ export default function CourseSubjectManagement({ user }) {
       showToast(`New Degree Program ${newProg.code} registered.`);
 
       // Sync with MongoDB backend
-      fetch('http://localhost:5000/api/courses', {
+      fetch(`${API_BASE}/courses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newProg)
@@ -724,7 +725,7 @@ export default function CourseSubjectManagement({ user }) {
       showToast(`Degree Program ${deletingProgram.code} removed.`);
 
       // Sync with MongoDB backend
-      fetch(`http://localhost:5000/api/courses/${targetId}`, {
+      fetch(`${API_BASE}/courses/${targetId}`, {
         method: 'DELETE'
       }).catch(err => console.error('Error deleting program in backend:', err));
 
@@ -741,7 +742,7 @@ export default function CourseSubjectManagement({ user }) {
       showToast(`Reallocated ${reallocatingSubject.code} to ${newFacultyName.trim()}`);
 
       // Sync with MongoDB backend
-      fetch(`http://localhost:5000/api/subjects/${targetId}`, {
+      fetch(`${API_BASE}/subjects/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ faculty: newFacultyName.trim() })

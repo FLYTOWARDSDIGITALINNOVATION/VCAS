@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import { 
   UserCheck, 
   Calendar, 
@@ -50,7 +51,7 @@ export default function StaffLeave({ staffUser = {} }) {
     if (!staffId) return;
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:5000/api/leave/staff/${staffId}`);
+      const res = await fetch(`${API_BASE}/leave/staff/${staffId}`);
       const data = await res.json();
       if (res.ok && data.success) {
         setLeaves(data.leaves || []);
@@ -86,7 +87,7 @@ export default function StaffLeave({ staffUser = {} }) {
     setErrorMsg('');
 
     try {
-      const res = await fetch(`http://localhost:5000/api/leave/staff/${staffId}`, {
+      const res = await fetch(`${API_BASE}/leave/staff/${staffId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -122,7 +123,7 @@ export default function StaffLeave({ staffUser = {} }) {
     if (!window.confirm('Are you sure you want to cancel this leave application?')) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/leave/${leaveId}`, {
+      const res = await fetch(`${API_BASE}/leave/${leaveId}`, {
         method: 'DELETE'
       });
       const data = await res.json();

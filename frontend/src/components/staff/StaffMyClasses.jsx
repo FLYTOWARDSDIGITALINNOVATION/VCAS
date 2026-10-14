@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   BookOpen, Users, ChevronDown, ChevronUp, GraduationCap,
   Hash, Layers, Plus, X, Trash2, CheckCircle2, UserPlus,
@@ -6,7 +7,7 @@ import {
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
 
-const API_BASE = 'http://localhost:5000/api';
+// API_BASE imported from apiConfig
 
 export default function StaffMyClasses({ staffUser }) {
   const [classes, setClasses] = useState([]);

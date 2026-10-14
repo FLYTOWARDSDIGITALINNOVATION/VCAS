@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   Award,
   ShieldCheck,
@@ -75,7 +76,7 @@ export default function StaffNetCertificateView({ staffUser = {} }) {
         if (staffUser?.staffId) {
           setIsUploading(true);
           try {
-            const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+            const res = await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -113,7 +114,7 @@ export default function StaffNetCertificateView({ staffUser = {} }) {
     setNetSetExamStatus(newStatus);
     if (staffUser?.staffId) {
       try {
-        await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+        await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ netSetExamStatus: newStatus })
@@ -134,7 +135,7 @@ export default function StaffNetCertificateView({ staffUser = {} }) {
     if (staffUser?.staffId) {
       setIsUploading(true);
       try {
-        await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+        await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import { 
   Printer, 
@@ -116,7 +117,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   useEffect(() => {
     const fetchStudentsForFees = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/students');
+        const res = await fetch(`${API_BASE}/students`);
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
           const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
@@ -312,7 +313,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     try {
       const studentLookupId = targetMongoId || rollNo || studentName;
       if (studentLookupId) {
-        await fetch(`http://localhost:5000/api/students/${studentLookupId}`, {
+        await fetch(`${API_BASE}/students/${studentLookupId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -379,7 +380,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
           
           if (rec.mongoId) {
-            fetch(`http://localhost:5000/api/students/${rec.mongoId}`, {
+            fetch(`${API_BASE}/students/${rec.mongoId}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ feeStatus: newStatus })
@@ -426,7 +427,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
 
           if (rec.mongoId) {
-            fetch(`http://localhost:5000/api/students/${rec.mongoId}`, {
+            fetch(`${API_BASE}/students/${rec.mongoId}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ feeStatus: nextStatus })
@@ -782,8 +783,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
                   {filteredRecords.length > 0 ? (
-                    filteredRecords.map((row) => (
-                      <tr key={row.id} className="hover:bg-slate-50/80 transition-all">
+                    filteredRecords.map((row, idx) => (
+                      <tr key={row._id || row.id || row.rollNo || idx} className="hover:bg-slate-50/80 transition-all">
                         {/* Student Info */}
                         <td className="py-4 px-5">
                           <div className="flex items-center gap-3">
