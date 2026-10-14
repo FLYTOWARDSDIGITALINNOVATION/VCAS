@@ -79,26 +79,28 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
   const [loadingStaffClasses, setLoadingStaffClasses] = useState(false);
   const [selectedClassCodes, setSelectedClassCodes] = useState(new Set());
   const [savingClasses, setSavingClasses] = useState(false);
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [coursesList, setCoursesList] = useState([]);
 
-  // Form State for Adding / Editing Student
+  // Form State for Adding / Editing Student - all fields completely untyped / blank
   const initialForm = {
     regNo: '',
     rollNo: '',
-    year: '1st Year',
-    sem: '1st Sem',
+    year: '',
+    sem: '',
     loginId: '',
     name: '',
-    gender: 'Male',
+    gender: '',
     dob: '',
-    course: staffUser?.department ? `B.Sc. ${staffUser.department.toUpperCase()}` : 'B.Sc. COMPUTER SCIENCE',
-    department: staffUser?.department || 'Computer Science',
-    courseDurationFrom: '2024',
-    courseDurationTo: '2027',
-    dateOfAdmission: new Date().toISOString().split('T')[0],
-    nationality: 'Indian',
-    religion: 'Hindu',
-    community: 'BC',
-    caste: 'BC',
+    course: '',
+    department: '',
+    courseDurationFrom: '',
+    courseDurationTo: '',
+    dateOfAdmission: '',
+    nationality: '',
+    religion: '',
+    community: '',
+    caste: '',
     communityCertNo: '',
     phone: '',
     email: '',
@@ -112,6 +114,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
     motherName: '',
     motherQualification: '',
     motherOccupation: '',
+    motherMobile: '',
     guardianName: '',
     guardianQualification: '',
     guardianOccupation: '',
@@ -168,54 +171,54 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
     // Medical Record (Page 3)
     height: '',
     weight: '',
-    bloodGroup: 'O+',
+    bloodGroup: '',
     idMark1: '',
     idMark2: '',
     healthProblemsAllergies: '',
     // Languages Known (Page 3)
-    langTamilRead: true,
-    langTamilWrite: true,
-    langTamilSpeak: true,
-    langTamilPercent: '100%',
-    langEnglishRead: true,
-    langEnglishWrite: true,
-    langEnglishSpeak: true,
-    langEnglishPercent: '80%',
+    langTamilRead: false,
+    langTamilWrite: false,
+    langTamilSpeak: false,
+    langTamilPercent: '',
+    langEnglishRead: false,
+    langEnglishWrite: false,
+    langEnglishSpeak: false,
+    langEnglishPercent: '',
     langOtherName: '',
     langOtherRead: false,
     langOtherWrite: false,
     langOtherSpeak: false,
     langOtherPercent: '',
     // Transportation Details (Page 3)
-    transportI_Bus: 'No',
-    transportI_Own: 'No',
+    transportI_Bus: '',
+    transportI_Own: '',
     transportI_Details: '',
-    transportII_Bus: 'No',
-    transportII_Own: 'No',
+    transportII_Bus: '',
+    transportII_Own: '',
     transportII_Details: '',
-    transportIII_Bus: 'No',
-    transportIII_Own: 'No',
+    transportIII_Bus: '',
+    transportIII_Own: '',
     transportIII_Details: '',
     // Mentor & Monitoring Records (Pages 4 & 5)
-    mentorName: staffUser?.name || '',
-    mentorDesignation: staffUser?.designation || 'Assistant Professor',
-    mentorDepartment: staffUser?.department || 'Computer Science',
+    mentorName: '',
+    mentorDesignation: '',
+    mentorDepartment: '',
     counsellingNotes: '',
     coCurricularActivities: '',
     extraCurricularProgrammes: '',
     valueAddedCourses: '',
     industrialVisits: '',
     disciplinaryActions: '',
-    totalWorkingHours: '450',
-    hoursAbsent: '0',
-    totalArrearsTillLastSem: '0',
-    arrearsClearedThisSem: '0',
-    arrearsYetToBeCleared: '0',
-    donation: 'Nil',
+    totalWorkingHours: '',
+    hoursAbsent: '',
+    totalArrearsTillLastSem: '',
+    arrearsClearedThisSem: '',
+    arrearsYetToBeCleared: '',
+    donation: '',
     drivingLicense: '',
     address: '',
-    feeStatus: 'Pending',
-    attendance: 85
+    feeStatus: '',
+    attendance: ''
   };
 
   const [formData, setFormData] = useState(initialForm);
@@ -227,7 +230,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
-  // Fetch all students
+  // Fetch all students and real departments/courses
   const fetchStudents = async () => {
     setLoading(true);
     try {
@@ -245,6 +248,26 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
 
   useEffect(() => {
     fetchStudents();
+
+    // Fetch real departments
+    fetch(`${API_BASE}/departments`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          setDepartmentsList(data.data);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch real courses
+    fetch(`${API_BASE}/courses`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          setCoursesList(data.data);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Open modal to assign subjects for a student
@@ -368,14 +391,18 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
 
     setIsSubmitting(true);
     try {
-      const cleanRollNo = formData.rollNo.trim().toUpperCase();
-      const cleanRegNo = formData.regNo.trim().toUpperCase();
+      const cleanRollNo = (formData.rollNo || '').trim().toUpperCase();
+      const cleanRegNo = (formData.regNo || '').trim().toUpperCase();
       const payload = {
         ...formData,
         regNo: cleanRegNo,
         rollNo: cleanRollNo,
         loginId: cleanRollNo || cleanRegNo,
-        feeStatus: 'Pending',
+        year: formData.year || '1st Year',
+        sem: formData.sem || '1st Sem',
+        gender: formData.gender || 'Male',
+        feeStatus: formData.feeStatus || 'Pending',
+        attendance: formData.attendance !== '' ? Number(formData.attendance) : 100,
         password: formData.dob // Set Date of Birth as Password
       };
 
@@ -935,48 +962,66 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Course / Degree</label>
-                  <input
-                    type="text"
-                    name="course"
-                    value={formData.course}
-                    onChange={handleChange}
-                    list="courseOptionsList"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 uppercase focus:outline-none"
-                  />
-                  <datalist id="courseOptionsList">
-                    {DEFAULT_COURSES.map(c => <option key={c} value={c} />)}
-                  </datalist>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Department</label>
-                  <input
-                    type="text"
+                  <label className="block font-bold text-slate-700 mb-1">Department *</label>
+                  <select
                     name="department"
                     value={formData.department}
                     onChange={handleChange}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-800 focus:outline-none"
+                  >
+                    <option value="">-- Select Department --</option>
+                    {departmentsList.map((d, i) => {
+                      const dName = typeof d === 'string' ? d : (d.name || '');
+                      if (!dName) return null;
+                      return (
+                        <option key={d._id || `dept-${i}`} value={dName}>
+                          {dName}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Course / Degree</label>
+                  <input
+                    type="text"
+                    name="course"
+                    placeholder="Select or enter Course / Degree"
+                    value={formData.course}
+                    onChange={handleChange}
+                    list="courseOptionsListStaff"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 uppercase focus:outline-none"
                   />
+                  <datalist id="courseOptionsListStaff">
+                    {coursesList.map((c, i) => (
+                      <option key={c._id || `c-${i}`} value={c.name} />
+                    ))}
+                    {departmentsList.map((d, i) => {
+                      const dName = typeof d === 'string' ? d : (d.name || '');
+                      return dName ? <option key={`dept-course-${i}`} value={`B.Sc. ${dName.toUpperCase()}`} /> : null;
+                    })}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Course Duration (From Year to Year)
                   </label>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500 font-bold">20</span>
                     <input
                       type="text"
                       name="courseDurationFrom"
                       maxLength={4}
+                      placeholder="YYYY"
                       value={formData.courseDurationFrom}
                       onChange={handleChange}
                       className="w-full bg-white border border-slate-300 rounded-xl px-2 py-2 text-center font-bold focus:outline-none"
                     />
-                    <span className="text-slate-500 font-bold">to 20</span>
+                    <span className="text-slate-500 font-bold">to</span>
                     <input
                       type="text"
                       name="courseDurationTo"
                       maxLength={4}
+                      placeholder="YYYY"
                       value={formData.courseDurationTo}
                       onChange={handleChange}
                       className="w-full bg-white border border-slate-300 rounded-xl px-2 py-2 text-center font-bold focus:outline-none"
@@ -992,6 +1037,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                       onChange={handleChange}
                       className="w-full bg-white border border-slate-300 rounded-xl px-2 py-2 font-bold focus:outline-none"
                     >
+                      <option value="">Select Year</option>
                       <option value="1st Year">1st Year</option>
                       <option value="2nd Year">2nd Year</option>
                       <option value="3rd Year">3rd Year</option>
@@ -1002,6 +1048,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                       onChange={handleChange}
                       className="w-full bg-white border border-slate-300 rounded-xl px-2 py-2 font-bold focus:outline-none"
                     >
+                      <option value="">Select Sem</option>
                       <option value="1st Sem">1st Sem</option>
                       <option value="2nd Sem">2nd Sem</option>
                       <option value="3rd Sem">3rd Sem</option>
@@ -1036,6 +1083,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                     onChange={handleChange}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold focus:outline-none"
                   >
+                    <option value="">Select Gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
@@ -1070,12 +1118,15 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {COMMUNITY_OPTIONS.map(comm => {
-                    const isSelected = (formData.community || '').toUpperCase() === comm.toUpperCase();
+                    const isSelected = formData.community && (formData.community || '').toUpperCase() === comm.toUpperCase();
                     return (
                       <button
                         type="button"
                         key={comm}
-                        onClick={() => setFormData(prev => ({ ...prev, community: comm }))}
+                        onClick={() => setFormData(prev => ({ 
+                          ...prev, 
+                          community: prev.community === comm ? '' : comm 
+                        }))}
                         className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer border ${
                           isSelected
                             ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
@@ -2198,6 +2249,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                   <input
                     type="text"
                     name="mentorName"
+                    placeholder="Enter Mentor Full Name"
                     value={formData.mentorName}
                     onChange={handleChange}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none"
@@ -2208,6 +2260,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                   <input
                     type="text"
                     name="mentorDesignation"
+                    placeholder="e.g. Assistant Professor"
                     value={formData.mentorDesignation}
                     onChange={handleChange}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 focus:outline-none"
@@ -2215,13 +2268,23 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Mentor Department</label>
-                  <input
-                    type="text"
+                  <select
                     name="mentorDepartment"
                     value={formData.mentorDepartment}
                     onChange={handleChange}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 focus:outline-none"
-                  />
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-800 focus:outline-none"
+                  >
+                    <option value="">-- Select Mentor Department --</option>
+                    {departmentsList.map((d, i) => {
+                      const dName = typeof d === 'string' ? d : (d.name || '');
+                      if (!dName) return null;
+                      return (
+                        <option key={d._id || `mdept-${i}`} value={dName}>
+                          {dName}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
               </div>
 

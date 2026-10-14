@@ -739,6 +739,25 @@ Unauthorized reproduction or distribution is strictly prohibited.
   };
 
   const handleCompleteWizard = async (newStudentData) => {
+    // If student was already created by AddStudentWizard
+    if (newStudentData && (newStudentData._id || newStudentData.regNo || newStudentData.id)) {
+      const created = normalizeStudent(newStudentData);
+      setStudents(prev => {
+        const next = [created, ...prev.filter(s => s.regNo !== created.regNo && s._id !== created._id)];
+        try {
+          localStorage.setItem('vcas_students_cache', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+      try {
+        window.dispatchEvent(new Event('vcas_students_updated'));
+      } catch (_) {}
+      setShowAddWizard(false);
+      showToast(`Student "${created.name}" registered successfully!`);
+      fetchStudents();
+      return;
+    }
+
     setIsSaving(true);
     try {
       const payload = {
@@ -835,6 +854,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
   if (showAddWizard) {
     return (
       <AddStudentWizard 
+        user={user}
         onBack={() => setShowAddWizard(false)}
         onComplete={handleCompleteWizard}
         isSaving={isSaving}
