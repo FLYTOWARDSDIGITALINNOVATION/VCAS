@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import { 
   User, 
   Mail, 
@@ -132,7 +133,7 @@ export default function StaffProfile({ staffUser = {} }) {
         if (staffUser?.staffId) {
           setIsUploadingPhoto(true);
           try {
-            const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+            const res = await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ profileImage: base64 })
@@ -161,7 +162,7 @@ export default function StaffProfile({ staffUser = {} }) {
     if (staffUser?.staffId) {
       setIsUploadingPhoto(true);
       try {
-        await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+        await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ profileImage: '' })
@@ -203,7 +204,7 @@ export default function StaffProfile({ staffUser = {} }) {
         if (staffUser?.staffId) {
           setIsUploadingCert(true);
           try {
-            const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+            const res = await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -245,7 +246,7 @@ export default function StaffProfile({ staffUser = {} }) {
     if (staffUser?.staffId) {
       setIsUploadingCert(true);
       try {
-        await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+        await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -273,7 +274,7 @@ export default function StaffProfile({ staffUser = {} }) {
     setNetSetExamStatus(newStatus);
     if (staffUser?.staffId) {
       try {
-        await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+        await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ netSetExamStatus: newStatus })
@@ -305,7 +306,7 @@ export default function StaffProfile({ staffUser = {} }) {
 
   useEffect(() => {
     if (!staffUser?.staffId) return;
-    fetch(`http://localhost:5000/api/classes/staff/${staffUser.staffId}`)
+    fetch(`${API_BASE}/classes/staff/${staffUser.staffId}`)
       .then(r => r.json())
       .then(d => {
         if (d.success && Array.isArray(d.classes)) {
@@ -323,7 +324,7 @@ export default function StaffProfile({ staffUser = {} }) {
     }
     setIsSaving(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/profile`, {
+      const res = await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -388,7 +389,7 @@ export default function StaffProfile({ staffUser = {} }) {
     if (!form.title.trim()) return;
     setIsAddingAchievement(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/auth/staff/${staffUser.staffId}/achievements`, {
+      const res = await fetch(`${API_BASE}/auth/staff/${staffUser.staffId}/achievements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
@@ -421,7 +422,7 @@ export default function StaffProfile({ staffUser = {} }) {
     setDeletingId(achievementId);
     try {
       const res = await fetch(
-        `http://localhost:5000/api/auth/staff/${staffUser.staffId}/achievements/${achievementId}`,
+        `${API_BASE}/auth/staff/${staffUser.staffId}/achievements/${achievementId}`,
         { method: 'DELETE' }
       );
       const data = await res.json();

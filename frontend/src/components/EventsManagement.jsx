@@ -1273,8 +1273,8 @@ export default function EventsManagement() {
                               String(r.rollNo || '').toLowerCase().includes(q) ||
                               String(r.collegeName || '').toLowerCase().includes(q);
                           })
-                          .map((reg) => (
-                            <tr key={reg.id} className="hover:bg-slate-50/80">
+                          .map((reg, idx) => (
+                            <tr key={reg._id || reg.id || reg.rollNo || idx} className="hover:bg-slate-50/80">
                               <td className="py-2.5 px-3">
                                 <p className="font-extrabold text-slate-900">{reg.studentName}</p>
                                 <p className="text-[10px] font-mono text-purple-700 font-bold">{reg.rollNo}</p>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   BookMarked,
   Plus,
@@ -27,7 +28,7 @@ import {
   Sparkles
 } from "lucide-react";
 
-const API = "http://localhost:5000/api";
+const API = API_BASE;
 
 export default function StaffAssignments({ staffUser }) {
   const staffId = staffUser?.staffId || staffUser?.employeeId || "";

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -107,12 +108,12 @@ export default function ReportsManagement({ user }) {
     try {
       setIsLoading(true);
       const [resStudents, resStaff, resAttendance, resDepts, resClasses, resMarks] = await Promise.allSettled([
-        fetch('http://localhost:5000/api/students'),
-        fetch('http://localhost:5000/api/staff'),
-        fetch('http://localhost:5000/api/attendance'),
-        fetch('http://localhost:5000/api/departments'),
-        fetch('http://localhost:5000/api/classes'),
-        fetch('http://localhost:5000/api/internal-marks')
+        fetch(`${API_BASE}/students`),
+        fetch(`${API_BASE}/staff`),
+        fetch(`${API_BASE}/attendance`),
+        fetch(`${API_BASE}/departments`),
+        fetch(`${API_BASE}/classes`),
+        fetch(`${API_BASE}/internal-marks`)
       ]);
 
       if (resStudents.status === 'fulfilled' && resStudents.value.ok) {

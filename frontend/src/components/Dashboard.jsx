@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import StudentsPage from './StudentsPage';
 import ModalPortal from './ModalPortal';
 import CollegeLogo from './CollegeLogo';
@@ -117,15 +118,15 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     try {
       setDashboardStats(prev => ({ ...prev, loading: true }));
       const [resLeaves, resStaff, resClasses, resNotices, resAssignments, resAttendance, resStudents, resDepts, resSubjects] = await Promise.allSettled([
-        fetch('http://localhost:5000/api/leave'),
-        fetch('http://localhost:5000/api/staff'),
-        fetch('http://localhost:5000/api/classes'),
-        fetch('http://localhost:5000/api/notices'),
-        fetch('http://localhost:5000/api/assignments'),
-        fetch('http://localhost:5000/api/attendance'),
-        fetch('http://localhost:5000/api/students'),
-        fetch('http://localhost:5000/api/departments'),
-        fetch('http://localhost:5000/api/subjects')
+        fetch(`${API_BASE}/leave`),
+        fetch(`${API_BASE}/staff`),
+        fetch(`${API_BASE}/classes`),
+        fetch(`${API_BASE}/notices`),
+        fetch(`${API_BASE}/assignments`),
+        fetch(`${API_BASE}/attendance`),
+        fetch(`${API_BASE}/students`),
+        fetch(`${API_BASE}/departments`),
+        fetch(`${API_BASE}/subjects`)
       ]);
 
       let leavesData = null;

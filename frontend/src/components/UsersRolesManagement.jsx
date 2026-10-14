@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { 
   ShieldCheck, 
   Plus, 
@@ -26,7 +27,7 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const API_BASE = 'http://localhost:5000/api';
+// API_BASE imported from apiConfig
 
 const INITIAL_USERS = [];
 
@@ -396,8 +397,8 @@ export default function UsersRolesManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {filteredUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                  {filteredUsers.map((u, idx) => (
+                    <tr key={u._id || u.id || u.email || idx} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full overflow-hidden bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs shrink-0">

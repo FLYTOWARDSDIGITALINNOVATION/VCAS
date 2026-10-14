@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BACKEND_URL } from '../apiConfig';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
 import {
   LayoutDashboard,
@@ -46,7 +47,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = BACKEND_URL;
 
 const NAV_SECTIONS = [
   {
@@ -1923,7 +1924,7 @@ CONTACT:
                           const isGraded = a.submissionStatus === 'Graded' || (a.marksAwarded !== null && a.marksAwarded !== undefined);
 
                           return (
-                            <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
+                            <tr key={a._id || a.id || idx} className="hover:bg-slate-50/80 transition-colors">
                               <td className="py-3.5 px-4">
                                 <span className="font-mono font-bold text-blue-700">{a.code}</span>
                                 <p className="text-[11px] text-slate-600 font-medium mt-0.5">{a.subject}</p>

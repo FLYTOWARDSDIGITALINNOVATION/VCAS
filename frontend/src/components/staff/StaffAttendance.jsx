@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   CheckSquare, Calendar as CalendarIcon, Clock, Users,
   CheckCircle2, XCircle, History, Save, AlertCircle,
   Search, BookOpen, ChevronRight, Plus
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:5000/api';
+// API_BASE imported from apiConfig
 
 export default function StaffAttendance({ staffUser }) {
   const [activeTab, setActiveTab] = useState('mark'); // 'mark' | 'history'

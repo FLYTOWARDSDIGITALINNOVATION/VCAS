@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE as ROOT_API } from '../apiConfig';
 import { 
   Building2, 
   Plus, 
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const API_BASE = 'http://localhost:5000/api/departments';
+const API_BASE = `${ROOT_API}/departments`;
 
 function formatHodEmail(name) {
   if (!name) return 'hod@college.edu';
@@ -144,7 +145,7 @@ export default function DepartmentManagement() {
       studentCount: 0,
       description: '',
       coursesList: [
-        { sNo: 1, code: '', title: '', handledStaff: '', appeared: '', pass: '', passPct: 0, reappear: '-' }
+        { sNo: 1, code: '', title: '', name: '', handledStaff: '', appeared: '', pass: '', passPct: 0, reappear: '-' }
       ]
     });
     setFormErrors({});
@@ -154,9 +155,9 @@ export default function DepartmentManagement() {
   const handleOpenEditModal = (dept) => {
     setEditingDept(dept);
     setFormData({
-      name: dept.name,
-      code: dept.code,
-      hod: dept.hod,
+      name: dept.name || '',
+      code: dept.code || '',
+      hod: dept.hod || '',
       totalYears: dept.totalYears || 3,
       totalSemesters: dept.totalSemesters || 6,
       facultyCount: dept.facultyCount || 0,
@@ -659,7 +660,7 @@ export default function DepartmentManagement() {
                     </label>
                     <input
                       type="text"
-                      value={formData.name}
+                      value={formData.name || ''}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="e.g. Computer Science"
                       className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all ${
@@ -675,7 +676,7 @@ export default function DepartmentManagement() {
                     </label>
                     <input
                       type="text"
-                      value={formData.hod}
+                      value={formData.hod || ''}
                       onChange={(e) => setFormData({ ...formData, hod: e.target.value })}
                       placeholder="e.g. Dr. Meenakshi C"
                       className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all ${
@@ -690,7 +691,7 @@ export default function DepartmentManagement() {
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Program Duration</label>
                     <select
-                      value={formData.totalYears}
+                      value={formData.totalYears || 3}
                       onChange={(e) => setFormData({ ...formData, totalYears: Number(e.target.value) })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none cursor-pointer"
                     >
@@ -703,7 +704,7 @@ export default function DepartmentManagement() {
                     <label className="block text-xs font-bold text-slate-700 mb-1">Faculty Count</label>
                     <input
                       type="number"
-                      value={formData.facultyCount}
+                      value={formData.facultyCount ?? ''}
                       onChange={(e) => setFormData({ ...formData, facultyCount: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none"
                     />
@@ -712,7 +713,7 @@ export default function DepartmentManagement() {
                     <label className="block text-xs font-bold text-slate-700 mb-1">Total Students</label>
                     <input
                       type="number"
-                      value={formData.studentCount}
+                      value={formData.studentCount ?? ''}
                       onChange={(e) => setFormData({ ...formData, studentCount: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none"
                     />
@@ -763,7 +764,7 @@ export default function DepartmentManagement() {
                           <td className="py-1.5 px-1.5 border-r border-slate-100">
                             <input
                               type="text"
-                              value={sub.code}
+                              value={sub.code || ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'code', e.target.value.toUpperCase(), false)}
                               placeholder="e.g. CS101"
                               className="w-full font-mono font-bold text-blue-700 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-blue-500"
@@ -772,7 +773,7 @@ export default function DepartmentManagement() {
                           <td className="py-1.5 px-2 border-r border-slate-100">
                             <input
                               type="text"
-                              value={sub.title || sub.name}
+                              value={sub.title || sub.name || ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'title', e.target.value, false)}
                               placeholder="e.g. Programming in C"
                               className="w-full font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
@@ -781,7 +782,7 @@ export default function DepartmentManagement() {
                           <td className="py-1.5 px-2 border-r border-slate-100">
                             <input
                               type="text"
-                              value={sub.handledStaff}
+                              value={sub.handledStaff || ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'handledStaff', e.target.value, false)}
                               placeholder="e.g. Dr. Ramesh K"
                               className="w-full text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
@@ -791,7 +792,7 @@ export default function DepartmentManagement() {
                             <input
                               type="number"
                               min="0"
-                              value={sub.appeared}
+                              value={sub.appeared ?? ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'appeared', e.target.value, false)}
                               placeholder="0"
                               className="w-20 text-center font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-blue-500"
@@ -801,7 +802,7 @@ export default function DepartmentManagement() {
                             <input
                               type="number"
                               min="0"
-                              value={sub.pass}
+                              value={sub.pass ?? ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'pass', e.target.value, false)}
                               placeholder="0"
                               className="w-20 text-center font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-blue-500"
@@ -898,7 +899,7 @@ export default function DepartmentManagement() {
                     <label className="block text-xs font-bold text-slate-700 mb-1">Department Name *</label>
                     <input
                       type="text"
-                      value={formData.name}
+                      value={formData.name || ''}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none"
                     />
@@ -908,7 +909,7 @@ export default function DepartmentManagement() {
                     <label className="block text-xs font-bold text-slate-700 mb-1">HOD Name *</label>
                     <input
                       type="text"
-                      value={formData.hod}
+                      value={formData.hod || ''}
                       onChange={(e) => setFormData({ ...formData, hod: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none"
                     />
@@ -920,7 +921,7 @@ export default function DepartmentManagement() {
                     <label className="block text-xs font-bold text-slate-700 mb-1">Faculty Count</label>
                     <input
                       type="number"
-                      value={formData.facultyCount}
+                      value={formData.facultyCount ?? ''}
                       onChange={(e) => setFormData({ ...formData, facultyCount: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none"
                     />
@@ -929,7 +930,7 @@ export default function DepartmentManagement() {
                     <label className="block text-xs font-bold text-slate-700 mb-1">Students Enrolled</label>
                     <input
                       type="number"
-                      value={formData.studentCount}
+                      value={formData.studentCount ?? ''}
                       onChange={(e) => setFormData({ ...formData, studentCount: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none"
                     />
@@ -938,7 +939,7 @@ export default function DepartmentManagement() {
                     <label className="block text-xs font-bold text-slate-700 mb-1">Duration (Years)</label>
                     <input
                       type="number"
-                      value={formData.totalYears}
+                      value={formData.totalYears || 3}
                       onChange={(e) => setFormData({ ...formData, totalYears: Number(e.target.value) })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none"
                     />
@@ -989,7 +990,7 @@ export default function DepartmentManagement() {
                           <td className="py-1.5 px-1.5 border-r border-slate-100">
                             <input
                               type="text"
-                              value={sub.code}
+                              value={sub.code || ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'code', e.target.value.toUpperCase(), true)}
                               placeholder="e.g. CS101"
                               className="w-full font-mono font-bold text-blue-700 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-blue-500"
@@ -998,7 +999,7 @@ export default function DepartmentManagement() {
                           <td className="py-1.5 px-2 border-r border-slate-100">
                             <input
                               type="text"
-                              value={sub.title || sub.name}
+                              value={sub.title || sub.name || ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'title', e.target.value, true)}
                               placeholder="e.g. Programming in C"
                               className="w-full font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
@@ -1007,7 +1008,7 @@ export default function DepartmentManagement() {
                           <td className="py-1.5 px-2 border-r border-slate-100">
                             <input
                               type="text"
-                              value={sub.handledStaff}
+                              value={sub.handledStaff || ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'handledStaff', e.target.value, true)}
                               placeholder="e.g. Dr. Ramesh K"
                               className="w-full text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
@@ -1017,7 +1018,7 @@ export default function DepartmentManagement() {
                             <input
                               type="number"
                               min="0"
-                              value={sub.appeared}
+                              value={sub.appeared ?? ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'appeared', e.target.value, true)}
                               placeholder="0"
                               className="w-20 text-center font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-blue-500"
@@ -1027,7 +1028,7 @@ export default function DepartmentManagement() {
                             <input
                               type="number"
                               min="0"
-                              value={sub.pass}
+                              value={sub.pass ?? ''}
                               onChange={(e) => handleSubjectFieldChange(idx, 'pass', e.target.value, true)}
                               placeholder="0"
                               className="w-20 text-center font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-blue-500"

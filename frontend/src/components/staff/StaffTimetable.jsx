@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   Calendar as CalendarIcon, Clock, Building2, BookOpen,
   ChevronRight, Info, CalendarDays, Plus, Edit2, Trash2,
   X, CheckCircle2, AlertCircle, Sparkles
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:5000/api';
+// API_BASE imported from apiConfig
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 

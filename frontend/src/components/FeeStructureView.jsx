@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { 
   Building2, 
   Award, 
@@ -176,7 +177,7 @@ export default function FeeStructureView({ user }) {
   const fetchFeeStructure = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('http://localhost:5000/api/fee-structure');
+      const res = await fetch(`${API_BASE}/fee-structure`);
       const json = await res.json();
       if (json.success && json.data) {
         if (Array.isArray(json.data.clusters) && json.data.clusters.length > 0) {
@@ -235,7 +236,7 @@ export default function FeeStructureView({ user }) {
         updatedRole: userRole
       };
 
-      const res = await fetch('http://localhost:5000/api/fee-structure', {
+      const res = await fetch(`${API_BASE}/fee-structure`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -274,7 +275,7 @@ export default function FeeStructureView({ user }) {
     if (!window.confirm('Reset fee structure to official institutional defaults?')) return;
     setIsSaving(true);
     try {
-      const res = await fetch('http://localhost:5000/api/fee-structure/reset', {
+      const res = await fetch(`${API_BASE}/fee-structure/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

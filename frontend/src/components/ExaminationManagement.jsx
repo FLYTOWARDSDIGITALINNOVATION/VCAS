@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import {
   FileSpreadsheet,
@@ -79,14 +80,14 @@ export default function ExaminationManagement({ user }) {
     try {
       setIsSyncing(true);
       const [resExams, resMarks, resHalls, resStudents, resTickets, resSubjects, resClasses, resDepts] = await Promise.allSettled([
-        fetch('http://localhost:5000/api/exams'),
-        fetch('http://localhost:5000/api/internal-marks'),
-        fetch('http://localhost:5000/api/exams/halls'),
-        fetch('http://localhost:5000/api/students'),
-        fetch('http://localhost:5000/api/hall-tickets'),
-        fetch('http://localhost:5000/api/subjects'),
-        fetch('http://localhost:5000/api/classes'),
-        fetch('http://localhost:5000/api/departments')
+        fetch(`${API_BASE}/exams`),
+        fetch(`${API_BASE}/internal-marks`),
+        fetch(`${API_BASE}/exams/halls`),
+        fetch(`${API_BASE}/students`),
+        fetch(`${API_BASE}/hall-tickets`),
+        fetch(`${API_BASE}/subjects`),
+        fetch(`${API_BASE}/classes`),
+        fetch(`${API_BASE}/departments`)
       ]);
 
       if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
@@ -110,7 +111,7 @@ export default function ExaminationManagement({ user }) {
             const key = (ex._id || `${ex.code}_${ex.date}_${ex.session}`).toString();
             if (!seen.has(key)) {
               seen.add(key);
-              uniqueExams.push(ex);
+              uniqueExams.push({ ...ex, id: ex._id || ex.id || key });
             }
           });
           setExamsList(uniqueExams);
@@ -506,7 +507,7 @@ export default function ExaminationManagement({ user }) {
         eseMax: 60
       };
 
-      const res = await fetch('http://localhost:5000/api/exams', {
+      const res = await fetch(`${API_BASE}/exams`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -557,7 +558,7 @@ export default function ExaminationManagement({ user }) {
     if (e) e.stopPropagation();
     if (!window.confirm('Are you sure you want to remove this exam schedule?')) return;
     try {
-      await fetch(`http://localhost:5000/api/exams/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/exams/${id}`, { method: 'DELETE' });
       setExamsList(prev => prev.filter(ex => (ex._id !== id && ex.id !== id)));
       showToast('Exam schedule deleted successfully.');
     } catch (err) {
@@ -629,7 +630,7 @@ export default function ExaminationManagement({ user }) {
       };
 
       if (editingHallId) {
-        const res = await fetch(`http://localhost:5000/api/exams/halls/${editingHallId}`, {
+        const res = await fetch(`${API_BASE}/exams/halls/${editingHallId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -642,7 +643,7 @@ export default function ExaminationManagement({ user }) {
         }
         showToast(`Exam Hall "${payload.hallName}" updated successfully.`);
       } else {
-        const res = await fetch('http://localhost:5000/api/exams/halls', {
+        const res = await fetch(`${API_BASE}/exams/halls`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -672,7 +673,7 @@ export default function ExaminationManagement({ user }) {
     if (e) e.stopPropagation();
     if (!window.confirm(`Are you sure you want to remove ${hallName || 'this exam hall'}?`)) return;
     try {
-      await fetch(`http://localhost:5000/api/exams/halls/${hallId}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/exams/halls/${hallId}`, { method: 'DELETE' });
       setHallsList(prev => prev.filter(h => h._id !== hallId && h.id !== hallId));
       showToast(`${hallName || 'Exam hall'} removed successfully.`);
     } catch (err) {
@@ -696,7 +697,7 @@ export default function ExaminationManagement({ user }) {
   const handleSyncStaffHalls = async () => {
     try {
       setIsSyncing(true);
-      const res = await fetch('http://localhost:5000/api/exams/halls');
+      const res = await fetch(`${API_BASE}/exams/halls`);
       const d = await res.json();
       if (d.success && Array.isArray(d.halls)) {
         setHallsList(d.halls);
@@ -1227,8 +1228,8 @@ export default function ExaminationManagement({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                  {filteredExams.map((exam) => (
-                    <tr key={exam.id} className="hover:bg-rose-50/20 transition-colors">
+                  {filteredExams.map((exam, idx) => (
+                    <tr key={exam._id || exam.id || `${exam.code}_${exam.date}_${exam.session}_${idx}`} className="hover:bg-rose-50/20 transition-colors">
                       <td className="py-4 px-6">
                         <p className="font-extrabold text-slate-900 leading-tight">{exam.date}</p>
                         <span className="text-[11px] text-rose-600 font-bold">{exam.session}</span>
@@ -1303,8 +1304,8 @@ export default function ExaminationManagement({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                  {filteredStudents.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/50">
+                  {filteredStudents.map((s, idx) => (
+                    <tr key={s._id || s.id || s.rollNo || `ht-${idx}`} className="hover:bg-slate-50/50">
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
                           <span className="font-mono font-bold text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
@@ -1431,7 +1432,7 @@ export default function ExaminationManagement({ user }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredStudents.map((s, idx) => (
-                    <tr key={s.id} className="hover:bg-slate-50/70">
+                    <tr key={s._id || s.id || s.rollNo || `mark-${idx}`} className="hover:bg-slate-50/70">
                       <td className="py-2 px-3 text-center font-bold text-slate-400 border-r border-slate-100">{idx + 1}</td>
                       <td className="py-2 px-4 border-r border-slate-100">
                         <div className="font-mono font-bold text-blue-600 text-[11px]">{s.rollNo}</div>
@@ -1590,8 +1591,8 @@ export default function ExaminationManagement({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                  {filteredStudents.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/50">
+                  {filteredStudents.map((s, idx) => (
+                    <tr key={s._id || s.id || s.rollNo || `res-${idx}`} className="hover:bg-slate-50/50">
                       <td className="py-3.5 px-6">
                         <span className="font-mono font-bold text-blue-600 mr-2">{s.rollNo}</span>
                         <span className="font-bold text-slate-900">{s.name}</span>

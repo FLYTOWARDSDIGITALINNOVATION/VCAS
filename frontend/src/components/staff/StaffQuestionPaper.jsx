@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   FileText, Plus, Trash2, Edit3, Eye, Save, CheckCircle,
   ChevronDown, ChevronRight, BookOpen, Layers, X, AlertCircle,
   Archive, Send, RotateCcw, List, Clock, Award, Download
 } from "lucide-react";
 
-const API = "http://localhost:5000/api/question-papers";
+const API = `${API_BASE}/question-papers`;
 
 const EXAM_TYPES = ["Internal Test 1", "Internal Test 2", "Model Exam", "Semester Exam", "Retest"];
 const QUESTION_TYPES = ["Short", "Long", "Essay", "MCQ"];

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { BACKEND_URL } from '../apiConfig';
 import {
   Search,
   Plus,
@@ -37,7 +38,7 @@ import {
 import StaffDetailView from './StaffDetailView';
 import ModalPortal from './ModalPortal';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = BACKEND_URL;
 
 const NET_SET_STATUS_OPTIONS = [
   'Qualified UGC-NET',

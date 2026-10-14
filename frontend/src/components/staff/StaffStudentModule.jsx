@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   GraduationCap,
   Users,
@@ -30,7 +31,7 @@ import {
 import ModalPortal from '../ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from '../CollegeLogo';
 
-const API_BASE = 'http://localhost:5000/api';
+// API_BASE imported from apiConfig
 
 const DEFAULT_COURSES = [
   'B.Sc. COMPUTER SCIENCE',

@@ -26,6 +26,7 @@ import {
   Layers,
   Loader2
 } from 'lucide-react';
+import { API_BASE } from '../apiConfig';
 
 export default function StudentProfileView({ 
   student, 
@@ -143,7 +144,7 @@ export default function StudentProfileView({
   useEffect(() => {
     if (activeTab === 'Attendance' || activeTab === 'Overview') {
       setAttendanceLoading(true);
-      fetch('/api/attendance')
+      fetch(`${API_BASE}/attendance`)
         .then(res => res.json())
         .then(data => {
           const sessions = data.sessions || (Array.isArray(data) ? data : (data.data || []));
@@ -175,8 +176,8 @@ export default function StudentProfileView({
     if (activeTab === 'Examination') {
       setExamsLoading(true);
       Promise.all([
-        fetch('/api/internal-marks').then(r => r.json()).catch(() => ({ data: [] })),
-        fetch('/api/exams').then(r => r.json()).catch(() => ({ exams: [] }))
+        fetch(`${API_BASE}/internal-marks`).then(r => r.json()).catch(() => ({ data: [] })),
+        fetch(`${API_BASE}/exams`).then(r => r.json()).catch(() => ({ exams: [] }))
       ]).then(([marksData, examsData]) => {
         // Process marks
         const sheets = marksData.data || (Array.isArray(marksData) ? marksData : []);
@@ -213,7 +214,7 @@ export default function StudentProfileView({
   useEffect(() => {
     if (activeTab === 'Assignments') {
       setAssignmentsLoading(true);
-      fetch('/api/assignments')
+      fetch(`${API_BASE}/assignments`)
         .then(res => res.json())
         .then(data => {
           const list = data.assignments || (Array.isArray(data) ? data : []);

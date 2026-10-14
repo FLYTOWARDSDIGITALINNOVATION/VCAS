@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import {
   ArrowLeft,
   Calendar,
@@ -67,7 +68,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
   const fetchStaffClasses = () => {
     if (!staffId) return;
     setLoadingCourses(true);
-    fetch(`http://localhost:5000/api/classes/staff/${staffId}`)
+    fetch(`${API_BASE}/classes/staff/${staffId}`)
       .then(r => r.json())
       .then(d => {
         if (d.success && Array.isArray(d.classes)) {
@@ -90,7 +91,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
   const fetchStaffAssignments = () => {
     if (!staffId) return;
     setLoadingAssignments(true);
-    fetch(`http://localhost:5000/api/assignments/${staffId}`)
+    fetch(`${API_BASE}/assignments/${staffId}`)
       .then(r => r.json())
       .then(d => {
         if (d.success && Array.isArray(d.data)) {
@@ -103,7 +104,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
 
   const fetchStaffLeaves = () => {
     if (!staffId) return;
-    fetch(`http://localhost:5000/api/leave/staff/${staffId}`)
+    fetch(`${API_BASE}/leave/staff/${staffId}`)
       .then(r => r.json())
       .then(d => {
         if (d.success) {
@@ -121,7 +122,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
   const fetchStaffAchievements = () => {
     if (!staffId) return;
     setLoadingAchievements(true);
-    fetch(`http://localhost:5000/api/staff/${staffId}`)
+    fetch(`${API_BASE}/staff/${staffId}`)
       .then(r => r.json())
       .then(d => {
         if (d.success && d.data && Array.isArray(d.data.achievements)) {
@@ -145,7 +146,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
     fetchStaffAchievements();
     if (staffId) {
       setLoadingSchedule(true);
-      fetch(`http://localhost:5000/api/timetable/staff/${staffId}`)
+      fetch(`${API_BASE}/timetable/staff/${staffId}`)
         .then(r => r.json())
         .then(d => {
           if (d.success && d.schedule) setStaffSchedule(d.schedule);
@@ -157,7 +158,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
 
   const handleAdminLeaveAction = async (leaveId, status) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/leave/${leaveId}/status`, {
+      const res = await fetch(`${API_BASE}/leave/${leaveId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, approvedBy: 'Admin (Principal / HoD)' })
@@ -752,8 +753,8 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {staffLeaves.map((l) => (
-                      <tr key={l._id} className="hover:bg-slate-50/50">
+                    {staffLeaves.map((l, idx) => (
+                      <tr key={l._id || l.id || idx} className="hover:bg-slate-50/50">
                         <td className="py-3.5 px-4 font-bold text-slate-900">{l.leaveType}</td>
                         <td className="py-3.5 px-4 text-slate-600">{l.fromDate}</td>
                         <td className="py-3.5 px-4 text-slate-600">{l.toDate}</td>

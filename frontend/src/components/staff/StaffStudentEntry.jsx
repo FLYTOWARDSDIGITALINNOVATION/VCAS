@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BACKEND_URL } from '../../apiConfig';
 import { 
   UserPlus, 
   Users, 
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = BACKEND_URL;
 
 export default function StaffStudentEntry({ staffUser }) {
   const [students, setStudents] = useState([]);

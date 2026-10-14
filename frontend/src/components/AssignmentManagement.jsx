@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import {
   FileText,
@@ -41,7 +42,7 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const API_BASE = 'http://localhost:5000/api';
+// API_BASE imported from apiConfig
 
 const DEPARTMENTS = [
   'All Departments',
@@ -1626,11 +1627,11 @@ export default function AssignmentManagement({ user }) {
                       </td>
                     </tr>
                   ) : (
-                    displayedSubmissions.map((sub) => {
+                    displayedSubmissions.map((sub, idx) => {
                       const isSubmitted = sub.status === 'Submitted' || sub.status === 'Graded';
 
                       return (
-                        <tr key={sub.id} className="hover:bg-slate-50/50">
+                        <tr key={sub._id || sub.id || sub.rollNo || idx} className="hover:bg-slate-50/50">
                           <td className="py-4 px-6">
                             <div className="flex items-center gap-3">
                               <span className="font-mono font-bold text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">

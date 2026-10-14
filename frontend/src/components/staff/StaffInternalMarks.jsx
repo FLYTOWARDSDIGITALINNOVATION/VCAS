@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   FileSpreadsheet,
   Search,
@@ -22,7 +23,7 @@ import {
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
 
-const API = "http://localhost:5000/api";
+const API = API_BASE;
 
 export const DEFAULT_MAX_CONFIG = {
   st1: 20,

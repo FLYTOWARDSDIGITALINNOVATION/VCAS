@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import { 
   UserCheck, 
@@ -89,7 +90,7 @@ export default function LeaveManagement() {
 
   const fetchQuotaSettings = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/leave/quota-settings');
+      const res = await fetch(`${API_BASE}/leave/quota-settings`);
       const data = await res.json();
       if (res.ok && data.success && data.policy) {
         setQuotaPolicy(data.policy);
@@ -111,7 +112,7 @@ export default function LeaveManagement() {
 
   const fetchStaffList = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/staff');
+      const res = await fetch(`${API_BASE}/staff`);
       const data = await res.json();
       if (res.ok && data.success && Array.isArray(data.data)) {
         setStaffList(data.data);
@@ -129,7 +130,7 @@ export default function LeaveManagement() {
       if (selectedDept !== 'All Departments') params.append('department', selectedDept);
       if (searchTerm.trim()) params.append('search', searchTerm.trim());
 
-      const res = await fetch(`http://localhost:5000/api/leave?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/leave?${params.toString()}`);
       const data = await res.json();
       if (res.ok && data.success) {
         setLeaves(data.leaves || []);
@@ -186,7 +187,7 @@ export default function LeaveManagement() {
   const handleUpdateStatus = async (leaveId, status, remarks = '') => {
     setActionLoadingId(leaveId);
     try {
-      const res = await fetch(`http://localhost:5000/api/leave/${leaveId}/status`, {
+      const res = await fetch(`${API_BASE}/leave/${leaveId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -217,7 +218,7 @@ export default function LeaveManagement() {
     setSavingQuota(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/leave/quota-settings', {
+      const res = await fetch(`${API_BASE}/leave/quota-settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -250,7 +251,7 @@ export default function LeaveManagement() {
     const staffObj = staffList.find((s) => s.staffId === selectedStaffOverride);
 
     try {
-      const res = await fetch(`http://localhost:5000/api/leave/quota-settings/staff/${selectedStaffOverride}`, {
+      const res = await fetch(`${API_BASE}/leave/quota-settings/staff/${selectedStaffOverride}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -533,10 +534,10 @@ export default function LeaveManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredLeaves.map((item) => {
+                {filteredLeaves.map((item, idx) => {
                   const isActioning = actionLoadingId === item._id;
                   return (
-                    <tr key={item._id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr key={item._id || item.id || idx} className="hover:bg-slate-50/70 transition-colors">
                       {/* Staff */}
                       <td className="py-4 px-5">
                         <div className="flex items-center gap-3">

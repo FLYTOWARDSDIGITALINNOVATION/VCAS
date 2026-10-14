@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import {
   CheckSquare, BookMarked, BookOpen, Bell, UserCheck,
   ChevronRight, TrendingUp, Clock, AlertCircle, CalendarCheck2,
@@ -22,12 +23,12 @@ export default function StaffHome({ staffUser, onNavigate }) {
     if (!staffUser?.staffId) return;
     setRefreshing(true);
     Promise.allSettled([
-      fetch(`http://localhost:5000/api/classes/staff/${staffUser.staffId}`).then(r => r.json()),
-      fetch(`http://localhost:5000/api/attendance/staff/${staffUser.staffId}`).then(r => r.json()),
-      fetch(`http://localhost:5000/api/timetable/staff/${staffUser.staffId}`).then(r => r.json()),
-      fetch(`http://localhost:5000/api/notices`).then(r => r.json()),
-      fetch(`http://localhost:5000/api/assignments/${staffUser.staffId}`).then(r => r.json()),
-      fetch(`http://localhost:5000/api/leave/staff/${staffUser.staffId}`).then(r => r.json())
+      fetch(`${API_BASE}/classes/staff/${staffUser.staffId}`).then(r => r.json()),
+      fetch(`${API_BASE}/attendance/staff/${staffUser.staffId}`).then(r => r.json()),
+      fetch(`${API_BASE}/timetable/staff/${staffUser.staffId}`).then(r => r.json()),
+      fetch(`${API_BASE}/notices`).then(r => r.json()),
+      fetch(`${API_BASE}/assignments/${staffUser.staffId}`).then(r => r.json()),
+      fetch(`${API_BASE}/leave/staff/${staffUser.staffId}`).then(r => r.json())
     ]).then(([resClasses, resAtt, resTt, resNotices, resAssign, resLeave]) => {
       if (resClasses.status === 'fulfilled' && resClasses.value?.success) setDbClasses(resClasses.value.classes || []);
       if (resAtt.status === 'fulfilled' && resAtt.value?.success) setDbHistory(resAtt.value.sessions || []);

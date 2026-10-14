@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { 
   Bell, 
   Plus, 
@@ -166,7 +167,7 @@ export default function NoticesManagement() {
   const fetchNotices = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:5000/api/notices');
+      const res = await fetch(`${API_BASE}/notices`);
       const data = await res.json();
       if (res.ok && data.success) {
         const formatted = (data.notices || []).map(n => ({
@@ -301,7 +302,7 @@ export default function NoticesManagement() {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/notices', {
+      const res = await fetch(`${API_BASE}/notices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -343,7 +344,7 @@ export default function NoticesManagement() {
 
   const handleDeleteNotice = async (id) => {
     try {
-      await fetch(`http://localhost:5000/api/notices/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/notices/${id}`, { method: 'DELETE' });
       setNotices(prev => prev.filter(n => n.id !== id && n._id !== id));
       setShowDeleteModal(null);
       if (showViewModal?.id === id || showViewModal?._id === id) setShowViewModal(null);
