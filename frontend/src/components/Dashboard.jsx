@@ -34,7 +34,8 @@ import {
   Menu,
   X,
   RefreshCw,
-  Loader2
+  Loader2,
+  Award
 } from 'lucide-react';
 import StaffManagement from './StaffManagement';
 import DepartmentManagement from './DepartmentManagement';
@@ -52,6 +53,7 @@ import SettingsManagement from './SettingsManagement';
 import FeesManagement from './FeesManagement';
 import CampusFacilitiesManagement from './CampusFacilitiesManagement';
 import FeeManagement from './FeeManagement';
+import TCManagement from './TCManagement';
 
 function formatTimeAgo(dateInput) {
   if (!dateInput) return 'Recently';
@@ -654,6 +656,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       title: 'ACADEMIC',
       items: [
         { name: 'Students', icon: GraduationCap },
+        { name: 'TC', icon: Award },
         { name: 'Staff', icon: Users },
         { name: 'Departments', icon: Building2 },
         { name: 'Courses & Subjects', icon: BookOpen },
@@ -661,6 +664,12 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         { name: 'Examinations', icon: FileSpreadsheet },
         { name: 'Timetable', icon: Calendar },
         { name: 'Assignments', icon: BookMarked }
+      ]
+    }] : []),
+    ...(isFinanceOrOffice && user?.role === 'Office Staff' ? [{
+      title: 'CERTIFICATES',
+      items: [
+        { name: 'TC', icon: Award }
       ]
     }] : []),
     ...(canViewFees ? [{
@@ -1118,6 +1127,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         {activeNav === 'Students' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
             <StudentsPage user={user} canViewFees={canViewFees} />
+          </main>
+        ) : activeNav === 'TC' ? (
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
+            <TCManagement user={user} />
           </main>
         ) : activeNav === 'Staff' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
