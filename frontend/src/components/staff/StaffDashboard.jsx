@@ -91,23 +91,24 @@ export default function StaffDashboard({ staffUser, onLogout }) {
   };
 
   useEffect(() => {
-    const handleScrollOrResize = () => {
-      if (activeTooltipRef.current) {
-        showTooltipFor(
-          activeTooltipRef.current.name,
-          activeTooltipRef.current.button,
-          activeTooltipRef.current.allowInExpanded
-        );
-      }
+    const handleScroll = () => {
+      // During active scroll, immediately hide tooltip so scrolling stays 100% fluid and never drops frames
+      activeTooltipRef.current = null;
+      setHoveredTooltip(null);
     };
 
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
-    return () => {
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
+    const handleResize = () => {
+      activeTooltipRef.current = null;
+      setHoveredTooltip(null);
     };
-  }, [sidebarCollapsed]);
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('vcas_sidebar_collapsed', sidebarCollapsed ? 'true' : 'false');
@@ -147,8 +148,8 @@ export default function StaffDashboard({ staffUser, onLogout }) {
   };
 
   const SidebarContent = ({ isCollapsed = false }) => (
-    <div className="flex flex-col justify-between h-full bg-white select-none">
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+    <div className="flex flex-col justify-between h-full bg-white select-none min-h-0">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain">
         {/* Sticky Header Matching Admin */}
         <div className={`sticky top-0 z-20 bg-white border-b border-slate-100 ${isCollapsed ? 'py-3 px-2 flex flex-col items-center justify-center gap-2' : 'px-4 py-4 sm:px-5 sm:py-5 flex items-center justify-between'} shadow-2xs min-w-0 transition-all`}>
           {isCollapsed ? (
@@ -331,7 +332,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
   return (
     <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
       {/* Desktop Sidebar (White & Crisp) */}
-      <aside className={`hidden lg:flex flex-col ${sidebarCollapsed ? 'w-20' : 'w-72'} shrink-0 bg-white border-r border-slate-200 shadow-xs overflow-y-auto transition-[width] duration-300 ease-in-out`}>
+      <aside className={`hidden lg:flex flex-col ${sidebarCollapsed ? 'w-20' : 'w-72'} shrink-0 bg-white border-r border-slate-200 shadow-xs overflow-hidden transition-[width] duration-300 ease-in-out`}>
         <SidebarContent isCollapsed={sidebarCollapsed} />
       </aside>
 
@@ -339,7 +340,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-72 bg-white h-full overflow-y-auto flex flex-col z-10 border-r border-slate-200 shadow-2xl">
+          <aside className="relative w-72 bg-white h-full overflow-hidden flex flex-col z-10 border-r border-slate-200 shadow-2xl">
             <SidebarContent isCollapsed={false} />
           </aside>
         </div>
