@@ -607,7 +607,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
             type: 'Course',
             title: `${code ? code + ': ' : ''}${name}`,
             subtitle: dept,
-            nav: 'Courses & Subjects',
+            nav: 'Subjects',
             icon: BookOpen
           });
         }
@@ -715,7 +715,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         { name: 'Students', icon: GraduationCap },
         { name: 'Staff', icon: Users },
         { name: 'Departments', icon: Building2 },
-        { name: 'Courses & Subjects', icon: BookOpen },
+        { name: 'Subjects', icon: BookOpen },
         { name: 'Attendance', icon: CheckSquare },
         { name: 'Examinations', icon: FileSpreadsheet },
         { name: 'Timetable', icon: Calendar },
@@ -825,7 +825,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       icon: BookOpen, 
       bg: 'bg-indigo-500', 
       textColor: 'text-indigo-600', 
-      navTarget: 'Courses & Subjects' 
+      navTarget: 'Subjects' 
     },
     { 
       title: 'TODAY\'S ATTENDANCE', 
@@ -1259,7 +1259,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <DepartmentManagement />
           </main>
-        ) : activeNav === 'Courses & Subjects' ? (
+        ) : (activeNav === 'Subjects' || activeNav === 'Courses & Subjects') ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <CourseSubjectManagement user={user} />
           </main>
