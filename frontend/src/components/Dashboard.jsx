@@ -122,23 +122,24 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   };
 
   useEffect(() => {
-    const handleScrollOrResize = () => {
-      if (activeTooltipRef.current) {
-        showTooltipFor(
-          activeTooltipRef.current.name,
-          activeTooltipRef.current.button,
-          activeTooltipRef.current.allowInExpanded
-        );
-      }
+    const handleScroll = () => {
+      // During active scroll, immediately hide tooltip so scrolling stays 100% fluid and never drops frames
+      activeTooltipRef.current = null;
+      setHoveredTooltip(null);
     };
 
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
-    return () => {
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
+    const handleResize = () => {
+      activeTooltipRef.current = null;
+      setHoveredTooltip(null);
     };
-  }, [sidebarCollapsed]);
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('vcas_sidebar_collapsed', sidebarCollapsed ? 'true' : 'false');
@@ -890,8 +891,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   ];
 
   const SidebarContent = ({ isCollapsed = false }) => (
-    <div className="flex flex-col justify-between h-full bg-white select-none">
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+    <div className="flex flex-col justify-between h-full bg-white select-none min-h-0">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain">
         {/* Sticky Logo / Title Header */}
         <div className={`sticky top-0 z-20 bg-white border-b border-slate-100 ${isCollapsed ? 'py-3 px-2 flex flex-col items-center justify-center gap-2' : 'px-4 py-4 sm:px-5 sm:py-5 flex items-center justify-between'} shadow-xs min-w-0 transition-all`}>
           {isCollapsed ? (
@@ -1082,7 +1083,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
       
       {/* DESKTOP SIDEBAR */}
-      <aside className={`hidden lg:flex ${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white border-r border-slate-200 flex-col shrink-0 h-full overflow-y-auto transition-[width] duration-300 ease-in-out`}>
+      <aside className={`hidden lg:flex ${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white border-r border-slate-200 flex-col shrink-0 h-full overflow-hidden transition-[width] duration-300 ease-in-out`}>
         <SidebarContent isCollapsed={sidebarCollapsed} />
       </aside>
 
@@ -1093,7 +1094,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
             className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="relative w-72 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col overflow-y-auto z-10 animate-slideRight">
+          <aside className="relative w-72 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col overflow-hidden z-10 animate-slideRight">
             <SidebarContent isCollapsed={false} />
           </aside>
         </div>
