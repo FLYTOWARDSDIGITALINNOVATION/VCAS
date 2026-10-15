@@ -883,15 +883,6 @@ Unauthorized reproduction or distribution is strictly prohibited.
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
-            onClick={fetchStudents}
-            disabled={isLoading}
-            className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 border border-slate-200"
-            title="Refresh student records"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
           {isSuperAdmin && (
             <div className="flex items-center gap-2">
               <button 
@@ -1020,26 +1011,18 @@ Unauthorized reproduction or distribution is strictly prohibited.
             
             {/* Table Header */}
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
-                <th className="py-3.5 px-4 w-10 text-center">
-                  <input 
-                    type="checkbox"
-                    checked={selectedRows.length === filteredStudents.length && filteredStudents.length > 0}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                  />
-                </th>
-                <th className="py-3.5 px-3 text-left">STUDENT / REG NO</th>
-                <th className="py-3.5 px-2 text-center w-24">YEAR</th>
-                <th className="py-3.5 px-2 text-center w-20">2. GENDER</th>
-                <th className="py-3.5 px-2 text-center w-28">3. DOB (PWD)</th>
-                <th className="py-3.5 px-3 text-left">4. FATHER'S NAME</th>
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                <th className="py-3.5 px-5 text-left">STUDENT / REG NO</th>
+                <th className="py-3.5 px-3 text-center">YEAR</th>
+                <th className="py-3.5 px-3 text-center">GENDER</th>
+                <th className="py-3.5 px-3 text-center">DOB</th>
+                <th className="py-3.5 px-4 text-left">FATHER'S NAME</th>
                 <th className="py-3.5 px-3 text-center">ROLL NO</th>
-                <th className="py-3.5 px-2 text-center w-28">7. ADM DATE</th>
-                <th className="py-3.5 px-3 text-left">8. COURSE ADMITTED</th>
+                <th className="py-3.5 px-3 text-center">ADM DATE</th>
+                <th className="py-3.5 px-4 text-left">COURSE ADMITTED</th>
                 <th className="py-3.5 px-3 text-center">STATUS</th>
                 {isSuperAdmin && <th className="py-3.5 px-4 text-center">STUDENT SLIP</th>}
-                <th className="py-3.5 px-4 text-right">ACTIONS</th>
+                <th className="py-3.5 px-5 text-right">ACTIONS</th>
               </tr>
             </thead>
 
@@ -1047,7 +1030,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
             <tbody className="divide-y divide-slate-100 text-xs font-medium">
               {isLoading ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? "12" : "11"} className="py-16 text-center text-slate-400">
+                  <td colSpan={isSuperAdmin ? "11" : "10"} className="py-16 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2.5">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                       <span className="text-xs font-semibold text-slate-600">Loading student records...</span>
@@ -1056,28 +1039,16 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </tr>
               ) : filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? "12" : "11"} className="py-12 text-center text-slate-400 font-normal">
+                  <td colSpan={isSuperAdmin ? "11" : "10"} className="py-12 text-center text-slate-400 font-normal">
                     No students match your filter criteria.
                   </td>
                 </tr>
               ) : (
                 filteredStudents.map((student, idx) => {
-                  const isChecked = selectedRows.includes(student.id);
                   return (
                     <tr key={student._id || student.id || student.rollNo || idx} className="hover:bg-slate-50/80 transition-colors">
-                      
-                      {/* Checkbox */}
-                      <td className="py-3.5 px-4 text-center">
-                        <input 
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleSelectRow(student.id)}
-                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                        />
-                      </td>
-
-                      {/* 1. Name & Reg No */}
-                      <td className="py-3.5 px-3 cursor-pointer" onClick={() => setSelectedStudentProfile(student)}>
+                      {/* Name & Reg No */}
+                      <td className="py-3.5 px-5 cursor-pointer whitespace-nowrap" onClick={() => setSelectedStudentProfile(student)}>
                         <div className="flex items-center gap-2.5 group">
                           <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
                             {(student.name || 'S').charAt(0)}
@@ -1096,46 +1067,46 @@ Unauthorized reproduction or distribution is strictly prohibited.
                       </td>
 
                       {/* Year */}
-                      <td className="py-3.5 px-2 text-center">
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-[10px] border border-amber-200">
                           {student.year || '1st Year'}
                         </span>
                       </td>
 
-                      {/* 2. Gender */}
-                      <td className="py-3.5 px-2 text-center">
+                      {/* Gender */}
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px]">
                           {student.gender || 'MALE'}
                         </span>
                       </td>
 
-                      {/* 3. Date of Birth (Password) */}
-                      <td className="py-3.5 px-2 text-center font-medium text-slate-700">
+                      {/* Date of Birth */}
+                      <td className="py-3.5 px-3 text-center font-medium text-slate-700 whitespace-nowrap">
                         {student.dob || '—'}
                       </td>
 
-                      {/* 4. Father's Name */}
-                      <td className="py-3.5 px-3 font-bold text-slate-800 uppercase">
+                      {/* Father's Name */}
+                      <td className="py-3.5 px-4 font-semibold text-slate-800 uppercase whitespace-nowrap">
                         {student.fatherName || '—'}
                       </td>
 
                       {/* Roll Number */}
-                      <td className="py-3.5 px-3 text-center text-slate-700 font-mono font-bold">
+                      <td className="py-3.5 px-3 text-center text-slate-700 font-mono font-bold whitespace-nowrap">
                         {student.rollNo || '—'}
                       </td>
 
-                      {/* 7. Date of Admission */}
-                      <td className="py-3.5 px-2 text-center font-medium text-slate-700">
+                      {/* Date of Admission */}
+                      <td className="py-3.5 px-3 text-center font-medium text-slate-700 whitespace-nowrap">
                         {student.dateOfAdmission || '—'}
                       </td>
 
-                      {/* 8. Course in Which Admitted */}
-                      <td className="py-3.5 px-3 font-extrabold text-blue-700">
+                      {/* Course in Which Admitted */}
+                      <td className="py-3.5 px-4 font-bold text-blue-700 whitespace-nowrap">
                         {student.courseAdmitted || student.course || student.department || '—'}
                       </td>
 
                       {/* Status Badge */}
-                      <td className="py-3.5 px-3 text-center">
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           student.status === 'Active' 
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
@@ -1147,14 +1118,14 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
                       {/* Student Slip (Super Admin only) */}
                       {isSuperAdmin && (
-                        <td className="py-3.5 px-4 text-center">
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setCredentialModalStudent(student);
                             }}
                             title="Download & View Official Student Slip"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all shadow-2xs"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all shadow-2xs cursor-pointer"
                           >
                             <Key className="w-3.5 h-3.5 text-purple-600" />
                             <span>Student Slip</span>
@@ -1163,7 +1134,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                       )}
 
                       {/* Action Buttons */}
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
                           {isSuperAdmin && (
                             <>
