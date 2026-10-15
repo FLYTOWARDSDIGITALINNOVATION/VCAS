@@ -39,6 +39,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import StaffApplicationView from './staff/StaffApplicationView';
 
 const CATEGORY_CONFIG = {
   Award:         { label: 'Award',         color: 'bg-amber-50 text-amber-700 border-amber-200',     badge: 'bg-amber-100 text-amber-800',  icon: Trophy },
@@ -115,9 +116,14 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
       .catch(() => {});
   };
 
+  const [staffData, setStaffData] = useState(staff);
   const [achievements, setAchievements] = useState(staff.achievements || []);
   const [loadingAchievements, setLoadingAchievements] = useState(false);
   const [achievementFilter, setAchievementFilter] = useState('All');
+
+  useEffect(() => {
+    setStaffData(staff);
+  }, [staff]);
 
   const fetchStaffAchievements = () => {
     if (!staffId) return;
@@ -125,8 +131,11 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
     fetch(`${API_BASE}/staff/${staffId}`)
       .then(r => r.json())
       .then(d => {
-        if (d.success && d.data && Array.isArray(d.data.achievements)) {
-          setAchievements(d.data.achievements);
+        if (d.success && d.data) {
+          setStaffData(prev => ({ ...prev, ...d.data }));
+          if (Array.isArray(d.data.achievements)) {
+            setAchievements(d.data.achievements);
+          }
         } else if (staff.achievements && Array.isArray(staff.achievements)) {
           setAchievements(staff.achievements);
         }
@@ -175,16 +184,17 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
   };
 
   // Real staff profile fields filled by staff or admin
-  const qualification = staff.qualification || 'Pending staff first-time setup';
-  const experience = staff.experience || 'Pending staff first-time setup';
-  const employmentType = staff.employmentType || 'Permanent / Full-Time';
-  const bloodGroup = staff.bloodGroup || 'Not specified';
-  const dob = staff.dob || 'Not specified';
-  const address = staff.address || 'Pending staff first-time setup';
-  const emergencyContact = staff.emergencyContact || 'Pending staff first-time setup';
-  const netSetExamStatus = staff.netSetExamStatus || 'Not Applicable';
-  const netSetExamCertificate = staff.netSetExamCertificate || '';
-  const netSetCertificateName = staff.netSetCertificateName || '';
+  const currentStaff = staffData || staff;
+  const qualification = currentStaff.qualification || 'Pending staff first-time setup';
+  const experience = currentStaff.experience || 'Pending staff first-time setup';
+  const employmentType = currentStaff.employmentType || 'Permanent / Full-Time';
+  const bloodGroup = currentStaff.bloodGroup || 'Not specified';
+  const dob = currentStaff.dob || 'Not specified';
+  const address = currentStaff.permanentAddress || currentStaff.address || 'Pending staff first-time setup';
+  const emergencyContact = currentStaff.emergencyContact || 'Pending staff first-time setup';
+  const netSetExamStatus = currentStaff.netSetExamStatus || 'Not Applicable';
+  const netSetExamCertificate = currentStaff.netSetExamCertificate || '';
+  const netSetCertificateName = currentStaff.netSetCertificateName || '';
 
   const handleViewCertificate = () => {
     if (!netSetExamCertificate) return;
@@ -245,6 +255,7 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
 
   const tabs = [
     { id: 'overview', label: 'Overview & Profile', icon: User },
+    { id: 'application', label: 'College Application Form', icon: FileText, badge: 'Official Form' },
     { id: 'attendance', label: 'Attendance & Leaves', icon: Calendar, badge: `${attendancePercentage}%` },
     { id: 'classes', label: 'Courses & Classes', icon: BookOpen, badge: `${courses.length}` },
     { id: 'timetable', label: 'Weekly Timetable', icon: Clock },
@@ -266,6 +277,18 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
         </button>
 
         <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setActiveTab('application')}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shadow-xs cursor-pointer ${
+              activeTab === 'application'
+                ? 'bg-purple-600 text-white border-purple-600 shadow-purple-500/20'
+                : 'bg-white hover:bg-purple-50 text-purple-700 border-purple-200'
+            }`}
+          >
+            <Printer className="w-4 h-4" />
+            <span>Print College Application</span>
+          </button>
+
           {isSuperAdmin && (
             <>
               <button
@@ -527,6 +550,22 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Date of Birth</span>
                   <span className="font-semibold text-slate-800">{dob}</span>
                 </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Gender / Marital Status</span>
+                  <span className="font-semibold text-slate-800">{currentStaff.gender || '—'} / {currentStaff.maritalStatus || '—'}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Community &amp; Caste</span>
+                  <span className="font-semibold text-slate-800">{currentStaff.community || '—'} {currentStaff.caste ? `(${currentStaff.caste})` : ''}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Father's / Husband's Name</span>
+                  <span className="font-semibold text-slate-800">{currentStaff.fatherOrSpouseName || '—'}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">WhatsApp Number</span>
+                  <span className="font-semibold text-slate-800">{currentStaff.whatsapp || currentStaff.phone || '—'}</span>
+                </div>
                 <div className="sm:col-span-2 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Residential Address</span>
                   <span className="font-semibold text-slate-800">{address}</span>
@@ -657,6 +696,13 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
           </div>
 
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 1.5: COLLEGE APPLICATION FORM (2-PAGE OFFICIAL FORMAT)               */}
+      {/* ========================================================================= */}
+      {activeTab === 'application' && (
+        <StaffApplicationView staff={currentStaff} />
       )}
 
       {/* ========================================================================= */}

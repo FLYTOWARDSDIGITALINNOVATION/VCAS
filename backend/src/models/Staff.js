@@ -28,6 +28,40 @@ const achievementSchema = new mongoose.Schema({
   description: { type: String, default: '', trim: true }
 }, { _id: true, timestamps: true });
 
+const qualificationItemSchema = new mongoose.Schema({
+  degree:          { type: String, default: '' },
+  specialization:  { type: String, default: '' },
+  institution:     { type: String, default: '' },
+  mode:            { type: String, default: 'Full time' },
+  marksOrCgpa:     { type: String, default: '' },
+  yearOfPassing:   { type: String, default: '' }
+}, { _id: false });
+
+const experienceItemSchema = new mongoose.Schema({
+  sNo:             { type: Number },
+  institution:     { type: String, default: '' },
+  designation:     { type: String, default: '' },
+  fromDate:        { type: String, default: '' },
+  toDate:          { type: String, default: '' },
+  duration:        { type: String, default: '' }
+}, { _id: false });
+
+const projectFundSchema = new mongoose.Schema({
+  agency:          { type: String, default: '' },
+  amountLakhs:     { type: String, default: '' },
+  scheme:          { type: String, default: '' },
+  title:           { type: String, default: '' },
+  duration:        { type: String, default: '' }
+}, { _id: false });
+
+const referenceSchema = new mongoose.Schema({
+  name:            { type: String, default: '' },
+  designation:     { type: String, default: '' },
+  institution:     { type: String, default: '' },
+  contactNo:       { type: String, default: '' },
+  email:           { type: String, default: '' }
+}, { _id: false });
+
 const staffSchema = new mongoose.Schema({
   staffId:            { type: String, required: true, unique: true, trim: true },
   name:               { type: String, required: true, trim: true },
@@ -60,6 +94,54 @@ const staffSchema = new mongoose.Schema({
   bankName:           { type: String, default: '', trim: true },
   ifscCode:           { type: String, default: '', uppercase: true, trim: true },
   bankBranch:         { type: String, default: '', trim: true },
+
+  // College Application Form Details (Matching Official 2-Page Paper Form)
+  postAppliedFor:         { type: String, default: '' },
+  age:                    { type: String, default: '' },
+  gender:                 { type: String, default: 'Male' },
+  maritalStatus:          { type: String, default: 'Single' },
+  fatherOrSpouseName:     { type: String, default: '' },
+  nationality:            { type: String, default: 'Indian' },
+  religion:               { type: String, default: 'Hindu' },
+  community:              { type: String, default: 'BC' },
+  caste:                  { type: String, default: '' },
+  permanentAddress:       { type: String, default: '' },
+  communicationAddress:   { type: String, default: '' },
+  whatsapp:               { type: String, default: '' },
+
+  academicQualifications: [qualificationItemSchema],
+  experienceDetails:      [experienceItemSchema],
+
+  publications: {
+    nationalConferences:      { type: Number, default: 0 },
+    nationalJournals:         { type: Number, default: 0 },
+    internationalConferences: { type: Number, default: 0 },
+    internationalJournals:    { type: Number, default: 0 },
+    patentsFiled:             { type: String, default: '' },
+    patentsGranted:           { type: String, default: '' }
+  },
+
+  programmes: {
+    organizedConferences:     { type: Number, default: 0 },
+    organizedWorkshops:       { type: Number, default: 0 },
+    organizedFdp:             { type: Number, default: 0 },
+    attendedConferences:      { type: Number, default: 0 },
+    attendedWorkshops:        { type: Number, default: 0 },
+    attendedFdp:              { type: Number, default: 0 }
+  },
+
+  projectFunds:           [projectFundSchema],
+  otherInformation:       { type: String, default: '' },
+  references:             [referenceSchema],
+
+  payExpected:                { type: String, default: '' },
+  payLastObtained:            { type: String, default: '' },
+  lastPayCertificate:         { type: String, default: '' },
+  place:                      { type: String, default: 'Tenkasi' },
+  applicationDate:            { type: String, default: '' },
+  educationalCertificatesDoc: { type: String, default: '' },
+  experienceCertificatesDoc:  { type: String, default: '' },
+
   classes:            [classSubjectSchema],
   achievements:       [achievementSchema]
 }, {

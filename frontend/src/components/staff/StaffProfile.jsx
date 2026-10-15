@@ -35,6 +35,7 @@ import {
   ExternalLink,
   AlertCircle
 } from 'lucide-react';
+import StaffApplicationView from './StaffApplicationView';
 
 const CATEGORY_CONFIG = {
   Award:         { label: 'Award',         color: 'bg-amber-50 text-amber-700 border-amber-200',     icon: Trophy },
@@ -92,8 +93,13 @@ export default function StaffProfile({ staffUser = {} }) {
   const [deletingId, setDeletingId] = useState(null);
   const [achievementMsg, setAchievementMsg] = useState(null); // { type: 'success'|'error', text }
 
+  // Application Modal state & full staff data
+  const [fullStaffData, setFullStaffData] = useState(staffUser);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+
   useEffect(() => {
     if (staffUser) {
+      setFullStaffData(staffUser);
       if (staffUser.profileImage) setProfileImage(staffUser.profileImage);
       if (staffUser.phone) setPhone(staffUser.phone);
       if (staffUser.altPhone) setAltPhone(staffUser.altPhone);
@@ -109,6 +115,20 @@ export default function StaffProfile({ staffUser = {} }) {
       if (staffUser.netSetExamCertificate) setNetSetExamCertificate(staffUser.netSetExamCertificate);
       if (staffUser.netSetCertificateName) setNetSetCertificateName(staffUser.netSetCertificateName);
       if (Array.isArray(staffUser.achievements)) setAchievements(staffUser.achievements);
+    }
+
+    if (staffUser?.staffId) {
+      fetch(`${API_BASE}/staff/${staffUser.staffId}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.data) {
+            setFullStaffData(d.data);
+            if (Array.isArray(d.data.achievements)) {
+              setAchievements(d.data.achievements);
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, [staffUser]);
 
@@ -448,11 +468,22 @@ export default function StaffProfile({ staffUser = {} }) {
   return (
     <div className="p-5 sm:p-7 space-y-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-extrabold text-slate-900">Faculty Profile</h2>
-        <p className="text-sm text-slate-500 mt-0.5">
-          View your employment details and keep your contact information up to date
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-slate-900">Faculty Profile</h2>
+          <p className="text-sm text-slate-500 mt-0.5">
+            View your employment details and keep your contact information up to date
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowApplicationModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-500/20 transition-all cursor-pointer self-start sm:self-auto active:scale-95"
+        >
+          <FileText className="w-4 h-4" />
+          <span>View / Print College Application Form (2-Page A4)</span>
+        </button>
       </div>
 
       {isSaved && (
@@ -589,6 +620,86 @@ export default function StaffProfile({ staffUser = {} }) {
             </div>
           </div>
         </div>
+
+        {/* Academic Qualifications & College Application Summary */}
+        {Array.isArray(fullStaffData?.academicQualifications) && fullStaffData.academicQualifications.length > 0 && (
+          <div className="py-5 border-b border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <GraduationCap className="w-4 h-4 text-purple-600" />
+                Academic Qualifications (Official Record)
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowApplicationModal(true)}
+                className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Full Application</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                    <th className="p-2.5">Exam / Degree</th>
+                    <th className="p-2.5">Specialization</th>
+                    <th className="p-2.5">Institution / University</th>
+                    <th className="p-2.5 text-center">Mode</th>
+                    <th className="p-2.5 text-center">% / CGPA</th>
+                    <th className="p-2.5 text-center">Year</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {fullStaffData.academicQualifications.map((q, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50">
+                      <td className="p-2.5 font-bold text-slate-800">{q.degree}</td>
+                      <td className="p-2.5 text-slate-700">{q.specialization || '—'}</td>
+                      <td className="p-2.5 text-slate-600">{q.institution || '—'}</td>
+                      <td className="p-2.5 text-center text-slate-600">{q.mode || 'Regular'}</td>
+                      <td className="p-2.5 text-center font-bold text-slate-800">{q.percentageOrCgpa || '—'}</td>
+                      <td className="p-2.5 text-center font-mono text-slate-600">{q.yearOfPassing || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Experience Details Table */}
+        {Array.isArray(fullStaffData?.experienceDetails) && fullStaffData.experienceDetails.length > 0 && (
+          <div className="py-5 border-b border-slate-100 space-y-3">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Briefcase className="w-4 h-4 text-blue-600" />
+              Prior &amp; Current Experience Details
+            </h4>
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                    <th className="p-2.5">Institution / Industry</th>
+                    <th className="p-2.5">Designation</th>
+                    <th className="p-2.5 text-center">From</th>
+                    <th className="p-2.5 text-center">To</th>
+                    <th className="p-2.5 text-center">Duration</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {fullStaffData.experienceDetails.map((exp, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50">
+                      <td className="p-2.5 font-medium text-slate-800">{exp.institutionOrIndustry || '—'}</td>
+                      <td className="p-2.5 font-bold text-slate-700">{exp.position || '—'}</td>
+                      <td className="p-2.5 text-center font-mono text-slate-600">{exp.from || '—'}</td>
+                      <td className="p-2.5 text-center font-mono text-slate-600">{exp.to || '—'}</td>
+                      <td className="p-2.5 text-center font-semibold text-slate-800">{exp.duration || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* NET / SET Exam Qualification & Certificate Section */}
         <div className="py-5 border-b border-slate-100">
@@ -1162,6 +1273,34 @@ export default function StaffProfile({ staffUser = {} }) {
                   className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* College Application Modal */}
+      {showApplicationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-slate-100 rounded-3xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-purple-400" />
+                <span className="font-extrabold text-sm">Official College Application Form (2-Page Format)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApplicationModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+              <StaffApplicationView 
+                staff={fullStaffData || staffUser} 
+                onClose={() => setShowApplicationModal(false)} 
+                showCloseButton={true} 
+              />
             </div>
           </div>
         </div>

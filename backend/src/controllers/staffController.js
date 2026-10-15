@@ -170,6 +170,32 @@ exports.createStaff = async (req, res) => {
       ifscCode: req.body.ifscCode ? req.body.ifscCode.trim().toUpperCase() : '',
       bankBranch: req.body.bankBranch ? req.body.bankBranch.trim() : '',
       classTeacherOf: classTeacherOf || '',
+      postAppliedFor: req.body.postAppliedFor || '',
+      age: req.body.age || '',
+      gender: req.body.gender || 'Male',
+      maritalStatus: req.body.maritalStatus || 'Single',
+      fatherOrSpouseName: req.body.fatherOrSpouseName || '',
+      nationality: req.body.nationality || 'Indian',
+      religion: req.body.religion || 'Hindu',
+      community: req.body.community || 'BC',
+      caste: req.body.caste || '',
+      permanentAddress: req.body.permanentAddress || '',
+      communicationAddress: req.body.communicationAddress || '',
+      whatsapp: req.body.whatsapp || '',
+      academicQualifications: Array.isArray(req.body.academicQualifications) ? req.body.academicQualifications : [],
+      experienceDetails: Array.isArray(req.body.experienceDetails) ? req.body.experienceDetails : [],
+      publications: req.body.publications || {},
+      programmes: req.body.programmes || {},
+      projectFunds: Array.isArray(req.body.projectFunds) ? req.body.projectFunds : [],
+      otherInformation: req.body.otherInformation || '',
+      references: Array.isArray(req.body.references) ? req.body.references : [],
+      payExpected: req.body.payExpected || '',
+      payLastObtained: req.body.payLastObtained || '',
+      lastPayCertificate: req.body.lastPayCertificate || '',
+      place: req.body.place || 'Tenkasi',
+      applicationDate: req.body.applicationDate || '',
+      educationalCertificatesDoc: req.body.educationalCertificatesDoc || '',
+      experienceCertificatesDoc: req.body.experienceCertificatesDoc || '',
       classes: []
     });
 
@@ -210,7 +236,12 @@ exports.updateStaff = async (req, res) => {
       'status', 'joiningDate', 'qualification', 'experience', 'bloodGroup', 
       'dob', 'address', 'emergencyContact', 'avatarBg', 'classTeacherOf', 'password', 'profileImage',
       'netSetExamStatus', 'netSetExamCertificate', 'netSetCertificateName',
-      'aadhaar', 'pan', 'bankAccountNo', 'bankName', 'ifscCode', 'bankBranch'
+      'aadhaar', 'pan', 'bankAccountNo', 'bankName', 'ifscCode', 'bankBranch',
+      'postAppliedFor', 'age', 'gender', 'maritalStatus', 'fatherOrSpouseName',
+      'nationality', 'religion', 'community', 'caste', 'permanentAddress', 'communicationAddress', 'whatsapp',
+      'academicQualifications', 'experienceDetails', 'publications', 'programmes', 'projectFunds',
+      'otherInformation', 'references', 'payExpected', 'payLastObtained', 'lastPayCertificate',
+      'place', 'applicationDate', 'educationalCertificatesDoc', 'experienceCertificatesDoc', 'isProfileCompleted'
     ];
 
     allowedUpdates.forEach(field => {
