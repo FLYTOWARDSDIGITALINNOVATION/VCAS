@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, BookOpen, CheckSquare, Calendar, BookMarked,
   Bell, UserCheck, User, LogOut, Menu, X, GraduationCap,
-  ChevronRight, Shield, FileSpreadsheet, ClipboardList, Ticket, Award, UserPlus,
+  ChevronRight, ChevronLeft, Shield, FileSpreadsheet, ClipboardList, Ticket, Award, UserPlus,
   Search, Clock, Sparkles, Building2
 } from 'lucide-react';
 import StaffHome from './StaffHome';
