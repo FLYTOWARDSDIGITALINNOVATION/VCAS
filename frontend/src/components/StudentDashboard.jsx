@@ -33,6 +33,9 @@ import {
   Menu,
   X,
   ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   TrendingUp,
   IdCard,
   IndianRupee,
@@ -79,6 +82,63 @@ export default function StudentDashboard({ student, onLogout }) {
   const [activeNav, setActiveNav] = useState('Dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('vcas_sidebar_collapsed') === 'true';
+  });
+  const [hoveredTooltip, setHoveredTooltip] = useState(null);
+  const activeTooltipRef = useRef(null);
+
+  const showTooltipFor = (name, targetElement, allowInExpanded = false) => {
+    if ((!sidebarCollapsed && !allowInExpanded) || !targetElement) {
+      setHoveredTooltip(null);
+      return;
+    }
+    const button = targetElement.tagName === 'BUTTON' 
+      ? targetElement 
+      : (targetElement.querySelector('button') || targetElement);
+    
+    const rect = button.getBoundingClientRect();
+    if (rect.bottom < 30 || rect.top > window.innerHeight - 30) {
+      setHoveredTooltip(null);
+      return;
+    }
+
+    activeTooltipRef.current = { name, button, allowInExpanded };
+    setHoveredTooltip({
+      name,
+      top: rect.top + rect.height / 2,
+      left: Math.max(rect.right + 12, 88)
+    });
+  };
+
+  const hideTooltip = () => {
+    activeTooltipRef.current = null;
+    setHoveredTooltip(null);
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      // During active scroll, immediately hide tooltip so scrolling stays 100% fluid and never drops frames
+      activeTooltipRef.current = null;
+      setHoveredTooltip(null);
+    };
+
+    const handleResize = () => {
+      activeTooltipRef.current = null;
+      setHoveredTooltip(null);
+    };
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('vcas_sidebar_collapsed', sidebarCollapsed ? 'true' : 'false');
+  }, [sidebarCollapsed]);
   const [showPassword, setShowPassword] = useState(false);
   const [attendanceData, setAttendanceData] = useState([]);
   const [attSummary, setAttSummary] = useState({ totalClasses: 0, present: 0, absent: 0, late: 0, percentage: 85, subjectBreakdown: [] });
@@ -778,60 +838,148 @@ CONTACT:
   ];
 
   // Sidebar Component Matching Admin Style Exactly
-  const SidebarContent = () => (
-    <div className="flex flex-col justify-between h-full bg-white">
-      <div>
+  const SidebarContent = ({ isCollapsed = false }) => (
+    <div className="flex flex-col justify-between h-full bg-white select-none min-h-0">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain">
         {/* Sticky Header Matching Admin */}
-        <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-4 sm:px-5 sm:py-5 flex items-center justify-between shadow-2xs min-w-0">
-          <CollegeLogo size="md" showText={true} />
-          <button 
-            onClick={() => setMobileOpen(false)}
-            className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        <div className={`sticky top-0 z-20 bg-white border-b border-slate-100 ${isCollapsed ? 'py-3 px-2 flex flex-col items-center justify-center gap-2' : 'px-4 py-4 sm:px-5 sm:py-5 flex items-center justify-between'} shadow-2xs min-w-0 transition-all`}>
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-2 w-full">
+              <button
+                onClick={() => setSidebarCollapsed(false)}
+                onMouseEnter={(e) => showTooltipFor('Expand Sidebar', e.currentTarget)}
+                onMouseMove={(e) => showTooltipFor('Expand Sidebar', e.currentTarget)}
+                onMouseLeave={hideTooltip}
+                className="cursor-pointer hover:scale-105 transition-transform p-1 rounded-xl hover:bg-slate-50"
+                aria-label="Expand sidebar"
+              >
+                <CollegeLogo size="xs" showText={false} />
+              </button>
+              <button
+                onClick={() => setSidebarCollapsed(false)}
+                onMouseEnter={(e) => showTooltipFor('Expand Sidebar', e.currentTarget)}
+                onMouseMove={(e) => showTooltipFor('Expand Sidebar', e.currentTarget)}
+                onMouseLeave={hideTooltip}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                aria-label="Expand sidebar"
+              >
+                <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center min-w-0 flex-1 overflow-hidden">
+                <CollegeLogo size="md" showText={true} />
+              </div>
+              {/* Collapse button on Desktop */}
+              <button 
+                onClick={() => setSidebarCollapsed(true)}
+                onMouseEnter={(e) => showTooltipFor('Collapse Sidebar', e.currentTarget, true)}
+                onMouseMove={(e) => showTooltipFor('Collapse Sidebar', e.currentTarget, true)}
+                onMouseLeave={hideTooltip}
+                className="hidden lg:flex p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0 ml-1"
+                aria-label="Collapse sidebar"
+              >
+                <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+              </button>
+              {/* Close button on mobile */}
+              <button 
+                onClick={() => setMobileOpen(false)}
+                className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer"
+                aria-label="Close menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </>
+          )}
         </div>
 
         {/* Student Quick Profile Card in Sidebar */}
-        <div 
-          onClick={() => { setActiveNav('Student Information'); setMobileOpen(false); }}
-          className="mx-4 my-3 p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 transition-all cursor-pointer group shadow-2xs"
-          title="View Student Profile"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0 group-hover:scale-105 transition-transform">
-              {name.charAt(0)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-slate-900 font-extrabold text-xs truncate group-hover:text-blue-600 transition-colors">
-                {name}
-              </p>
-              <p className="text-blue-700 font-mono text-[10px] font-bold truncate">
-                Reg: {regNo}
-              </p>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-200">
-                  {year}
-                </span>
-                <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-200 text-slate-700">
-                  {sem}
-                </span>
+        {isCollapsed ? (
+          <div 
+            className="w-full flex justify-center my-2 cursor-pointer"
+            onMouseEnter={(e) => showTooltipFor(`${name} (Student Profile)`, e.currentTarget)}
+            onMouseMove={(e) => showTooltipFor(`${name} (Student Profile)`, e.currentTarget)}
+            onMouseLeave={hideTooltip}
+          >
+            <div 
+              onClick={() => { setActiveNav('Student Information'); setMobileOpen(false); }}
+              className="w-10 h-10 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200/80 flex items-center justify-center cursor-pointer group shadow-2xs relative"
+              aria-label="View Student Profile"
+            >
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-xs shadow-xs shrink-0 group-hover:scale-105 transition-transform pointer-events-none">
+                {name.charAt(0)}
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div 
+            onClick={() => { setActiveNav('Student Information'); setMobileOpen(false); }}
+            className="mx-4 my-3 p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 transition-all cursor-pointer group shadow-2xs"
+            title="View Student Profile"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+                {name.charAt(0)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-slate-900 font-extrabold text-xs truncate group-hover:text-blue-600 transition-colors">
+                  {name}
+                </p>
+                <p className="text-blue-700 font-mono text-[10px] font-bold truncate">
+                  Reg: {regNo}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-200">
+                    {year}
+                  </span>
+                  <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-200 text-slate-700">
+                    {sem}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Categorized Navigation Links Matching Admin */}
-        <nav className="p-4 space-y-6">
+        <nav className={`${isCollapsed ? 'py-3 px-2 space-y-1' : 'p-4 space-y-6'}`}>
           {NAV_SECTIONS.map((section, idx) => (
-            <div key={idx}>
-              <h3 className="px-3 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-2">
-                {section.title}
-              </h3>
-              <div className="space-y-0.5">
+            <div key={idx} className={isCollapsed ? 'space-y-1' : ''}>
+              {!isCollapsed && (
+                <h3 className="px-3 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-2">
+                  {section.title}
+                </h3>
+              )}
+              <div className="space-y-1">
                 {section.items.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeNav === item.name;
+
+                  if (isCollapsed) {
+                    return (
+                      <div 
+                        key={item.name} 
+                        className="w-full flex justify-center py-1 cursor-pointer"
+                        onMouseEnter={(e) => showTooltipFor(item.name, e.currentTarget)}
+                        onMouseMove={(e) => showTooltipFor(item.name, e.currentTarget)}
+                        onMouseLeave={hideTooltip}
+                      >
+                        <button
+                          onClick={() => { setActiveNav(item.name); setMobileOpen(false); }}
+                          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-700 font-extrabold shadow-xs border border-blue-200/80'
+                              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 border border-transparent'
+                          }`}
+                          aria-label={item.name}
+                        >
+                          <Icon className={`w-5 h-5 shrink-0 stroke-[2] pointer-events-none ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
+                        </button>
+                      </div>
+                    );
+                  }
+
                   return (
                     <button
                       key={item.name}
@@ -856,8 +1004,8 @@ CONTACT:
         </nav>
       </div>
 
-      {/* Sticky Bottom Sign Out Matching Admin */}
-      <div className="p-4 border-t border-slate-100 bg-white sticky bottom-0">
+      {/* Mobile Drawer Logout Only */}
+      <div className="lg:hidden p-4 border-t border-slate-100 bg-white">
         <button
           onClick={() => setShowLogoutModal(true)}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-900 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
@@ -872,16 +1020,16 @@ CONTACT:
   return (
     <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
       {/* Desktop Sidebar (Crisp White Layout Matching Admin) */}
-      <aside className="hidden lg:flex flex-col w-72 shrink-0 bg-white border-r border-slate-200 shadow-xs overflow-y-auto">
-        <SidebarContent />
+      <aside className={`hidden lg:flex flex-col ${sidebarCollapsed ? 'w-20' : 'w-72'} shrink-0 bg-white border-r border-slate-200 shadow-xs overflow-hidden transition-[width] duration-300 ease-in-out`}>
+        <SidebarContent isCollapsed={sidebarCollapsed} />
       </aside>
 
       {/* Mobile Sidebar Overlay */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-72 bg-white h-full overflow-y-auto flex flex-col z-10 border-r border-slate-200 shadow-2xl">
-            <SidebarContent />
+          <aside className="relative w-72 bg-white h-full overflow-hidden flex flex-col z-10 border-r border-slate-200 shadow-2xl">
+            <SidebarContent isCollapsed={false} />
           </aside>
         </div>
       )}
@@ -925,24 +1073,32 @@ CONTACT:
               <span>{new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
             </div>
 
-            {/* User Avatar & Role Badge Matching Admin */}
+            {/* Header Logout Button matching Image 2 */}
+            <button
+              onClick={() => setShowLogoutModal(true)}
+              className="flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-rose-50/90 hover:bg-rose-100 text-rose-600 font-bold text-xs sm:text-sm rounded-2xl border border-rose-200/90 transition-all shadow-2xs hover:shadow-xs cursor-pointer active:scale-95"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4 text-rose-600 stroke-[2.3]" />
+              <span className="font-bold">Logout</span>
+            </button>
+
+            {/* User Avatar & Role Badge (Pill Container matching Image 2) */}
             <div 
               onClick={() => setActiveNav('Student Information')}
-              className="flex items-center gap-2.5 cursor-pointer group"
+              className="flex items-center gap-2.5 bg-slate-50/90 hover:bg-slate-100/90 border border-slate-200/80 rounded-2xl p-1 sm:p-1.5 sm:pr-3.5 cursor-pointer transition-all shadow-2xs group"
               title="Student Particulars"
             >
-              <div className="w-9 h-9 rounded-full flex items-center justify-center font-extrabold text-xs shadow-xs text-white ring-2 ring-blue-300 bg-gradient-to-tr from-blue-600 to-indigo-600">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
                 {name.charAt(0)}
               </div>
-              <div className="text-left hidden sm:block">
-                <p className="text-xs font-bold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
+              <div className="text-left hidden sm:block min-w-0">
+                <p className="text-xs font-bold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors truncate">
                   {name}
                 </p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-blue-700 border border-blue-200">
-                    🎓 Student
-                  </span>
-                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  STUDENT
+                </p>
               </div>
             </div>
           </div>
@@ -2444,6 +2600,21 @@ CONTACT:
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Floating Tooltip for Sidebar Icons */}
+      {hoveredTooltip && (
+        <div
+          className="fixed z-[9999] pointer-events-none px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-2xl transition-opacity duration-150 whitespace-nowrap flex items-center select-none"
+          style={{
+            top: `${hoveredTooltip.top}px`,
+            left: `${hoveredTooltip.left}px`,
+            transform: 'translateY(-50%)'
+          }}
+        >
+          <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-0 h-0 border-y-4 border-y-transparent border-r-4 border-r-slate-900" />
+          <span>{hoveredTooltip.name}</span>
         </div>
       )}
 

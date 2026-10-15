@@ -43,7 +43,7 @@ const INITIAL_PROGRAMS = [
     code: 'BSC-CS',
     name: 'B.Sc. Computer Science',
     degreeLevel: 'Undergraduate (UG)',
-    department: 'Computer Science',
+    department: 'BSc. Computer science',
     regulation: 'Regulation 2024 (R24)',
     durationYears: 3,
     totalSemesters: 6,
@@ -58,7 +58,7 @@ const INITIAL_SUBJECTS = [
   {
     code: 'CS2001',
     name: 'Cloud',
-    department: 'Computer Science',
+    department: 'BSc. Computer science',
     year: 1,
     sem: 'Sem 1',
     credits: 4,
@@ -72,7 +72,7 @@ const INITIAL_SUBJECTS = [
   {
     code: 'CS2005',
     name: 'DBMS',
-    department: 'Computer Science',
+    department: 'BSc. Computer science',
     year: 1,
     sem: 'Sem 1',
     credits: 4,
@@ -122,7 +122,10 @@ export default function CourseSubjectManagement({ user }) {
       if (cached) {
         const parsed = JSON.parse(cached);
         const demoCodes = ['BCOM-GEN', 'BCA-APP', 'BBA-MGMT', 'BA-ENG', 'BSC-MATH'];
-        const filtered = Array.isArray(parsed) ? parsed.filter(p => !demoCodes.includes(p.code)) : [];
+        const filtered = Array.isArray(parsed) ? parsed.filter(p => !demoCodes.includes(p.code)).map(p => ({
+          ...p,
+          department: p.department === 'Computer Science' ? 'BSc. Computer science' : p.department
+        })) : [];
         if (filtered.length > 0) return filtered;
         localStorage.removeItem('vcas_programs_cache');
       }
@@ -144,7 +147,10 @@ export default function CourseSubjectManagement({ user }) {
           'BBA101', 'BBA201', 'BBA301', 'BBA401', 'BBA501', 'BBA601'
         ];
         const fakeFacultyNames = ['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'];
-        const filtered = Array.isArray(parsed) ? parsed.filter(s => !demoSubjectCodes.includes(s.code) && !fakeFacultyNames.includes(s.faculty)) : [];
+        const filtered = Array.isArray(parsed) ? parsed.filter(s => !demoSubjectCodes.includes(s.code) && !fakeFacultyNames.includes(s.faculty)).map(s => ({
+          ...s,
+          department: s.department === 'Computer Science' ? 'BSc. Computer science' : s.department
+        })) : [];
         if (filtered.length > 0) return filtered;
         localStorage.removeItem('vcas_subjects_cache');
       }
@@ -307,11 +313,50 @@ export default function CourseSubjectManagement({ user }) {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Department name normalization helper
+  const normalizeDeptName = (deptName) => {
+    if (!deptName) return '';
+    const trimmed = String(deptName).trim();
+    // 1. Direct match with a department name or code
+    const exact = departmentsList.find(d => 
+      d.name?.trim().toLowerCase() === trimmed.toLowerCase() ||
+      d.code?.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (exact) return exact.name;
+
+    // 2. Map legacy default 'Computer Science' to real department 'BSc. Computer science'
+    if (trimmed.toLowerCase() === 'computer science') {
+      const cs = departmentsList.find(d => 
+        d.name?.toLowerCase().includes('computer science') ||
+        d.code?.toUpperCase() === 'BCS'
+      );
+      if (cs) return cs.name;
+    }
+
+    // 3. Map 'BCA' to 'computer application'
+    if (trimmed.toLowerCase() === 'bca' || trimmed.toLowerCase() === 'computer applications') {
+      const ca = departmentsList.find(d => 
+        d.name?.toLowerCase().includes('computer application') ||
+        d.code?.toUpperCase() === 'CA'
+      );
+      if (ca) return ca.name;
+    }
+
+    return trimmed;
+  };
+
+  // Only exact real departments added in DB
+  const realDepartmentNames = useMemo(() => {
+    const list = departmentsList.map(d => d.name?.trim()).filter(Boolean);
+    const unique = Array.from(new Set(list));
+    return unique.length > 0 ? unique : ['BSc. Computer science'];
+  }, [departmentsList]);
+
   // Form State for Subject Add / Edit
   const [subjectForm, setSubjectForm] = useState({
     code: '',
     name: '',
-    department: 'Computer Science',
+    department: 'BSc. Computer science',
     year: 1,
     sem: 'Sem 1',
     credits: 4,
@@ -328,7 +373,7 @@ export default function CourseSubjectManagement({ user }) {
     code: '',
     name: '',
     degreeLevel: 'Undergraduate (UG)',
-    department: 'Computer Science',
+    department: 'BSc. Computer science',
     regulation: 'Regulation 2024 (R24)',
     durationYears: 3,
     totalCredits: 140,
@@ -345,44 +390,57 @@ export default function CourseSubjectManagement({ user }) {
   const filteredSubjects = useMemo(() => {
     return subjectsList.filter(s => {
       const q = (searchQuery || '').toLowerCase().trim();
+      const sDept = normalizeDeptName(s.department);
       const matchesSearch = !q || (
         String(s.name || '').toLowerCase().includes(q) ||
         String(s.code || '').toLowerCase().includes(q) ||
         String(s.faculty || '').toLowerCase().includes(q) ||
-        String(s.department || '').toLowerCase().includes(q) ||
+        String(sDept || '').toLowerCase().includes(q) ||
         (s.textbooks && String(s.textbooks).toLowerCase().includes(q))
       );
 
-      const matchesDept = selectedDept === 'All Departments' || s.department === selectedDept;
-      const matchesYear = selectedYear === 'ALL' || s.year === Number(selectedYear);
-      const matchesSem = selectedSem === 'All Semesters' || s.sem === selectedSem;
-      const matchesType = selectedType === 'All Types' || s.type === selectedType;
+      const matchesDept = selectedDept === 'All Departments' || 
+        sDept.toLowerCase() === selectedDept.toLowerCase() ||
+        String(s.department || '').toLowerCase() === selectedDept.toLowerCase();
+
+      const matchesYear = selectedYear === 'ALL' || Number(s.year) === Number(selectedYear);
+
+      const sSemClean = String(s.sem || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const selSemClean = String(selectedSem || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchesSem = selectedSem === 'All Semesters' || sSemClean === selSemClean;
+
+      const matchesType = selectedType === 'All Types' || String(s.type || '').trim().toLowerCase() === String(selectedType || '').trim().toLowerCase();
       
       let matchesCredits = true;
-      if (selectedCredits === '1-2') matchesCredits = s.credits <= 2;
-      else if (selectedCredits === '3') matchesCredits = s.credits === 3;
-      else if (selectedCredits === '4') matchesCredits = s.credits === 4;
-      else if (selectedCredits === '5+') matchesCredits = s.credits >= 5;
+      const cNum = Number(s.credits) || 0;
+      if (selectedCredits === '1-2') matchesCredits = cNum <= 2;
+      else if (selectedCredits === '3') matchesCredits = cNum === 3;
+      else if (selectedCredits === '4') matchesCredits = cNum === 4;
+      else if (selectedCredits === '5+') matchesCredits = cNum >= 5;
 
       return matchesSearch && matchesDept && matchesYear && matchesSem && matchesType && matchesCredits;
     });
-  }, [subjectsList, searchQuery, selectedDept, selectedYear, selectedSem, selectedType, selectedCredits]);
+  }, [subjectsList, searchQuery, selectedDept, selectedYear, selectedSem, selectedType, selectedCredits, departmentsList]);
 
   const filteredPrograms = useMemo(() => {
     return programsList.filter(p => {
       const q = (searchQuery || '').toLowerCase().trim();
+      const pDept = normalizeDeptName(p.department);
       const matchesSearch = !q || (
         String(p.name || '').toLowerCase().includes(q) ||
         String(p.code || '').toLowerCase().includes(q) ||
         String(p.coordinator || '').toLowerCase().includes(q) ||
-        String(p.department || '').toLowerCase().includes(q) ||
+        String(pDept || '').toLowerCase().includes(q) ||
         String(p.regulation || '').toLowerCase().includes(q)
       );
 
-      const matchesDept = selectedDept === 'All Departments' || p.department === selectedDept;
+      const matchesDept = selectedDept === 'All Departments' || 
+        pDept.toLowerCase() === selectedDept.toLowerCase() ||
+        String(p.department || '').toLowerCase() === selectedDept.toLowerCase();
+
       return matchesSearch && matchesDept;
     });
-  }, [programsList, searchQuery, selectedDept]);
+  }, [programsList, searchQuery, selectedDept, departmentsList]);
 
   // Distinct Faculty Teaching Workload
   const facultyWorkload = useMemo(() => {
@@ -463,16 +521,9 @@ export default function CourseSubjectManagement({ user }) {
   // Subject Handlers
   // -------------------------------------------------------------
   const handleOpenAddSubject = (defaultSem) => {
-    const initialDept = selectedDept !== 'All Departments' ? selectedDept : 'Computer Science';
-    const deptPrefixes = {
-      'Commerce': 'CM',
-      'Computer Science': 'CS',
-      'English Literature': 'EN',
-      'Business Administration (BBA)': 'BB',
-      'Computer Applications (BCA)': 'BC',
-      'Mathematics': 'MA'
-    };
-    const prefix = deptPrefixes[initialDept] || 'CS';
+    const initialDept = selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'BSc. Computer science');
+    const deptObj = departmentsList.find(d => d.name === initialDept);
+    const prefix = deptObj?.code || (initialDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'CS';
     const initialYear = selectedYear !== 'ALL' ? Number(selectedYear) : 1;
 
     setSubjectForm({
@@ -483,7 +534,7 @@ export default function CourseSubjectManagement({ user }) {
       sem: defaultSem || (selectedSem !== 'All Semesters' ? selectedSem : `Sem ${initialYear * 2 - 1}`),
       credits: 4,
       type: 'Core Theory',
-      faculty: '',
+      faculty: deptObj?.hod || '',
       ltp: '3-1-0',
       hours: '4 hrs/wk (3L + 1T)',
       prerequisite: 'None',
@@ -495,19 +546,10 @@ export default function CourseSubjectManagement({ user }) {
   };
 
   const handleSubjectDeptChange = (newDept) => {
-    
-    // Auto-update subject code prefix if creating a new subject
+    const deptObj = departmentsList.find(d => d.name === newDept);
+    const prefix = deptObj?.code || (newDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'CS';
     let newCode = subjectForm.code;
     if (!editingSubject) {
-      const deptPrefixes = {
-        'Commerce': 'CM',
-        'Computer Science': 'CS',
-        'English Literature': 'EN',
-        'Business Administration (BBA)': 'BB',
-        'Computer Applications (BCA)': 'BC',
-        'Mathematics': 'MA'
-      };
-      const prefix = deptPrefixes[newDept] || 'CS';
       const year = subjectForm.year || 1;
       newCode = `${prefix}${year}01`;
     }
@@ -515,22 +557,15 @@ export default function CourseSubjectManagement({ user }) {
     setSubjectForm(prev => ({
       ...prev,
       department: newDept,
-      faculty: defaultHod, // Auto-sets the HOD / Department Head
+      faculty: deptObj?.hod || prev.faculty || '',
       code: newCode
     }));
   };
 
   const handleSubjectYearChange = (newYear) => {
     const yearNum = Number(newYear);
-    const deptPrefixes = {
-      'Commerce': 'CM',
-      'Computer Science': 'CS',
-      'English Literature': 'EN',
-      'Business Administration (BBA)': 'BB',
-      'Computer Applications (BCA)': 'BC',
-      'Mathematics': 'MA'
-    };
-    const prefix = deptPrefixes[subjectForm.department] || 'CS';
+    const deptObj = departmentsList.find(d => d.name === subjectForm.department);
+    const prefix = deptObj?.code || (String(subjectForm.department || '').split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'CS';
     
     setSubjectForm(prev => ({
       ...prev,
@@ -545,7 +580,7 @@ export default function CourseSubjectManagement({ user }) {
     setSubjectForm({
       code: subj.code,
       name: subj.name,
-      department: subj.department,
+      department: normalizeDeptName(subj.department),
       year: subj.year,
       sem: subj.sem,
       credits: subj.credits,
@@ -652,11 +687,14 @@ export default function CourseSubjectManagement({ user }) {
   // Program Handlers
   // -------------------------------------------------------------
   const handleOpenAddProgram = () => {
+    const defaultDept = selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'BSc. Computer science');
+    const deptObj = departmentsList.find(d => d.name === defaultDept);
+    const prefix = deptObj?.code || (defaultDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'BSC';
     setProgramForm({
-      code: 'BSC-DATA',
+      code: `${prefix}-PROG`,
       name: '',
       degreeLevel: 'Undergraduate (UG)',
-      department: 'Computer Science',
+      department: defaultDept,
       regulation: 'Regulation 2024 (R24)',
       durationYears: 3,
       totalCredits: 140,
@@ -674,7 +712,7 @@ export default function CourseSubjectManagement({ user }) {
       code: prog.code,
       name: prog.name,
       degreeLevel: prog.degreeLevel,
-      department: prog.department,
+      department: normalizeDeptName(prog.department),
       regulation: prog.regulation || 'Regulation 2024 (R24)',
       durationYears: prog.durationYears,
       totalCredits: prog.totalCredits,
@@ -812,7 +850,7 @@ export default function CourseSubjectManagement({ user }) {
             <span className="text-xs text-slate-500 font-semibold">NEP 2020 Aligned</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-            <span>Courses & Subjects</span>
+            <span>Subjects</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
             Configure degree programs, semester curriculum matrix, syllabus units, prerequisites, and faculty allocations.
@@ -1034,7 +1072,8 @@ export default function CourseSubjectManagement({ user }) {
                 onChange={(e) => setSelectedDept(e.target.value)}
                 className="w-full bg-slate-50/80 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
               >
-                {DEPARTMENTS.map(d => (
+                <option value="All Departments">All Departments</option>
+                {realDepartmentNames.map(d => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
@@ -1159,7 +1198,7 @@ export default function CourseSubjectManagement({ user }) {
 
                         {/* Department */}
                         <td className="py-4 px-4 font-semibold text-slate-700 text-xs">
-                          {subj.department}
+                          {normalizeDeptName(subj.department)}
                         </td>
 
                         {/* Year & Semester */}
@@ -1344,7 +1383,7 @@ export default function CourseSubjectManagement({ user }) {
                     </h3>
 
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
-                      <span className="font-semibold text-slate-700">{subj.department}</span>
+                      <span className="font-semibold text-slate-700">{normalizeDeptName(subj.department)}</span>
                       <span>•</span>
                       <span>Year {subj.year} ({subj.sem})</span>
                     </div>
@@ -1446,6 +1485,9 @@ export default function CourseSubjectManagement({ user }) {
                   <h3 className="text-base font-extrabold text-slate-900 leading-tight">
                     {prog.name}
                   </h3>
+                  <p className="text-xs font-bold text-blue-700 mt-1">
+                    🏢 {normalizeDeptName(prog.department)}
+                  </p>
                   
                   <div className="flex items-center gap-2 mt-2">
                     <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-semibold text-[10px] rounded-md border border-indigo-100">
@@ -1578,9 +1620,17 @@ export default function CourseSubjectManagement({ user }) {
                 const semNumber = idx + 1;
                 const semLabel = `Sem ${semNumber}`;
                 const allSubjects = subjectsList;
-                const semSubjects = allSubjects.filter(s => 
-                  (s.department === activeMatrixProgram?.department || s.course === activeMatrixProgram?.code) && (s.sem === semLabel || s.semester === semNumber)
-                );
+                const semSubjects = allSubjects.filter(s => {
+                  const sDept = normalizeDeptName(s.department);
+                  const progDept = normalizeDeptName(activeMatrixProgram?.department);
+                  const deptMatch = !progDept || sDept.toLowerCase() === progDept.toLowerCase() || 
+                    String(s.department || '').toLowerCase() === String(activeMatrixProgram?.department || '').toLowerCase() ||
+                    String(s.course || '').toLowerCase() === String(activeMatrixProgram?.code || '').toLowerCase();
+                  const sSemClean = String(s.sem || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                  const semLabelClean = semLabel.toLowerCase().replace(/[^a-z0-9]/g, '');
+                  const semMatch = sSemClean === semLabelClean || Number(s.semester) === semNumber || Number(s.year) === Math.ceil(semNumber / 2);
+                  return deptMatch && semMatch;
+                });
                 const totalSemCredits = semSubjects.reduce((acc, curr) => acc + (Number(curr.credits) || 0), 0);
 
                 return (
@@ -1683,7 +1733,7 @@ export default function CourseSubjectManagement({ user }) {
                           </div>
                           <div>
                             <h4 className="font-extrabold text-sm text-slate-900 leading-tight">{fac.name}</h4>
-                            <span className="text-[11px] font-semibold text-slate-500">{fac.department}</span>
+                            <span className="text-[11px] font-semibold text-slate-500">{normalizeDeptName(fac.department)}</span>
                           </div>
                         </div>
                       </div>
@@ -1744,7 +1794,7 @@ export default function CourseSubjectManagement({ user }) {
                     {viewingSubject.name}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    {viewingSubject.department} • Year {viewingSubject.year} ({viewingSubject.sem}) • {viewingSubject.credits} Credits
+                    {normalizeDeptName(viewingSubject.department)} • Year {viewingSubject.year} ({viewingSubject.sem}) • {viewingSubject.credits} Credits
                   </p>
                 </div>
               </div>
@@ -1940,7 +1990,7 @@ export default function CourseSubjectManagement({ user }) {
                     onChange={(e) => handleSubjectDeptChange(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
-                    {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
+                    {realDepartmentNames.map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
@@ -2183,7 +2233,7 @@ export default function CourseSubjectManagement({ user }) {
                     onChange={(e) => setProgramForm({ ...programForm, department: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
-                    {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
+                    {realDepartmentNames.map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
@@ -2291,7 +2341,7 @@ export default function CourseSubjectManagement({ user }) {
 
             <div className="p-3.5 bg-purple-50/70 rounded-2xl border border-purple-100 text-xs">
               <p className="font-extrabold text-purple-950">{reallocatingSubject.code}: {reallocatingSubject.name}</p>
-              <p className="text-purple-700 mt-0.5 font-medium">Department: {reallocatingSubject.department} • {reallocatingSubject.credits} Credits</p>
+              <p className="text-purple-700 mt-0.5 font-medium">Department: {normalizeDeptName(reallocatingSubject.department)} • {reallocatingSubject.credits} Credits</p>
             </div>
 
             <div>
