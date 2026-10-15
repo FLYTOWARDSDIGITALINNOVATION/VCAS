@@ -38,52 +38,9 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const INITIAL_PROGRAMS = [
-  {
-    code: 'BSC-CS',
-    name: 'B.Sc. Computer Science',
-    degreeLevel: 'Undergraduate (UG)',
-    department: 'BSc. Computer science',
-    regulation: 'Regulation 2024 (R24)',
-    durationYears: 3,
-    totalSemesters: 6,
-    totalCredits: 140,
-    enrolledStudents: 3,
-    totalSubjects: 2,
-    coordinator: 'Latha V'
-  }
-];
+const INITIAL_PROGRAMS = [];
 
-const INITIAL_SUBJECTS = [
-  {
-    code: 'CS2001',
-    name: 'Cloud',
-    department: 'BSc. Computer science',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Latha V',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk (3L + 1T)',
-    prerequisite: 'None',
-    studentsEnrolled: 3
-  },
-  {
-    code: 'CS2005',
-    name: 'DBMS',
-    department: 'BSc. Computer science',
-    year: 1,
-    sem: 'Sem 1',
-    credits: 4,
-    type: 'Core Theory',
-    faculty: 'Latha V',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk (3L + 1T)',
-    prerequisite: 'None',
-    studentsEnrolled: 3
-  }
-];
+const INITIAL_SUBJECTS = [];
 
 const SUBJECT_TYPES = [
   'All Types',
@@ -121,7 +78,7 @@ export default function CourseSubjectManagement({ user }) {
       const cached = localStorage.getItem('vcas_programs_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        const demoCodes = ['BCOM-GEN', 'BCA-APP', 'BBA-MGMT', 'BA-ENG', 'BSC-MATH'];
+        const demoCodes = ['BCOM-GEN', 'BCA-APP', 'BBA-MGMT', 'BA-ENG', 'BSC-MATH', 'BSC-CS'];
         const filtered = Array.isArray(parsed) ? parsed.filter(p => !demoCodes.includes(p.code)).map(p => ({
           ...p,
           department: p.department === 'Computer Science' ? 'BSc. Computer science' : p.department
@@ -130,7 +87,7 @@ export default function CourseSubjectManagement({ user }) {
         localStorage.removeItem('vcas_programs_cache');
       }
     } catch (_) {}
-    return INITIAL_PROGRAMS;
+    return [];
   });
 
   const [subjectsList, setSubjectsList] = useState(() => {
@@ -144,10 +101,11 @@ export default function CourseSubjectManagement({ user }) {
           'CS502', 'CS503P', 'CS601', 'CS602', 'CS603', 'COM101', 'COM102',
           'COM201', 'COM202', 'COM301', 'COM401', 'COM501', 'COM601',
           'BCA101', 'BCA201', 'BCA301', 'BCA401', 'BCA501', 'BCA601',
-          'BBA101', 'BBA201', 'BBA301', 'BBA401', 'BBA501', 'BBA601'
+          'BBA101', 'BBA201', 'BBA301', 'BBA401', 'BBA501', 'BBA601',
+          'CS2001', 'CS2005'
         ];
         const fakeFacultyNames = ['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'];
-        const filtered = Array.isArray(parsed) ? parsed.filter(s => !demoSubjectCodes.includes(s.code) && !fakeFacultyNames.includes(s.faculty)).map(s => ({
+        const filtered = Array.isArray(parsed) ? parsed.filter(s => !demoSubjectCodes.includes(s.code) && !fakeFacultyNames.includes(s.faculty) && !String(s._id || s.id || '').startsWith('dept_')).map(s => ({
           ...s,
           department: s.department === 'Computer Science' ? 'BSc. Computer science' : s.department
         })) : [];
@@ -155,7 +113,7 @@ export default function CourseSubjectManagement({ user }) {
         localStorage.removeItem('vcas_subjects_cache');
       }
     } catch (_) {}
-    return INITIAL_SUBJECTS;
+    return [];
   });
 
   const [facultyList, setFacultyList] = useState([]);
@@ -184,7 +142,7 @@ export default function CourseSubjectManagement({ user }) {
       if (resCourses.status === 'fulfilled' && resCourses.value.ok) {
         const cData = await resCourses.value.json();
         if (cData.success && Array.isArray(cData.data)) {
-          const list = cData.data.length > 0 ? cData.data : INITIAL_PROGRAMS;
+          const list = cData.data.filter(c => c.code && !['BSC-CS'].includes(c.code.toUpperCase()));
           setProgramsList(list);
           try { localStorage.setItem('vcas_programs_cache', JSON.stringify(list)); } catch (_) {}
         }
@@ -193,42 +151,9 @@ export default function CourseSubjectManagement({ user }) {
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const sData = await resSubjects.value.json();
         if (sData.success && Array.isArray(sData.data)) {
-          const clean = sData.data.filter(s => s.code && !['SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()) && !['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'].includes(s.faculty));
-          
-          // Also bring in any subjects added under real departments
-          const deptSubjects = [];
-          if (realDepts.length > 0) {
-            realDepts.forEach(d => {
-              if (Array.isArray(d.coursesList)) {
-                d.coursesList.forEach((c, idx) => {
-                  const already = clean.some(s => s.code && s.code.toUpperCase() === (c.code || '').toUpperCase());
-                  if (!already && c.name) {
-                    deptSubjects.push({
-                      id: `dept_${d._id || d.code}_${c.code || idx}`,
-                      _id: `dept_${d._id || d.code}_${c.code || idx}`,
-                      code: c.code || `SUB${idx + 1}`,
-                      name: c.name || c.title || 'Untitled Subject',
-                      department: d.name,
-                      year: c.year || 1,
-                      sem: c.sem || 'Sem 1',
-                      credits: Number(c.credits) || 4,
-                      type: 'Core Theory',
-                      faculty: c.handledStaff || d.hod || 'Unassigned',
-                      ltp: '3-1-0',
-                      hours: '4 hrs/wk (3L + 1T)',
-                      prerequisite: 'None',
-                      studentsEnrolled: c.appearedCount || 0
-                    });
-                  }
-                });
-              }
-            });
-          }
-
-          const combined = [...clean, ...deptSubjects];
-          const list = combined.length > 0 ? combined : INITIAL_SUBJECTS;
-          setSubjectsList(list);
-          try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(list)); } catch (_) {}
+          const clean = sData.data.filter(s => s.code && !['CS2001', 'CS2005', 'SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()) && !['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'].includes(s.faculty));
+          setSubjectsList(clean);
+          try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean)); } catch (_) {}
         }
       }
 
@@ -251,6 +176,10 @@ export default function CourseSubjectManagement({ user }) {
   };
 
   React.useEffect(() => {
+    try {
+      localStorage.removeItem('vcas_subjects_cache');
+      localStorage.removeItem('vcas_programs_cache');
+    } catch (_) {}
     fetchCoursesAndSubjects();
   }, []);
 
@@ -309,7 +238,10 @@ export default function CourseSubjectManagement({ user }) {
   const [toastMessage, setToastMessage] = useState(null);
 
   const showToast = (msg) => {
-    setToastMessage(msg);
+    const text = typeof msg === 'string'
+      ? msg
+      : (msg?.message || (msg && typeof msg === 'object' && !msg._reactName ? JSON.stringify(msg) : 'Action completed'));
+    setToastMessage(text);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
@@ -525,13 +457,16 @@ export default function CourseSubjectManagement({ user }) {
     const deptObj = departmentsList.find(d => d.name === initialDept);
     const prefix = deptObj?.code || (initialDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'CS';
     const initialYear = selectedYear !== 'ALL' ? Number(selectedYear) : 1;
+    const semValue = (typeof defaultSem === 'string' && defaultSem.trim())
+      ? defaultSem.trim()
+      : (selectedSem !== 'All Semesters' ? selectedSem : `Sem ${initialYear * 2 - 1}`);
 
     setSubjectForm({
       code: `${prefix}${initialYear}01`,
       name: '',
       department: initialDept,
       year: initialYear,
-      sem: defaultSem || (selectedSem !== 'All Semesters' ? selectedSem : `Sem ${initialYear * 2 - 1}`),
+      sem: semValue,
       credits: 4,
       type: 'Core Theory',
       faculty: deptObj?.hod || '',
@@ -634,10 +569,14 @@ export default function CourseSubjectManagement({ user }) {
 
     } else {
       // Create new
+      const semStr = (typeof subjectForm.sem === 'string' && subjectForm.sem.trim())
+        ? subjectForm.sem.trim()
+        : `Sem ${(Number(subjectForm.year) || 1) * 2 - 1}`;
       const newSubj = {
         id: Date.now(),
         ...subjectForm,
         code: subjectForm.code.trim().toUpperCase(),
+        sem: semStr,
         studentsEnrolled: Number(subjectForm.studentsEnrolled) || 0,
         units: [
           { unit: 'Unit 1', title: 'Foundational Principles & Core Concepts', hours: 9 },
@@ -668,7 +607,11 @@ export default function CourseSubjectManagement({ user }) {
   const handleConfirmDeleteSubject = () => {
     if (deletingSubject) {
       const targetId = deletingSubject._id || deletingSubject.id || deletingSubject.code;
-      setSubjectsList(prev => prev.filter(s => s.id !== deletingSubject.id && s._id !== deletingSubject._id));
+      setSubjectsList(prev => {
+        const next = prev.filter(s => s.id !== deletingSubject.id && s._id !== deletingSubject._id && s.code !== deletingSubject.code);
+        try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(next)); } catch (_) {}
+        return next;
+      });
       if (viewingSubject && (viewingSubject.id === deletingSubject.id || viewingSubject._id === deletingSubject._id)) {
         setViewingSubject(null);
       }
@@ -686,15 +629,17 @@ export default function CourseSubjectManagement({ user }) {
   // -------------------------------------------------------------
   // Program Handlers
   // -------------------------------------------------------------
-  const handleOpenAddProgram = () => {
-    const defaultDept = selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'BSc. Computer science');
-    const deptObj = departmentsList.find(d => d.name === defaultDept);
-    const prefix = deptObj?.code || (defaultDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'BSC';
+  const handleOpenAddProgram = (defaultDept) => {
+    const chosenDept = (typeof defaultDept === 'string' && defaultDept.trim())
+      ? defaultDept.trim()
+      : (selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'BSc. Computer science'));
+    const deptObj = departmentsList.find(d => d.name === chosenDept);
+    const prefix = deptObj?.code || (chosenDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'BSC';
     setProgramForm({
       code: `${prefix}-PROG`,
       name: '',
       degreeLevel: 'Undergraduate (UG)',
-      department: defaultDept,
+      department: chosenDept,
       regulation: 'Regulation 2024 (R24)',
       durationYears: 3,
       totalCredits: 140,
@@ -789,16 +734,22 @@ export default function CourseSubjectManagement({ user }) {
   const handleConfirmDeleteProgram = () => {
     if (deletingProgram) {
       const targetId = deletingProgram._id || deletingProgram.id || deletingProgram.code;
-      setProgramsList(prev => prev.filter(p => p.id !== deletingProgram.id && p._id !== deletingProgram._id));
+      setProgramsList(prev => {
+        const next = prev.filter(p => p.id !== deletingProgram.id && p._id !== deletingProgram._id && p.code !== deletingProgram.code);
+        try { localStorage.setItem('vcas_programs_cache', JSON.stringify(next)); } catch (_) {}
+        return next;
+      });
       if (viewingProgram && (viewingProgram.id === deletingProgram.id || viewingProgram._id === deletingProgram._id)) {
         setViewingProgram(null);
       }
       showToast(`Degree Program ${deletingProgram.code} removed.`);
 
       // Sync with MongoDB backend
-      fetch(`${API_BASE}/courses/${targetId}`, {
-        method: 'DELETE'
-      }).catch(err => console.error('Error deleting program in backend:', err));
+      if (targetId) {
+        fetch(`${API_BASE}/courses/${targetId}`, {
+          method: 'DELETE'
+        }).catch(err => console.error('Error deleting program in backend:', err));
+      }
 
       setDeletingProgram(null);
     }
@@ -831,7 +782,7 @@ export default function CourseSubjectManagement({ user }) {
       {toastMessage && typeof document !== 'undefined' && createPortal(
         <div className="fixed top-5 right-5 z-[99999] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-700 animate-fadeIn pointer-events-auto">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span className="text-xs font-semibold">{toastMessage}</span>
+          <span className="text-xs font-semibold">{typeof toastMessage === 'string' ? toastMessage : String(toastMessage || '')}</span>
           <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white ml-2 cursor-pointer">
             <X className="w-4 h-4" />
           </button>
@@ -870,7 +821,7 @@ export default function CourseSubjectManagement({ user }) {
           )}
 
           <button
-            onClick={handleOpenAddProgram}
+            onClick={() => handleOpenAddProgram()}
             className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all border border-slate-200"
           >
             <Plus className="w-4 h-4 text-slate-600" />
@@ -1204,7 +1155,7 @@ export default function CourseSubjectManagement({ user }) {
                         {/* Year & Semester */}
                         <td className="py-4 px-4 text-xs font-semibold text-slate-600">
                           <span className="bg-slate-100 px-2.5 py-1 rounded-md text-slate-700">
-                            Year {subj.year} • {subj.sem}
+                            Year {subj.year} • {typeof subj.sem === 'string' ? subj.sem : (subj.sem?.name || `Sem ${(Number(subj.year) || 1) * 2 - 1}`)}
                           </span>
                         </td>
 
@@ -1311,7 +1262,7 @@ export default function CourseSubjectManagement({ user }) {
                             </button>
                           ) : (
                             <button
-                              onClick={handleOpenAddSubject}
+                              onClick={() => handleOpenAddSubject()}
                               className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5" />
@@ -1350,7 +1301,7 @@ export default function CourseSubjectManagement({ user }) {
                 </button>
               ) : (
                 <button
-                  onClick={handleOpenAddSubject}
+                  onClick={() => handleOpenAddSubject()}
                   className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -1385,7 +1336,7 @@ export default function CourseSubjectManagement({ user }) {
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
                       <span className="font-semibold text-slate-700">{normalizeDeptName(subj.department)}</span>
                       <span>•</span>
-                      <span>Year {subj.year} ({subj.sem})</span>
+                      <span>Year {subj.year} ({typeof subj.sem === 'string' ? subj.sem : (subj.sem?.name || 'Sem 1')})</span>
                     </div>
                   </div>
 
@@ -1457,7 +1408,7 @@ export default function CourseSubjectManagement({ user }) {
               </button>
             ) : (
               <button
-                onClick={handleOpenAddProgram}
+                onClick={() => handleOpenAddProgram()}
                 className="mt-2 flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
@@ -1577,7 +1528,7 @@ export default function CourseSubjectManagement({ user }) {
               </p>
             </div>
             <button
-              onClick={handleOpenAddProgram}
+              onClick={() => handleOpenAddProgram()}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -1794,7 +1745,7 @@ export default function CourseSubjectManagement({ user }) {
                     {viewingSubject.name}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    {normalizeDeptName(viewingSubject.department)} • Year {viewingSubject.year} ({viewingSubject.sem}) • {viewingSubject.credits} Credits
+                    {normalizeDeptName(viewingSubject.department)} • Year {viewingSubject.year} ({typeof viewingSubject.sem === 'string' ? viewingSubject.sem : (viewingSubject.sem?.name || 'Sem 1')}) • {viewingSubject.credits} Credits
                   </p>
                 </div>
               </div>

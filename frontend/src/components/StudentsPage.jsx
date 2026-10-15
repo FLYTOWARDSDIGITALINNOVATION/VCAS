@@ -154,12 +154,10 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       const result = await res.json();
       if (res.ok && result.success) {
         const normalized = (result.data || []).map(normalizeStudent);
-        if (normalized.length > 0) {
-          setStudents(normalized);
-          try {
-            localStorage.setItem('vcas_students_cache', JSON.stringify(normalized));
-          } catch (e) {}
-        }
+        setStudents(normalized);
+        try {
+          localStorage.setItem('vcas_students_cache', JSON.stringify(normalized));
+        } catch (e) {}
       } else {
         console.error('Failed to fetch students:', result.message);
         setErrorMessage(result.message || 'Failed to fetch students from server');

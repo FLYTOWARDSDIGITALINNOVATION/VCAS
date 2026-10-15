@@ -1,5 +1,6 @@
 const Course = require('../models/Course');
 const Subject = require('../models/Subject');
+const Department = require('../models/Department');
 
 // ==========================================
 // COURSE / PROGRAM CONTROLLERS
@@ -7,30 +8,7 @@ const Subject = require('../models/Subject');
 
 exports.getCourses = async (req, res) => {
   try {
-    let courses = await Course.find().sort({ code: 1 });
-
-    // Auto-ensure B.Sc. Computer Science program exists in catalog
-    const hasBscCS = courses.some(c => c.code && c.code.toUpperCase() === 'BSC-CS');
-    if (!hasBscCS) {
-      try {
-        const bscCS = await Course.create({
-          code: 'BSC-CS',
-          name: 'B.Sc. Computer Science',
-          degreeLevel: 'Undergraduate (UG)',
-          department: 'Computer Science',
-          regulation: 'Regulation 2024 (R24)',
-          durationYears: 3,
-          totalSemesters: 6,
-          totalCredits: 140,
-          enrolledStudents: 3,
-          totalSubjects: 2,
-          coordinator: 'Latha V',
-          coordinatorEmail: 'latha.v@vcas.edu.in',
-          description: 'Bachelor of Science in Computer Science with focus on Cloud Architecture and Database Systems.'
-        });
-        courses.push(bscCS);
-      } catch (_) {}
-    }
+    const courses = await Course.find().sort({ code: 1 });
 
     res.status(200).json({
       success: true,
@@ -127,14 +105,11 @@ exports.deleteCourse = async (req, res) => {
     const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { code: id.toUpperCase() };
 
     const deleted = await Course.findOneAndDelete(query);
-    if (!deleted) {
-      return res.status(404).json({ success: false, message: 'Course not found.' });
-    }
 
     res.status(200).json({
       success: true,
-      message: `Course "${deleted.name}" removed successfully.`,
-      data: deleted
+      message: deleted ? `Course "${deleted.name}" removed successfully.` : 'Course removed successfully.',
+      data: deleted || { _id: id }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -148,50 +123,6 @@ exports.deleteCourse = async (req, res) => {
 exports.getSubjects = async (req, res) => {
   try {
     let subjects = await Subject.find().sort({ department: 1, year: 1, sem: 1, code: 1 });
-
-    // Auto-ensure CS2001 (Cloud) exists
-    const hasCS2001 = subjects.some(s => s.code && s.code.toUpperCase() === 'CS2001');
-    if (!hasCS2001) {
-      try {
-        const cs2001 = await Subject.create({
-          code: 'CS2001',
-          name: 'Cloud',
-          department: 'Computer Science',
-          year: 1,
-          sem: 'Sem 1',
-          credits: 4,
-          type: 'Core Theory',
-          faculty: 'Latha V',
-          ltp: '3-1-0',
-          hours: '4 hrs/wk (3L + 1T)',
-          prerequisite: 'None',
-          studentsEnrolled: 3
-        });
-        subjects.push(cs2001);
-      } catch (_) {}
-    }
-
-    // Auto-ensure CS2005 (DBMS) exists
-    const hasCS2005 = subjects.some(s => s.code && s.code.toUpperCase() === 'CS2005');
-    if (!hasCS2005) {
-      try {
-        const cs2005 = await Subject.create({
-          code: 'CS2005',
-          name: 'DBMS',
-          department: 'Computer Science',
-          year: 1,
-          sem: 'Sem 1',
-          credits: 4,
-          type: 'Core Theory',
-          faculty: 'Latha V',
-          ltp: '3-1-0',
-          hours: '4 hrs/wk (3L + 1T)',
-          prerequisite: 'None',
-          studentsEnrolled: 3
-        });
-        subjects.push(cs2005);
-      } catch (_) {}
-    }
 
     // Filter out dummy/test subjects
     subjects = subjects.filter(s => s.code && !['SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()));
@@ -294,17 +225,34 @@ exports.updateSubject = async (req, res) => {
 exports.deleteSubject = async (req, res) => {
   try {
     const { id } = req.params;
-    const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { code: id.toUpperCase() };
-
-    const deleted = await Subject.findOneAndDelete(query);
-    if (!deleted) {
-      return res.status(404).json({ success: false, message: 'Subject not found.' });
+    let codeToDelete = id.toUpperCase();
+    if (id.startsWith('dept_')) {
+      const parts = id.split('_');
+      codeToDelete = parts[parts.length - 1].toUpperCase();
     }
+
+    const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { code: codeToDelete };
+    const deleted = await Subject.findOneAndDelete(query);
+
+    // Also remove from any Department coursesList if present
+    await Department.updateMany(
+      {},
+      {
+        $pull: {
+          coursesList: {
+            $or: [
+              { code: codeToDelete },
+              { code: id }
+            ]
+          }
+        }
+      }
+    ).catch(() => {});
 
     res.status(200).json({
       success: true,
-      message: `Subject "${deleted.name}" removed successfully.`,
-      data: deleted
+      message: deleted ? `Subject "${deleted.name}" removed successfully.` : 'Subject removed successfully.',
+      data: deleted || { code: codeToDelete }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
