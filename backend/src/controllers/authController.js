@@ -202,17 +202,23 @@ exports.completeProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Staff member not found.' });
     }
 
-    if (phone !== undefined)            staff.phone = phone.trim();
-    if (qualification !== undefined)    staff.qualification = qualification.trim();
-    if (experience !== undefined)       staff.experience = experience.trim();
-    if (bloodGroup !== undefined)       staff.bloodGroup = bloodGroup;
-    if (dob !== undefined)              staff.dob = dob;
-    if (address !== undefined)          staff.address = address.trim();
-    if (emergencyContact !== undefined) staff.emergencyContact = emergencyContact.trim();
-    if (profileImage !== undefined)     staff.profileImage = profileImage;
-    if (netSetExamStatus !== undefined)      staff.netSetExamStatus = netSetExamStatus;
-    if (netSetExamCertificate !== undefined) staff.netSetExamCertificate = netSetExamCertificate;
-    if (netSetCertificateName !== undefined) staff.netSetCertificateName = netSetCertificateName;
+    const fieldsToUpdate = [
+      'phone', 'qualification', 'experience', 'bloodGroup', 'dob', 'address', 'emergencyContact',
+      'profileImage', 'netSetExamStatus', 'netSetExamCertificate', 'netSetCertificateName',
+      'postAppliedFor', 'age', 'gender', 'maritalStatus', 'fatherOrSpouseName',
+      'nationality', 'religion', 'community', 'caste', 'permanentAddress', 'communicationAddress', 'whatsapp',
+      'academicQualifications', 'experienceDetails', 'publications', 'programmes', 'projectFunds',
+      'otherInformation', 'references', 'payExpected', 'payLastObtained', 'lastPayCertificate',
+      'place', 'applicationDate', 'educationalCertificatesDoc', 'experienceCertificatesDoc',
+      'aadhaar', 'pan', 'bankAccountNo', 'bankName', 'ifscCode', 'bankBranch'
+    ];
+
+    fieldsToUpdate.forEach(field => {
+      if (req.body[field] !== undefined) {
+        staff[field] = req.body[field];
+      }
+    });
+
     if (newPassword && newPassword.trim()) {
       staff.password = newPassword.trim();
     }
@@ -220,44 +226,13 @@ exports.completeProfile = async (req, res) => {
     staff.isProfileCompleted = true;
     await staff.save();
 
+    const staffObj = staff.toObject();
+    delete staffObj.password;
+
     res.status(200).json({
       success: true,
       message: 'Profile completed successfully!',
-      staff: {
-        _id:                staff._id,
-        staffId:            staff.staffId,
-        name:               staff.name,
-        email:              staff.email,
-        role:               staff.role || (staff.designation === 'Accountant' ? 'Accountant' : staff.designation === 'Office Staff' ? 'Office Staff' : 'Staff'),
-        designation:        staff.designation,
-        department:         staff.department,
-        employmentType:     staff.employmentType,
-        status:             staff.status,
-        joiningDate:        staff.joiningDate,
-        phone:              staff.phone,
-        qualification:      staff.qualification,
-        experience:         staff.experience,
-        bloodGroup:         staff.bloodGroup,
-        dob:                staff.dob,
-        address:            staff.address,
-        emergencyContact:   staff.emergencyContact,
-        avatarBg:           staff.avatarBg,
-        avatarText:         staff.avatarText,
-        profileImage:       staff.profileImage || '',
-        netSetExamStatus:      staff.netSetExamStatus || 'Not Applicable',
-        netSetExamCertificate: staff.netSetExamCertificate || '',
-        netSetCertificateName: staff.netSetCertificateName || '',
-        aadhaar:            staff.aadhaar || '',
-        pan:                staff.pan || '',
-        bankAccountNo:      staff.bankAccountNo || '',
-        bankName:           staff.bankName || '',
-        ifscCode:           staff.ifscCode || '',
-        bankBranch:         staff.bankBranch || '',
-        classTeacherOf:     staff.classTeacherOf,
-        isProfileCompleted: true,
-        classes:            staff.classes || [],
-        achievements:       staff.achievements || []
-      }
+      staff: staffObj
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -377,31 +352,30 @@ exports.updateProfile = async (req, res) => {
       aadhaar, pan, bankAccountNo, bankName, ifscCode, bankBranch
     } = req.body;
 
-    const staff = await Staff.findOne({ staffId });
-    if (!staff) return res.status(404).json({ success: false, message: 'Staff member not found.' });
+    const fieldsToUpdate = [
+      'phone', 'address', 'emergencyContact', 'bio', 'qualification', 'experience', 'bloodGroup', 'dob',
+      'profileImage', 'netSetExamStatus', 'netSetExamCertificate', 'netSetCertificateName',
+      'postAppliedFor', 'age', 'gender', 'maritalStatus', 'fatherOrSpouseName',
+      'nationality', 'religion', 'community', 'caste', 'permanentAddress', 'communicationAddress', 'whatsapp',
+      'academicQualifications', 'experienceDetails', 'publications', 'programmes', 'projectFunds',
+      'otherInformation', 'references', 'payExpected', 'payLastObtained', 'lastPayCertificate',
+      'place', 'applicationDate', 'educationalCertificatesDoc', 'experienceCertificatesDoc',
+      'aadhaar', 'pan', 'bankAccountNo', 'bankName', 'ifscCode', 'bankBranch'
+    ];
 
-    if (phone !== undefined)            staff.phone = phone.trim();
-    if (address !== undefined)          staff.address = address.trim();
-    if (emergencyContact !== undefined) staff.emergencyContact = emergencyContact.trim();
-    if (bio !== undefined)              staff.bio = bio.trim();
-    if (qualification !== undefined)    staff.qualification = qualification.trim();
-    if (experience !== undefined)       staff.experience = experience.trim();
-    if (bloodGroup !== undefined)       staff.bloodGroup = bloodGroup;
-    if (dob !== undefined)              staff.dob = dob;
-    if (profileImage !== undefined)     staff.profileImage = profileImage;
-    if (netSetExamStatus !== undefined)      staff.netSetExamStatus = netSetExamStatus;
-    if (netSetExamCertificate !== undefined) staff.netSetExamCertificate = netSetExamCertificate;
-    if (netSetCertificateName !== undefined) staff.netSetCertificateName = netSetCertificateName;
-    if (aadhaar !== undefined)          staff.aadhaar = aadhaar.trim();
-    if (pan !== undefined)              staff.pan = pan.trim().toUpperCase();
-    if (bankAccountNo !== undefined)    staff.bankAccountNo = bankAccountNo.trim();
-    if (bankName !== undefined)         staff.bankName = bankName.trim();
-    if (ifscCode !== undefined)         staff.ifscCode = ifscCode.trim().toUpperCase();
-    if (bankBranch !== undefined)       staff.bankBranch = bankBranch.trim();
+    fieldsToUpdate.forEach(field => {
+      if (req.body[field] !== undefined) {
+        staff[field] = req.body[field];
+      }
+    });
 
     staff.isProfileCompleted = true;
     await staff.save();
-    res.status(200).json({ success: true, message: 'Profile updated successfully in database.', staff });
+
+    const staffObj = staff.toObject();
+    delete staffObj.password;
+
+    res.status(200).json({ success: true, message: 'Profile updated successfully in database.', staff: staffObj });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BACKEND_URL } from '../../apiConfig';
 import { 
   GraduationCap, 
@@ -15,17 +15,32 @@ import {
   UserCheck, 
   LogOut,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   Camera,
   Upload,
   X,
   FileCheck,
-  Award
+  Award,
+  BookOpen,
+  FileText,
+  Users,
+  DollarSign,
+  Plus,
+  Trash2,
+  Check,
+  Building2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
+import CollegeLogo from '../CollegeLogo';
 
 const API_BASE = BACKEND_URL;
 
-const BLOOD_GROUPS = ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'];
+const COMMUNITIES = ['OC', 'BC', 'BCM', 'MBC / DNC', 'SC', 'SCA', 'ST'];
+const GENDERS = ['Male', 'Female'];
+const MARITAL_STATUSES = ['Single', 'Married'];
+const STUDY_MODES = ['Full time', 'Part time', 'Distance mode'];
 
 const NET_SET_STATUS_OPTIONS = [
   'Qualified UGC-NET',
@@ -37,56 +52,241 @@ const NET_SET_STATUS_OPTIONS = [
   'Not Applicable'
 ];
 
+const INITIAL_QUALIFICATIONS = [
+  { degree: 'NET / SET', specialization: '', institution: '', mode: 'Full time', marksOrCgpa: 'NA', yearOfPassing: '' },
+  { degree: 'Ph.D', specialization: '', institution: '', mode: 'Full time', marksOrCgpa: '', yearOfPassing: '' },
+  { degree: 'M.Phil', specialization: '', institution: '', mode: 'Full time', marksOrCgpa: '', yearOfPassing: '' },
+  { degree: 'Post-graduate (PG)', specialization: '', institution: '', mode: 'Full time', marksOrCgpa: '', yearOfPassing: '' },
+  { degree: 'Under graduate (UG)', specialization: '', institution: '', mode: 'Full time', marksOrCgpa: '', yearOfPassing: '' },
+  { degree: 'HSC (12th)', specialization: '', institution: '', mode: 'Full time', marksOrCgpa: '', yearOfPassing: '' },
+  { degree: 'SSLC (10th)', specialization: '', institution: '', mode: 'Full time', marksOrCgpa: '', yearOfPassing: '' }
+];
+
 export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout }) {
-  const [profileImage, setProfileImage] = useState(staffUser.profileImage || '');
-  const [netSetExamStatus, setNetSetExamStatus] = useState(staffUser.netSetExamStatus || 'Not Applicable');
-  const [netSetExamCertificate, setNetSetExamCertificate] = useState(staffUser.netSetExamCertificate || '');
-  const [netSetCertificateName, setNetSetCertificateName] = useState(staffUser.netSetCertificateName || '');
+  const [activeStep, setActiveStep] = useState(1);
+  const [profileImage, setProfileImage] = useState(staffUser?.profileImage || '');
 
-  const [formData, setFormData] = useState({
-    phone: staffUser.phone || '',
-    qualification: staffUser.qualification || '',
-    experience: staffUser.experience || '',
-    bloodGroup: staffUser.bloodGroup || 'O+',
-    dob: staffUser.dob || '',
-    address: staffUser.address || '',
-    emergencyContact: staffUser.emergencyContact || '',
-    newPassword: '',
-    confirmPassword: ''
-  });
+  // Step 1: Personal Details
+  const [postAppliedFor, setPostAppliedFor] = useState(staffUser?.designation || staffUser?.postAppliedFor || 'Assistant Professor');
+  const [department, setDepartment] = useState(staffUser?.department || '');
+  const [name, setName] = useState(staffUser?.name || '');
+  const [dob, setDob] = useState(staffUser?.dob || '');
+  const [age, setAge] = useState(staffUser?.age || '');
+  const [gender, setGender] = useState(staffUser?.gender || 'Male');
+  const [maritalStatus, setMaritalStatus] = useState(staffUser?.maritalStatus || 'Single');
+  const [fatherOrSpouseName, setFatherOrSpouseName] = useState(staffUser?.fatherOrSpouseName || '');
+  const [nationality, setNationality] = useState(staffUser?.nationality || 'Indian');
+  const [religion, setReligion] = useState(staffUser?.religion || 'Hindu');
+  const [community, setCommunity] = useState(staffUser?.community || 'BC');
+  const [caste, setCaste] = useState(staffUser?.caste || '');
+  const [permanentAddress, setPermanentAddress] = useState(staffUser?.permanentAddress || staffUser?.address || '');
+  const [communicationAddress, setCommunicationAddress] = useState(staffUser?.communicationAddress || staffUser?.address || '');
+  const [sameAddress, setSameAddress] = useState(false);
+  const [email] = useState(staffUser?.email || '');
+  const [phone, setPhone] = useState(staffUser?.phone || '');
+  const [whatsapp, setWhatsapp] = useState(staffUser?.whatsapp || staffUser?.phone || '');
+  const [sameWhatsapp, setSameWhatsapp] = useState(true);
 
-  const handleCertSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    if (!validTypes.includes(file.type) && !file.name.match(/\.(pdf|jpe?g|png|webp)$/i)) {
-      alert('Please upload a valid document or image (PDF, PNG, JPG, WEBP).');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size exceeds 10MB limit.');
-      return;
-    }
-    const fileName = file.name;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result;
-      if (base64) {
-        setNetSetExamCertificate(base64);
-        setNetSetCertificateName(fileName);
-        if (netSetExamStatus === 'Not Applicable') {
-          setNetSetExamStatus('Qualified UGC-NET');
+  // Auto calculate age when DOB changes
+  useEffect(() => {
+    if (dob) {
+      const birthDate = new Date(dob);
+      if (!isNaN(birthDate.getTime())) {
+        const today = new Date();
+        let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          calculatedAge--;
+        }
+        if (calculatedAge >= 0) {
+          setAge(String(calculatedAge));
         }
       }
-    };
-    reader.readAsDataURL(file);
+    }
+  }, [dob]);
+
+  // Handle same address toggle
+  const handleSameAddressChange = (checked) => {
+    setSameAddress(checked);
+    if (checked) {
+      setCommunicationAddress(permanentAddress);
+    }
   };
 
+  // Handle same whatsapp toggle
+  const handleSameWhatsappChange = (checked) => {
+    setSameWhatsapp(checked);
+    if (checked) {
+      setWhatsapp(phone);
+    }
+  };
+
+  // Step 2: Academic Qualifications Table
+  const [qualifications, setQualifications] = useState(() => {
+    if (Array.isArray(staffUser?.academicQualifications) && staffUser.academicQualifications.length > 0) {
+      return staffUser.academicQualifications;
+    }
+    return INITIAL_QUALIFICATIONS;
+  });
+
+  const handleQualChange = (index, field, value) => {
+    setQualifications(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const addCustomQualification = () => {
+    setQualifications(prev => [
+      ...prev,
+      { degree: '', specialization: '', institution: '', mode: 'Full time', marksOrCgpa: '', yearOfPassing: '' }
+    ]);
+  };
+
+  const removeQualification = (index) => {
+    if (qualifications.length <= 1) return;
+    setQualifications(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Step 3: Experience Details Table
+  const [experiences, setExperiences] = useState(() => {
+    if (Array.isArray(staffUser?.experienceDetails) && staffUser.experienceDetails.length > 0) {
+      return staffUser.experienceDetails;
+    }
+    return [
+      { sNo: 1, institution: '', designation: '', fromDate: '', toDate: '', duration: '' }
+    ];
+  });
+
+  const handleExpChange = (index, field, value) => {
+    setExperiences(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const addExperienceRow = () => {
+    setExperiences(prev => [
+      ...prev,
+      { sNo: prev.length + 1, institution: '', designation: '', fromDate: '', toDate: '', duration: '' }
+    ]);
+  };
+
+  const removeExperienceRow = (index) => {
+    if (experiences.length <= 1) return;
+    setExperiences(prev => prev.filter((_, i) => i !== index).map((row, i) => ({ ...row, sNo: i + 1 })));
+  };
+
+  // Step 4: Publications, Programmes, Projects & Other Info
+  const [publications, setPublications] = useState({
+    nationalConferences: staffUser?.publications?.nationalConferences || 0,
+    nationalJournals: staffUser?.publications?.nationalJournals || 0,
+    internationalConferences: staffUser?.publications?.internationalConferences || 0,
+    internationalJournals: staffUser?.publications?.internationalJournals || 0,
+    patentsFiled: staffUser?.publications?.patentsFiled || '',
+    patentsGranted: staffUser?.publications?.patentsGranted || ''
+  });
+
+  const [programmes, setProgrammes] = useState({
+    organizedConferences: staffUser?.programmes?.organizedConferences || 0,
+    organizedWorkshops: staffUser?.programmes?.organizedWorkshops || 0,
+    organizedFdp: staffUser?.programmes?.organizedFdp || 0,
+    attendedConferences: staffUser?.programmes?.attendedConferences || 0,
+    attendedWorkshops: staffUser?.programmes?.attendedWorkshops || 0,
+    attendedFdp: staffUser?.programmes?.attendedFdp || 0
+  });
+
+  const [projectFunds, setProjectFunds] = useState(() => {
+    if (Array.isArray(staffUser?.projectFunds) && staffUser.projectFunds.length > 0) {
+      return staffUser.projectFunds;
+    }
+    return [
+      { agency: '', amountLakhs: '', scheme: '', title: '', duration: '' }
+    ];
+  });
+
+  const handleProjectFundChange = (index, field, value) => {
+    setProjectFunds(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const addProjectFundRow = () => {
+    setProjectFunds(prev => [
+      ...prev,
+      { agency: '', amountLakhs: '', scheme: '', title: '', duration: '' }
+    ]);
+  };
+
+  const removeProjectFundRow = (index) => {
+    if (projectFunds.length <= 1) {
+      setProjectFunds([{ agency: '', amountLakhs: '', scheme: '', title: '', duration: '' }]);
+      return;
+    }
+    setProjectFunds(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const [otherInformation, setOtherInformation] = useState(staffUser?.otherInformation || '');
+
+  // Step 5: References & Pay Details
+  const [references, setReferences] = useState(() => {
+    if (Array.isArray(staffUser?.references) && staffUser.references.length > 0) {
+      return staffUser.references.slice(0, 1);
+    }
+    return [
+      { name: '', designation: '', institution: '', contactNo: '', email: '' }
+    ];
+  });
+
+  const handleRefChange = (index, field, value) => {
+    setReferences(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const [payExpected, setPayExpected] = useState(staffUser?.payExpected || '');
+  const [payLastObtained, setPayLastObtained] = useState(staffUser?.payLastObtained || '');
+  const [place, setPlace] = useState(staffUser?.place || 'Tenkasi');
+  const [applicationDate, setApplicationDate] = useState(() => {
+    return staffUser?.applicationDate || new Date().toISOString().split('T')[0];
+  });
+
+  // Step 6: Certificate Uploads & Password
+  const [netSetExamStatus, setNetSetExamStatus] = useState(staffUser?.netSetExamStatus || 'Not Applicable');
+  const [netSetExamCertificate, setNetSetExamCertificate] = useState(staffUser?.netSetExamCertificate || '');
+  const [netSetCertificateName, setNetSetCertificateName] = useState(staffUser?.netSetCertificateName || '');
+  const [lastPayCertificate, setLastPayCertificate] = useState(staffUser?.lastPayCertificate || '');
+  const [lastPayCertName, setLastPayCertName] = useState('');
+  const [educationalCertificatesDoc, setEducationalCertificatesDoc] = useState(staffUser?.educationalCertificatesDoc || '');
+  const [eduCertName, setEduCertName] = useState('');
+  const [experienceCertificatesDoc, setExperienceCertificatesDoc] = useState(staffUser?.experienceCertificatesDoc || '');
+  const [expCertName, setExpCertName] = useState('');
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Status & Validation
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState('');
+
+  // Handle Photo Upload
   const handlePhotoSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file (PNG, JPG, WEBP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo size exceeds 5MB limit.');
       return;
     }
     const reader = new FileReader();
@@ -97,59 +297,130 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
     reader.readAsDataURL(file);
   };
 
-  const [formErrors, setFormErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [serverError, setServerError] = useState('');
+  // Helper for generic file upload
+  const handleDocUpload = (e, setBase64, setFileName) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit.');
+      return;
+    }
+    const name = file.name;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const b64 = event.target?.result;
+      if (b64) {
+        setBase64(b64);
+        setFileName(name);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
-  const validate = () => {
+  // Step Validation
+  const validateStep = (step) => {
     const errs = {};
-    if (!formData.phone.trim()) {
-      errs.phone = 'Mobile phone number is required';
+    if (step === 1) {
+      if (!name.trim()) errs.name = 'Full Name is required';
+      if (!dob) errs.dob = 'Date of birth is required';
+      if (!phone.trim()) errs.phone = 'Mobile number is required';
+      if (!permanentAddress.trim()) errs.permanentAddress = 'Permanent address is required';
     }
-    if (!formData.qualification.trim()) {
-      errs.qualification = 'Please enter your academic qualifications (e.g. M.Phil, M.Com, M.Sc, Ph.D., NET/SET)';
-    }
-    if (!formData.experience.trim()) {
-      errs.experience = 'Please enter your teaching / professional experience';
-    }
-    if (!formData.address.trim()) {
-      errs.address = 'Residential address is required';
-    }
-    if (!formData.emergencyContact.trim()) {
-      errs.emergencyContact = 'Emergency contact person and phone is required';
-    }
-    if (formData.newPassword) {
-      if (formData.newPassword.length < 6) {
-        errs.newPassword = 'Password must be at least 6 characters';
-      } else if (formData.newPassword !== formData.confirmPassword) {
-        errs.confirmPassword = 'Passwords do not match';
+    if (step === 6) {
+      if (newPassword) {
+        if (newPassword.length < 6) {
+          errs.newPassword = 'Password must be at least 6 characters';
+        } else if (newPassword !== confirmPassword) {
+          errs.confirmPassword = 'Passwords do not match';
+        }
       }
     }
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
+  const handleNext = () => {
+    if (validateStep(activeStep)) {
+      setActiveStep(prev => Math.min(prev + 1, 6));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handlePrev = () => {
+    setActiveStep(prev => Math.max(prev - 1, 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Final Form Submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validateStep(1) || !validateStep(6)) {
+      setActiveStep(1);
+      return;
+    }
 
     setIsSubmitting(true);
     setServerError('');
 
     try {
+      // Build summary strings for backward compatibility
+      const highestQual = qualifications.find(q => q.degree && q.institution)?.degree || 'Faculty';
+      const totalExpString = experiences.filter(e => e.institution).map(e => `${e.designation} at ${e.institution}`).join(', ') || 'Fresher / Lecturer';
+
       const payload = {
-        phone: formData.phone.trim(),
-        qualification: formData.qualification.trim(),
-        experience: formData.experience.trim(),
-        bloodGroup: formData.bloodGroup,
-        dob: formData.dob,
-        address: formData.address.trim(),
-        emergencyContact: formData.emergencyContact.trim(),
+        name: name.trim(),
+        postAppliedFor: postAppliedFor.trim(),
+        designation: postAppliedFor.trim(),
+        department: department.trim(),
+        dob,
+        age: String(age),
+        gender,
+        maritalStatus,
+        fatherOrSpouseName: fatherOrSpouseName.trim(),
+        nationality: nationality.trim(),
+        religion: religion.trim(),
+        community,
+        caste: caste.trim(),
+        permanentAddress: permanentAddress.trim(),
+        communicationAddress: communicationAddress.trim(),
+        address: communicationAddress.trim() || permanentAddress.trim(),
+        phone: phone.trim(),
+        whatsapp: whatsapp.trim(),
+        emergencyContact: fatherOrSpouseName ? `${fatherOrSpouseName} (${phone})` : phone,
         profileImage: profileImage || undefined,
+
+        // Academic qualifications
+        qualification: highestQual,
+        academicQualifications: qualifications.filter(q => q.degree.trim()),
+
+        // Experience
+        experience: totalExpString,
+        experienceDetails: experiences.filter(e => e.institution.trim()),
+
+        // Publications & Research
+        publications,
+        programmes,
+        projectFunds: projectFunds.filter(p => p.agency.trim() || p.title.trim()),
+        otherInformation: otherInformation.trim(),
+
+        // References
+        references: references.filter(r => r.name.trim()),
+
+        // Pay & Place
+        payExpected: payExpected.trim(),
+        payLastObtained: payLastObtained.trim(),
+        lastPayCertificate: lastPayCertificate || undefined,
+        place: place.trim(),
+        applicationDate,
+
+        // Certificates
         netSetExamStatus,
         netSetExamCertificate: netSetExamCertificate || undefined,
         netSetCertificateName: netSetCertificateName || undefined,
-        newPassword: formData.newPassword ? formData.newPassword.trim() : undefined
+        educationalCertificatesDoc: educationalCertificatesDoc || undefined,
+        experienceCertificatesDoc: experienceCertificatesDoc || undefined,
+
+        newPassword: newPassword.trim() ? newPassword.trim() : undefined
       };
 
       const res = await fetch(`${API_BASE}/api/auth/staff/${staffUser.staffId}/complete-profile`, {
@@ -159,392 +430,1281 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
       });
 
       const data = await res.json();
-
-      if (res.ok && data.success) {
-        // Callback to App.jsx with updated staff object
-        onComplete({
-          ...staffUser,
-          ...data.staff,
-          isProfileCompleted: true
-        });
-      } else {
-        setServerError(data.message || 'Failed to update profile. Please try again.');
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to complete staff application profile.');
       }
+
+      // Success! Pass updated staff user to onComplete
+      onComplete(data.staff);
     } catch (err) {
-      setServerError('Unable to connect to the VCAS server. Please ensure backend is running.');
-    } finally {
+      console.error('Staff Application Submit Error:', err);
+      setServerError(err.message || 'Network error occurred while saving application.');
       setIsSubmitting(false);
     }
   };
 
+  const STEPS = [
+    { num: 1, label: 'Personal Details' },
+    { num: 2, label: 'Academic Qualifications' },
+    { num: 3, label: 'Experience Details' },
+    { num: 4, label: 'Research & Publications' },
+    { num: 5, label: 'References & Pay' },
+    { num: 6, label: 'Documents & Finish' }
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl w-full mx-auto space-y-6">
-        
-        {/* TOP BRAND & WELCOME BAR */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-800/80 border border-slate-700 p-5 rounded-3xl backdrop-blur-md">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/20 shrink-0">
-              <GraduationCap className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-white font-extrabold text-base sm:text-lg tracking-tight">
-                  Welcome, {staffUser.name}!
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center py-6 px-3 sm:px-6">
+      <div className="w-full max-w-5xl">
+
+        {/* HEADER BAR */}
+        <div className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 sm:p-6 mb-6 shadow-xl backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <CollegeLogo size="sm" showText={false} />
+              <div>
+                <h1 className="text-base sm:text-lg font-black text-white tracking-wide">
+                  VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  {staffUser.staffId}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {staffUser.designation} · Department of {staffUser.department}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={onLogout}
-            className="self-start sm:self-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all border border-slate-700/60 cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
-        </div>
-
-        {/* ONBOARDING INSTRUCTION BANNER */}
-        <div className="bg-gradient-to-r from-blue-900/60 to-indigo-900/60 border border-blue-500/30 p-5 rounded-3xl text-blue-100 flex items-start gap-3.5">
-          <div className="p-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-300 shrink-0 mt-0.5">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-white tracking-wide flex items-center gap-2">
-              First-Time Faculty Profile Setup
-            </h2>
-            <p className="text-xs text-blue-200/90 mt-1 leading-relaxed">
-              Your institutional account has been initialized. Because the administration may not know all your personal and academic credentials, please complete the details below. 
-              <strong> The information you submit will be saved to your profile and will be visible in the Admin Staff section.</strong>
-            </p>
-          </div>
-        </div>
-
-        {/* MAIN SETUP FORM CARD */}
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xl p-6 sm:p-8 text-slate-800">
-          
-          {serverError && (
-            <div className="mb-6 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-              <span>{serverError}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* OPTIONAL PROFILE PHOTO UPLOAD */}
-            <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row items-center gap-4">
-              <div className="relative group shrink-0">
-                <div className={`w-16 h-16 rounded-2xl overflow-hidden ${!profileImage ? 'bg-gradient-to-tr from-blue-600 to-indigo-600' : 'bg-slate-100'} flex items-center justify-center text-white font-extrabold text-xl shadow-md ring-2 ring-blue-100`}>
-                  {profileImage ? (
-                    <img src={profileImage} alt={staffUser.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <span>{staffUser.avatarInitials || staffUser.avatarText || staffUser.name?.substring(0, 2)?.toUpperCase() || 'ST'}</span>
-                  )}
-                </div>
-                {profileImage && (
-                  <button
-                    type="button"
-                    onClick={() => setProfileImage('')}
-                    className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 shadow-sm hover:bg-rose-600 cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-              <div className="flex-1 text-center sm:text-left">
-                <h4 className="text-xs font-bold text-slate-800">Profile Photo (Optional)</h4>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Upload your formal staff photograph. If not uploaded, your initials will be displayed across both administrator and staff dashboards.
+                <p className="text-[11px] text-blue-300 font-medium">
+                  Affiliated to Manonmaniam Sundaranar University • VELLALANKULAM, TENKASI - 627 857
                 </p>
-                <div className="mt-2">
-                  <label 
-                    htmlFor="setup-photo-upload"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-blue-600 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>{profileImage ? 'Change Photo' : 'Upload Profile Photo'}</span>
-                  </label>
-                  <input 
-                    id="setup-photo-upload" 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handlePhotoSelect} 
-                    className="hidden" 
-                  />
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600/30 text-blue-300 border border-blue-500/30">
+                    OFFICIAL STAFF APPLICATION FORM
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    ID: {staffUser?.staffId}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* SECTION 1: ACADEMIC & QUALIFICATIONS */}
-            <div className="space-y-3.5">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                <GraduationCap className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Academic & Teaching Qualifications
-                </h3>
+            <button
+              onClick={onLogout}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-slate-700 transition-all cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+
+          {/* STEP PROGRESS NAVIGATION */}
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mt-6 pt-5 border-t border-slate-700/60">
+            {STEPS.map((s) => {
+              const isCurrent = activeStep === s.num;
+              const isPast = activeStep > s.num;
+              return (
+                <button
+                  key={s.num}
+                  type="button"
+                  onClick={() => {
+                    if (validateStep(activeStep)) {
+                      setActiveStep(s.num);
+                    }
+                  }}
+                  className={`flex flex-col items-start p-2 rounded-xl text-left transition-all cursor-pointer ${
+                    isCurrent
+                      ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-500/25 ring-2 ring-blue-400'
+                      : isPast
+                      ? 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/40'
+                      : 'bg-slate-800/50 border border-slate-700/60 text-slate-400 hover:bg-slate-700/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                    {isPast ? <Check className="w-3 h-3 text-emerald-400" /> : <span>Step {s.num}</span>}
+                  </div>
+                  <span className="text-[11px] font-semibold truncate w-full mt-0.5">
+                    {s.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ERROR NOTIFICATION */}
+        {serverError && (
+          <div className="p-4 mb-6 rounded-2xl bg-rose-950/60 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-3 animate-shake">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <div className="flex-1 font-semibold">{serverError}</div>
+          </div>
+        )}
+
+        {/* APPLICATION FORM CARD */}
+        <form onSubmit={handleSubmit} className="bg-slate-800/90 border border-slate-700/80 rounded-3xl p-5 sm:p-8 shadow-2xl backdrop-blur-md">
+
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* STEP 1: PERSONAL DETAILS (IMAGE 2, SECTION 1)                */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          {activeStep === 1 && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-700">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center font-black text-xs border border-blue-500/30">
+                    1
+                  </span>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-black text-white">1. Personal Details</h2>
+                    <p className="text-[11px] text-slate-400 font-medium">As specified in the College Application Form</p>
+                  </div>
+                </div>
+
+                {/* Profile Photo Box matching physical form */}
+                <div className="flex items-center gap-3">
+                  <div className="relative group cursor-pointer">
+                    <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl border-2 border-dashed border-slate-600 hover:border-blue-500 bg-slate-900/60 flex flex-col items-center justify-center overflow-hidden transition-all shadow-inner">
+                      {profileImage ? (
+                        <img src={profileImage} alt="Staff" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-center p-1">
+                          <Camera className="w-5 h-5 text-slate-400 mx-auto mb-1" />
+                          <span className="text-[9px] font-bold text-slate-400 block leading-tight">Passport Photo</span>
+                        </div>
+                      )}
+                    </div>
+                    <label className="absolute inset-0 opacity-0 cursor-pointer">
+                      <input type="file" accept="image/*" onChange={handlePhotoSelect} />
+                    </label>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Application Target: Post & Dept */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-blue-950/30 border border-blue-800/30">
+                <div>
+                  <label className="block text-xs font-bold text-blue-200 mb-1">
+                    Application for the Post of <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={postAppliedFor}
+                    onChange={(e) => setPostAppliedFor(e.target.value)}
+                    placeholder="e.g. Assistant Professor / Associate Professor"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-blue-200 mb-1">
+                    In the Department of <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    placeholder="e.g. Computer Science / Commerce / English"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Name, DOB, Age, Gender, Marital Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Highest Educational Qualifications *
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Full Name (with initials) <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="text"
-                    value={formData.qualification}
-                    onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
-                    placeholder="e.g. Ph.D. in Computer Science (Madras University), M.Sc, NET/SET"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none transition-all ${
-                      formErrors.qualification ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
-                    }`}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Dr. K. Ramesh"
+                    className={`w-full px-3.5 py-2 rounded-xl bg-slate-900 border ${formErrors.name ? 'border-rose-500' : 'border-slate-700'} text-white text-xs font-semibold focus:border-blue-500 focus:outline-none`}
+                    required
                   />
-                  {formErrors.qualification && (
-                    <p className="text-[11px] text-rose-500 mt-1 font-medium">{formErrors.qualification}</p>
-                  )}
+                  {formErrors.name && <p className="text-[10px] text-rose-400 mt-1">{formErrors.name}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Teaching & Professional Experience *
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Gender <span className="text-rose-400">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={formData.experience}
-                    onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                    placeholder="e.g. 8 Years Teaching Experience (4 Years at VCAS)"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none transition-all ${
-                      formErrors.experience ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
-                    }`}
-                  />
-                  {formErrors.experience && (
-                    <p className="text-[11px] text-rose-500 mt-1 font-medium">{formErrors.experience}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Blood Group
-                  </label>
-                  <select
-                    value={formData.bloodGroup}
-                    onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
-                  >
-                    {BLOOD_GROUPS.map(bg => (
-                      <option key={bg} value={bg}>{bg}</option>
+                  <div className="flex gap-2">
+                    {GENDERS.map((g) => (
+                      <button
+                        type="button"
+                        key={g}
+                        onClick={() => setGender(g)}
+                        className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                          gender === g
+                            ? 'bg-blue-600 border-blue-500 text-white shadow-xs'
+                            : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
+                        }`}
+                      >
+                        {g}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Date of Birth
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Date of Birth <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="date"
-                    value={formData.dob}
-                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    className={`w-full px-3.5 py-2 rounded-xl bg-slate-900 border ${formErrors.dob ? 'border-rose-500' : 'border-slate-700'} text-white text-xs font-semibold focus:border-blue-500 focus:outline-none`}
+                    required
+                  />
+                  {formErrors.dob && <p className="text-[10px] text-rose-400 mt-1">{formErrors.dob}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Age (Years)
+                  </label>
+                  <input
+                    type="text"
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    placeholder="Auto-calculated from DOB"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900/60 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    NET / SET Exam Qualification
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Marital Status
                   </label>
                   <select
-                    value={netSetExamStatus}
-                    onChange={(e) => setNetSetExamStatus(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    value={maritalStatus}
+                    onChange={(e) => setMaritalStatus(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none cursor-pointer"
                   >
-                    {NET_SET_STATUS_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
+                    {MARITAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
+              </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    NET / SET Exam Certificate Upload
+              {/* Father/Spouse, Nationality, Religion, Community, Caste */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Father / Spouse Name
                   </label>
-                  {netSetExamCertificate ? (
-                    <div className="flex items-center justify-between p-3 bg-blue-50/70 border border-blue-200 rounded-xl">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <FileCheck className="w-5 h-5 text-blue-600 shrink-0" />
-                        <span className="text-xs font-bold text-blue-950 truncate">
-                          {netSetCertificateName || 'Certificate Attached'}
-                        </span>
+                  <input
+                    type="text"
+                    value={fatherOrSpouseName}
+                    onChange={(e) => setFatherOrSpouseName(e.target.value)}
+                    placeholder="Enter Father or Spouse name"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Nationality & Religion
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={nationality}
+                      onChange={(e) => setNationality(e.target.value)}
+                      placeholder="Nationality"
+                      className="w-1/2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={religion}
+                      onChange={(e) => setReligion(e.target.value)}
+                      placeholder="Religion"
+                      className="w-1/2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Community & Caste
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={community}
+                      onChange={(e) => setCommunity(e.target.value)}
+                      className="w-1/2 px-2 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none cursor-pointer"
+                    >
+                      {COMMUNITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input
+                      type="text"
+                      value={caste}
+                      onChange={(e) => setCaste(e.target.value)}
+                      placeholder="Caste"
+                      className="w-1/2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Permanent Address & Communication Address */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Permanent Address <span className="text-rose-400">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={permanentAddress}
+                    onChange={(e) => {
+                      setPermanentAddress(e.target.value);
+                      if (sameAddress) setCommunicationAddress(e.target.value);
+                    }}
+                    placeholder="Door No, Street, Village/Town, District, State, PIN"
+                    className={`w-full px-3.5 py-2 rounded-xl bg-slate-900 border ${formErrors.permanentAddress ? 'border-rose-500' : 'border-slate-700'} text-white text-xs font-semibold focus:border-blue-500 focus:outline-none`}
+                    required
+                  />
+                  {formErrors.permanentAddress && <p className="text-[10px] text-rose-400 mt-1">{formErrors.permanentAddress}</p>}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-300">
+                      Address for Communication
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[11px] text-blue-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={sameAddress}
+                        onChange={(e) => handleSameAddressChange(e.target.checked)}
+                        className="rounded border-slate-700 text-blue-600 focus:ring-0"
+                      />
+                      <span>Same as Permanent</span>
+                    </label>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={communicationAddress}
+                    onChange={(e) => setCommunicationAddress(e.target.value)}
+                    disabled={sameAddress}
+                    placeholder="Address for correspondence/postal"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none disabled:opacity-70"
+                  />
+                </div>
+              </div>
+
+              {/* Email, Mobile No, WhatsApp No */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    E-mail ID
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    disabled
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900/60 border border-slate-700 text-slate-400 text-xs font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Mobile No. <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      if (sameWhatsapp) setWhatsapp(e.target.value);
+                    }}
+                    placeholder="10-digit mobile number"
+                    className={`w-full px-3.5 py-2 rounded-xl bg-slate-900 border ${formErrors.phone ? 'border-rose-500' : 'border-slate-700'} text-white text-xs font-semibold focus:border-blue-500 focus:outline-none`}
+                    required
+                  />
+                  {formErrors.phone && <p className="text-[10px] text-rose-400 mt-1">{formErrors.phone}</p>}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-300">
+                      WhatsApp No.
+                    </label>
+                    <label className="flex items-center gap-1 text-[10px] text-blue-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={sameWhatsapp}
+                        onChange={(e) => handleSameWhatsappChange(e.target.checked)}
+                        className="rounded border-slate-700 text-blue-600 focus:ring-0"
+                      />
+                      <span>Same as Mobile</span>
+                    </label>
+                  </div>
+                  <input
+                    type="tel"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                    disabled={sameWhatsapp}
+                    placeholder="WhatsApp contact number"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none disabled:opacity-70"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* STEP 2: ACADEMIC QUALIFICATIONS (IMAGE 2, SECTION 2)         */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          {activeStep === 2 && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-700">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center font-black text-xs border border-blue-500/30">
+                    2
+                  </span>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-black text-white">2. Academic Qualifications</h2>
+                    <p className="text-[11px] text-slate-400 font-medium">Please enter degree, specialization, institution, mode, marks/CGPA and passing year</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={addCustomQualification}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Degree</span>
+                </button>
+              </div>
+
+              {/* Responsive Qualifications Table */}
+              <div className="overflow-x-auto rounded-2xl border border-slate-700 bg-slate-900/60 shadow-inner">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-300 font-black text-[11px] uppercase tracking-wider">
+                      <th className="py-3 px-3 w-40">Degree</th>
+                      <th className="py-3 px-3">Specialization</th>
+                      <th className="py-3 px-3">School / College / University</th>
+                      <th className="py-3 px-3 w-36">Study Mode</th>
+                      <th className="py-3 px-2 text-center w-28">% Marks / CGPA</th>
+                      <th className="py-3 px-2 text-center w-24">Year</th>
+                      <th className="py-3 px-2 text-center w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800 text-xs">
+                    {qualifications.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={row.degree}
+                            onChange={(e) => handleQualChange(idx, 'degree', e.target.value)}
+                            placeholder="e.g. B.Sc / M.Sc"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-bold text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={row.specialization}
+                            onChange={(e) => handleQualChange(idx, 'specialization', e.target.value)}
+                            placeholder="e.g. Computer Science"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={row.institution}
+                            onChange={(e) => handleQualChange(idx, 'institution', e.target.value)}
+                            placeholder="e.g. Madras University / Govt HSS"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <select
+                            value={row.mode || 'Full time'}
+                            onChange={(e) => handleQualChange(idx, 'mode', e.target.value)}
+                            className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none cursor-pointer"
+                          >
+                            {STUDY_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <input
+                            type="text"
+                            value={row.marksOrCgpa}
+                            onChange={(e) => handleQualChange(idx, 'marksOrCgpa', e.target.value)}
+                            placeholder="82% / 8.4"
+                            className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center text-xs font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <input
+                            type="text"
+                            value={row.yearOfPassing}
+                            onChange={(e) => handleQualChange(idx, 'yearOfPassing', e.target.value)}
+                            placeholder="2020"
+                            maxLength={4}
+                            className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center text-xs font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          {idx >= 7 && (
+                            <button
+                              type="button"
+                              onClick={() => removeQualification(idx)}
+                              className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                              title="Remove Degree"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* STEP 3: EXPERIENCE DETAILS (IMAGE 2, SECTION 3)              */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          {activeStep === 3 && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-700">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center font-black text-xs border border-blue-500/30">
+                    3
+                  </span>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-black text-white">3. Experience Details</h2>
+                    <p className="text-[11px] text-slate-400 font-medium">Attach details of teaching or industry experience</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={addExperienceRow}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Experience</span>
+                </button>
+              </div>
+
+              {/* Dynamic Experience Table */}
+              <div className="overflow-x-auto rounded-2xl border border-slate-700 bg-slate-900/60 shadow-inner">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-300 font-black text-[11px] uppercase tracking-wider">
+                      <th className="py-3 px-3 text-center w-12">S.No.</th>
+                      <th className="py-3 px-3">Institution / Industry Name</th>
+                      <th className="py-3 px-3">Position / Title</th>
+                      <th className="py-3 px-2 text-center w-32">From</th>
+                      <th className="py-3 px-2 text-center w-32">To</th>
+                      <th className="py-3 px-3 w-36">No. of Years & Month</th>
+                      <th className="py-3 px-2 text-center w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800 text-xs">
+                    {experiences.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="py-2 px-3 text-center font-bold text-slate-400">
+                          {row.sNo || idx + 1}
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={row.institution}
+                            onChange={(e) => handleExpChange(idx, 'institution', e.target.value)}
+                            placeholder="e.g. St. Xavier's College / Infosys"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-semibold text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={row.designation}
+                            onChange={(e) => handleExpChange(idx, 'designation', e.target.value)}
+                            placeholder="e.g. Assistant Professor / Lecturer"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <input
+                            type="text"
+                            value={row.fromDate}
+                            onChange={(e) => handleExpChange(idx, 'fromDate', e.target.value)}
+                            placeholder="MM/YYYY"
+                            className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center text-xs font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <input
+                            type="text"
+                            value={row.toDate}
+                            onChange={(e) => handleExpChange(idx, 'toDate', e.target.value)}
+                            placeholder="MM/YYYY or Present"
+                            className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center text-xs font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={row.duration}
+                            onChange={(e) => handleExpChange(idx, 'duration', e.target.value)}
+                            placeholder="e.g. 2 Yrs 4 Mos"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeExperienceRow(idx)}
+                            className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                            title="Remove Row"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* STEP 4: RESEARCH, PUBLICATIONS & PROGRAMMES (IMAGE 1)         */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          {activeStep === 4 && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-slate-700">
+                <span className="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center font-black text-xs border border-blue-500/30">
+                  4
+                </span>
+                <div>
+                  <h2 className="text-sm sm:text-base font-black text-white">4. Publications, Programmes & Projects</h2>
+                  <p className="text-[11px] text-slate-400 font-medium">Matching Sections 4, 5, 6 & 7 of the College Application Form</p>
+                </div>
+              </div>
+
+              {/* 4. Publication Details Table (Count Only) */}
+              <div>
+                <h3 className="text-xs font-bold text-blue-200 mb-2 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-blue-400" />
+                  <span>4. Publication Details (Provide only the count)</span>
+                </h3>
+                <div className="overflow-x-auto rounded-2xl border border-slate-700 bg-slate-900/60 shadow-inner">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-300 font-bold text-[11px]">
+                        <th className="py-2.5 px-4 w-48">Category</th>
+                        <th className="py-2.5 px-4 text-center">Conferences</th>
+                        <th className="py-2.5 px-4 text-center">Journals</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      <tr>
+                        <td className="py-2.5 px-4 font-bold text-white">National</td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={publications.nationalConferences}
+                            onChange={(e) => setPublications({ ...publications, nationalConferences: parseInt(e.target.value) || 0 })}
+                            className="w-24 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={publications.nationalJournals}
+                            onChange={(e) => setPublications({ ...publications, nationalJournals: parseInt(e.target.value) || 0 })}
+                            className="w-24 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-2.5 px-4 font-bold text-white">International</td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={publications.internationalConferences}
+                            onChange={(e) => setPublications({ ...publications, internationalConferences: parseInt(e.target.value) || 0 })}
+                            className="w-24 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={publications.internationalJournals}
+                            onChange={(e) => setPublications({ ...publications, internationalJournals: parseInt(e.target.value) || 0 })}
+                            className="w-24 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Patents */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-3.5 rounded-xl bg-slate-900/40 border border-slate-700/60">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Patents Filed (Count / Details)
+                    </label>
+                    <input
+                      type="text"
+                      value={publications.patentsFiled}
+                      onChange={(e) => setPublications({ ...publications, patentsFiled: e.target.value })}
+                      placeholder="e.g. 1 Patent Filed (Application #2024...)"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Patents Granted (Count / Details)
+                    </label>
+                    <input
+                      type="text"
+                      value={publications.patentsGranted}
+                      onChange={(e) => setPublications({ ...publications, patentsGranted: e.target.value })}
+                      placeholder="e.g. 1 Patent Granted (#IN...)"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Programmes Organized / Attended */}
+              <div>
+                <h3 className="text-xs font-bold text-blue-200 mb-2 flex items-center gap-1.5">
+                  <Award className="w-3.5 h-3.5 text-blue-400" />
+                  <span>5. Programmes Organized / Attended (Provide only the count)</span>
+                </h3>
+                <div className="overflow-x-auto rounded-2xl border border-slate-700 bg-slate-900/60 shadow-inner">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-300 font-bold text-[11px]">
+                        <th className="py-2.5 px-4 w-48">Category</th>
+                        <th className="py-2.5 px-4 text-center">Conferences</th>
+                        <th className="py-2.5 px-4 text-center">Workshops</th>
+                        <th className="py-2.5 px-4 text-center">FDP / SDP / STTP</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      <tr>
+                        <td className="py-2.5 px-4 font-bold text-white">Organized</td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={programmes.organizedConferences}
+                            onChange={(e) => setProgrammes({ ...programmes, organizedConferences: parseInt(e.target.value) || 0 })}
+                            className="w-20 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={programmes.organizedWorkshops}
+                            onChange={(e) => setProgrammes({ ...programmes, organizedWorkshops: parseInt(e.target.value) || 0 })}
+                            className="w-20 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={programmes.organizedFdp}
+                            onChange={(e) => setProgrammes({ ...programmes, organizedFdp: parseInt(e.target.value) || 0 })}
+                            className="w-20 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-2.5 px-4 font-bold text-white">Attended</td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={programmes.attendedConferences}
+                            onChange={(e) => setProgrammes({ ...programmes, attendedConferences: parseInt(e.target.value) || 0 })}
+                            className="w-20 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={programmes.attendedWorkshops}
+                            onChange={(e) => setProgrammes({ ...programmes, attendedWorkshops: parseInt(e.target.value) || 0 })}
+                            className="w-20 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={programmes.attendedFdp}
+                            onChange={(e) => setProgrammes({ ...programmes, attendedFdp: parseInt(e.target.value) || 0 })}
+                            className="w-20 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono focus:border-blue-500 focus:outline-none"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 6. Project Funds Received from External Agencies */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-blue-200 flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-blue-400" />
+                    <span>6. Project Funds Received from the External Agencies</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={addProjectFundRow}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-600/20 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-500/30 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Project</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-700 bg-slate-900/60 shadow-inner">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-300 font-bold text-[11px]">
+                        <th className="py-2.5 px-3">Name of the Agency</th>
+                        <th className="py-2.5 px-2 text-center w-28">Amount (Lakhs)</th>
+                        <th className="py-2.5 px-3">Scheme Name</th>
+                        <th className="py-2.5 px-3">Title of the Project</th>
+                        <th className="py-2.5 px-3 w-32">Duration & Period</th>
+                        <th className="py-2.5 px-2 text-center w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {projectFunds.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={row.agency}
+                              onChange={(e) => handleProjectFundChange(idx, 'agency', e.target.value)}
+                              placeholder="e.g. UGC / DST / TNSCST"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            <input
+                              type="text"
+                              value={row.amountLakhs}
+                              onChange={(e) => handleProjectFundChange(idx, 'amountLakhs', e.target.value)}
+                              placeholder="e.g. 5.5"
+                              className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono text-xs focus:border-blue-500 focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={row.scheme}
+                              onChange={(e) => handleProjectFundChange(idx, 'scheme', e.target.value)}
+                              placeholder="e.g. Minor Research Project"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={row.title}
+                              onChange={(e) => handleProjectFundChange(idx, 'title', e.target.value)}
+                              placeholder="Project title..."
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={row.duration}
+                              onChange={(e) => handleProjectFundChange(idx, 'duration', e.target.value)}
+                              placeholder="e.g. 2023-2025"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeProjectFundRow(idx)}
+                              className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                              title="Remove Project"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 7. Any Other Information */}
+              <div>
+                <h3 className="text-xs font-bold text-blue-200 mb-1.5">
+                  7. Any Other Information
+                </h3>
+                <textarea
+                  rows={3}
+                  value={otherInformation}
+                  onChange={(e) => setOtherInformation(e.target.value)}
+                  placeholder="Specify memberships, awards, honours, curriculum development, community service, etc."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* STEP 5: REFERENCES & PAY DETAILS (IMAGE 1, SECTIONS 8 & 9)   */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          {activeStep === 5 && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-slate-700">
+                <span className="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center font-black text-xs border border-blue-500/30">
+                  5
+                </span>
+                <div>
+                  <h2 className="text-sm sm:text-base font-black text-white">5. References & Pay Details</h2>
+                  <p className="text-[11px] text-slate-400 font-medium">Matching Sections 8 & Pay details of the College Application Form</p>
+                </div>
+              </div>
+
+              {/* 8. References Table / Inputs */}
+              <div>
+                <h3 className="text-xs font-bold text-blue-200 mb-2 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-blue-400" />
+                  <span>8. Reference Details</span>
+                </h3>
+
+                <div className="max-w-2xl">
+                  {references.slice(0, 1).map((ref, idx) => (
+                    <div key={idx} className="p-4 rounded-2xl bg-slate-900/60 border border-slate-700/80 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-xs font-bold text-amber-300">Reference Details</span>
                       </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Name</label>
+                        <input
+                          type="text"
+                          value={ref.name}
+                          onChange={(e) => handleRefChange(idx, 'name', e.target.value)}
+                          placeholder="e.g. Dr. S. Murugan"
+                          className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">Designation</label>
+                          <input
+                            type="text"
+                            value={ref.designation}
+                            onChange={(e) => handleRefChange(idx, 'designation', e.target.value)}
+                            placeholder="e.g. Professor & Head"
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">Institution</label>
+                          <input
+                            type="text"
+                            value={ref.institution}
+                            onChange={(e) => handleRefChange(idx, 'institution', e.target.value)}
+                            placeholder="e.g. MSU University"
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">Contact Number</label>
+                          <input
+                            type="tel"
+                            value={ref.contactNo}
+                            onChange={(e) => handleRefChange(idx, 'contactNo', e.target.value)}
+                            placeholder="Mobile / Phone"
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">E-mail ID</label>
+                          <input
+                            type="email"
+                            value={ref.email}
+                            onChange={(e) => handleRefChange(idx, 'email', e.target.value)}
+                            placeholder="Email address"
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pay Details, Place & Date */}
+              <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-700/60 space-y-4">
+                <h3 className="text-xs font-bold text-blue-200">
+                  Pay Expected & Previous Pay
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Pay Expected (Rs.)
+                    </label>
+                    <input
+                      type="text"
+                      value={payExpected}
+                      onChange={(e) => setPayExpected(e.target.value)}
+                      placeholder="e.g. Rs. 35,000 / Month"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Pay Last Obtained (Rs.)
+                    </label>
+                    <input
+                      type="text"
+                      value={payLastObtained}
+                      onChange={(e) => setPayLastObtained(e.target.value)}
+                      placeholder="e.g. Rs. 28,000 / Month"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Place
+                    </label>
+                    <input
+                      type="text"
+                      value={place}
+                      onChange={(e) => setPlace(e.target.value)}
+                      placeholder="e.g. Tenkasi"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Application Date
+                    </label>
+                    <input
+                      type="date"
+                      value={applicationDate}
+                      onChange={(e) => setApplicationDate(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* STEP 6: DOCUMENTS, CREDENTIALS & FINISH                       */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          {activeStep === 6 && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-slate-700">
+                <span className="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center font-black text-xs border border-blue-500/30">
+                  6
+                </span>
+                <div>
+                  <h2 className="text-sm sm:text-base font-black text-white">6. Attachments & Security Setup</h2>
+                  <p className="text-[11px] text-slate-400 font-medium">Attach photocopies of qualifications, service proof and set your password</p>
+                </div>
+              </div>
+
+              {/* Document Uploads Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                {/* 1. Educational Qualifications Doc */}
+                <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-700/80">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileCheck className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs font-bold text-white">1. Educational Qualifications</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-3">Consolidated Degree / Marksheet (PDF / Image up to 10MB)</p>
+                  
+                  {educationalCertificatesDoc ? (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+                      <span className="truncate">{eduCertName || 'Educational_Certificates.pdf'}</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNetSetExamCertificate('');
-                          setNetSetCertificateName('');
-                        }}
-                        className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                        onClick={() => { setEducationalCertificatesDoc(''); setEduCertName(''); }}
+                        className="text-slate-400 hover:text-rose-400 p-1"
                       >
-                        Remove
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ) : (
-                    <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-blue-50/30 rounded-xl text-xs font-bold text-slate-600 hover:text-blue-600 transition-all cursor-pointer">
-                      <Upload className="w-4 h-4 text-slate-400" />
-                      <span>Upload Certificate (PDF / Image up to 10MB)</span>
+                    <label className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-slate-600 hover:border-blue-500 bg-slate-900/40 hover:bg-blue-600/10 text-xs font-semibold text-slate-300 cursor-pointer transition-all">
+                      <Upload className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Upload Certificates</span>
                       <input
                         type="file"
-                        accept=".pdf,image/png,image/jpeg,image/webp"
-                        onChange={handleCertSelect}
+                        accept=".pdf,image/*"
+                        onChange={(e) => handleDocUpload(e, setEducationalCertificatesDoc, setEduCertName)}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* 2. Proof for Experience */}
+                <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-700/80">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Briefcase className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs font-bold text-white">2. Proof for Experience</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-3">Service certificates / relieving letters (PDF / Image up to 10MB)</p>
+                  
+                  {experienceCertificatesDoc ? (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+                      <span className="truncate">{expCertName || 'Experience_Proof.pdf'}</span>
+                      <button
+                        type="button"
+                        onClick={() => { setExperienceCertificatesDoc(''); setExpCertName(''); }}
+                        className="text-slate-400 hover:text-rose-400 p-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-slate-600 hover:border-blue-500 bg-slate-900/40 hover:bg-blue-600/10 text-xs font-semibold text-slate-300 cursor-pointer transition-all">
+                      <Upload className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Upload Experience Proof</span>
+                      <input
+                        type="file"
+                        accept=".pdf,image/*"
+                        onChange={(e) => handleDocUpload(e, setExperienceCertificatesDoc, setExpCertName)}
                         className="hidden"
                       />
                     </label>
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* SECTION 2: CONTACT & RESIDENCE */}
-            <div className="space-y-3.5 pt-2">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                <Phone className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Contact & Residential Details
-                </h3>
+              {/* Password Setup */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-700/80 space-y-4 mt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold text-white">Update Portal Login Password (Optional)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-[11px] font-bold text-blue-300 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <span>{showPassword ? 'Hide' : 'Show'} Password</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      New Password (Leave blank to keep current)
+                    </label>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      className={`w-full px-3.5 py-2 rounded-xl bg-slate-900 border ${formErrors.newPassword ? 'border-rose-500' : 'border-slate-700'} text-white text-xs font-semibold focus:border-blue-500 focus:outline-none`}
+                    />
+                    {formErrors.newPassword && <p className="text-[10px] text-rose-400 mt-1">{formErrors.newPassword}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className={`w-full px-3.5 py-2 rounded-xl bg-slate-900 border ${formErrors.confirmPassword ? 'border-rose-500' : 'border-slate-700'} text-white text-xs font-semibold focus:border-blue-500 focus:outline-none`}
+                    />
+                    {formErrors.confirmPassword && <p className="text-[10px] text-rose-400 mt-1">{formErrors.confirmPassword}</p>}
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Personal Mobile Phone Number *
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="e.g. 9876543210"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none transition-all ${
-                      formErrors.phone ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
-                    }`}
-                  />
-                  {formErrors.phone && (
-                    <p className="text-[11px] text-rose-500 mt-1 font-medium">{formErrors.phone}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Emergency Contact Person & Phone *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.emergencyContact}
-                    onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
-                    placeholder="e.g. Mr. Rajesh (Spouse) - 9840123456"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none transition-all ${
-                      formErrors.emergencyContact ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
-                    }`}
-                  />
-                  {formErrors.emergencyContact && (
-                    <p className="text-[11px] text-rose-500 mt-1 font-medium">{formErrors.emergencyContact}</p>
-                  )}
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Residential Address *
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="e.g. 42, Faculty Quarters, VCAS Campus, Vellalankulam"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none transition-all resize-none ${
-                      formErrors.address ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-500'
-                    }`}
-                  />
-                  {formErrors.address && (
-                    <p className="text-[11px] text-rose-500 mt-1 font-medium">{formErrors.address}</p>
-                  )}
+              {/* Applicant Declaration */}
+              <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-700/60 text-slate-300 text-[11px] leading-relaxed">
+                <p className="font-semibold text-white mb-1">Declaration:</p>
+                <p>
+                  I hereby declare that all the information furnished above is true, complete and correct to the best of my knowledge and belief. I agree to abide by the rules and regulations of Vivekananda College of Arts and Science.
+                </p>
+                <div className="flex items-center justify-between mt-3 text-slate-400 font-mono text-[10px]">
+                  <span>Place: {place}</span>
+                  <span>Date: {applicationDate}</span>
+                  <span className="font-bold text-blue-300">Signature of the Applicant: {name}</span>
                 </div>
               </div>
             </div>
+          )}
 
-            {/* SECTION 3: OPTIONAL NEW PASSWORD */}
-            <div className="space-y-3.5 pt-2">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                <Lock className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Set Private Password (Optional)
-                </h3>
-              </div>
-
-              <p className="text-[11px] text-slate-500">
-                You can replace your initial password with your own private password, or leave blank to keep your current password.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    New Password
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.newPassword}
-                    onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                    placeholder="Enter new password (min 6 chars)"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none"
-                  />
-                  {formErrors.newPassword && (
-                    <p className="text-[11px] text-rose-500 mt-1 font-medium">{formErrors.newPassword}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Confirm New Password
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    placeholder="Re-enter new password"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none"
-                  />
-                  {formErrors.confirmPassword && (
-                    <p className="text-[11px] text-rose-500 mt-1 font-medium">{formErrors.confirmPassword}</p>
-                  )}
-                </div>
-              </div>
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* STEP CONTROLS (PREVIOUS / NEXT / SUBMIT)                     */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-700">
+            <div>
+              {activeStep > 1 && (
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-slate-700/80 hover:bg-slate-700 text-slate-200 transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Previous</span>
+                </button>
+              )}
             </div>
 
-            {/* SUBMIT BUTTON */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
-              >
-                {isSubmitting ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    <span>Save & Complete Profile &rarr; Open Dashboard</span>
-                  </>
-                )}
-              </button>
+            <div className="flex items-center gap-3">
+              {activeStep < 6 ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/25 transition-all cursor-pointer active:scale-95"
+                >
+                  <span>Save & Continue</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/30 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{isSubmitting ? 'Saving Application...' : 'Submit & Enter Portal'}</span>
+                </button>
+              )}
             </div>
-
-          </form>
-
-        </div>
+          </div>
+        </form>
 
       </div>
     </div>
