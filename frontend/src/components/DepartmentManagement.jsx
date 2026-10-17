@@ -24,7 +24,7 @@ import ModalPortal from './ModalPortal';
 const API_BASE = `${ROOT_API}/departments`;
 
 function formatHodEmail(name) {
-  if (!name) return 'hod@college.edu';
+  if (!name || !name.trim()) return '';
   const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim().toLowerCase();
   const parts = clean.split(' ').filter(Boolean);
   if (parts.length >= 2) {
@@ -56,22 +56,32 @@ export default function DepartmentManagement() {
     }, 4000);
   };
 
-  // Fetch departments from MongoDB backend
+  const [allSubjectsList, setAllSubjectsList] = useState([]);
+
+  // Fetch departments and subjects from MongoDB backend
   const fetchDepartments = async () => {
     setErrorMessage('');
     try {
-      const res = await fetch(API_BASE);
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setDepartments(data.data || []);
-        try {
-          localStorage.setItem('vcas_departments_cache', JSON.stringify(data.data || []));
-        } catch (_) {}
-      } else {
-        setErrorMessage(data.message || 'Failed to fetch departments from server.');
+      const [resDepts, resSubs] = await Promise.allSettled([
+        fetch(API_BASE),
+        fetch(`${ROOT_API}/subjects`)
+      ]);
+      if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
+        const data = await resDepts.value.json();
+        if (data.success) {
+          setDepartments(data.data || []);
+          try {
+            localStorage.setItem('vcas_departments_cache', JSON.stringify(data.data || []));
+          } catch (_) {}
+        }
+      }
+      if (resSubs.status === 'fulfilled' && resSubs.value.ok) {
+        const subData = await resSubs.value.json();
+        const list = Array.isArray(subData?.data) ? subData.data : (Array.isArray(subData) ? subData : []);
+        setAllSubjectsList(list);
       }
     } catch (err) {
-      console.error('Error fetching departments:', err);
+      console.error('Error fetching departments/subjects:', err);
       setErrorMessage('Unable to connect to backend server. Please verify backend is running.');
     } finally {
       setIsLoading(false);
@@ -128,8 +138,7 @@ export default function DepartmentManagement() {
 
   const validateForm = () => {
     const errors = {};
-    if (!formData.name.trim()) errors.name = 'Department Name is required';
-    if (!formData.hod.trim()) errors.hod = 'HOD Name is required';
+    if (!formData.name || !formData.name.trim()) errors.name = 'Department Name is required';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -262,7 +271,7 @@ export default function DepartmentManagement() {
     const newCode = (formData.code && formData.code.trim()) 
       ? formData.code.trim().toUpperCase() 
       : (formData.name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 5) || 'DEPT');
-    const newHod = formData.hod.trim();
+    const newHod = (formData.hod || '').trim();
     const years = Number(formData.totalYears) || 3;
     const sems = years * 2;
 
@@ -297,8 +306,8 @@ export default function DepartmentManagement() {
       name: formData.name.trim(),
       code: newCode,
       hod: newHod,
-      hodEmail: formatHodEmail(newHod),
-      hodPhone: formData.hodPhone || '',
+      hodEmail: newHod ? formatHodEmail(newHod) : '',
+      hodPhone: newHod ? (formData.hodPhone || '') : '',
       totalYears: years,
       totalSemesters: sems,
       facultyCount: Number(formData.facultyCount) || 0,
@@ -342,7 +351,7 @@ export default function DepartmentManagement() {
     const newCode = (formData.code && formData.code.trim()) 
       ? formData.code.trim().toUpperCase() 
       : (editingDept.code || formData.name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 5) || 'DEPT');
-    const newHod = formData.hod.trim();
+    const newHod = (formData.hod || '').trim();
     const years = Number(formData.totalYears) || editingDept.totalYears || 3;
 
     const sanitizedCourses = (editCoursesList || [])
@@ -376,8 +385,8 @@ export default function DepartmentManagement() {
       name: formData.name.trim(),
       code: newCode,
       hod: newHod,
-      hodEmail: formatHodEmail(newHod),
-      hodPhone: formData.hodPhone || editingDept.hodPhone || '',
+      hodEmail: newHod ? formatHodEmail(newHod) : '',
+      hodPhone: newHod ? (formData.hodPhone || editingDept.hodPhone || '') : '',
       totalYears: years,
       totalSemesters: years * 2,
       facultyCount: Number(formData.facultyCount) || 0,
@@ -441,9 +450,9 @@ export default function DepartmentManagement() {
     const q = searchQuery.toLowerCase().trim();
     return departments.filter(
       d =>
-        d.name.toLowerCase().includes(q) ||
-        d.code.toLowerCase().includes(q) ||
-        d.hod.toLowerCase().includes(q)
+        (d.name || '').toLowerCase().includes(q) ||
+        (d.code || '').toLowerCase().includes(q) ||
+        (d.hod || '').toLowerCase().includes(q)
     );
   }, [departments, searchQuery]);
 
@@ -564,7 +573,7 @@ export default function DepartmentManagement() {
                   {dept.name}
                 </h3>
                 <p className="text-xs text-slate-500 font-semibold mt-1">
-                  HOD: <span className="text-slate-700">{dept.hod}</span>
+                  HOD: <span className="text-slate-700">{dept.hod || 'Not Assigned'}</span>
                 </p>
               </div>
 
@@ -672,18 +681,15 @@ export default function DepartmentManagement() {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Head of Department (HOD) *
+                      Head of Department (HOD) <span className="text-slate-400 font-normal">(Optional)</span>
                     </label>
                     <input
                       type="text"
                       value={formData.hod || ''}
                       onChange={(e) => setFormData({ ...formData, hod: e.target.value })}
-                      placeholder="e.g. Dr. Meenakshi C"
-                      className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all ${
-                        formErrors.hod ? 'border-rose-400' : 'border-slate-200 focus:border-blue-500'
-                      }`}
+                      placeholder="e.g. Dr. Meenakshi C (Optional)"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:border-blue-500 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none transition-all"
                     />
-                    {formErrors.hod && <p className="text-[10px] text-rose-500 mt-1">{formErrors.hod}</p>}
                   </div>
                 </div>
 
@@ -906,11 +912,14 @@ export default function DepartmentManagement() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">HOD Name *</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Head of Department (HOD) <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
                     <input
                       type="text"
                       value={formData.hod || ''}
                       onChange={(e) => setFormData({ ...formData, hod: e.target.value })}
+                      placeholder="e.g. Dr. Meenakshi C (Optional)"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none"
                     />
                   </div>
@@ -1123,11 +1132,11 @@ export default function DepartmentManagement() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     DEPARTMENT LEADERSHIP
                   </span>
-                  <p className="text-sm font-bold text-slate-900">{viewingDept.hod}</p>
+                  <p className="text-sm font-bold text-slate-900">{viewingDept.hod || 'Not Assigned'}</p>
                 </div>
               </div>
               <span className="px-3 py-1 bg-white text-slate-600 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hidden sm:inline-block">
-                {formatHodEmail(viewingDept.hod)}
+                {viewingDept.hod ? formatHodEmail(viewingDept.hod) : 'No HOD assigned'}
               </span>
             </div>
 
@@ -1154,41 +1163,64 @@ export default function DepartmentManagement() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(viewingDept.coursesList && viewingDept.coursesList.length > 0) ? (
-                      viewingDept.coursesList.map((sub, idx) => {
-                        const appearVal = sub.appeared !== undefined ? sub.appeared : (sub.appearedCount !== undefined ? sub.appearedCount : (viewingDept.studentCount || 28));
-                        const passVal = sub.pass !== undefined ? sub.pass : (sub.passCount !== undefined ? sub.passCount : (viewingDept.studentCount || 28));
-                        const pctVal = sub.passPct !== undefined ? sub.passPct : (sub.passPercentage !== undefined ? sub.passPercentage : 100);
-                        const reapVal = sub.reappear !== undefined ? sub.reappear : (sub.reappearCount !== undefined ? sub.reappearCount : '-');
+                    {(() => {
+                      const directList = viewingDept.coursesList || [];
+                      const deptNorm = (viewingDept.name || '').toLowerCase().trim();
+                      const existingCodes = new Set(directList.map(c => (c.code || '').toUpperCase().trim()));
+                      const fromGlobal = allSubjectsList
+                        .filter(s => {
+                          const sDept = (s.department || s.dept || '').toLowerCase().trim();
+                          const code = (s.code || '').toUpperCase().trim();
+                          return !existingCodes.has(code) && (sDept === deptNorm || sDept.includes(deptNorm) || deptNorm.includes(sDept));
+                        })
+                        .map((s, idx) => ({
+                          sNo: directList.length + idx + 1,
+                          code: s.code,
+                          title: s.name || s.title || s.code,
+                          handledStaff: s.faculty || 'Faculty Member',
+                          appeared: s.studentsEnrolled || viewingDept.studentCount || 28,
+                          pass: s.studentsEnrolled || viewingDept.studentCount || 28,
+                          passPct: 100,
+                          reappear: '-'
+                        }));
+                      const combinedSubjects = [...directList, ...fromGlobal];
 
-                        return (
-                          <tr key={idx} className="hover:bg-slate-50/70">
-                            <td className="py-2.5 px-2 text-center font-bold text-slate-500 border-r border-slate-100">{sub.sNo || idx + 1}</td>
-                            <td className="py-2.5 px-3 text-center font-mono font-bold text-blue-700 border-r border-slate-100">{sub.code}</td>
-                            <td className="py-2.5 px-3 font-bold text-slate-900 border-r border-slate-100">{sub.title || sub.name}</td>
-                            <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100">{sub.handledStaff || 'Faculty Member'}</td>
-                            <td className="py-2.5 px-3 text-center font-bold text-slate-800 border-r border-slate-100">{appearVal}</td>
-                            <td className="py-2.5 px-2 text-center font-bold text-slate-900 border-r border-slate-100">{passVal}</td>
-                            <td className="py-2.5 px-2 text-center font-black border-r border-slate-100">
-                              <span className={`px-2 py-0.5 rounded-md ${pctVal >= 90 ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
-                                {pctVal}%
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-2 text-center font-bold">
-                              <span className={`px-2 py-0.5 rounded-md ${reapVal === '-' ? 'text-slate-400' : 'bg-rose-50 text-rose-700 font-black'}`}>
-                                {reapVal}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan={8} className="p-8 text-center text-slate-400 text-xs">
-                          No subjects registered for this department. Edit this department to add subjects.
-                        </td>
-                      </tr>
-                    )}
+                      return combinedSubjects.length > 0 ? (
+                        combinedSubjects.map((sub, idx) => {
+                          const appearVal = sub.appeared !== undefined ? sub.appeared : (sub.appearedCount !== undefined ? sub.appearedCount : (viewingDept.studentCount || 28));
+                          const passVal = sub.pass !== undefined ? sub.pass : (sub.passCount !== undefined ? sub.passCount : (viewingDept.studentCount || 28));
+                          const pctVal = sub.passPct !== undefined ? sub.passPct : (sub.passPercentage !== undefined ? sub.passPercentage : 100);
+                          const reapVal = sub.reappear !== undefined ? sub.reappear : (sub.reappearCount !== undefined ? sub.reappearCount : '-');
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/70">
+                              <td className="py-2.5 px-2 text-center font-bold text-slate-500 border-r border-slate-100">{sub.sNo || idx + 1}</td>
+                              <td className="py-2.5 px-3 text-center font-mono font-bold text-blue-700 border-r border-slate-100">{sub.code}</td>
+                              <td className="py-2.5 px-3 font-bold text-slate-900 border-r border-slate-100">{sub.title || sub.name}</td>
+                              <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100">{sub.handledStaff || 'Faculty Member'}</td>
+                              <td className="py-2.5 px-3 text-center font-bold text-slate-800 border-r border-slate-100">{appearVal}</td>
+                              <td className="py-2.5 px-2 text-center font-bold text-slate-900 border-r border-slate-100">{passVal}</td>
+                              <td className="py-2.5 px-2 text-center font-black border-r border-slate-100">
+                                <span className={`px-2 py-0.5 rounded-md ${pctVal >= 90 ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
+                                  {pctVal}%
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-2 text-center font-bold">
+                                <span className={`px-2 py-0.5 rounded-md ${reapVal === '-' ? 'text-slate-400' : 'bg-rose-50 text-rose-700 font-black'}`}>
+                                  {reapVal}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={8} className="p-8 text-center text-slate-400 text-xs">
+                            No subjects registered for this department. Edit this department or use Courses & Subjects to add subjects.
+                          </td>
+                        </tr>
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>

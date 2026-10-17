@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { API_BASE, BACKEND_URL } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import {
   FileSpreadsheet,
@@ -40,19 +40,6 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const STANDARD_DEPARTMENTS = [
-  'BSc. Computer science',
-  'Computer Science',
-  'Commerce',
-  'Mathematics',
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Tamil',
-  'English',
-  'Physical Education',
-  'Office'
-];
-
 const EXAM_SESSIONS = [
   'All Sessions',
   'End Semester Examinations - Nov/Dec 2026',
@@ -73,8 +60,28 @@ export default function ExaminationManagement({ user }) {
   const [examsList, setExamsList] = useState([]);
   const [studentMarksList, setStudentMarksList] = useState([]);
   const [hallsList, setHallsList] = useState([]);
-  const [availableSubjects, setAvailableSubjects] = useState([]);
-  const [availableDepartments, setAvailableDepartments] = useState(STANDARD_DEPARTMENTS);
+  const [availableSubjects, setAvailableSubjects] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+      if (Array.isArray(cached) && cached.length > 0) {
+        return cached.map(s => ({
+          code: (s.code || '').toUpperCase().trim(),
+          name: s.name || s.title || s.code,
+          department: s.department || s.dept || ''
+        })).filter(s => Boolean(s.code));
+      }
+    } catch (_) {}
+    return [{ code: 'CS101', name: 'Tamil', department: 'Computer Science' }];
+  });
+  const [availableDepartments, setAvailableDepartments] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
+      if (Array.isArray(cached) && cached.length > 0) {
+        return Array.from(new Set(cached.map(d => d.name).filter(Boolean)));
+      }
+    } catch (_) {}
+    return getKnownDepartments();
+  });
   const [facultyList, setFacultyList] = useState([]);
   const [invigilatorCategoryFilter, setInvigilatorCategoryFilter] = useState('All');
   const [availableVenues, setAvailableVenues] = useState([]);
@@ -85,7 +92,7 @@ export default function ExaminationManagement({ user }) {
   const fetchAllExaminationData = async () => {
     try {
       setIsSyncing(true);
-      const [resExams, resMarks, resHalls, resStudents, resTickets, resSubjects, resClasses, resDepts, resStaff] = await Promise.allSettled([
+      const [resExams, resMarks, resHalls, resStudents, resTickets, resSubjects, resClasses, resDepts, resStaff, resCourses] = await Promise.allSettled([
         fetch(`${API_BASE}/exams`),
         fetch(`${API_BASE}/internal-marks`),
         fetch(`${API_BASE}/exams/halls`),
@@ -94,7 +101,8 @@ export default function ExaminationManagement({ user }) {
         fetch(`${API_BASE}/subjects`),
         fetch(`${API_BASE}/classes`),
         fetch(`${API_BASE}/departments`),
-        fetch(`${API_BASE}/staff`)
+        fetch(`${API_BASE}/staff`),
+        fetch(`${API_BASE}/courses`)
       ]);
 
       let staffArr = [];
@@ -105,22 +113,28 @@ export default function ExaminationManagement({ user }) {
       }
 
       let deptNames = [];
+      let rawDepts = [];
       if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
         const d = await resDepts.value.json();
         if (d.success && Array.isArray(d.data)) {
+          rawDepts = d.data;
           deptNames = d.data.map(dept => dept.name).filter(Boolean);
         }
       }
-      const staffDepts = staffArr.map(s => s.department || s.dept || s.departmentName).filter(Boolean);
-      let subjectDepts = [];
-      if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
-        const sd = await resSubjects.value.json();
-        if (sd.success && Array.isArray(sd.data)) {
-          subjectDepts = sd.data.map(s => s.department).filter(Boolean);
-        }
+      if (deptNames.length === 0) {
+        try {
+          const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
+          if (Array.isArray(cached) && cached.length > 0) {
+            deptNames = cached.map(d => d.name).filter(Boolean);
+          }
+        } catch (_) {}
       }
-      const combinedDepts = Array.from(new Set([...STANDARD_DEPARTMENTS, ...deptNames, ...staffDepts, ...subjectDepts]));
-      setAvailableDepartments(combinedDepts);
+      if (deptNames.length === 0) {
+        deptNames = getKnownDepartments();
+      }
+      // Strictly ONLY the real added departments from DB (no extra hardcoded datas)
+      const realAddedDepts = Array.from(new Set(deptNames));
+      setAvailableDepartments(realAddedDepts);
 
       // Collect real-time venues strictly from real exam halls and user-added custom venues
       const venueSet = new Set();
@@ -204,39 +218,96 @@ export default function ExaminationManagement({ user }) {
         }
       }
 
-      // Process Registered Curriculum Subjects & Classes for Schedule Dropdown
+      // Process Registered Curriculum Subjects, Department Courses, Program Courses, and Classes
       const subsMap = new Map();
+
+      // a) Database Subjects (/api/subjects)
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const d = await resSubjects.value.json();
-        if (d.success && Array.isArray(d.data)) {
-          d.data.forEach(s => {
-            const code = (s.code || '').toUpperCase().trim();
-            if (code) {
+        const list = Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : []);
+        list.forEach(s => {
+          const code = (s.code || '').toUpperCase().trim();
+          if (code) {
+            subsMap.set(code, {
+              code,
+              name: s.name || s.title || code,
+              department: s.department || s.dept || ''
+            });
+          }
+        });
+      }
+
+      // b) Department Courses from /api/departments (coursesList inside each department)
+      rawDepts.forEach(dept => {
+        if (Array.isArray(dept.coursesList)) {
+          dept.coursesList.forEach(c => {
+            const code = (c.code || '').toUpperCase().trim();
+            if (code && !subsMap.has(code)) {
               subsMap.set(code, {
                 code,
-                name: s.name || code,
-                department: s.department || 'Computer Science'
+                name: c.name || c.title || code,
+                department: dept.name || ''
               });
             }
           });
         }
-      }
+      });
+
+
+      // d) Classes (/api/classes)
       if (resClasses.status === 'fulfilled' && resClasses.value.ok) {
         const d = await resClasses.value.json();
-        if (d.success && Array.isArray(d.classes)) {
-          d.classes.forEach(c => {
+        const clsList = d?.classes || (Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : []));
+        if (Array.isArray(clsList)) {
+          clsList.forEach(c => {
             const code = (c.code || '').toUpperCase().trim();
             if (code && !subsMap.has(code)) {
               subsMap.set(code, {
                 code,
                 name: c.name || code,
-                department: c.department || 'Computer Science'
+                department: c.department || c.dept || ''
               });
             }
           });
         }
       }
-      setAvailableSubjects(Array.from(subsMap.values()));
+
+      // e) Existing Scheduled Exams (/api/exams)
+      realExams.forEach(ex => {
+        const code = (ex.code || '').toUpperCase().trim();
+        if (code && !subsMap.has(code)) {
+          subsMap.set(code, {
+            code,
+            name: ex.name || code,
+            department: ex.department || ''
+          });
+        }
+      });
+
+      // f) Client-side cached subjects
+      try {
+        const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+        if (Array.isArray(cached)) {
+          cached.forEach(s => {
+            const code = (s.code || '').toUpperCase().trim();
+            if (code && !subsMap.has(code)) {
+              subsMap.set(code, {
+                code,
+                name: s.name || s.title || code,
+                department: s.department || ''
+              });
+            }
+          });
+        }
+      } catch (_) {}
+
+      const allSubs = Array.from(subsMap.values());
+      setAvailableSubjects(allSubs);
+      try {
+        if (allSubs.length > 0) {
+          localStorage.setItem('vcas_subjects_cache', JSON.stringify(allSubs));
+        }
+      } catch (_) {}
 
       // Build unified student examination and marks roster
       const studentMap = new Map();
@@ -460,7 +531,7 @@ export default function ExaminationManagement({ user }) {
   const [scheduleForm, setScheduleForm] = useState({
     code: '',
     name: '',
-    department: 'BSc. Computer science',
+    department: '',
     year: 1,
     sem: 'Sem 1',
     date: '',
@@ -470,6 +541,37 @@ export default function ExaminationManagement({ user }) {
     invigilator: '',
     type: 'End Semester Theory'
   });
+
+  // Subjects for the Add Exam Schedule modal:
+  // If user selects a department, show subjects for that department (or all subjects if none match or department is empty)
+  const modalScheduleSubjects = useMemo(() => {
+    if (!scheduleForm.department || scheduleForm.department.trim() === '') return availableSubjects;
+    const targetDept = scheduleForm.department.toLowerCase().trim();
+    const filtered = availableSubjects.filter(s => {
+      if (!s.department) return true;
+      const sDept = (s.department || '').toLowerCase().trim();
+      return sDept === targetDept || sDept.includes(targetDept) || targetDept.includes(sDept);
+    });
+    return filtered.length > 0 ? filtered : availableSubjects;
+  }, [availableSubjects, scheduleForm.department]);
+
+  const handleOpenAddSchedule = () => {
+    fetchAllExaminationData();
+    setScheduleForm({
+      code: '',
+      name: '',
+      department: '',
+      year: 1,
+      sem: 'Sem 1',
+      date: new Date().toISOString().split('T')[0],
+      session: 'Forenoon (FN)',
+      hall: '',
+      qpCode: '',
+      invigilator: '',
+      type: 'End Semester Theory'
+    });
+    setIsAddScheduleOpen(true);
+  };
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -563,12 +665,17 @@ export default function ExaminationManagement({ user }) {
       return;
     }
 
+    if (!scheduleForm.department || !scheduleForm.department.trim()) {
+      alert('Please select a Department');
+      return;
+    }
+
     try {
       setIsSubmittingSchedule(true);
       const payload = {
         code: finalCode,
         name: finalName,
-        department: scheduleForm.department || 'Computer Science',
+        department: scheduleForm.department.trim(),
         year: Number(scheduleForm.year) || 1,
         sem: scheduleForm.sem || 'Sem 1',
         date: scheduleForm.date,
@@ -606,6 +713,12 @@ export default function ExaminationManagement({ user }) {
         setExamsList(prev => [tempExam, ...prev]);
         showToast('New Exam Schedule added to list!');
       }
+      setAvailableSubjects(prev => {
+        if (!prev.some(s => s.code === finalCode)) {
+          return [{ code: finalCode, name: finalName, department: scheduleForm.department }, ...prev];
+        }
+        return prev;
+      });
     } catch (err) {
       console.error('Failed to persist exam schedule:', err);
       const tempExam = { id: Date.now(), ...scheduleForm };
@@ -617,7 +730,7 @@ export default function ExaminationManagement({ user }) {
       setScheduleForm({
         code: '',
         name: '',
-        department: 'BSc. Computer science',
+        department: '',
         year: 1,
         sem: 'Sem 1',
         date: '',
@@ -1191,7 +1304,7 @@ export default function ExaminationManagement({ user }) {
           )}
 
           <button
-            onClick={() => setIsAddScheduleOpen(true)}
+            onClick={handleOpenAddSchedule}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs shadow-rose-500/20 transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -2084,21 +2197,30 @@ export default function ExaminationManagement({ user }) {
                     value={scheduleForm.code}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const matched = availableSubjects.find(s => s.code === val);
-                      setScheduleForm(prev => ({
-                        ...prev,
-                        code: val,
-                        name: matched ? matched.name : (val === 'CUSTOM' ? '' : prev.name),
-                        department: matched && matched.department ? matched.department : prev.department
-                      }));
+                      if (val === 'CUSTOM') {
+                        setScheduleForm(prev => ({
+                          ...prev,
+                          code: 'CUSTOM',
+                          name: '',
+                          customCode: ''
+                        }));
+                      } else {
+                        const matched = availableSubjects.find(s => s.code === val);
+                        setScheduleForm(prev => ({
+                          ...prev,
+                          code: val,
+                          name: matched ? matched.name : prev.name,
+                          department: matched && matched.department ? matched.department : prev.department
+                        }));
+                      }
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
                     required
                   >
                     <option value="">-- Select Subject Code --</option>
-                    {availableSubjects.map((s) => (
+                    {modalScheduleSubjects.map((s) => (
                       <option key={s.code} value={s.code}>
-                        {s.code} ({s.name})
+                        {s.code} - {s.name} {s.department ? `(${s.department})` : ''}
                       </option>
                     ))}
                     <option value="CUSTOM">+ Enter Custom Code...</option>
@@ -2135,6 +2257,7 @@ export default function ExaminationManagement({ user }) {
                   value={scheduleForm.department}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, department: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                  required
                 >
                   <option value="">-- Select Department --</option>
                   {availableDepartments.filter(d => d !== 'All Departments').map(d => (
@@ -2712,15 +2835,9 @@ export default function ExaminationManagement({ user }) {
                     className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 mb-1.5 focus:bg-white focus:outline-none cursor-pointer"
                   >
                     <option value="All">All Staff Categories ({facultyList.length})</option>
-                    <option value="Computer Science">1. Computer Science</option>
-                    <option value="Commerce">2. Commerce</option>
-                    <option value="Mathematics">3. Mathematics</option>
-                    <option value="Business Administration (BBA)">4. BBA</option>
-                    <option value="Computer Applications (BCA)">5. BCA</option>
-                    <option value="Tamil">6. Tamil</option>
-                    <option value="English">7. English</option>
-                    <option value="Physical Education">8. Physical Education</option>
-                    <option value="Office">9. Office</option>
+                    {availableDepartments.map((dept, idx) => (
+                      <option key={dept} value={dept}>{idx + 1}. {dept}</option>
+                    ))}
                   </select>
 
                   <select

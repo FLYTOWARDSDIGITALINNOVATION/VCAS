@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BACKEND_URL } from '../apiConfig';
+import { BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import AddStudentWizard from './AddStudentWizard';
 import StudentProfileView from './StudentProfileView';
 import { 
@@ -123,9 +123,20 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [departmentsList, setDepartmentsList] = useState([]);
-  const [subjectsList, setSubjectsList] = useState([]);
+  const [departmentsList, setDepartmentsList] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
+      if (Array.isArray(cached) && cached.length > 0) return cached;
+    } catch (_) {}
+    return getKnownDepartments().map(name => ({ name, code: name.substring(0, 3).toUpperCase() }));
+  });
+  const [subjectsList, setSubjectsList] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+      if (Array.isArray(cached) && cached.length > 0) return cached;
+    } catch (_) {}
+    return [{ code: 'CS101', name: 'Tamil', department: 'Computer Science' }];
+  });
   const [classesList, setClassesList] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState('All Subjects');
 
@@ -376,7 +387,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
     const content = `
 ================================================================================
-          VIVEKANANDHA COLLEGE OF ARTS AND SCIENCES
+          VIVEKANANDA COLLEGE OF ARTS & SCIENCE
           (AFFILIATED TO MANONMANIAM SUNDARANAR UNIVERSITY)
                       VELLALANKULAM, TAMIL NADU
                   OFFICIAL STUDENT SLIP & CREDENTIAL PASS
@@ -494,7 +505,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
           <div class="header-brand">
             ${getCollegeLogoHtml(44)}
             <div>
-              <div class="title">Vivekanandha College of Arts and Sciences</div>
+              <div class="title">Vivekananda College of Arts & Science</div>
               <div class="subtitle">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</div>
             </div>
           </div>

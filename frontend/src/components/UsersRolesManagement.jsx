@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { API_BASE, BACKEND_URL } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { 
   ShieldCheck, 
   Plus, 
@@ -681,14 +681,9 @@ export default function UsersRolesManagement() {
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
                   >
-                    <option value="Commerce">Commerce</option>
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="English Literature">English Literature</option>
-                    <option value="Business Administration (BBA)">Business Administration (BBA)</option>
-                    <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
-                    <option value="Mathematics">Mathematics</option>
-                    <option value="Administration">Administration</option>
-                    <option value="Finance & Accounts">Finance & Accounts</option>
+                    {getKnownDepartments().map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
                   </select>
                 </div>
               </div>

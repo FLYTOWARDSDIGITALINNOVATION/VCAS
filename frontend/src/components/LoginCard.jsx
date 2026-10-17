@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BACKEND_URL } from '../apiConfig';
+import { BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { 
   GraduationCap, 
   Lock, 
@@ -25,17 +25,7 @@ import CollegeLogo from './CollegeLogo';
 
 const API_BASE = BACKEND_URL;
 
-const DEPARTMENTS = [
-  'Computer Science',
-  'Commerce',
-  'Mathematics',
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Tamil',
-  'English',
-  'Physical Education',
-  'Office'
-];
+const DEPARTMENTS = getKnownDepartments();
 
 export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
   // Primary portal selection: 'Student' or staff/admin roles ('SuperAdmin' | 'Admin' | 'Staff')
@@ -69,10 +59,9 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
     fetch(`${API_BASE}/api/departments`)
       .then(r => r.json())
       .then(d => {
-        if (d.success && Array.isArray(d.data)) {
+        if (d.success && Array.isArray(d.data) && d.data.length > 0) {
           const names = d.data.map(item => item.name).filter(Boolean);
-          const combined = Array.from(new Set([...DEPARTMENTS, ...names]));
-          setDepartmentsList(combined);
+          setDepartmentsList(names.length > 0 ? names : getKnownDepartments());
         }
       })
       .catch(() => {});
@@ -302,8 +291,8 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
       {/* Brand Header */}
       <div className="flex flex-col items-center text-center mb-5">
         <CollegeLogo size="lg" showText={false} className="mb-2" />
-        <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-slate-900 leading-tight">
-          Vivekanandha College of Arts and Sciences
+        <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-slate-900 leading-tight uppercase">
+          VIVEKANANDA COLLEGE OF ARTS & SCIENCE
         </h1>
         <p className="text-[11px] text-blue-600 font-bold mt-0.5">Vellalankulam Campus Automation • VCAS Portal</p>
       </div>

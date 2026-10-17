@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { API_BASE, BACKEND_URL } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import { 
   BookOpen, 
@@ -70,13 +70,7 @@ export default function CourseSubjectManagement({ user }) {
       const cached = localStorage.getItem('vcas_programs_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        const demoCodes = ['BCOM-GEN', 'BCA-APP', 'BBA-MGMT', 'BA-ENG', 'BSC-MATH', 'BSC-CS'];
-        const filtered = Array.isArray(parsed) ? parsed.filter(p => !demoCodes.includes(p.code)).map(p => ({
-          ...p,
-          department: p.department === 'Computer Science' ? 'BSc. Computer science' : p.department
-        })) : [];
-        if (filtered.length > 0) return filtered;
-        localStorage.removeItem('vcas_programs_cache');
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (_) {}
     return [];
@@ -87,25 +81,37 @@ export default function CourseSubjectManagement({ user }) {
       const cached = localStorage.getItem('vcas_subjects_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        const demoSubjectCodes = [
-          'CS101', 'CS102', 'CS103P', 'MAT101', 'CS201', 'CS202', 'CS203P',
-          'CS301', 'CS302', 'CS303P', 'CS401', 'CS402', 'CS403P', 'CS501',
-          'CS502', 'CS503P', 'CS601', 'CS602', 'CS603', 'COM101', 'COM102',
-          'COM201', 'COM202', 'COM301', 'COM401', 'COM501', 'COM601',
-          'BCA101', 'BCA201', 'BCA301', 'BCA401', 'BCA501', 'BCA601',
-          'BBA101', 'BBA201', 'BBA301', 'BBA401', 'BBA501', 'BBA601',
-          'CS2001', 'CS2005'
-        ];
-        const fakeFacultyNames = ['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'];
-        const filtered = Array.isArray(parsed) ? parsed.filter(s => !demoSubjectCodes.includes(s.code) && !fakeFacultyNames.includes(s.faculty) && !String(s._id || s.id || '').startsWith('dept_')).map(s => ({
-          ...s,
-          department: s.department === 'Computer Science' ? 'BSc. Computer science' : s.department
-        })) : [];
-        if (filtered.length > 0) return filtered;
-        localStorage.removeItem('vcas_subjects_cache');
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (_) {}
-    return [];
+    return [
+      {
+        _id: '6ad345945892adbcf3013478',
+        code: 'CS101',
+        name: 'Tamil',
+        department: 'Computer Science',
+        year: 1,
+        sem: 'Sem 1',
+        credits: 2,
+        type: 'Theory',
+        faculty: 'Latha V',
+        ltp: '3-0-0',
+        hours: '3 hrs/wk',
+        theoryHours: 3,
+        labHours: 0,
+        isContinuousLab: true,
+        prerequisite: 'None',
+        textbooks: '',
+        studentsEnrolled: 60,
+        units: [
+          { unit: 'Unit 1', title: 'Foundational Principles & Core Concepts', hours: 9 },
+          { unit: 'Unit 2', title: 'Theoretical Framework & Analytical Methods', hours: 9 },
+          { unit: 'Unit 3', title: 'Applied Methodology & System Implementation', hours: 9 },
+          { unit: 'Unit 4', title: 'Real-world Architecture & Case Studies', hours: 9 },
+          { unit: 'Unit 5', title: 'Emerging Paradigms & Industry Standards', hours: 9 }
+        ]
+      }
+    ];
   });
 
   const [facultyList, setFacultyList] = useState([]);
@@ -134,7 +140,7 @@ export default function CourseSubjectManagement({ user }) {
       if (resCourses.status === 'fulfilled' && resCourses.value.ok) {
         const cData = await resCourses.value.json();
         if (cData.success && Array.isArray(cData.data)) {
-          const list = cData.data.filter(c => c.code && !['BSC-CS'].includes(c.code.toUpperCase()));
+          const list = cData.data.filter(c => Boolean(c.code));
           setProgramsList(list);
           try { localStorage.setItem('vcas_programs_cache', JSON.stringify(list)); } catch (_) {}
         }
@@ -143,7 +149,7 @@ export default function CourseSubjectManagement({ user }) {
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const sData = await resSubjects.value.json();
         if (sData.success && Array.isArray(sData.data)) {
-          const clean = sData.data.filter(s => s.code && !['CS2001', 'CS2005', 'SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()) && !['Dr. Ramesh Kumar', 'Dr. Ananya Sharma'].includes(s.faculty));
+          const clean = sData.data.filter(s => Boolean(s.code));
           setSubjectsList(clean);
           try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean)); } catch (_) {}
         }
@@ -284,14 +290,14 @@ export default function CourseSubjectManagement({ user }) {
   const realDepartmentNames = useMemo(() => {
     const list = departmentsList.map(d => d.name?.trim()).filter(Boolean);
     const unique = Array.from(new Set(list));
-    return unique.length > 0 ? unique : ['BSc. Computer science'];
+    return unique.length > 0 ? unique : getKnownDepartments();
   }, [departmentsList]);
 
   // Form State for Subject Add / Edit
   const [subjectForm, setSubjectForm] = useState({
     code: '',
     name: '',
-    department: 'BSc. Computer science',
+    department: 'Computer Science',
     year: 1,
     sem: 'Sem 1',
     credits: 4,
@@ -311,7 +317,7 @@ export default function CourseSubjectManagement({ user }) {
     code: '',
     name: '',
     degreeLevel: 'Undergraduate (UG)',
-    department: 'BSc. Computer science',
+    department: 'Computer Science',
     regulation: 'Regulation 2024 (R24)',
     durationYears: 3,
     totalCredits: 140,
@@ -459,7 +465,7 @@ export default function CourseSubjectManagement({ user }) {
   // Subject Handlers
   // -------------------------------------------------------------
   const handleOpenAddSubject = (defaultSem) => {
-    const initialDept = selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'BSc. Computer science');
+    const initialDept = selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'Computer Science');
     const deptObj = departmentsList.find(d => d.name === initialDept);
     const prefix = deptObj?.code || (initialDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'CS';
     const initialYear = selectedYear !== 'ALL' ? Number(selectedYear) : 1;
@@ -617,7 +623,11 @@ export default function CourseSubjectManagement({ user }) {
         ],
         evaluation: { internal: 40, external: 60 }
       };
-      setSubjectsList(prev => [newSubj, ...prev]);
+      setSubjectsList(prev => {
+        const next = [newSubj, ...prev];
+        try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(next)); } catch (_) {}
+        return next;
+      });
       setIsAddSubjectOpen(false);
       showToast(`Class & Subject ${newSubj.code} added. Weekly timetable automatically generated with continuous lab hours!`);
 
@@ -628,7 +638,11 @@ export default function CourseSubjectManagement({ user }) {
         body: JSON.stringify(newSubj)
       }).then(r => r.json()).then(data => {
         if (data.success && data.data) {
-          setSubjectsList(prev => prev.map(s => s.code === newSubj.code ? data.data : s));
+          setSubjectsList(prev => {
+            const next = prev.map(s => s.code === newSubj.code ? data.data : s);
+            try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(next)); } catch (_) {}
+            return next;
+          });
         }
       }).catch(err => console.error('Error creating subject in backend:', err));
     }
@@ -662,7 +676,7 @@ export default function CourseSubjectManagement({ user }) {
   const handleOpenAddProgram = (defaultDept) => {
     const chosenDept = (typeof defaultDept === 'string' && defaultDept.trim())
       ? defaultDept.trim()
-      : (selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'BSc. Computer science'));
+      : (selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'Computer Science'));
     const deptObj = departmentsList.find(d => d.name === chosenDept);
     const prefix = deptObj?.code || (chosenDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'BSC';
     setProgramForm({
@@ -1827,20 +1841,6 @@ export default function CourseSubjectManagement({ user }) {
               </div>
             </div>
 
-            {/* Assessment & Evaluation Scheme */}
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs space-y-2">
-              <span className="font-bold text-slate-800 block text-[11px] uppercase">Assessment & Evaluation Scheme:</span>
-              <div className="flex items-center gap-4">
-                <div className="flex-1 bg-white p-2.5 rounded-xl border border-slate-200 text-center">
-                  <span className="text-xs text-slate-500 font-semibold block">Continuous Internal Assessment (CIA)</span>
-                  <span className="text-sm font-extrabold text-blue-600">40%</span>
-                </div>
-                <div className="flex-1 bg-white p-2.5 rounded-xl border border-slate-200 text-center">
-                  <span className="text-xs text-slate-500 font-semibold block">End-Semester Examination (ESE)</span>
-                  <span className="text-sm font-extrabold text-indigo-600">60%</span>
-                </div>
-              </div>
-            </div>
 
             {/* Textbooks & References */}
             {viewingSubject.textbooks && (

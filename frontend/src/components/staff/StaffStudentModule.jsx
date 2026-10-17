@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { API_BASE, BACKEND_URL } from '../../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../../apiConfig';
 import {
   GraduationCap,
   Users,
@@ -79,7 +79,13 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
   const [loadingStaffClasses, setLoadingStaffClasses] = useState(false);
   const [selectedClassCodes, setSelectedClassCodes] = useState(new Set());
   const [savingClasses, setSavingClasses] = useState(false);
-  const [departmentsList, setDepartmentsList] = useState([]);
+  const [departmentsList, setDepartmentsList] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
+      if (Array.isArray(cached) && cached.length > 0) return cached;
+    } catch (_) {}
+    return getKnownDepartments().map(name => ({ name, code: name.substring(0, 3).toUpperCase() }));
+  });
   const [coursesList, setCoursesList] = useState([]);
 
   // Form State for Adding / Editing Student - all fields completely untyped / blank
@@ -512,7 +518,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
           <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:6px;">
             ${getCollegeLogoHtml(44)}
             <div>
-              <div class="title">Vivekanandha College of Arts and Sciences</div>
+              <div class="title">Vivekananda College of Arts & Science</div>
               <div class="sub">Affiliated with Manonmaniam Sundaranar University • VCAS</div>
             </div>
           </div>

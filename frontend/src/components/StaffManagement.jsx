@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BACKEND_URL } from '../apiConfig';
+import { BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import {
   Search,
   Plus,
@@ -75,28 +75,20 @@ const INITIAL_STAFF = [];
 
 const DEPARTMENTS = [
   'All Departments',
-  'Computer Science',
+  'Artificial Intelligence',
   'Commerce',
-  'Mathematics',
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Tamil',
-  'English',
-  'Physical Education',
-  'Office'
+  'Computer Science',
+  'Criminology and Forensic Science',
+  'Management'
 ];
 
 export const STANDARD_STAFF_CATEGORIES = [
   { value: 'All Departments', label: 'All Staff' },
-  { value: 'Computer Science', label: '1. Computer Science' },
+  { value: 'Artificial Intelligence', label: '1. Artificial Intelligence' },
   { value: 'Commerce', label: '2. Commerce' },
-  { value: 'Mathematics', label: '3. Mathematics' },
-  { value: 'Business Administration (BBA)', label: '4. BBA' },
-  { value: 'Computer Applications (BCA)', label: '5. BCA' },
-  { value: 'Tamil', label: '6. Tamil' },
-  { value: 'English', label: '7. English' },
-  { value: 'Physical Education', label: '8. Physical Education' },
-  { value: 'Office', label: '9. Office' }
+  { value: 'Computer Science', label: '3. Computer Science' },
+  { value: 'Criminology and Forensic Science', label: '4. Criminology & Forensic' },
+  { value: 'Management', label: '5. Management' }
 ];
 
 export const isStaffInDeptCategory = (s, deptValue) => {
@@ -764,48 +756,26 @@ is authorized to export or issue this credential sheet.
     }
   };
 
-  // Dynamic list of categories combining standard 9 numbered categories + any dynamic departments
+  // Dynamic list of categories combining real departments
   const dynamicCategories = useMemo(() => {
-    const list = [...STANDARD_STAFF_CATEGORIES];
-    const coveredValues = new Set(STANDARD_STAFF_CATEGORIES.map(c => c.value.toLowerCase()));
-
-    const isStandardCovered = (name) => {
-      const n = (name || '').toLowerCase();
-      return n.includes('computer science') || n.includes('commerce') || n.includes('math') ||
-             n.includes('bba') || n.includes('business administration') || n.includes('bca') ||
-             n.includes('computer application') || n.includes('tamil') || n.includes('english') ||
-             n.includes('physical') || n.includes('sports') || n.includes('office');
-    };
-
-    let extraIndex = 10;
-    const addedExtra = new Set();
-
-    departmentsList.forEach(d => {
-      const name = (d.name || '').trim();
-      if (name && !coveredValues.has(name.toLowerCase()) && !isStandardCovered(name) && !addedExtra.has(name.toLowerCase())) {
-        addedExtra.add(name.toLowerCase());
-        list.push({
-          value: name,
-          label: `${extraIndex}. ${name}`
-        });
-        extraIndex++;
-      }
+    const list = [{ value: 'All Departments', label: 'All Staff' }];
+    const deptNames = departmentsList.map(d => (typeof d === 'string' ? d : d?.name || d?.departmentName || '').trim()).filter(Boolean);
+    const unique = Array.from(new Set(deptNames.length > 0 ? deptNames : getKnownDepartments()));
+    unique.forEach((name, idx) => {
+      list.push({
+        value: name,
+        label: `${idx + 1}. ${name}`
+      });
     });
-
-    staffList.forEach(s => {
-      const name = (s.department || '').trim();
-      if (name && !coveredValues.has(name.toLowerCase()) && !isStandardCovered(name) && !addedExtra.has(name.toLowerCase())) {
-        addedExtra.add(name.toLowerCase());
-        list.push({
-          value: name,
-          label: `${extraIndex}. ${name}`
-        });
-        extraIndex++;
-      }
-    });
-
     return list;
-  }, [departmentsList, staffList]);
+  }, [departmentsList]);
+
+  // Dynamic list of departments combining real added departments
+  const dynamicDepartments = useMemo(() => {
+    const deptNames = departmentsList.map(d => (typeof d === 'string' ? d : d?.name || d?.departmentName || '').trim()).filter(Boolean);
+    const unique = Array.from(new Set(deptNames.length > 0 ? deptNames : getKnownDepartments()));
+    return ['All Departments', ...unique];
+  }, [departmentsList]);
 
   // Dynamic list of original subjects combining database subjects and assigned staff classes
   const dynamicSubjects = useMemo(() => {
@@ -1514,8 +1484,7 @@ is authorized to export or issue this credential sheet.
                         const r = e.target.value;
                         setFormData(prev => ({
                           ...prev,
-                          role: r,
-                          department: r === 'Office Staff' ? 'Office' : prev.department
+                          role: r
                         }));
                       }}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
@@ -1533,7 +1502,7 @@ is authorized to export or issue this credential sheet.
                       onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                     >
-                      {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
+                      {dynamicDepartments.filter(d => d !== 'All Departments').map(d => (
                         <option key={d} value={d}>{d}</option>
                       ))}
                     </select>
@@ -1883,8 +1852,7 @@ is authorized to export or issue this credential sheet.
                         const r = e.target.value;
                         setFormData(prev => ({
                           ...prev,
-                          role: r,
-                          department: r === 'Office Staff' ? 'Office' : prev.department
+                          role: r
                         }));
                       }}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
@@ -1902,7 +1870,7 @@ is authorized to export or issue this credential sheet.
                       onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                     >
-                      {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
+                      {dynamicDepartments.filter(d => d !== 'All Departments').map(d => (
                         <option key={d} value={d}>{d}</option>
                       ))}
                     </select>

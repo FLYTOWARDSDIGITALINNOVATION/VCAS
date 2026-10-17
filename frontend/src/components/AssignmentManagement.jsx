@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { API_BASE, BACKEND_URL } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import {
   FileText,
@@ -46,12 +46,7 @@ import ModalPortal from './ModalPortal';
 
 const DEPARTMENTS = [
   'All Departments',
-  'Commerce',
-  'Computer Science',
-  'English Literature',
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Mathematics'
+  ...getKnownDepartments()
 ];
 
 const INITIAL_ASSIGNMENTS = [];
@@ -66,7 +61,7 @@ export default function AssignmentManagement({ user }) {
   const [assignmentsList, setAssignmentsList] = useState(INITIAL_ASSIGNMENTS);
   const [submissionsList, setSubmissionsList] = useState(INITIAL_SUBMISSIONS);
   const [availableClasses, setAvailableClasses] = useState([]);
-  const [availableDepartments, setAvailableDepartments] = useState([]);
+  const [availableDepartments, setAvailableDepartments] = useState(() => getKnownDepartments());
   const [loading, setLoading] = useState(false);
 
   // Selected Assignment for Submissions view
@@ -174,9 +169,9 @@ export default function AssignmentManagement({ user }) {
         fetch(`${API_BASE}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] }))
       ]);
 
-      if (resDepts.success && Array.isArray(resDepts.data)) {
+      if (resDepts.success && Array.isArray(resDepts.data) && resDepts.data.length > 0) {
         const dNames = resDepts.data.map(d => d.name).filter(Boolean);
-        setAvailableDepartments(dNames);
+        setAvailableDepartments(dNames.length > 0 ? dNames : getKnownDepartments());
       }
 
       const classesList = resClasses.classes || resClasses.data || [];

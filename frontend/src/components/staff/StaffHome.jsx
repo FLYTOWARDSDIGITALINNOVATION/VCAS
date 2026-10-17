@@ -160,9 +160,8 @@ export default function StaffHome({ staffUser, onNavigate }) {
   const quickActions = [
     { label: 'Mark Attendance', icon: CheckSquare, bg: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700', navTarget: 'Attendance' },
     { label: 'Student', icon: GraduationCap, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Student' },
-    { label: 'Hall Allocation Setup', icon: Building2, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Hall Allocation Setup' },
+    { label: 'Hall Allocation & Tickets', icon: Ticket, bg: 'bg-rose-50 hover:bg-rose-100 text-rose-700', navTarget: 'Hall Allocation & Tickets' },
     { label: 'Internal Marks', icon: FileSpreadsheet, bg: 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700', navTarget: 'Internal Marks' },
-    { label: 'Hall Tickets', icon: Ticket, bg: 'bg-rose-50 hover:bg-rose-100 text-rose-700', navTarget: 'Hall Tickets' },
     { label: 'New Assignment', icon: BookMarked, bg: 'bg-purple-50 hover:bg-purple-100 text-purple-700', navTarget: 'Assignments' },
     { label: 'View Timetable', icon: Calendar, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Timetable' },
     { label: 'Apply Leave', icon: UserCheck, bg: 'bg-teal-50 hover:bg-teal-100 text-teal-700', navTarget: 'Leave' }
@@ -199,10 +198,10 @@ export default function StaffHome({ staffUser, onNavigate }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button 
-            onClick={() => onNavigate('Hall Allocation Setup')}
+            onClick={() => onNavigate('Hall Allocation & Tickets')}
             className="px-3.5 py-1.5 bg-white hover:bg-blue-50 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 shadow-xs transition-all cursor-pointer"
           >
-            Hall Allocation Setup →
+            Hall Allocation &amp; Tickets →
           </button>
           <button 
             onClick={() => onNavigate('Student')}

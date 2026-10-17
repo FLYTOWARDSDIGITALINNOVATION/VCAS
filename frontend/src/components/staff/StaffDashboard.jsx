@@ -36,10 +36,9 @@ const NAV_SECTIONS = [
       { name: 'Attendance', icon: CheckSquare },
       { name: 'Internal Marks', icon: FileSpreadsheet },
       { name: 'Timetable', icon: Calendar },
-      { name: 'Hall Allocation Setup', icon: Building2 },
+      { name: 'Hall Allocation & Tickets', icon: Ticket },
       { name: 'Assignments', icon: BookMarked },
-      { name: 'Question Papers', icon: ClipboardList },
-      { name: 'Hall Tickets', icon: Ticket }
+      { name: 'Question Papers', icon: ClipboardList }
     ]
   },
   {
@@ -133,12 +132,14 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Attendance':           return <StaffAttendance staffUser={staffUser} />;
       case 'Internal Marks':       return <StaffInternalMarks staffUser={staffUser} />;
       case 'Timetable':            return <StaffTimetable staffUser={staffUser} />;
+      case 'Hall Allocation & Tickets':
+      case 'Hall Tickets & Allocation':
       case 'Hall Allocation Setup':
       case 'Hall Allocation':
-      case 'Exam Schedule':        return <StaffExamSchedule staffUser={staffUser} onNavigate={setActiveNav} />;
+      case 'Exam Schedule':
+      case 'Hall Tickets':         return <StaffHallTicket staffUser={staffUser} onNavigate={setActiveNav} />;
       case 'Assignments':          return <StaffAssignments staffUser={staffUser} />;
       case 'Question Papers':      return <StaffQuestionPaper staffUser={staffUser} />;
-      case 'Hall Tickets':         return <StaffHallTicket staffUser={staffUser} onNavigate={setActiveNav} />;
       case 'My Profile':           return <StaffProfile staffUser={staffUser} />;
       case 'Notices':              return <StaffNotices staffUser={staffUser} />;
       case 'Leave Management':

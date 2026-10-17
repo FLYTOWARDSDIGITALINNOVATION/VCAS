@@ -481,7 +481,7 @@ export default function TCManagement({ user }) {
                 </span>
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                Issue, preview, save, and print official college Transfer Certificates for Vivekanandha College students.
+                Issue, preview, save, and print official college Transfer Certificates for Vivekananda College students.
               </p>
             </div>
           </div>
@@ -648,7 +648,7 @@ export default function TCManagement({ user }) {
                 <CollegeLogo size="lg" showText={false} />
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase">
-                    Vivekanandha College of Arts & Science
+                    VIVEKANANDA COLLEGE OF ARTS & SCIENCE
                   </h3>
                   <p className="text-xs text-slate-500 font-semibold">
                     Affiliated to Manonmaniam Sundaranar University • Vellalankulam, Tenkasi District – 627857

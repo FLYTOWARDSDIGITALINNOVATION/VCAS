@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { getKnownDepartments } from '../apiConfig';
 import { 
   Sparkles, 
   Plus, 
@@ -272,15 +273,7 @@ const CATEGORIES = [
 
 const DEPARTMENTS = [
   'All', 
-  'Commerce',
-  'Computer Science', 
-  'English Literature', 
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Mathematics',
-  'Student Affairs & Cultural Council', 
-  'Physical Education Department', 
-  'Training & Placement Cell'
+  ...getKnownDepartments()
 ];
 
 const STATUSES = ['All', 'Upcoming', 'Ongoing', 'Completed'];

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { API_BASE, BACKEND_URL } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import {
   Calendar,
@@ -79,15 +79,11 @@ const COLOR_MAP = {
 
 const STAFF_CATEGORIES = [
   { id: 'All', label: 'All Staff' },
-  { id: 'Computer Science', label: '1. Computer Science' },
+  { id: 'Artificial Intelligence', label: '1. Artificial Intelligence' },
   { id: 'Commerce', label: '2. Commerce' },
-  { id: 'Mathematics', label: '3. Mathematics' },
-  { id: 'Business Administration (BBA)', label: '4. BBA' },
-  { id: 'Computer Applications (BCA)', label: '5. BCA' },
-  { id: 'Tamil', label: '6. Tamil' },
-  { id: 'English', label: '7. English' },
-  { id: 'Physical Education', label: '8. Physical Education' },
-  { id: 'Office', label: '9. Office' }
+  { id: 'Computer Science', label: '3. Computer Science' },
+  { id: 'Criminology and Forensic Science', label: '4. Criminology and Forensic Science' },
+  { id: 'Management', label: '5. Management' }
 ];
 
 export default function TimetableManagement({ user }) {
@@ -197,7 +193,7 @@ export default function TimetableManagement({ user }) {
       return INITIAL_SCHEDULES;
     }
   });
-  const [availableDepartments, setAvailableDepartments] = useState([]);
+  const [availableDepartments, setAvailableDepartments] = useState(() => getKnownDepartments());
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
   const [selectedStaffCategory, setSelectedStaffCategory] = useState('All');
@@ -287,15 +283,15 @@ export default function TimetableManagement({ user }) {
         const deptList = rawDepts
           .map(d => (typeof d === 'string' ? d : d.name || d.departmentName))
           .filter(Boolean);
-        const mergedDepts = Array.from(new Set([...deptList, ...staffDepts]));
-        setAvailableDepartments(mergedDepts);
-        if (mergedDepts.length > 0) {
-          setSelectedDept(prev => (prev && mergedDepts.includes(prev) ? prev : mergedDepts[0]));
+        const finalDepts = deptList.length > 0 ? Array.from(new Set(deptList)) : getKnownDepartments();
+        setAvailableDepartments(finalDepts);
+        if (finalDepts.length > 0) {
+          setSelectedDept(prev => (prev && finalDepts.includes(prev) ? prev : finalDepts[0]));
         }
-      } else if (staffDepts.length > 0) {
-        const uniqueStaffDepts = Array.from(new Set(staffDepts));
-        setAvailableDepartments(uniqueStaffDepts);
-        setSelectedDept(prev => (prev && uniqueStaffDepts.includes(prev) ? prev : uniqueStaffDepts[0]));
+      } else {
+        const fallbackDepts = getKnownDepartments();
+        setAvailableDepartments(fallbackDepts);
+        setSelectedDept(prev => (prev && fallbackDepts.includes(prev) ? prev : fallbackDepts[0]));
       }
 
       if (subRes && subRes.ok) {
@@ -377,24 +373,13 @@ export default function TimetableManagement({ user }) {
     return staffList.find(s => s.staffId === selectedStaffId) || null;
   }, [staffList, selectedStaffId]);
 
-  // Filtered staff list by selected category (including 6. Tamil, 7. English, 8. Physical Education, 9. Office)
+  // Filtered staff list by selected category
   const filteredStaffList = useMemo(() => {
     if (selectedStaffCategory === 'All') return staffList;
+    const catLow = selectedStaffCategory.toLowerCase();
     return staffList.filter(s => {
-      const dept = String(s.department || s.dept || s.departmentName || '');
-      if (selectedStaffCategory === 'Office') {
-        return s.role === 'Office Staff' || dept.toLowerCase().includes('office');
-      }
-      if (selectedStaffCategory === 'English') {
-        return dept === 'English' || dept === 'English Literature';
-      }
-      if (selectedStaffCategory === 'Tamil') {
-        return dept.toLowerCase().includes('tamil');
-      }
-      if (selectedStaffCategory === 'Physical Education') {
-        return dept.toLowerCase().includes('physical');
-      }
-      return dept === selectedStaffCategory;
+      const dept = String(s.department || s.dept || s.departmentName || '').toLowerCase();
+      return dept === catLow || dept.includes(catLow) || catLow.includes(dept);
     });
   }, [staffList, selectedStaffCategory]);
 
@@ -955,15 +940,12 @@ export default function TimetableManagement({ user }) {
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 {STAFF_CATEGORIES.map(cat => {
                   const isSelected = selectedStaffCategory === cat.id;
+                  const catLow = cat.id.toLowerCase();
                   const count = cat.id === 'All'
                     ? staffList.length
                     : staffList.filter(s => {
-                        const dept = String(s.department || s.dept || s.departmentName || '');
-                        if (cat.id === 'Office') return s.role === 'Office Staff' || dept.toLowerCase().includes('office');
-                        if (cat.id === 'English') return dept === 'English' || dept === 'English Literature';
-                        if (cat.id === 'Tamil') return dept.toLowerCase().includes('tamil');
-                        if (cat.id === 'Physical Education') return dept.toLowerCase().includes('physical');
-                        return dept === cat.id;
+                        const dept = String(s.department || s.dept || s.departmentName || '').toLowerCase();
+                        return dept === catLow || dept.includes(catLow) || catLow.includes(dept);
                       }).length;
                   return (
                     <button
@@ -973,12 +955,8 @@ export default function TimetableManagement({ user }) {
                         setSelectedStaffCategory(cat.id);
                         const match = staffList.filter(s => {
                           if (cat.id === 'All') return true;
-                          const dept = String(s.department || s.dept || s.departmentName || '');
-                          if (cat.id === 'Office') return s.role === 'Office Staff' || dept.toLowerCase().includes('office');
-                          if (cat.id === 'English') return dept === 'English' || dept === 'English Literature';
-                          if (cat.id === 'Tamil') return dept.toLowerCase().includes('tamil');
-                          if (cat.id === 'Physical Education') return dept.toLowerCase().includes('physical');
-                          return dept === cat.id;
+                          const dept = String(s.department || s.dept || s.departmentName || '').toLowerCase();
+                          return dept === catLow || dept.includes(catLow) || catLow.includes(dept);
                         });
                         if (match.length > 0 && !match.some(m => m.staffId === selectedStaffId)) {
                           setSelectedStaffId(match[0].staffId);

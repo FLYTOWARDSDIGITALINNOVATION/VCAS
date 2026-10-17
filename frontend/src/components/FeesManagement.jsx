@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { getKnownDepartments } from '../apiConfig';
 import { 
   IndianRupee, 
   Plus, 
@@ -265,12 +266,9 @@ export default function FeesManagement() {
                     onChange={(e) => setCollectForm({ ...collectForm, dept: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
                   >
-                    <option value="Commerce">Commerce</option>
-                    <option value="CS">Computer Science</option>
-                    <option value="English">English</option>
-                    <option value="BBA">BBA</option>
-                    <option value="BCA">BCA</option>
-                    <option value="Maths">Mathematics</option>
+                    {getKnownDepartments().map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
                   </select>
                 </div>
               </div>

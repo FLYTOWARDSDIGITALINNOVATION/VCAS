@@ -164,8 +164,8 @@ export default function App() {
           <div className="min-h-screen w-full overflow-y-auto bg-[#070f1e] flex flex-col items-center py-8 px-4 sm:px-6">
             <div className="flex flex-col items-center text-center mb-4 sm:mb-5 mt-2">
               <CollegeLogo size="xl" showText={false} className="mb-2" />
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Vivekanandha College</h1>
-              <p className="text-xs text-blue-300 font-semibold mt-0.5">Campus Automation System • VCAS Portal</p>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white text-center">VIVEKANANDA COLLEGE OF ARTS & SCIENCE</h1>
+              <p className="text-xs text-blue-300 font-semibold mt-1">Vellalankulam • Campus Automation System • VCAS Portal</p>
             </div>
             <LoginCard onLoginSuccess={handleLoginSuccess} />
             <div className="pb-8" />

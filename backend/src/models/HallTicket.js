@@ -4,8 +4,8 @@ const subjectScheduleSchema = new mongoose.Schema({
   code: { type: String, required: true, uppercase: true, trim: true },
   name: { type: String, required: true, trim: true },
   date: { type: String, default: 'TBA', trim: true }, // Optional/defaults to TBA so it never crashes validation
-  session: { type: String, enum: ['Forenoon (FN)', 'Afternoon (AN)', 'FN', 'AN'], default: 'Forenoon (FN)' },
-  time: { type: String, default: '09:30 AM - 12:30 PM', trim: true }
+  session: { type: String, default: 'Forenoon (FN)', trim: true },
+  time: { type: String, default: '', trim: true }
 }, { _id: false });
 
 const studentAllocationSchema = new mongoose.Schema({

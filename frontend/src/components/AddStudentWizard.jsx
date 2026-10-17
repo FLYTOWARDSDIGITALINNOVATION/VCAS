@@ -282,7 +282,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
           <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:6px;">
             ${getCollegeLogoHtml(44)}
             <div>
-              <div class="title">Vivekanandha College of Arts and Sciences</div>
+              <div class="title">Vivekananda College of Arts & Science</div>
               <div class="sub">Affiliated with Manonmaniam Sundaranar University • VCAS</div>
             </div>
           </div>

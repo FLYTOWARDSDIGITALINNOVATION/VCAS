@@ -119,10 +119,16 @@ exports.getHalls = async (req, res) => {
       for (const t of tickets) {
         if (Array.isArray(t.halls)) {
           for (const h of t.halls) {
-            const hallName = `Hall ${h.hallNo}`;
-            const studentsInHall = (t.students || []).filter(s => (s.hallNo || '').trim().toUpperCase() === (h.hallNo || '').trim().toUpperCase());
+            const rawNo = (h.hallNo || '').trim();
+            if (!rawNo) continue;
+            const hallName = rawNo.toLowerCase().startsWith('hall') ? rawNo : `Hall ${rawNo}`;
+            const cleanNo = rawNo.toUpperCase();
+            const studentsInHall = (t.students || []).filter(s => {
+              const sHNo = (s.hallNo || '').trim().toUpperCase();
+              return sHNo === cleanNo || sHNo === hallName.toUpperCase();
+            });
             const rolls = studentsInHall.map(s => s.rollNo).filter(Boolean).sort();
-            const rollRange = rolls.length > 1 ? `${rolls[0]} - ${rolls[rolls.length - 1]}` : rolls.length === 1 ? rolls[0] : 'No candidates assigned';
+            const rollRange = rolls.length > 1 ? `${rolls[0]} - ${rolls[rolls.length - 1]}` : (rolls[0] || 'No candidates assigned');
 
             const existing = await ExamHall.findOne({ hallName });
             if (!existing) {
@@ -134,13 +140,16 @@ exports.getHalls = async (req, res) => {
                 rollRange,
                 invigilator: t.allocatedByStaffName || 'Staff In-Charge',
                 invigilatorDept: t.department || 'Computer Science',
-                status: studentsInHall.length >= (h.capacity || 30) ? 'Fully Allocated' : 'Allocated'
+                status: studentsInHall.length >= (Number(h.capacity) || 30) ? 'Fully Allocated' : (studentsInHall.length > 0 ? 'Allocated' : 'Available')
               });
             } else {
               existing.allocatedStudents = studentsInHall.length;
               existing.rollRange = rollRange;
+              if (h.capacity) existing.capacity = Number(h.capacity);
               if (t.allocatedByStaffName) existing.invigilator = t.allocatedByStaffName;
               if (t.department) existing.invigilatorDept = t.department;
+              existing.departments = `${t.department || 'Computer Science'} (Sem ${t.semester || 1})`;
+              existing.status = studentsInHall.length >= (Number(existing.capacity) || 30) ? 'Fully Allocated' : (studentsInHall.length > 0 ? 'Allocated' : 'Available');
               await existing.save();
             }
           }

@@ -165,9 +165,11 @@ export function generatePrintableTCHtml(tcData = {}) {
       <div class="cert-container">
         
         <!-- Header Section -->
-        <div style="position: relative; text-align: center; margin-bottom: 6px;">
-          <img src="${logoSrc}" style="position: absolute; right: 0; top: 0; width: 62px; height: 62px; object-fit: contain;" alt="College Emblem" />
-          <div style="font-size: 17pt; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Times New Roman', serif;">
+        <div style="text-align: center; margin-bottom: 6px;">
+          <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 4px;">
+            <img src="${logoSrc}" style="width: 58px; height: 58px; object-fit: contain; display: block;" alt="College Emblem" onerror="this.onerror=null;this.src='/vcas-logo.png';" />
+          </div>
+          <div style="font-size: 17pt; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Times New Roman', serif; line-height: 1.2;">
             VIVEKANANDA COLLEGE OF ARTS & SCIENCE
           </div>
           <div style="font-size: 10pt; font-style: italic; margin-top: 2px; color: #111;">
@@ -177,15 +179,15 @@ export function generatePrintableTCHtml(tcData = {}) {
             Vellalankulam, Tenkasi District – 627857
           </div>
 
-          <!-- Reg No & TC No Banner -->
-          <div style="display: flex; justify-content: space-between; font-size: 10.5pt; font-weight: bold; margin-top: 10px; padding: 0 2px;">
-            <span>Reg No.: ${tcData.regNo || '—'}</span>
-            ${tcData.umisNumber ? `<span>UMIS No.: ${tcData.umisNumber}</span>` : ''}
-            <span>T.C. No.: ${tcData.tcNumber || '—'}</span>
+          <!-- Reg No, UMIS No & TC No Banner -->
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10.5pt; font-weight: bold; margin-top: 10px; padding: 0 4px;">
+            <span style="flex: 1; text-align: left;">Reg No.: ${tcData.regNo || '—'}</span>
+            <span style="flex: 1; text-align: center;">UMIS No.: ${(tcData.umisNumber || tcData.umis || tcData.umisNo || '—')}</span>
+            <span style="flex: 1; text-align: right;">T.C. No.: ${tcData.tcNumber || '—'}</span>
           </div>
 
           <!-- Document Title -->
-          <div style="text-align: center; margin-top: 6px; margin-bottom: 8px;">
+          <div style="text-align: center; margin-top: 8px; margin-bottom: 8px;">
             <span style="font-size: 12.5pt; font-weight: bold; text-decoration: underline; letter-spacing: 0.5px; text-transform: uppercase;">TRANSFER CERTIFICATE</span>
           </div>
         </div>
@@ -491,13 +493,15 @@ export default function TCCertificatePreview({
           >
             
             {/* Header Section */}
-            <div className="relative text-center mb-2">
-              <img 
-                src={vcasLogo} 
-                alt="College Emblem" 
-                className="absolute right-0 top-0 w-14 h-14 sm:w-16 sm:h-16 object-contain" 
-              />
-              <div className="text-lg sm:text-xl font-bold tracking-wide uppercase font-serif text-black pr-14 sm:pr-0">
+            <div className="text-center mb-2">
+              <div className="flex justify-center mb-1.5">
+                <img 
+                  src={vcasLogo} 
+                  alt="College Emblem" 
+                  className="w-14 h-14 sm:w-16 sm:h-16 object-contain" 
+                />
+              </div>
+              <div className="text-lg sm:text-xl font-bold tracking-wide uppercase font-serif text-black leading-tight">
                 VIVEKANANDA COLLEGE OF ARTS & SCIENCE
               </div>
               <div className="text-xs sm:text-sm italic text-neutral-800 mt-0.5">
@@ -507,15 +511,15 @@ export default function TCCertificatePreview({
                 Vellalankulam, Tenkasi District – 627857
               </div>
 
-              {/* Reg No & TC No */}
-              <div className="flex justify-between items-center text-xs sm:text-sm font-bold mt-2.5 px-0.5 text-black">
-                <div>Reg No.: {data.regNo || '—'}</div>
-                {data.umisNumber && <div className="font-mono">UMIS No.: {data.umisNumber}</div>}
-                <div>T.C. No.: {data.tcNumber || '—'}</div>
+              {/* Reg No, UMIS No & TC No */}
+              <div className="flex justify-between items-center text-xs sm:text-sm font-bold mt-2.5 px-1 text-black">
+                <div className="flex-1 text-left">Reg No.: {data.regNo || '—'}</div>
+                <div className="flex-1 text-center font-mono">UMIS No.: {data.umisNumber || data.umis || data.umisNo || '—'}</div>
+                <div className="flex-1 text-right">T.C. No.: {data.tcNumber || '—'}</div>
               </div>
 
               {/* Title */}
-              <div className="text-center mt-1.5 mb-2">
+              <div className="text-center mt-2 mb-2">
                 <span className="text-sm sm:text-base font-bold underline uppercase tracking-wide">
                   TRANSFER CERTIFICATE
                 </span>

@@ -462,7 +462,7 @@ export default function StudentDashboard({ student, onLogout }) {
           <div class="logo-bar">
             ${getCollegeLogoHtml(48)}
             <div>
-              <div class="title">Vivekanandha College of Arts and Sciences</div>
+              <div class="title">Vivekananda College of Arts & Science</div>
               <div class="sub">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</div>
             </div>
           </div>
@@ -560,7 +560,7 @@ export default function StudentDashboard({ student, onLogout }) {
   const handleDownloadStudentSlip = () => {
     const text = `
 ================================================================================
-VIVEKANANDHA COLLEGE OF ARTS AND SCIENCES
+VIVEKANANDA COLLEGE OF ARTS & SCIENCE
 (AFFILIATED TO MANONMANIAM SUNDARANAR UNIVERSITY)
 OFFICIAL STUDENT CREDENTIAL SLIP & RECORD PASS
 ================================================================================
@@ -1715,7 +1715,7 @@ CONTACT:
                   <div className="flex items-center justify-center gap-4 text-center border-b border-blue-900/20 pb-4">
                     <CollegeLogo size="sm" showText={false} />
                     <div>
-                      <h4 className="text-base font-black text-slate-900 uppercase">Vivekanandha College of Arts and Sciences</h4>
+                      <h4 className="text-base font-black text-slate-900 uppercase">Vivekananda College of Arts & Science</h4>
                       <p className="text-xs text-slate-500">Affiliated with Manonmaniam Sundaranar University • Vellalankulam Campus</p>
                     </div>
                   </div>

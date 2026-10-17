@@ -8,7 +8,8 @@ const {
   getStudentHallTicket,
   createOrUpdateAllocation,
   cleanupDuplicates,
-  deleteAllocation
+  deleteAllocation,
+  updateSubjectSchedule
 } = require('../controllers/hallTicketController');
 
 router.get('/', getAllHallTickets);
@@ -17,6 +18,7 @@ router.get('/eligible-students', getEligibleStudents);
 router.get('/student/:identifier', getStudentHallTicket);
 router.get('/:id', getHallTicketById);
 router.post('/allocate', createOrUpdateAllocation);
+router.post('/update-subject-schedule', updateSubjectSchedule);
 router.post('/cleanup-duplicates', cleanupDuplicates);
 router.delete('/:id', deleteAllocation);
 

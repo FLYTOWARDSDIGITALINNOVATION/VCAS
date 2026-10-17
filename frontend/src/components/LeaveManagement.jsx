@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { API_BASE, BACKEND_URL } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import { 
   UserCheck, 
@@ -15,27 +15,22 @@ import {
   AlertCircle, 
   Loader2, 
   Building2, 
-  RefreshCw,
-  Eye,
-  FileText,
-  Sliders,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-  ChevronRight,
-  Info,
-  Layers,
-  UserCog
+  RefreshCw, 
+  Eye, 
+  FileText, 
+  Sliders, 
+  Settings, 
+  ShieldCheck, 
+  Sparkles, 
+  ChevronRight, 
+  Info, 
+  Layers, 
+  UserCog 
 } from 'lucide-react';
 
 const DEPARTMENTS = [
   'All Departments',
-  'Commerce',
-  'Computer Science',
-  'English Literature',
-  'Business Administration (BBA)',
-  'Computer Applications (BCA)',
-  'Mathematics'
+  ...getKnownDepartments()
 ];
 
 export default function LeaveManagement() {

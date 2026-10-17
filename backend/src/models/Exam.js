@@ -36,6 +36,11 @@ const examSchema = new mongoose.Schema({
     default: 'Forenoon (FN)',
     trim: true
   },
+  time: {
+    type: String,
+    default: '09:30 AM - 12:30 PM',
+    trim: true
+  },
   hall: {
     type: String,
     default: 'Hall 101 (Main Block)',

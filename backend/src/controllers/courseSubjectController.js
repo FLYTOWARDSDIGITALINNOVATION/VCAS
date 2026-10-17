@@ -127,10 +127,7 @@ exports.deleteCourse = async (req, res) => {
 
 exports.getSubjects = async (req, res) => {
   try {
-    let subjects = await Subject.find().sort({ department: 1, year: 1, sem: 1, code: 1 });
-
-    // Filter out dummy/deleted subjects
-    subjects = subjects.filter(s => s.code && !['SF76', 'CS401', 'CS402', 'CS2001', 'CS2005'].includes(s.code.toUpperCase()));
+    const subjects = await Subject.find().sort({ department: 1, year: 1, sem: 1, code: 1 });
 
     res.status(200).json({
       success: true,

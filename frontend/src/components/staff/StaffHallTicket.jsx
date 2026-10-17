@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { API_BASE, BACKEND_URL } from '../../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../../apiConfig';
 import {
   Ticket, Building2, Users, Calendar, Clock, Download, Printer,
   Search, Filter, Plus, Trash2, CheckCircle2, AlertCircle, RefreshCw,
@@ -19,21 +19,36 @@ const DEFAULT_INSTRUCTIONS = [
 ];
 
 const ALL_SEMESTERS = [1, 2, 3, 4, 5, 6];
-const DEFAULT_DEPTS = [
-  'BSc. Computer science',
-  'Computer Science',
-  'Commerce',
-  'Mathematics',
-  'Business Administration',
-  'English',
-  'Tamil',
-  'Physical Education',
-  'Office'
-];
+const DEFAULT_DEPTS = getKnownDepartments();
 
-export default function StaffHallTicket({ staffUser, onNavigate }) {
-  // Navigation tabs: 'tickets' | 'allocate'
-  const [activeTab, setActiveTab] = useState('tickets');
+// Local storage helpers for persisting custom subject timing and dates across reloads
+const getSavedCustomTimings = () => {
+  try {
+    const raw = localStorage.getItem('vcas_staff_custom_subjects_timing');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveCustomTiming = (code, timingObj) => {
+  if (!code) return;
+  try {
+    const current = getSavedCustomTimings();
+    const cleanKey = code.toUpperCase().trim();
+    current[cleanKey] = {
+      ...(current[cleanKey] || {}),
+      ...timingObj
+    };
+    localStorage.setItem('vcas_staff_custom_subjects_timing', JSON.stringify(current));
+  } catch (e) {
+    console.error('Error caching custom timing:', e);
+  }
+};
+
+export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
+  // Navigation tabs: 'allocate' (Hall Allocation Setup) | 'tickets' (Hall Tickets & Print)
+  const [activeTab, setActiveTab] = useState(initialTab || 'allocate');
 
   // Data states
   const [allocations, setAllocations] = useState([]);
@@ -91,7 +106,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [previewExam, setPreviewExam] = useState(null);
 
   // Available departments & semesters (dynamically fetched from database)
-  const [availableDepts, setAvailableDepts] = useState([]);
+  const [availableDepts, setAvailableDepts] = useState(() => getKnownDepartments());
   const [availableSemesters, setAvailableSemesters] = useState(ALL_SEMESTERS);
   const [availableSections, setAvailableSections] = useState(['All', 'A', 'B', 'C']);
 
@@ -141,8 +156,15 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [newHallName, setNewHallName] = useState('');
   const [newHallCap, setNewHallCap] = useState(30);
 
-  // Subjects schedule for this exam
-  const [subjectsSchedule, setSubjectsSchedule] = useState([]);
+  // Subjects schedule for this exam (restores cached subjects across reloads)
+  const [subjectsSchedule, setSubjectsSchedule] = useState(() => {
+    try {
+      const raw = localStorage.getItem('vcas_staff_subjects_schedule');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [catalogSubjects, setCatalogSubjects] = useState([]);
   const [newSubCode, setNewSubCode] = useState('');
   const [customSubCode, setCustomSubCode] = useState('');
@@ -246,7 +268,23 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
         setInstructionsList(currentAllocation.instructions);
       }
       if (Array.isArray(currentAllocation.commonSubjects) && currentAllocation.commonSubjects.length > 0) {
-        setSubjectsSchedule(currentAllocation.commonSubjects.filter(s => !deletedSubjectCodes.has(s.code.toUpperCase())));
+        const cachedTimings = getSavedCustomTimings();
+        const enriched = currentAllocation.commonSubjects
+          .filter(s => !deletedSubjectCodes.has(s.code.toUpperCase()))
+          .map(s => {
+            const custom = cachedTimings[s.code.toUpperCase()];
+            return {
+              ...s,
+              name: custom?.name || s.name,
+              date: custom?.date || s.date,
+              session: custom?.session || s.session,
+              time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : s.time
+            };
+          });
+        setSubjectsSchedule(enriched);
+        try {
+          localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(enriched));
+        } catch {}
       }
     }
   }, [currentAllocation?._id]);
@@ -363,6 +401,8 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
       if (data.success && Array.isArray(data.subjects) && data.subjects.length > 0) {
         setCatalogSubjects(data.subjects);
+        const cachedTimings = getSavedCustomTimings();
+
         setSubjectsSchedule(prev => {
           const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
           const merged = [];
@@ -374,24 +414,34 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
             const code = dbSub.code.toUpperCase();
             const baseDay = 15 + (idx * 3);
             const defaultDate = `2026-04-${baseDay < 10 ? '0' + baseDay : baseDay}`;
+            const custom = cachedTimings[code];
+
+            const resolvedDate = custom?.date || (dbSub.date && dbSub.date !== 'TBA' ? dbSub.date : defaultDate);
+            const resolvedSession = custom?.session || dbSub.session || 'Forenoon (FN)';
+            const resolvedTime = (custom?.time !== undefined && custom?.time !== null)
+              ? custom.time
+              : (dbSub.time !== undefined && dbSub.time !== null ? dbSub.time : '09:30 AM - 12:30 PM');
+            const resolvedName = custom?.name || dbSub.name;
 
             if (prevMap.has(code)) {
               const existing = prevMap.get(code);
               merged.push({
                 ...existing,
-                name: dbSub.name || existing.name,
-                date: (existing.date && existing.date !== 'TBA') ? existing.date : (dbSub.date || defaultDate),
-                session: existing.session || dbSub.session || 'Forenoon (FN)',
-                time: existing.time || dbSub.time || ''
+                name: resolvedName || existing.name,
+                date: (existing.date && existing.date !== 'TBA') ? existing.date : resolvedDate,
+                session: existing.session || resolvedSession,
+                time: (existing.time !== undefined && existing.time !== null && existing.time !== '')
+                  ? existing.time
+                  : resolvedTime
               });
               prevMap.delete(code);
             } else {
               merged.push({
                 code: dbSub.code,
-                name: dbSub.name,
-                date: dbSub.date || defaultDate,
-                session: dbSub.session || 'Forenoon (FN)',
-                time: dbSub.time || ''
+                name: resolvedName,
+                date: resolvedDate,
+                session: resolvedSession,
+                time: resolvedTime
               });
             }
           });
@@ -399,9 +449,19 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           // Keep user-added custom subjects that are not in DB (as long as not deleted)
           prevMap.forEach(customSub => {
             if (!deletedSubjectCodes.has(customSub.code.toUpperCase())) {
-              merged.push(customSub);
+              const custom = cachedTimings[customSub.code.toUpperCase()];
+              merged.push({
+                ...customSub,
+                name: custom?.name || customSub.name,
+                date: custom?.date || customSub.date,
+                session: custom?.session || customSub.session,
+                time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : customSub.time
+              });
             }
           });
+          try {
+            localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(merged));
+          } catch {}
           return merged;
         });
       }
@@ -436,6 +496,8 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
       if (data.success) {
         if (data.subjects && data.subjects.length > 0) {
+          const cachedTimings = getSavedCustomTimings();
+
           setSubjectsSchedule(prev => {
             const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
             const merged = [];
@@ -446,33 +508,53 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
               const code = dbSub.code.toUpperCase();
               const baseDay = 15 + (idx * 3);
               const defaultDate = `2026-04-${baseDay < 10 ? '0' + baseDay : baseDay}`;
+              const custom = cachedTimings[code];
+
+              const resolvedDate = custom?.date || (dbSub.date && dbSub.date !== 'TBA' ? dbSub.date : defaultDate);
+              const resolvedSession = custom?.session || dbSub.session || 'Forenoon (FN)';
+              const resolvedTime = (custom?.time !== undefined && custom?.time !== null)
+                ? custom.time
+                : (dbSub.time !== undefined && dbSub.time !== null ? dbSub.time : '09:30 AM - 12:30 PM');
+              const resolvedName = custom?.name || dbSub.name;
 
               if (prevMap.has(code)) {
                 const existing = prevMap.get(code);
                 merged.push({
                   ...existing,
-                  name: dbSub.name || existing.name,
-                  date: (existing.date && existing.date !== 'TBA') ? existing.date : (dbSub.date || defaultDate),
-                  session: existing.session || dbSub.session || 'Forenoon (FN)',
-                  time: existing.time || dbSub.time || ''
+                  name: resolvedName || existing.name,
+                  date: (existing.date && existing.date !== 'TBA') ? existing.date : resolvedDate,
+                  session: existing.session || resolvedSession,
+                  time: (existing.time !== undefined && existing.time !== null && existing.time !== '')
+                    ? existing.time
+                    : resolvedTime
                 });
                 prevMap.delete(code);
               } else {
                 merged.push({
                   code: dbSub.code,
-                  name: dbSub.name,
-                  date: dbSub.date || defaultDate,
-                  session: dbSub.session || 'Forenoon (FN)',
-                  time: dbSub.time || ''
+                  name: resolvedName,
+                  date: resolvedDate,
+                  session: resolvedSession,
+                  time: resolvedTime
                 });
               }
             });
 
             prevMap.forEach(customSub => {
               if (!deletedSubjectCodes.has(customSub.code.toUpperCase())) {
-                merged.push(customSub);
+                const custom = cachedTimings[customSub.code.toUpperCase()];
+                merged.push({
+                  ...customSub,
+                  name: custom?.name || customSub.name,
+                  date: custom?.date || customSub.date,
+                  session: custom?.session || customSub.session,
+                  time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : customSub.time
+                });
               }
             });
+            try {
+              localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(merged));
+            } catch {}
             return merged;
           });
         }
@@ -604,6 +686,21 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     try {
       localStorage.setItem('vcas_staff_halls_list', JSON.stringify(updated));
     } catch { }
+
+    try {
+      fetch(`${API_BASE}/exams/halls`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hallName: cleanName.toLowerCase().startsWith('hall') ? cleanName : `Hall ${cleanName}`,
+          capacity: cap,
+          status: 'Available',
+          departments: `${formDept} (Sem ${formSemester})`,
+          invigilator: staffUser?.name || 'Staff In-Charge'
+        })
+      });
+    } catch (_) {}
+
     setNewHallName('');
     setNewHallCap(30);
     setStatusMessage({ type: 'success', text: `Added Hall: ${cleanName} (Capacity: ${cap})` });
@@ -733,8 +830,18 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       return next;
     });
 
+    // Cache custom timing
+    saveCustomTiming(cleanCode, {
+      code: cleanCode,
+      name: cleanName,
+      date: cleanDate,
+      session: cleanSession,
+      time: cleanTime
+    });
+
     setSubjectsSchedule(prev => {
       const idx = prev.findIndex(s => s.code.toUpperCase() === cleanCode);
+      let next;
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = {
@@ -744,19 +851,40 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           session: cleanSession,
           time: cleanTime
         };
-        return copy;
+        next = copy;
+      } else {
+        next = [
+          ...prev,
+          {
+            code: cleanCode,
+            name: cleanName,
+            date: cleanDate,
+            session: cleanSession,
+            time: cleanTime
+          }
+        ];
       }
-      return [
-        ...prev,
-        {
-          code: cleanCode,
-          name: cleanName,
-          date: cleanDate,
-          session: cleanSession,
-          time: cleanTime
-        }
-      ];
+      try {
+        localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
+      } catch {}
+      return next;
     });
+
+    // Background sync to backend
+    fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        name: cleanName,
+        date: cleanDate,
+        session: cleanSession,
+        time: cleanTime,
+        department: formDept,
+        semester: Number(formSemester) || 1,
+        allocationId: currentAllocation?._id
+      })
+    }).catch(e => console.warn('Could not sync added subject:', e));
 
     if (currentAllocation?._id) {
       setAllocations(prev => prev.map(a => {
@@ -834,15 +962,62 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   };
 
   // Clear / delete exam time from a scheduled subject
-  const handleClearSubjectTime = (code) => {
+  const handleClearSubjectTime = async (code) => {
     const cleanCode = code.toUpperCase();
-    setSubjectsSchedule(prev => prev.map(s => {
-      if (s.code.toUpperCase() === cleanCode) {
-        return { ...s, time: '' };
-      }
-      return s;
-    }));
-    setStatusMessage({ type: 'info', text: `Exam time deleted for ${code}.` });
+    saveCustomTiming(cleanCode, { time: '' });
+
+    setSubjectsSchedule(prev => {
+      const next = prev.map(s => {
+        if (s.code.toUpperCase() === cleanCode) {
+          return { ...s, time: '' };
+        }
+        return s;
+      });
+      try {
+        localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (currentAllocation?._id) {
+      setAllocations(prev => prev.map(a => {
+        if (a._id === currentAllocation._id) {
+          return {
+            ...a,
+            commonSubjects: (a.commonSubjects || []).map(s => s.code.toUpperCase() === cleanCode ? { ...s, time: '' } : s),
+            students: (a.students || []).map(st => ({
+              ...st,
+              subjects: (st.subjects || []).map(s => s.code.toUpperCase() === cleanCode ? { ...s, time: '' } : s)
+            }))
+          };
+        }
+        return a;
+      }));
+    }
+
+    setStudentsToAllocate(prev => prev.map(st => ({
+      ...st,
+      subjects: (st.subjects || []).map(s => s.code.toUpperCase() === cleanCode ? { ...s, time: '' } : s)
+    })));
+
+    setStatusMessage({ type: 'info', text: `Exam time cleared for ${cleanCode}. Saving...` });
+
+    try {
+      await fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: cleanCode,
+          time: '',
+          department: formDept,
+          semester: Number(formSemester) || 1,
+          allocationId: currentAllocation?._id
+        })
+      });
+      setStatusMessage({ type: 'info', text: `Exam time deleted for ${cleanCode}.` });
+    } catch (e) {
+      console.warn('Could not sync clear time to server:', e);
+    }
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
@@ -877,7 +1052,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     });
   };
 
-  const handleSaveEditSubject = (originalCode) => {
+  const handleSaveEditSubject = async (originalCode) => {
     if (!editSubForm.code.trim() || !editSubForm.name.trim()) {
       alert('Subject Code and Title cannot be empty.');
       return;
@@ -886,21 +1061,46 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     const cleanName = editSubForm.name.trim();
     const cleanDate = editSubForm.date || '2026-04-20';
     const cleanSession = editSubForm.session || 'Forenoon (FN)';
-    const cleanTime = editSubForm.time.trim() || '';
+    const cleanTime = editSubForm.time.trim();
 
-    setSubjectsSchedule(prev => prev.map(s => {
-      if (s.code.toUpperCase() === originalCode.toUpperCase()) {
-        return {
-          ...s,
-          code: cleanCode,
-          name: cleanName,
-          date: cleanDate,
-          session: cleanSession,
-          time: cleanTime
-        };
-      }
-      return s;
-    }));
+    // 1. Immediately cache in local storage to prevent any overwrite on reload
+    saveCustomTiming(cleanCode, {
+      code: cleanCode,
+      name: cleanName,
+      date: cleanDate,
+      session: cleanSession,
+      time: cleanTime
+    });
+    if (originalCode && originalCode.toUpperCase() !== cleanCode) {
+      saveCustomTiming(originalCode.toUpperCase(), {
+        code: cleanCode,
+        name: cleanName,
+        date: cleanDate,
+        session: cleanSession,
+        time: cleanTime
+      });
+    }
+
+    // 2. Update React subjectsSchedule state
+    setSubjectsSchedule(prev => {
+      const next = prev.map(s => {
+        if (s.code.toUpperCase() === originalCode.toUpperCase()) {
+          return {
+            ...s,
+            code: cleanCode,
+            name: cleanName,
+            date: cleanDate,
+            session: cleanSession,
+            time: cleanTime
+          };
+        }
+        return s;
+      });
+      try {
+        localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
 
     // Keep active selectedAllocationSubject in sync
     if (selectedAllocationSubject && selectedAllocationSubject.toUpperCase() === originalCode.toUpperCase()) {
@@ -992,7 +1192,32 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     }));
 
     setEditingSubCode(null);
-    setStatusMessage({ type: 'success', text: `Saved updates for subject ${cleanCode} (${cleanName}).` });
+    setStatusMessage({ type: 'success', text: `Saved updates for subject ${cleanCode} (${cleanName}). Saving to database...` });
+
+    // 3. Immediately persist to database via dedicated timetable sync API
+    try {
+      const res = await fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalCode,
+          code: cleanCode,
+          name: cleanName,
+          date: cleanDate,
+          session: cleanSession,
+          time: cleanTime,
+          department: formDept,
+          semester: Number(formSemester) || 1,
+          allocationId: currentAllocation?._id
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatusMessage({ type: 'success', text: `Timetable & timing for ${cleanCode} saved to database successfully!` });
+      }
+    } catch (apiErr) {
+      console.warn('Could not sync subject edit to backend API immediately:', apiErr);
+    }
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
@@ -1211,7 +1436,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           name: sub.name || matched?.name || sub.code,
           date: (sub.date && sub.date !== 'TBA') ? sub.date : (matched?.date || (sub.code === 'CS2001' ? '2026-04-15' : '2026-04-18')),
           session: sub.session || matched?.session || 'Forenoon (FN)',
-          time: sub.time || matched?.time || '09:30 AM - 12:30 PM'
+          time: (sub.time !== undefined && sub.time !== null && sub.time !== '') ? sub.time : (matched?.time !== undefined && matched?.time !== null ? matched.time : (sub.time || ''))
         };
       }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
 
@@ -1331,7 +1556,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
         ...s,
         date: (s.date && s.date.trim() && s.date !== 'TBA') ? s.date.trim() : (s.date || ''),
         session: s.session || 'Forenoon (FN)',
-        time: s.time || '09:30 AM - 12:30 PM'
+        time: (s.time !== undefined && s.time !== null) ? s.time : (s.session?.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM')
       }));
 
     const preparedStudents = studentsToAllocate.map((st, i) => {
@@ -1353,7 +1578,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
           name: sub.name || matched?.name || sub.code,
           date: finalDate,
           session: sub.session || matched?.session || 'Forenoon (FN)',
-          time: sub.time || matched?.time || '09:30 AM - 12:30 PM'
+          time: (sub.time !== undefined && sub.time !== null && sub.time !== '') ? sub.time : (matched?.time !== undefined && matched?.time !== null ? matched.time : (sub.time || ''))
         };
       }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
 
@@ -1818,32 +2043,32 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
               <Ticket className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-slate-900 leading-tight">Hall Ticket & Exam Allocation</h1>
-              <p className="text-xs text-slate-500 font-medium">Allocate exam halls, manage seat matrix, and generate official student hall tickets</p>
+              <h1 className="text-xl font-extrabold text-slate-900 leading-tight">Hall Allocation &amp; Hall Tickets Setup</h1>
+              <p className="text-xs text-slate-500 font-medium">Allocate exam halls, configure timetable, and generate official student hall tickets all within one unified setup</p>
             </div>
           </div>
 
           {/* Action Tabs */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveTab('tickets')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'tickets'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-            >
-              <Ticket className="w-4 h-4" />
-              Hall Tickets & Print
-            </button>
-            <button
               onClick={() => setActiveTab('allocate')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'allocate'
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'allocate'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
               <Building2 className="w-4 h-4" />
-              Hall Allocation Setup
+              1. Hall Allocation Setup
+            </button>
+            <button
+              onClick={() => setActiveTab('tickets')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'tickets'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+            >
+              <Ticket className="w-4 h-4" />
+              2. Hall Tickets &amp; Print
             </button>
           </div>
         </div>
@@ -2526,7 +2751,16 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
                               <td className="px-3 py-2">
                                 <select
                                   value={editSubForm.session?.includes('AN') || editSubForm.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
-                                  onChange={(e) => setEditSubForm(prev => ({ ...prev, session: e.target.value }))}
+                                  onChange={(e) => {
+                                    const newSess = e.target.value;
+                                    setEditSubForm(prev => ({
+                                      ...prev,
+                                      session: newSess,
+                                      time: (!prev.time || prev.time === '09:30 AM - 12:30 PM' || prev.time === '01:30 PM - 04:30 PM')
+                                        ? (newSess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM')
+                                        : prev.time
+                                    }));
+                                  }}
                                   className="w-full bg-white border border-blue-300 rounded px-1.5 py-1 text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer"
                                 >
                                   <option value="Forenoon (FN)">Forenoon (FN)</option>

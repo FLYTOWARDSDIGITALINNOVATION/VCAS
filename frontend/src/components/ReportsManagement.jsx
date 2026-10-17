@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { API_BASE, BACKEND_URL } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -540,12 +540,9 @@ export default function ReportsManagement({ user }) {
             className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
           >
             <option value="All Departments">All Departments</option>
-            <option value="Commerce">Commerce</option>
-            <option value="Computer Science">Computer Science</option>
-            <option value="English Literature">English Literature</option>
-            <option value="Business Administration (BBA)">Business Administration (BBA)</option>
-            <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
-            <option value="Mathematics">Mathematics</option>
+            {getKnownDepartments().map(d => (
+              <option key={d} value={d}>{d}</option>
+            ))}
           </select>
         </div>
 

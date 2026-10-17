@@ -16,5 +16,22 @@ export const BACKEND_URL = (
 
 export const API_BASE = `${BACKEND_URL}/api`;
 
+export const getKnownDepartments = () => {
+  try {
+    const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
+    if (Array.isArray(cached) && cached.length > 0) {
+      const names = cached.map(d => (typeof d === 'string' ? d : d.name)).filter(Boolean);
+      if (names.length > 0) return Array.from(new Set(names));
+    }
+  } catch (_) {}
+  return [
+    'Artificial Intelligence',
+    'Commerce',
+    'Computer Science',
+    'Criminology and Forensic Science',
+    'Management'
+  ];
+};
+
 export default API_BASE;
 

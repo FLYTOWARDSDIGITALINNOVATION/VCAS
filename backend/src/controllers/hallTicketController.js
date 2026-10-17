@@ -3,6 +3,7 @@ const Class = require('../models/Class');
 const Student = require('../models/Student');
 const Department = require('../models/Department');
 const Course = require('../models/Course');
+const { Exam, ExamHall } = require('../models/Exam');
 
 // Helper: Normalize & deduplicate subjects array
 const deduplicateSubjects = (subjects = []) => {
@@ -13,12 +14,13 @@ const deduplicateSubjects = (subjects = []) => {
     const code = (s.code || '').trim().toUpperCase();
     if (code && !seen.has(code)) {
       seen.add(code);
+      const resolvedTime = (s.time !== undefined && s.time !== null) ? s.time.trim() : '09:30 AM - 12:30 PM';
       result.push({
         code,
         name: (s.name || '').trim(),
         date: (s.date && s.date.trim()) ? s.date.trim() : 'TBA',
         session: (s.session || 'Forenoon (FN)').trim(),
-        time: (s.time || '09:30 AM - 12:30 PM').trim()
+        time: resolvedTime
       });
     }
   }
@@ -50,12 +52,15 @@ const deduplicateStudents = (students = [], defaultSubjects = []) => {
         const match = Array.isArray(defaultSubjects)
           ? defaultSubjects.find(ds => (ds.code || '').toUpperCase() === code)
           : null;
+        const resolvedTime = (s.time !== undefined && s.time !== null && s.time !== '')
+          ? s.time.trim()
+          : ((match?.time !== undefined && match?.time !== null) ? match.time.trim() : (s.time || ''));
         return {
           code,
           name: (s.name || match?.name || code || '').trim(),
           date: (s.date && s.date.trim() && s.date !== 'TBA') ? s.date.trim() : (match?.date && match.date !== 'TBA' ? match.date.trim() : (s.date || '')),
           session: (s.session || match?.session || 'Forenoon (FN)').trim(),
-          time: (s.time || match?.time || '09:30 AM - 12:30 PM').trim()
+          time: resolvedTime
         };
       }).filter(s => s.code && !['CS2003', 'CS2006', 'SF76'].includes(s.code));
 
@@ -208,6 +213,40 @@ exports.getEligibleStudents = async (req, res) => {
     // Also fetch all classes in department
     const allDeptClasses = await Class.find(deptRegex ? { dept: deptRegex } : {});
 
+    // Retrieve any saved timetable configurations from HallTicket and Exam to retain customized dates, sessions and times
+    const customTimingsMap = new Map();
+    try {
+      const savedTickets = await HallTicket.find(deptRegex ? { department: deptRegex } : {}).lean();
+      savedTickets.forEach(t => {
+        (t.commonSubjects || []).forEach(sub => {
+          const c = (sub.code || '').trim().toUpperCase();
+          if (c && !customTimingsMap.has(c)) {
+            customTimingsMap.set(c, {
+              name: sub.name,
+              date: sub.date,
+              session: sub.session,
+              time: (sub.time !== undefined && sub.time !== null) ? sub.time : ''
+            });
+          }
+        });
+      });
+    } catch (_) {}
+
+    try {
+      const savedExams = await Exam.find(deptRegex ? { department: deptRegex } : {}).lean();
+      savedExams.forEach(ex => {
+        const c = (ex.code || '').trim().toUpperCase();
+        if (c && !customTimingsMap.has(c)) {
+          customTimingsMap.set(c, {
+            name: ex.name,
+            date: ex.date,
+            session: ex.session,
+            time: (ex.time !== undefined && ex.time !== null) ? ex.time : ''
+          });
+        }
+      });
+    } catch (_) {}
+
     const subjectsMap = new Map();
     allDeptClasses.forEach(cls => {
       const code = (cls.code || '').trim().toUpperCase();
@@ -215,14 +254,28 @@ exports.getEligibleStudents = async (req, res) => {
         // Exclude dummy test/legacy subjects
         if (['SF76', 'CS2003', 'CS2006'].includes(code)) return;
         if (!subjectsMap.has(code)) {
+          const savedInfo = customTimingsMap.get(code);
           subjectsMap.set(code, {
             code,
-            name: cls.name.trim(),
-            date: code === 'CS2001' ? '2026-04-15' : (code === 'CS2005' ? '2026-04-18' : '2026-04-20'),
-            session: 'Forenoon (FN)',
-            time: '09:30 AM - 12:30 PM'
+            name: savedInfo?.name || cls.name.trim(),
+            date: savedInfo?.date || (code === 'CS2001' ? '2026-04-15' : (code === 'CS2005' ? '2026-04-18' : '2026-04-20')),
+            session: savedInfo?.session || 'Forenoon (FN)',
+            time: (savedInfo?.time !== undefined && savedInfo?.time !== null) ? savedInfo.time : '09:30 AM - 12:30 PM'
           });
         }
+      }
+    });
+
+    // Also include any subjects saved in HallTicket that were not in Class collection
+    customTimingsMap.forEach((info, c) => {
+      if (!subjectsMap.has(c) && !['SF76', 'CS2003', 'CS2006'].includes(c)) {
+        subjectsMap.set(c, {
+          code: c,
+          name: info.name || c,
+          date: info.date || '2026-04-20',
+          session: info.session || 'Forenoon (FN)',
+          time: info.time !== undefined ? info.time : '09:30 AM - 12:30 PM'
+        });
       }
     });
 
@@ -245,10 +298,10 @@ exports.getEligibleStudents = async (req, res) => {
             if (code && subjectsMap.has(code) && !existing.subjects.some(s => s.code === code)) {
               existing.subjects.push({
                 code,
-                name: (cls.name || '').trim(),
+                name: subjectsMap.get(code)?.name || (cls.name || '').trim(),
                 date: subjectsMap.get(code)?.date || '2026-04-18',
-                session: 'Forenoon (FN)',
-                time: '09:30 AM - 12:30 PM'
+                session: subjectsMap.get(code)?.session || 'Forenoon (FN)',
+                time: subjectsMap.get(code)?.time || ''
               });
             }
             studentMap.set(rollNo, existing);
@@ -480,7 +533,7 @@ exports.createOrUpdateAllocation = async (req, res) => {
               name: s.name || match?.name || s.code,
               date: (s.date && s.date !== 'TBA') ? s.date : (match?.date || (s.code === 'CS2001' ? '2026-04-15' : '2026-04-18')),
               session: s.session || match?.session || 'Forenoon (FN)',
-              time: s.time || match?.time || '09:30 AM - 12:30 PM'
+              time: (s.time !== undefined && s.time !== null && s.time !== '') ? s.time : (match?.time || s.time || '')
             };
           }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
 
@@ -518,6 +571,94 @@ exports.createOrUpdateAllocation = async (req, res) => {
       } else {
         allocation = await HallTicket.create(payload);
       }
+    }
+
+    // Automatically synchronize staff-assigned halls into ExamHall collection
+    try {
+      const activeHallsList = payload.halls && payload.halls.length > 0 ? payload.halls : cleanHalls;
+      for (const h of activeHallsList) {
+        const rawNo = (h.hallNo || '').trim();
+        if (!rawNo) continue;
+        const hallName = rawNo.toLowerCase().startsWith('hall') ? rawNo : `Hall ${rawNo}`;
+        const studentsInHall = (payload.students || []).filter(s => {
+          const sHNo = (s.hallNo || '').trim().toUpperCase();
+          return sHNo === rawNo.toUpperCase() || sHNo === hallName.toUpperCase();
+        });
+        const rolls = studentsInHall.map(s => s.rollNo).filter(Boolean).sort();
+        const rollRange = rolls.length > 1 ? `${rolls[0]} - ${rolls[rolls.length - 1]}` : (rolls[0] || 'No candidates assigned');
+
+        let existingHall = await ExamHall.findOne({ hallName });
+        if (!existingHall) {
+          await ExamHall.create({
+            hallName,
+            capacity: Number(h.capacity) || 30,
+            allocatedStudents: studentsInHall.length,
+            departments: `${payload.department} (Sem ${payload.semester})`,
+            rollRange,
+            invigilator: payload.allocatedByStaffName || 'Staff In-Charge',
+            invigilatorDept: payload.department,
+            status: studentsInHall.length >= (Number(h.capacity) || 30) ? 'Fully Allocated' : (studentsInHall.length > 0 ? 'Allocated' : 'Available')
+          });
+        } else {
+          existingHall.capacity = Number(h.capacity) || existingHall.capacity;
+          existingHall.allocatedStudents = studentsInHall.length;
+          existingHall.rollRange = rollRange;
+          existingHall.departments = `${payload.department} (Sem ${payload.semester})`;
+          if (payload.allocatedByStaffName) existingHall.invigilator = payload.allocatedByStaffName;
+          if (payload.department) existingHall.invigilatorDept = payload.department;
+          existingHall.status = studentsInHall.length >= (Number(existingHall.capacity) || 30) ? 'Fully Allocated' : (studentsInHall.length > 0 ? 'Allocated' : 'Available');
+          await existingHall.save();
+        }
+      }
+    } catch (hallSyncErr) {
+      console.warn('Error syncing ExamHall in allocateHallTickets:', hallSyncErr.message);
+    }
+
+    // Automatically synchronize common exam subjects into Exam collection so Admin Timetable reflects assigned halls & timings
+    try {
+      const activeHallsList = payload.halls && payload.halls.length > 0 ? payload.halls : cleanHalls;
+      const assignedHallNames = activeHallsList.map(h => {
+        const rawNo = (h.hallNo || '').trim();
+        return rawNo.toLowerCase().startsWith('hall') ? rawNo : `Hall ${rawNo}`;
+      }).join(', ') || 'Hall 101';
+
+      for (const sub of (payload.commonSubjects || cleanCommonSubjects)) {
+        const subCode = (sub.code || '').trim().toUpperCase();
+        if (!subCode) continue;
+
+        let examDoc = await Exam.findOne({ code: subCode });
+        const subSessionStr = sub.time ? `${sub.session || 'Forenoon (FN)'} (${sub.time})` : (sub.session || 'Forenoon (FN)');
+
+        if (examDoc) {
+          examDoc.hall = assignedHallNames;
+          if (sub.date && sub.date !== 'TBA') examDoc.date = sub.date;
+          if (sub.session) examDoc.session = sub.session;
+          if (sub.time !== undefined) examDoc.time = sub.time;
+          if (payload.department) examDoc.department = payload.department;
+          if (payload.semester) examDoc.sem = `Sem ${payload.semester}`;
+          if (payload.allocatedByStaffName) examDoc.invigilator = payload.allocatedByStaffName;
+          examDoc.status = 'Scheduled';
+          await examDoc.save();
+        } else {
+          await Exam.create({
+            code: subCode,
+            name: sub.name || subCode,
+            department: payload.department,
+            year: Math.ceil(Number(payload.semester) / 2) || 1,
+            sem: `Sem ${payload.semester}`,
+            date: (sub.date && sub.date !== 'TBA') ? sub.date : '2026-05-15',
+            session: sub.session || 'Forenoon (FN)',
+            time: sub.time !== undefined ? sub.time : '09:30 AM - 12:30 PM',
+            hall: assignedHallNames,
+            qpCode: `QP-${subCode}-2026`,
+            invigilator: payload.allocatedByStaffName || 'Assigned Faculty',
+            status: 'Scheduled',
+            type: 'End Semester Theory'
+          });
+        }
+      }
+    } catch (examSyncErr) {
+      console.warn('Error syncing Exam in allocateHallTickets:', examSyncErr.message);
     }
 
     console.log('[HallTicket] Allocation saved successfully! Total students:', payload.students.length);
@@ -675,7 +816,7 @@ exports.getStudentHallTicket = async (req, res) => {
       if (!s.date || s.date === 'TBA') {
         s.date = s.code === 'CS2001' ? '2026-04-15' : (s.code === 'CS2005' ? '2026-04-18' : '2026-04-20');
       }
-      if (!s.time) {
+      if (s.time === undefined || s.time === null) {
         s.time = '09:30 AM - 12:30 PM';
       }
       if (!s.session) {
@@ -717,4 +858,183 @@ exports.getStudentHallTicket = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error retrieving hall ticket', error: error.message });
   }
 };
+
+// @desc    Update subject date, session, timing or name across all hall tickets & exams
+// @route   POST /api/hall-tickets/update-subject-schedule
+exports.updateSubjectSchedule = async (req, res) => {
+  try {
+    const { originalCode, code, name, date, session, time, department, semester, allocationId } = req.body;
+    const lookupCode = (originalCode || code || '').trim().toUpperCase();
+    const cleanCode = (code || originalCode || '').trim().toUpperCase();
+    if (!cleanCode) {
+      return res.status(400).json({ success: false, message: 'Subject code is required' });
+    }
+
+    const cleanDate = date && date.trim() ? date.trim() : '2026-04-20';
+    const cleanSession = session && session.trim() ? session.trim() : 'Forenoon (FN)';
+    const cleanTime = (time !== undefined && time !== null) ? time.trim() : '';
+    const cleanName = name ? name.trim() : '';
+
+    console.log(`[HallTicket] Updating subject schedule for ${lookupCode} -> ${cleanCode}, Time: "${cleanTime}", Session: "${cleanSession}", Date: "${cleanDate}"`);
+
+    // 1. Update all HallTickets that reference this subject code or match allocationId
+    const ticketFilter = {};
+    if (allocationId) {
+      ticketFilter._id = allocationId;
+    } else if (department) {
+      ticketFilter.$or = [
+        { 'commonSubjects.code': lookupCode },
+        { 'students.subjects.code': lookupCode },
+        { department: new RegExp(department.trim().split(' ')[0], 'i') }
+      ];
+    } else {
+      ticketFilter.$or = [
+        { 'commonSubjects.code': lookupCode },
+        { 'students.subjects.code': lookupCode }
+      ];
+    }
+
+    const matchingTickets = await HallTicket.find(ticketFilter);
+    for (const ticket of matchingTickets) {
+      let changed = false;
+
+      // Update in commonSubjects
+      let subFoundInCommon = false;
+      ticket.commonSubjects = (ticket.commonSubjects || []).map(s => {
+        if ((s.code || '').toUpperCase() === lookupCode) {
+          subFoundInCommon = true;
+          changed = true;
+          return {
+            ...s.toObject(),
+            code: cleanCode,
+            name: cleanName || s.name,
+            date: cleanDate,
+            session: cleanSession,
+            time: cleanTime
+          };
+        }
+        return s;
+      });
+
+      if (!subFoundInCommon && cleanName) {
+        ticket.commonSubjects.push({
+          code: cleanCode,
+          name: cleanName,
+          date: cleanDate,
+          session: cleanSession,
+          time: cleanTime
+        });
+        changed = true;
+      }
+
+      // Update in student records
+      (ticket.students || []).forEach(st => {
+        if (Array.isArray(st.subjects)) {
+          st.subjects.forEach(sub => {
+            if ((sub.code || '').toUpperCase() === lookupCode) {
+              changed = true;
+              sub.code = cleanCode;
+              if (cleanName) sub.name = cleanName;
+              sub.date = cleanDate;
+              sub.session = cleanSession;
+              sub.time = cleanTime;
+            }
+          });
+        }
+      });
+
+      if (changed) {
+        ticket.markModified('commonSubjects');
+        ticket.markModified('students');
+        await ticket.save();
+      }
+    }
+
+    // If no existing ticket was found, create draft so MongoDB retains it
+    if (matchingTickets.length === 0 && department && semester) {
+      try {
+        await HallTicket.create({
+          examName: 'End Semester Theory Examinations - April/May 2026',
+          department: department.trim(),
+          semester: Number(semester) || 1,
+          section: 'All',
+          halls: [{ hallNo: 'Hall 101', capacity: 30 }],
+          commonSubjects: [{
+            code: cleanCode,
+            name: cleanName || cleanCode,
+            date: cleanDate,
+            session: cleanSession,
+            time: cleanTime
+          }],
+          students: []
+        });
+      } catch (createErr) {
+        console.warn('Could not create draft ticket in updateSubjectSchedule:', createErr.message);
+      }
+    }
+
+    // 2. Synchronize with Exam collection
+    try {
+      let examDoc = await Exam.findOne({ code: lookupCode });
+      if (examDoc) {
+        examDoc.code = cleanCode;
+        if (cleanName) examDoc.name = cleanName;
+        examDoc.date = cleanDate;
+        examDoc.session = cleanSession;
+        examDoc.time = cleanTime;
+        if (department) examDoc.department = department;
+        if (semester) examDoc.sem = `Sem ${semester}`;
+        await examDoc.save();
+      } else if (cleanName && department) {
+        await Exam.create({
+          code: cleanCode,
+          name: cleanName,
+          department: department,
+          year: Math.ceil(Number(semester) / 2) || 1,
+          sem: `Sem ${semester || 1}`,
+          date: cleanDate,
+          session: cleanSession,
+          time: cleanTime,
+          hall: 'Main Examination Hall',
+          qpCode: `QP-${cleanCode}-2026`,
+          status: 'Scheduled',
+          type: 'End Semester Theory'
+        });
+      }
+    } catch (exErr) {
+      console.warn('Could not sync Exam in updateSubjectSchedule:', exErr.message);
+    }
+
+    // 3. Synchronize with Class collection
+    try {
+      const cls = await Class.findOne({ code: lookupCode });
+      if (cls) {
+        if (cleanCode !== lookupCode) cls.code = cleanCode;
+        if (cleanName) cls.name = cleanName;
+        await cls.save();
+      }
+    } catch (clsErr) {
+      console.warn('Could not sync Class in updateSubjectSchedule:', clsErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Updated timetable for ${cleanCode} successfully`,
+      subject: {
+        code: cleanCode,
+        name: cleanName,
+        date: cleanDate,
+        session: cleanSession,
+        time: cleanTime
+      }
+    });
+  } catch (error) {
+    console.error('updateSubjectSchedule error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update subject schedule: ' + error.message
+    });
+  }
+};
+
 
