@@ -34,25 +34,66 @@ import ModalPortal from '../ModalPortal';
 // API_BASE imported from apiConfig
 
 const DEFAULT_DEPTS = [
+  'BSc. Computer science',
   'Computer Science',
-  'Information Technology',
   'Commerce',
   'Mathematics',
-  'Physics',
-  'Chemistry',
   'Business Administration',
-  'English'
+  'English',
+  'Tamil',
+  'Physical Education',
+  'Office'
 ];
 
 export default function StaffExamSchedule({ staffUser, onNavigate }) {
   // Main Tab Navigation: 'seating' (Hall Allocation & Seating Setup) | 'eligibility' (No Due & Attendance)
   const [activeTab, setActiveTab] = useState('seating');
 
+  // Real database departments
+  const [availableDepts, setAvailableDepts] = useState([]);
+
   // Common Selection Filters
-  const [selectedDept, setSelectedDept] = useState(staffUser?.department || 'Computer Science');
+  const [selectedDept, setSelectedDept] = useState(staffUser?.department || '');
   const [selectedSem, setSelectedSem] = useState(1);
   const [examTypeFilter, setExamTypeFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Fetch real departments on mount
+  useEffect(() => {
+    const fetchDepts = async () => {
+      try {
+        let depts = [];
+        try {
+          const deptRes = await fetch(`${API_BASE}/departments`);
+          const deptData = await deptRes.json();
+          if (deptData.success && Array.isArray(deptData.data)) {
+            const list = deptData.data.map(d => d.name?.trim()).filter(Boolean);
+            depts.push(...list);
+          }
+        } catch (_) {}
+
+        try {
+          const metaRes = await fetch(`${API_BASE}/hall-tickets/meta`);
+          const metaData = await metaRes.json();
+          if (metaData.success && metaData.departments?.length > 0) {
+            depts.push(...metaData.departments);
+          }
+        } catch (_) {}
+
+        const uniqueDepts = Array.from(new Set(depts.filter(Boolean)));
+        const finalDepts = uniqueDepts.length > 0 ? uniqueDepts : DEFAULT_DEPTS;
+        setAvailableDepts(finalDepts);
+
+        if (!selectedDept || !finalDepts.includes(selectedDept)) {
+          const match = finalDepts.find(d => staffUser?.department && d.toLowerCase().includes(staffUser.department.toLowerCase()));
+          setSelectedDept(match || finalDepts[0]);
+        }
+      } catch (err) {
+        setAvailableDepts(DEFAULT_DEPTS);
+      }
+    };
+    fetchDepts();
+  }, [staffUser?.department]);
 
   // 2. Exam Eligibility State (Editable Rules & Overrides)
   const [students, setStudents] = useState([]);
@@ -140,9 +181,30 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
     try {
       const res = await fetch(`${API_BASE}/hall-tickets/eligible-students?department=${encodeURIComponent(selectedDept)}&semester=${selectedSem}`);
       const data = await res.json();
-      if (data.success && Array.isArray(data.students)) {
-        setStudents(data.students);
+      let studentList = (data.success && Array.isArray(data.students)) ? data.students : [];
+
+      if (studentList.length === 0) {
+        try {
+          const sRes = await fetch(`${API_BASE}/students`);
+          const sData = await sRes.json();
+          if (sData.success && Array.isArray(sData.data)) {
+            studentList = sData.data.map(st => ({
+              rollNo: st.rollNo || st.regNo || '',
+              regNo: st.regNo || st.rollNo || '',
+              name: st.name || st.fullName || 'Student',
+              dept: st.department || selectedDept,
+              semester: st.sem ? parseInt(st.sem) || selectedSem : selectedSem,
+              section: st.section || 'A',
+              feeStatus: st.feeStatus || 'Pending',
+              attendance: st.attendance !== undefined ? st.attendance : 85,
+              subjects: []
+            }));
+          }
+        } catch (_) {}
       }
+
+      setStudents(studentList);
+
       if (data.success && Array.isArray(data.subjects)) {
         setAvailableCatalogSubjects(data.subjects);
       }
@@ -547,15 +609,6 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
         </div>
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => {
-              fetchStudentsForEligibility();
-            }}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs transition-all cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${loadingStudents ? 'animate-spin' : ''}`} />
-            <span>Sync Data</span>
-          </button>
-          <button
             onClick={handlePrintSeatingChart}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all cursor-pointer"
           >
@@ -588,7 +641,7 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
             onChange={(e) => setSelectedDept(e.target.value)}
             className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
           >
-            {DEFAULT_DEPTS.map(d => (
+            {availableDepts.map(d => (
               <option key={d} value={d}>{d}</option>
             ))}
           </select>
@@ -1100,18 +1153,22 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
               </div>
 
               <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Session</label>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Session Timing</label>
                 <select
-                  value={newSubSession}
+                  value={newSubSession?.includes('AN') || newSubSession?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
                   onChange={(e) => {
                     const sess = e.target.value;
                     setNewSubSession(sess);
-                    setNewSubTime(sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM');
+                    if (sess.includes('AN')) {
+                      setNewSubTime('01:30 PM - 04:30 PM');
+                    } else {
+                      setNewSubTime('09:30 AM - 12:30 PM');
+                    }
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 >
-                  <option value="Forenoon (FN)">Forenoon (FN: 09:30 AM - 12:30 PM)</option>
-                  <option value="Afternoon (AN)">Afternoon (AN: 01:30 PM - 04:30 PM)</option>
+                  <option value="Forenoon (FN)">Forenoon (FN)</option>
+                  <option value="Afternoon (AN)">Afternoon (AN)</option>
                 </select>
               </div>
 
@@ -1147,7 +1204,21 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
                         <td className="px-3.5 py-2 font-bold text-slate-800">{s.name}</td>
                         <td className="px-3.5 py-2 text-slate-700">{s.date}</td>
                         <td className="px-3.5 py-2 text-slate-700">{s.session}</td>
-                        <td className="px-3.5 py-2 text-slate-700">{s.time}</td>
+                        <td className="px-3.5 py-2 text-slate-700">
+                          <div className="flex items-center gap-1.5">
+                            <span>{s.time || '—'}</span>
+                            {s.time && (
+                              <button
+                                type="button"
+                                onClick={() => setExamSubjects(prev => prev.map(sub => sub.code === s.code ? { ...sub, time: '' } : sub))}
+                                className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
+                                title="Delete / Clear Exam Time"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-3.5 py-2 text-right">
                           <button
                             type="button"

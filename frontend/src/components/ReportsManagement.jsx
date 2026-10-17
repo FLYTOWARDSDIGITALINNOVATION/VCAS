@@ -451,7 +451,7 @@ export default function ReportsManagement({ user }) {
             className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-60"
           >
             <Sparkles className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{isLoading ? 'Syncing...' : 'Sync Live Data'}</span>
+            <span>{isLoading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
 
           {isSuperAdmin && (

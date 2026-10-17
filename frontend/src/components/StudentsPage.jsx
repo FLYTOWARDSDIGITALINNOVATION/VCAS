@@ -125,13 +125,55 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   const [toastMessage, setToastMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [departmentsList, setDepartmentsList] = useState([]);
+  const [subjectsList, setSubjectsList] = useState([]);
+  const [classesList, setClassesList] = useState([]);
+  const [selectedSubject, setSelectedSubject] = useState('All Subjects');
 
   useEffect(() => {
+    // 1. Fetch real departments
     fetch(`${API_BASE}/api/departments`)
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.data)) {
           setDepartmentsList(data.data);
+        }
+      })
+      .catch(() => {});
+
+    // 2. Fetch original real subjects
+    fetch(`${API_BASE}/api/subjects`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          setSubjectsList(data.data);
+        }
+      })
+      .catch(() => {});
+
+    // 3. Fetch real classes to enrich subject allocations
+    fetch(`${API_BASE}/api/classes`)
+      .then(res => res.json())
+      .then(data => {
+        const cls = data.classes || (Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []));
+        if (Array.isArray(cls)) {
+          setClassesList(cls);
+          // Merge unique classes into subjectsList if not already present
+          setSubjectsList(prev => {
+            const seenCodes = new Set(prev.map(s => (s.code || '').toUpperCase()));
+            const newSubs = [...prev];
+            cls.forEach(c => {
+              const code = (c.code || c.classCode || '').toUpperCase();
+              if (code && !seenCodes.has(code)) {
+                seenCodes.add(code);
+                newSubs.push({
+                  code,
+                  name: c.name || c.className || code,
+                  department: c.dept || c.department || ''
+                });
+              }
+            });
+            return newSubs;
+          });
         }
       })
       .catch(() => {});
@@ -229,7 +271,40 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     const matchesDept = selectedDept === 'All Departments' || student.department === selectedDept;
     const matchesFee = !canViewFees || selectedFeeStatus === 'All Statuses' || student.feeStatus === selectedFeeStatus;
 
-    return matchesSearch && matchesDept && matchesFee;
+    let matchesSubject = true;
+    if (selectedSubject && selectedSubject !== 'All Subjects') {
+      const targetSub = selectedSubject.toLowerCase();
+      // Match against student's enrolled subjects array if present
+      const hasEnrolledSub = Array.isArray(student.subjects) && student.subjects.some(sub => {
+        const code = (sub.code || sub).toLowerCase();
+        const name = (sub.name || '').toLowerCase();
+        return code.includes(targetSub) || name.includes(targetSub);
+      });
+
+      // Match against class enrolled students list
+      const matchedClass = classesList.find(c => 
+        (c.code || '').toLowerCase() === targetSub || 
+        (c.name || '').toLowerCase() === targetSub
+      );
+      const inClass = matchedClass && Array.isArray(matchedClass.students) && matchedClass.students.some(st => 
+        (st.rollNo && st.rollNo.toUpperCase() === (student.rollNo || '').toUpperCase()) ||
+        (st.regNo && st.regNo.toUpperCase() === (student.regNo || '').toUpperCase())
+      );
+
+      // Match against department or course association
+      const matchedSubDoc = subjectsList.find(s => 
+        (s.code || '').toLowerCase() === targetSub || 
+        (s.name || '').toLowerCase() === targetSub
+      );
+      const matchesDeptOfSub = matchedSubDoc?.department && (
+        String(student.department || '').toLowerCase().includes(matchedSubDoc.department.toLowerCase()) ||
+        String(student.course || student.courseAdmitted || '').toLowerCase().includes(matchedSubDoc.department.toLowerCase())
+      );
+
+      matchesSubject = hasEnrolledSub || inClass || matchesDeptOfSub;
+    }
+
+    return matchesSearch && matchesDept && matchesFee && matchesSubject;
   });
 
   // Selection handlers
@@ -931,15 +1006,25 @@ Unauthorized reproduction or distribution is strictly prohibited.
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          {/* Search Input - Prominent and Spacious */}
+          <div className="relative flex-1 min-w-[280px] sm:min-w-[340px]">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input 
               type="text" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all h-10"
+              placeholder="Search by student name, roll no, register number, department..."
+              className="w-full pl-10 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-900 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all h-10"
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Filters Group */}
@@ -960,16 +1045,27 @@ Unauthorized reproduction or distribution is strictly prohibited.
               )}
             </select>
 
-            {/* Courses Filter */}
-            <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10">
-              <option value="All Courses">All Courses</option>
-              <option value="B.Com">B.Com</option>
-              <option value="B.Sc CS">B.Sc CS</option>
-              <option value="B.A. English">B.A. English</option>
-              <option value="BBA">BBA</option>
-              <option value="BCA">BCA</option>
-              <option value="B.Sc Maths">B.Sc Maths</option>
-              <option value="M.Com">M.Com</option>
+            {/* Subjects Filter (Replaces Courses with Real Subjects from DB) */}
+            <select 
+              value={selectedSubject}
+              onChange={(e) => setSelectedSubject(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10 min-w-[140px]"
+            >
+              <option value="All Subjects">All Subjects</option>
+              {subjectsList.length > 0 ? (
+                subjectsList.map(sub => (
+                  <option key={sub._id || sub.code} value={sub.code || sub.name}>
+                    {sub.code ? `${sub.code} - ${sub.name}` : sub.name}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="BCS101">BCS101 - Core Programming</option>
+                  <option value="CS2001">CS2001 - Data Structures</option>
+                  <option value="CS2002">CS2002 - Database Systems</option>
+                  <option value="CS2005">CS2005 - Web Technology</option>
+                </>
+              )}
             </select>
 
             {/* Semesters Filter */}

@@ -36,7 +36,10 @@ import {
   FileCheck,
   Eye,
   X,
-  CreditCard
+  CreditCard,
+  Users,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import StaffApplicationView from './staff/StaffApplicationView';
@@ -148,22 +151,250 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
       .finally(() => setLoadingAchievements(false));
   };
 
+  const fetchStaffSchedule = () => {
+    if (!staffId) return;
+    setLoadingSchedule(true);
+    fetch(`${API_BASE}/timetable/staff/${staffId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.schedule) setStaffSchedule(d.schedule);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSchedule(false));
+  };
+
+  const handleClearTimetableSlot = async (day, slotNum) => {
+    if (!window.confirm(`Delete / Clear Period ${slotNum} on ${day}?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/timetable/staff/${staffId}/slot/${day}/${slotNum}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.schedule) setStaffSchedule(data.schedule);
+        fetchStaffSchedule();
+      } else {
+        alert(data.message || 'Failed to clear timetable slot');
+      }
+    } catch (e) {
+      alert('Network error clearing timetable slot');
+    }
+  };
+
+  const handleClearFullTimetable = async () => {
+    if (!window.confirm(`Are you sure you want to delete and reset the weekly timetable for ${staff.name}?`)) return;
+    try {
+      const emptySchedule = {
+        Monday: {},
+        Tuesday: {},
+        Wednesday: {},
+        Thursday: {},
+        Friday: {},
+        Saturday: {}
+      };
+      const res = await fetch(`${API_BASE}/timetable/staff/${staffId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule: emptySchedule })
+      });
+      if (res.ok) {
+        setStaffSchedule(emptySchedule);
+        fetchStaffSchedule();
+      }
+    } catch (e) {
+      alert('Network error clearing timetable');
+    }
+  };
+
   useEffect(() => {
     fetchStaffLeaves();
     fetchStaffClasses();
     fetchStaffAssignments();
     fetchStaffAchievements();
-    if (staffId) {
-      setLoadingSchedule(true);
-      fetch(`${API_BASE}/timetable/staff/${staffId}`)
-        .then(r => r.json())
-        .then(d => {
-          if (d.success && d.schedule) setStaffSchedule(d.schedule);
-        })
-        .catch(() => {})
-        .finally(() => setLoadingSchedule(false));
-    }
+    fetchStaffSchedule();
+    fetchDropdownData();
   }, [staffId]);
+
+  // Real database dropdown options for Add Class modal
+  const [availableDepartments, setAvailableDepartments] = useState([]);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [availableStaffList, setAvailableStaffList] = useState([]);
+  const [availableVenues, setAvailableVenues] = useState([]);
+  const [isAddClassModalOpen, setIsAddClassModalOpen] = useState(false);
+  const [savingClass, setSavingClass] = useState(false);
+  const [classFormError, setClassFormError] = useState('');
+  const [classSuccessToast, setClassSuccessToast] = useState('');
+
+  const [classForm, setClassForm] = useState({
+    code: '',
+    name: '',
+    dept: staff.department || '',
+    year: 1,
+    semester: 1,
+    section: 'A',
+    staffId: staff.staffId || staff.empId || '',
+    staffName: staff.name || '',
+    theoryHours: 3,
+    labHours: 0,
+    isContinuousLab: false,
+    continuousHours: 3,
+    room: '',
+    credits: 3
+  });
+
+  const fetchDropdownData = async () => {
+    try {
+      const [dRes, subRes, sRes, cRes] = await Promise.all([
+        fetch(`${API_BASE}/departments`).catch(() => null),
+        fetch(`${API_BASE}/subjects`).catch(() => null),
+        fetch(`${API_BASE}/staff`).catch(() => null),
+        fetch(`${API_BASE}/classes`).catch(() => null)
+      ]);
+
+      if (dRes && dRes.ok) {
+        const dData = await dRes.json();
+        const rawDepts = dData?.departments || dData?.data || (Array.isArray(dData) ? dData : []);
+        const deptNames = rawDepts.map(d => (typeof d === 'string' ? d : d.name || d.departmentName)).filter(Boolean);
+        setAvailableDepartments(Array.from(new Set(deptNames)));
+      }
+
+      if (subRes && subRes.ok) {
+        const subData = await subRes.json();
+        const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
+        // Only created subjects, filter out deleted or dummy
+        const filteredSubs = rawSubs.filter(s => s && s.code && !['CS401', 'CS402', 'SF76', 'CS2001', 'CS2005'].includes(s.code.toUpperCase()));
+        setAvailableSubjects(filteredSubs);
+      }
+
+      if (sRes && sRes.ok) {
+        const sData = await sRes.json();
+        const staffArr = sData?.data || sData?.staff || (Array.isArray(sData) ? sData : []);
+        setAvailableStaffList(staffArr);
+      }
+
+      let rooms = [];
+      if (cRes && cRes.ok) {
+        const cData = await cRes.json();
+        const clsArr = cData?.classes || cData?.data || (Array.isArray(cData) ? cData : []);
+        rooms = clsArr.map(c => c.room).filter(Boolean);
+      }
+      try {
+        const customHalls = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
+        const customVenues = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
+        const names = [...customHalls, ...customVenues].map(h => typeof h === 'string' ? h : (h?.name || h?.room || h?.hallName)).filter(Boolean);
+        rooms = [...rooms, ...names];
+      } catch (_) {}
+      const uniqueRooms = Array.from(new Set(rooms));
+      setAvailableVenues(uniqueRooms.length > 0 ? uniqueRooms : ['LH-101', 'LH-102', 'Computer Lab 1', 'Seminar Hall 1']);
+    } catch (e) {
+      console.error('Failed to load dropdown options:', e);
+    }
+  };
+
+  const handleOpenAddClassModal = () => {
+    setClassFormError('');
+    fetchDropdownData();
+    setClassForm({
+      code: '',
+      name: '',
+      dept: availableDepartments.length > 0 ? (availableDepartments.includes(staff.department) ? staff.department : availableDepartments[0]) : '',
+      year: 1,
+      semester: 1,
+      section: 'A',
+      staffId: staff.staffId || staff.empId || '',
+      staffName: staff.name || '',
+      theoryHours: 3,
+      labHours: 0,
+      isContinuousLab: false,
+      continuousHours: 3,
+      room: availableVenues[0] || 'LH-101',
+      credits: 3
+    });
+    setIsAddClassModalOpen(true);
+  };
+
+  const handleSelectCreatedSubject = (selectedCode) => {
+    const sub = availableSubjects.find(s => s.code === selectedCode);
+    if (sub) {
+      const isLab = Boolean(sub.type === 'lab' || (Number(sub.labHours) > 0) || sub.name?.toLowerCase().includes('lab'));
+      const parsedSem = sub.sem ? (parseInt(String(sub.sem).replace(/\D/g, ''), 10) || 1) : 1;
+      const matchedDept = availableDepartments.includes(sub.department) ? sub.department : (availableDepartments[0] || '');
+      setClassForm(prev => ({
+        ...prev,
+        code: sub.code,
+        name: sub.name,
+        dept: matchedDept,
+        year: Number(sub.year) || prev.year,
+        semester: parsedSem,
+        theoryHours: sub.theoryHours !== undefined ? Number(sub.theoryHours) : (isLab ? 0 : 3),
+        labHours: sub.labHours !== undefined ? Number(sub.labHours) : (isLab ? 3 : 0),
+        isContinuousLab: Boolean(sub.isContinuousLab || isLab),
+        continuousHours: Number(sub.labHours) || 3,
+        credits: Number(sub.credits) || 3,
+        room: isLab ? 'Computer Lab 1' : (prev.room || 'LH-101')
+      }));
+    } else {
+      setClassForm(prev => ({ ...prev, code: selectedCode }));
+    }
+  };
+
+  const handleSaveAddClass = async (e) => {
+    e.preventDefault();
+    setClassFormError('');
+
+    if (!classForm.code.trim() || !classForm.name.trim()) {
+      setClassFormError('Subject Code and Subject Name are required.');
+      return;
+    }
+
+    try {
+      setSavingClass(true);
+      const isLab = Boolean(classForm.isContinuousLab || Number(classForm.labHours) > 0);
+      const hoursStr = Number(classForm.labHours) > 0
+        ? `${classForm.theoryHours}h Theory + ${classForm.labHours}h Continuous Lab`
+        : `${classForm.theoryHours} hrs/wk`;
+
+      const payload = {
+        code: classForm.code.trim().toUpperCase(),
+        name: classForm.name.trim(),
+        dept: classForm.dept || staff.department || '',
+        year: Number(classForm.year),
+        semester: Number(classForm.semester),
+        section: classForm.section || 'A',
+        credits: Number(classForm.credits) || 3,
+        theoryHours: Number(classForm.theoryHours) || 0,
+        labHours: Number(classForm.labHours) || 0,
+        isContinuousLab: isLab,
+        hours: hoursStr,
+        staffId: classForm.staffId || staff.staffId,
+        staffName: classForm.staffName || staff.name,
+        room: classForm.room || 'LH-101',
+        academicYear: '2026-2027'
+      };
+
+      const res = await fetch(`${API_BASE}/classes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setClassFormError(data.message || 'Failed to add class.');
+        return;
+      }
+
+      setIsAddClassModalOpen(false);
+      setClassSuccessToast(`✓ Class "${payload.code} - ${payload.name}" added successfully and Weekly Timetable automatically generated with continuous lab hours!`);
+      setTimeout(() => setClassSuccessToast(''), 4500);
+      fetchStaffClasses();
+      fetchStaffSchedule();
+    } catch (err) {
+      setClassFormError('Network error: ' + err.message);
+    } finally {
+      setSavingClass(false);
+    }
+  };
 
   const handleAdminLeaveAction = async (leaveId, status) => {
     try {
@@ -585,29 +816,217 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Aadhaar Card Number</span>
-                  <span className="font-mono font-bold text-slate-800">{staff.aadhaar || '—'}</span>
+                  <span className="font-mono font-bold text-slate-800">{currentStaff.aadhaar || '—'}</span>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">PAN Card Number</span>
-                  <span className="font-mono font-bold text-slate-800">{staff.pan || '—'}</span>
+                  <span className="font-mono font-bold text-slate-800">{currentStaff.pan || '—'}</span>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Bank Account Number</span>
-                  <span className="font-mono font-bold text-blue-700">{staff.bankAccountNo || '—'}</span>
+                  <span className="font-mono font-bold text-blue-700">{currentStaff.bankAccountNo || '—'}</span>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Bank Name</span>
-                  <span className="font-semibold text-slate-800">{staff.bankName || '—'}</span>
+                  <span className="font-semibold text-slate-800">{currentStaff.bankName || '—'}</span>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">IFSC Code</span>
-                  <span className="font-mono font-bold text-slate-800">{staff.ifscCode || '—'}</span>
+                  <span className="font-mono font-bold text-slate-800">{currentStaff.ifscCode || '—'}</span>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Branch Name</span>
-                  <span className="font-semibold text-slate-800">{staff.bankBranch || '—'}</span>
+                  <span className="font-semibold text-slate-800">{currentStaff.bankBranch || '—'}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Academic Qualifications Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <GraduationCap className="w-4 h-4 text-indigo-600" /> Academic Qualifications &amp; Degrees
+                </h3>
+                <span className="text-[11px] font-bold text-indigo-600">Educational History</span>
+              </div>
+
+              {Array.isArray(currentStaff.academicQualifications) && currentStaff.academicQualifications.filter(q => q.degree).length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Degree</th>
+                        <th className="py-2.5 px-3">Specialization</th>
+                        <th className="py-2.5 px-3">Institution / University</th>
+                        <th className="py-2.5 px-2 text-center">Mode</th>
+                        <th className="py-2.5 px-2 text-center">Marks / CGPA</th>
+                        <th className="py-2.5 px-2 text-center">Year</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {currentStaff.academicQualifications.filter(q => q.degree).map((q, qIdx) => (
+                        <tr key={qIdx} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="py-2.5 px-3 font-bold text-slate-900">{q.degree}</td>
+                          <td className="py-2.5 px-3 font-medium text-slate-700">{q.specialization || '—'}</td>
+                          <td className="py-2.5 px-3 text-slate-600">{q.institution || '—'}</td>
+                          <td className="py-2.5 px-2 text-center text-slate-500">{q.mode || 'Full time'}</td>
+                          <td className="py-2.5 px-2 text-center font-bold text-indigo-700">{q.marksOrCgpa || '—'}</td>
+                          <td className="py-2.5 px-2 text-center font-mono text-slate-700">{q.yearOfPassing || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600">
+                  <span className="font-bold text-slate-800">Summary: </span>
+                  {currentStaff.qualification || 'Faculty member'}
+                </div>
+              )}
+            </div>
+
+            {/* Experience Details Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-amber-600" /> Teaching &amp; Industry Experience
+                </h3>
+                <span className="text-[11px] font-bold text-amber-600">Service Record</span>
+              </div>
+
+              {Array.isArray(currentStaff.experienceDetails) && currentStaff.experienceDetails.filter(e => e.institution).length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Institution / Organization</th>
+                        <th className="py-2.5 px-3">Designation</th>
+                        <th className="py-2.5 px-2 text-center">From Date</th>
+                        <th className="py-2.5 px-2 text-center">To Date</th>
+                        <th className="py-2.5 px-2 text-center">Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {currentStaff.experienceDetails.filter(e => e.institution).map((exp, eIdx) => (
+                        <tr key={eIdx} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="py-2.5 px-3 font-bold text-slate-900">{exp.institution}</td>
+                          <td className="py-2.5 px-3 font-medium text-slate-700">{exp.designation || 'Lecturer'}</td>
+                          <td className="py-2.5 px-2 text-center text-slate-500">{exp.fromDate || '—'}</td>
+                          <td className="py-2.5 px-2 text-center text-slate-500">{exp.toDate || '—'}</td>
+                          <td className="py-2.5 px-2 text-center font-bold text-amber-700">{exp.duration || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600">
+                  <span className="font-bold text-slate-800">Experience Profile: </span>
+                  {currentStaff.experience || 'Fresher / Lecturer'}
+                </div>
+              )}
+            </div>
+
+            {/* Research, Publications & Grants */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-purple-600" /> Research, Publications &amp; Projects
+              </h3>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100 text-center">
+                  <span className="text-[10px] font-bold text-purple-600 uppercase block">Int'l Journals</span>
+                  <span className="text-base font-black text-purple-900">{currentStaff.publications?.internationalJournals || 0}</span>
+                </div>
+                <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100 text-center">
+                  <span className="text-[10px] font-bold text-purple-600 uppercase block">National Journals</span>
+                  <span className="text-base font-black text-purple-900">{currentStaff.publications?.nationalJournals || 0}</span>
+                </div>
+                <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 text-center">
+                  <span className="text-[10px] font-bold text-indigo-600 uppercase block">Conferences</span>
+                  <span className="text-base font-black text-indigo-900">
+                    {(Number(currentStaff.publications?.internationalConferences) || 0) + (Number(currentStaff.publications?.nationalConferences) || 0)}
+                  </span>
+                </div>
+                <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 text-center">
+                  <span className="text-[10px] font-bold text-amber-700 uppercase block">Books Authored</span>
+                  <span className="text-base font-black text-amber-900">{currentStaff.publications?.books || 0}</span>
+                </div>
+                <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-center">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase block">FDPs &amp; Seminars</span>
+                  <span className="text-base font-black text-emerald-900">
+                    {(Number(currentStaff.programmes?.attendedFDP) || 0) + (Number(currentStaff.programmes?.organizedFDP) || 0) + (Number(currentStaff.programmes?.attendedSeminars) || 0)}
+                  </span>
+                </div>
+                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-center">
+                  <span className="text-[10px] font-bold text-blue-700 uppercase block">Funded Projects</span>
+                  <span className="text-base font-black text-blue-900">
+                    {Array.isArray(currentStaff.projectFunds) ? currentStaff.projectFunds.filter(p => p.agency || p.title).length : 0}
+                  </span>
+                </div>
+              </div>
+
+              {Array.isArray(currentStaff.projectFunds) && currentStaff.projectFunds.filter(p => p.agency || p.title).length > 0 && (
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <span className="text-xs font-bold text-slate-700 block">Funded Research Projects:</span>
+                  {currentStaff.projectFunds.filter(p => p.agency || p.title).map((proj, pIdx) => (
+                    <div key={pIdx} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-slate-800">{proj.title || 'Research Grant'}</span>
+                        <span className="block text-[11px] text-slate-500">{proj.agency} • Scheme: {proj.scheme || 'N/A'}</span>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-700">₹{proj.amountLakhs || 0} Lakhs</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Professional References & Application Metadata */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-600" /> Professional References &amp; Application Info
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Post Applied For</span>
+                  <span className="font-semibold text-slate-800">{currentStaff.postAppliedFor || currentStaff.designation || 'Assistant Professor'}</span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Age / Nationality / Religion</span>
+                  <span className="font-semibold text-slate-800">
+                    {currentStaff.age ? `${currentStaff.age} yrs` : '—'} • {currentStaff.nationality || 'Indian'} • {currentStaff.religion || '—'}
+                  </span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Expected Pay / Last Pay</span>
+                  <span className="font-semibold text-slate-800">
+                    {currentStaff.payExpected || '—'} / {currentStaff.payLastObtained || '—'}
+                  </span>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Application Date &amp; Place</span>
+                  <span className="font-semibold text-slate-800">
+                    {currentStaff.applicationDate || '—'} • {currentStaff.place || 'Campus'}
+                  </span>
+                </div>
+              </div>
+
+              {Array.isArray(currentStaff.references) && currentStaff.references.filter(r => r.name).length > 0 && (
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <span className="text-xs font-bold text-slate-700 block">Designated References:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {currentStaff.references.filter(r => r.name).map((ref, rIdx) => (
+                      <div key={rIdx} className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                        <span className="font-bold text-slate-900 block">{ref.name}</span>
+                        <span className="text-[11px] text-slate-500 block">{ref.designation} • {ref.institution}</span>
+                        <span className="text-[11px] text-indigo-700 font-mono block mt-1">{ref.contactNo || ''} {ref.email ? `• ${ref.email}` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>
@@ -851,9 +1270,28 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
       {/* ========================================================================= */}
       {activeTab === 'classes' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-slate-900">Assigned Courses & Lecture Modules</h3>
-            <span className="text-xs text-slate-500 font-medium">Academic Semester 2026-27</span>
+          {classSuccessToast && (
+            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold shadow-xs animate-fadeIn">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{classSuccessToast}</span>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">Assigned Courses & Lecture Modules</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Academic Semester 2026-27 • <span className="font-bold text-blue-600">{courses.length} Courses Assigned</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenAddClassModal}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/25 transition-all cursor-pointer self-start sm:self-auto hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Class</span>
+            </button>
           </div>
 
           {loadingCourses ? (
@@ -861,12 +1299,22 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
               Loading courses and classes...
             </div>
           ) : courses.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-400">
-              <BookOpen className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-              <p className="text-sm font-bold text-slate-700">No Courses or Classes Assigned Yet</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Classes created or assigned to {staff.name} will appear here.
-              </p>
+            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-400 space-y-3">
+              <BookOpen className="w-12 h-12 mx-auto text-slate-300" />
+              <div>
+                <p className="text-base font-bold text-slate-700">No Courses or Classes Assigned Yet</p>
+                <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                  Click the button below to add and assign a class / subject to {staff.name}. Only real subjects & departments created in the database will be available.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenAddClassModal}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/25 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Class to {staff.name}</span>
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -934,10 +1382,21 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
                 Weekly scheduled lectures and lab allocations for {staff.name} ({staffId})
               </p>
             </div>
-            {staffSchedule && (
-              <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 self-start sm:self-auto">
-                {Object.values(staffSchedule).reduce((total, daySlots) => total + Object.keys(daySlots || {}).length, 0)} Total Assigned Slots
-              </span>
+            {staffSchedule && Object.values(staffSchedule).some(daySlots => Object.keys(daySlots || {}).length > 0) && (
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">
+                  {Object.values(staffSchedule).reduce((total, daySlots) => total + Object.keys(daySlots || {}).length, 0)} Total Assigned Slots
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearFullTimetable}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  title="Clear all assigned slots for this staff member"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear Timetable</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -992,11 +1451,21 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
                             <span className="text-[11px] font-bold text-blue-600 font-mono">
                               Period {slotNum} ({SLOT_TIMES[slotNum] || `Slot ${slotNum}`})
                             </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
-                              slot.type === 'lab' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
-                            }`}>
-                              {slot.type || 'Theory'}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
+                                slot.type === 'lab' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                              }`}>
+                                {slot.type || 'Theory'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleClearTimetableSlot(day, slotNum)}
+                                title="Delete this period slot"
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-xs font-extrabold text-slate-900 leading-tight">
                             {slot.code}: {slot.name}
@@ -1413,6 +1882,303 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
                 </div>
               </div>
             </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ADD CLASS / SUBJECT MODULE FOR STAFF                               */}
+      {/* ========================================================================= */}
+      {isAddClassModalOpen && (
+        <ModalPortal isOpen={isAddClassModalOpen} onClose={() => setIsAddClassModalOpen(false)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 my-auto max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 block">
+                  Staff Courses &amp; Classes Management
+                </span>
+                <h3 className="text-lg font-black text-slate-900">Add Class / Subject Module</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Assigning to <span className="font-bold text-slate-800">{classForm.staffName || staff.name}</span> ({classForm.staffId || staff.staffId})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddClassModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {classFormError && (
+              <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{classFormError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveAddClass} className="space-y-4">
+              {/* 1. SUBJECT SELECTION FROM CREATED SUBJECTS */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Select Created Subject <span className="text-[11px] font-normal text-blue-600">(Dropdown of Added Subjects)</span>
+                </label>
+                <select
+                  value={availableSubjects.some(s => s.code === classForm.code) ? classForm.code : (classForm.code ? '__custom__' : '')}
+                  onChange={(e) => handleSelectCreatedSubject(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs sm:text-sm font-bold text-blue-950 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer transition-all"
+                >
+                  <option value="">-- Choose Subject Created by Admin / Staff --</option>
+                  {availableSubjects.length === 0 ? (
+                    <option value="" disabled>No subjects created yet in Subjects page</option>
+                  ) : (
+                    availableSubjects.map(sub => (
+                      <option key={sub._id || sub.code} value={sub.code}>
+                        [{sub.code}] {sub.name} • {sub.department || 'General'} (Yr {sub.year || 1})
+                      </option>
+                    ))
+                  )}
+                  {classForm.code && !availableSubjects.some(s => s.code === classForm.code) && (
+                    <option value={classForm.code}>{classForm.code} (Custom)</option>
+                  )}
+                </select>
+              </div>
+
+              {/* Subject Code & Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. CS2001"
+                    value={classForm.code}
+                    onChange={(e) => setClassForm({ ...classForm, code: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject / Class Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Data Structures & Algorithms"
+                    value={classForm.name}
+                    onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Department & Staff In-Charge Dropdowns */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Department <span className="text-[11px] font-normal text-blue-600">(Dropdown of Added Departments)</span>
+                  </label>
+                  <select
+                    value={classForm.dept}
+                    onChange={(e) => setClassForm({ ...classForm, dept: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Select Created Department --</option>
+                    {availableDepartments.length === 0 ? (
+                      <option value="" disabled>No departments created yet (Please add department first)</option>
+                    ) : (
+                      availableDepartments.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Faculty / Staff In-Charge <span className="text-[11px] font-normal text-indigo-600">(Signed-up Staff)</span>
+                  </label>
+                  <select
+                    value={classForm.staffId}
+                    onChange={(e) => {
+                      const sId = e.target.value;
+                      const st = availableStaffList.find(s => s.staffId === sId);
+                      setClassForm({
+                        ...classForm,
+                        staffId: sId,
+                        staffName: st ? st.name : classForm.staffName
+                      });
+                    }}
+                    className="w-full px-3 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Select Staff In-Charge --</option>
+                    {availableStaffList.length === 0 ? (
+                      <option value="" disabled>No signed-up staff found</option>
+                    ) : (
+                      availableStaffList.map(st => (
+                        <option key={st._id || st.staffId} value={st.staffId}>
+                          {st.name} ({st.staffId}) • {st.department || 'General'}
+                        </option>
+                      ))
+                    )}
+                    {classForm.staffId && !availableStaffList.some(s => s.staffId === classForm.staffId) && (
+                      <option value={classForm.staffId}>{classForm.staffName || classForm.staffId}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* Year, Semester & Section */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Year</label>
+                  <select
+                    value={classForm.year}
+                    onChange={(e) => setClassForm({ ...classForm, year: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value={1}>1st Year</option>
+                    <option value={2}>2nd Year</option>
+                    <option value={3}>3rd Year</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Semester</label>
+                  <select
+                    value={classForm.semester}
+                    onChange={(e) => setClassForm({ ...classForm, semester: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 cursor-pointer"
+                  >
+                    {[1, 2, 3, 4, 5, 6].map(sem => (
+                      <option key={sem} value={sem}>Sem {sem}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Section</label>
+                  <select
+                    value={classForm.section}
+                    onChange={(e) => setClassForm({ ...classForm, section: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="A">Section A</option>
+                    <option value="B">Section B</option>
+                    <option value="C">Section C</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Theory Hours & Lab Hours (Separate Inputs) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-800 mb-1">
+                    Theory Hours (per week)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={classForm.theoryHours}
+                    onChange={(e) => setClassForm({ ...classForm, theoryHours: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-black text-slate-900 focus:border-blue-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 font-medium">Standard lecture slots</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-800 mb-1">
+                    Lab Hours (per week)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={classForm.labHours}
+                    onChange={(e) => {
+                      const lh = Number(e.target.value);
+                      setClassForm(prev => ({
+                        ...prev,
+                        labHours: lh,
+                        isContinuousLab: lh > 0 ? true : prev.isContinuousLab,
+                        continuousHours: lh > 0 ? lh : prev.continuousHours
+                      }));
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-black text-slate-900 focus:border-blue-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 font-medium">E.g., 3 continuous hours</span>
+                </div>
+              </div>
+
+              {/* Continuous Lab Hours Block */}
+              {Number(classForm.labHours) > 0 && (
+                <div className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-black text-emerald-950">
+                      <input
+                        type="checkbox"
+                        checked={classForm.isContinuousLab}
+                        onChange={(e) => setClassForm({ ...classForm, isContinuousLab: e.target.checked })}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span>Continuous Lab Hours Block</span>
+                    </label>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 border border-emerald-300">
+                      {classForm.labHours} Continuous Hours
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 font-medium">
+                    ⚡ If {classForm.labHours} hrs is set for lab, the lab periods will be scheduled continuously on the weekly timetable without breaks.
+                  </p>
+                </div>
+              )}
+
+              {/* Classroom / Venue */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Classroom / Lab Venue</label>
+                <select
+                  value={classForm.room}
+                  onChange={(e) => setClassForm({ ...classForm, room: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="">-- Choose Classroom / Lab Room --</option>
+                  {availableVenues.map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                  {classForm.room && !availableVenues.includes(classForm.room) && (
+                    <option value={classForm.room}>{classForm.room}</option>
+                  )}
+                </select>
+              </div>
+
+              {/* Auto Timetable notice */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-[11px] font-bold text-blue-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                  Automatic Timetable Generation: Setting hours for this subject/class automatically generates the weekly timetable schedule. Lab hours are scheduled as continuous consecutive periods without breaks.
+                </span>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddClassModalOpen(false)}
+                  disabled={savingClass}
+                  className="px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingClass}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{savingClass ? 'Saving Class...' : 'Add Class & Auto-Generate Timetable'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </ModalPortal>
       )}

@@ -82,13 +82,13 @@ export default function StaffInternalMarks({ staffUser }) {
 
   const getStoredSubject = () => {
     try {
-      return (
-        localStorage.getItem('vcas_internal_subject') ||
-        sessionStorage.getItem('vcas_internal_subject') ||
-        "CS2001"
-      );
+      const stored = localStorage.getItem('vcas_internal_subject') || sessionStorage.getItem('vcas_internal_subject');
+      if (stored && !['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76'].includes(stored.toUpperCase())) {
+        return stored;
+      }
+      return "";
     } catch {
-      return "CS2001";
+      return "";
     }
   };
 
@@ -149,15 +149,9 @@ export default function StaffInternalMarks({ staffUser }) {
   }, [componentId, passMarksConfig, activeComp]);
 
   const dropdownSubjects = useMemo(() => {
-    const list = [...staffSubjects];
-    if (subjectCode && !list.some((s) => s.code === subjectCode)) {
-      list.unshift({ code: subjectCode, name: subjectName || subjectCode });
-    }
-    if (list.length === 0) {
-      list.push(
-        { code: "CS2001", name: "Cloud Computing" },
-        { code: "CS2005", name: "DBMS" }
-      );
+    const list = staffSubjects.filter(s => !['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76'].includes((s.code || '').toUpperCase()));
+    if (subjectCode && !list.some((s) => s.code === subjectCode) && !['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76'].includes(subjectCode.toUpperCase())) {
+      list.unshift({ code: subjectCode, name: (subjectName && subjectName !== 'Course') ? subjectName : subjectCode });
     }
     return list;
   }, [staffSubjects, subjectCode, subjectName]);
@@ -264,47 +258,72 @@ export default function StaffInternalMarks({ staffUser }) {
 
   // Load available staff subjects on mount
   useEffect(() => {
+    // Clear legacy dummy CS2001 from storage
+    try {
+      if (localStorage.getItem('vcas_internal_subject') === 'CS2001') {
+        localStorage.removeItem('vcas_internal_subject');
+      }
+      if (sessionStorage.getItem('vcas_internal_subject') === 'CS2001') {
+        sessionStorage.removeItem('vcas_internal_subject');
+      }
+    } catch {}
+
     Promise.all([
       fetch(`${API}/classes/staff/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+      fetch(`${API}/classes`).then(r => r.json()).catch(() => null),
+      fetch(`${API}/subjects`).then(r => r.json()).catch(() => null),
       fetch(`${API}/assignments/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
       fetch(`${API}/internal-marks/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
-    ]).then(([clsData, asgtsData, marksData]) => {
+    ]).then(([staffClsData, allClassesData, subjectsData, asgtsData, marksData]) => {
       const subs = [];
       const seen = new Set();
-      const classesList = Array.isArray(clsData?.classes)
-        ? clsData.classes
-        : (Array.isArray(clsData?.data) ? clsData.data : []);
+      const legacyExclusions = new Set(['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76']);
 
-      if (classesList.length > 0) {
-        classesList.forEach(c => {
-          const code = (c.code || "").trim().toUpperCase();
-          if (code && code.length >= 3 && !seen.has(code)) {
-            seen.add(code);
-            subs.push({ code, name: c.name || code });
-          }
-        });
-      }
+      const addSub = (code, name) => {
+        const c = (code || "").trim().toUpperCase();
+        if (c && c.length >= 3 && !seen.has(c) && !legacyExclusions.has(c)) {
+          seen.add(c);
+          subs.push({ code: c, name: (name && name !== 'Course' && name !== c) ? name : c });
+        }
+      };
+
+      // 1. Staff classes
+      const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
+      staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+
+      // 2. All active classes in database
+      const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
+      allClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+
+      // 3. Official subjects in database
+      const allSubjects = subjectsData?.data || (Array.isArray(subjectsData) ? subjectsData : []);
+      allSubjects.forEach(s => addSub(s.code, s.name));
+
+      // 4. Assignments
       if (asgtsData?.success && Array.isArray(asgtsData.data)) {
-        asgtsData.data.forEach(a => {
-          const code = (a.subjectCode || "").trim().toUpperCase();
-          if (code && code.length >= 3 && !seen.has(code)) {
-            seen.add(code);
-            subs.push({ code, name: a.subjectName || a.title || code });
-          }
-        });
+        asgtsData.data.forEach(a => addSub(a.subjectCode, a.subjectName || a.title));
       }
+
+      // 5. Existing marks
       if (marksData?.success && Array.isArray(marksData.data)) {
-        marksData.data.forEach(m => {
-          const code = (m.subjectCode || "").trim().toUpperCase();
-          if (code && code.length >= 3 && !seen.has(code)) {
-            seen.add(code);
-            subs.push({ code, name: m.subjectName || code });
-          }
-        });
+        marksData.data.forEach(m => addSub(m.subjectCode, m.subjectName));
       }
+
       setStaffSubjects(subs);
+
+      // Auto-load first real subject if none or invalid currently selected
+      if (subs.length > 0) {
+        const stored = localStorage.getItem('vcas_internal_subject');
+        const match = subs.find(s => s.code === stored || s.code === subjectCode);
+        const target = match ? match.code : subs[0].code;
+        const targetName = match ? match.name : subs[0].name;
+        setSubjectCode(target);
+        setSearchInput(target);
+        setSubjectName(targetName);
+        fetchMarksheet(target);
+      }
     });
-  }, [effectiveStaffId]);
+  }, [effectiveStaffId, fetchMarksheet]);
 
   // Always load initial/stored subject on mount
   useEffect(() => {
@@ -829,20 +848,6 @@ export default function StaffInternalMarks({ staffUser }) {
               </button>
 
               <button
-                onClick={handleSyncAssignments}
-                disabled={syncingAssignments || isLocked}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 disabled:opacity-50 rounded-xl text-xs font-bold text-blue-700 shadow-xs transition-all cursor-pointer"
-                title="Pull latest graded marks from the Assignments portal for this subject"
-              >
-                {syncingAssignments ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                )}
-                <span>{syncingAssignments ? "Syncing..." : "Sync Assignments"}</span>
-              </button>
-
-              <button
                 onClick={openConfigModal}
                 disabled={isLocked}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50 rounded-xl text-xs font-bold text-indigo-700 shadow-xs transition-all"
@@ -895,7 +900,7 @@ export default function StaffInternalMarks({ staffUser }) {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
             <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
               <BookMarked className="w-4 h-4 text-blue-600" />
-              <span>Select Subject / Course Code</span>
+              <span>Select Subject Code</span>
               {loading && (
                 <span className="text-[11px] text-blue-600 font-medium flex items-center gap-1 ml-2">
                   <Loader2 className="w-3 h-3 animate-spin" /> Loading...
@@ -908,7 +913,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 onClick={() => setShowCustomInput(!showCustomInput)}
                 className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
               >
-                {showCustomInput ? "Switch to Course Dropdown" : "+ Enter Custom Course Code"}
+                {showCustomInput ? "Switch to Subject Dropdown" : "+ Enter Custom Subject Code"}
               </button>
             </div>
           </div>
@@ -922,10 +927,10 @@ export default function StaffInternalMarks({ staffUser }) {
                 }}
                 className="w-full bg-slate-50 hover:bg-slate-100/90 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer appearance-none pr-10 shadow-xs"
               >
-                <option value="" disabled>-- Select Course Code --</option>
+                <option value="" disabled>-- Select Subject Code --</option>
                 {dropdownSubjects.map((sub) => (
                   <option key={sub.code} value={sub.code}>
-                    {sub.code} — {sub.name && sub.name !== sub.code ? sub.name : "Course"}
+                    {sub.code} — {sub.name && sub.name !== 'Course' ? sub.name : sub.code}
                   </option>
                 ))}
               </select>
@@ -935,7 +940,7 @@ export default function StaffInternalMarks({ staffUser }) {
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Enter course code, e.g. CS2001..."
+                placeholder="Enter subject code, e.g. BCS101..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleLoadSubject(); }}
@@ -948,7 +953,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm shadow-blue-500/20 shrink-0"
               >
                 {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                <span>Load Course</span>
+                <span>Load Subject</span>
               </button>
             </div>
           )}
@@ -1251,7 +1256,7 @@ export default function StaffInternalMarks({ staffUser }) {
                       <tr>
                         <td colSpan={15} className="py-12 text-center text-slate-500 text-xs">
                           <p className="font-bold text-slate-800 text-sm">No students in marksheet for {subjectCode}</p>
-                          <p className="text-slate-400 mt-1">Use "Sync Assignments" or "Add Student" above to populate the student list.</p>
+                          <p className="text-slate-400 mt-1">Use "Add Student" above to populate the student list.</p>
                         </td>
                       </tr>
                     )}

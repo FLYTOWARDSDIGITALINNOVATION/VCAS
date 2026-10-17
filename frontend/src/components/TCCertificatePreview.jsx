@@ -180,6 +180,7 @@ export function generatePrintableTCHtml(tcData = {}) {
           <!-- Reg No & TC No Banner -->
           <div style="display: flex; justify-content: space-between; font-size: 10.5pt; font-weight: bold; margin-top: 10px; padding: 0 2px;">
             <span>Reg No.: ${tcData.regNo || '—'}</span>
+            ${tcData.umisNumber ? `<span>UMIS No.: ${tcData.umisNumber}</span>` : ''}
             <span>T.C. No.: ${tcData.tcNumber || '—'}</span>
           </div>
 
@@ -509,6 +510,7 @@ export default function TCCertificatePreview({
               {/* Reg No & TC No */}
               <div className="flex justify-between items-center text-xs sm:text-sm font-bold mt-2.5 px-0.5 text-black">
                 <div>Reg No.: {data.regNo || '—'}</div>
+                {data.umisNumber && <div className="font-mono">UMIS No.: {data.umisNumber}</div>}
                 <div>T.C. No.: {data.tcNumber || '—'}</div>
               </div>
 

@@ -617,110 +617,268 @@ CONTACT:
     URL.revokeObjectURL(url);
   };
 
-  // Print Hall Ticket Handler
+  // Print Hall Ticket Handler matching physical Vivekananda College Hall Ticket
   const handlePrintHallTicket = () => {
-    const printWindow = window.open('', '_blank', 'width=900,height=1000');
+    const printWindow = window.open('', '_blank', 'width=950,height=950');
     if (!printWindow) {
       alert('Please allow popups to view and print your Hall Ticket.');
       return;
     }
+
+    const toRoman = (num) => {
+      const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+      return map[Number(num)] || (num ? String(num).toUpperCase() : 'I');
+    };
+    const semNum = Number(sem?.replace(/\D/g, '')) || 1;
+    const yearRoman = toRoman(Math.ceil(semNum / 2));
+    const semRoman = toRoman(semNum);
+
+    const rows = (activeExamTimetable || []).map((e, idx) => `
+      <tr>
+        <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 6px 4px;">${idx + 1}</td>
+        <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 6px 4px;">${e.date || '21.10.26'}</td>
+        <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 6px 4px;">${String(e.session || 'FN').toUpperCase().includes('AN') ? 'AN' : 'FN'}</td>
+        <td style="text-align: left; font-weight: 700; border: 1px solid #000; padding: 6px 8px; text-transform: uppercase;">${e.subject}</td>
+        <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 6px 4px;">${e.code || ''}</td>
+        <td style="text-align: center; border: 1px solid #000; padding: 6px 4px; height: 32px;"></td>
+      </tr>
+    `).join('');
+
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>University Examination Hall Ticket - ${name} (${regNo})</title>
+        <title>Hall Ticket - ${name} (${regNo})</title>
         <style>
-          @page { size: A4; margin: 12mm; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 0; padding: 20px; font-size: 12px; }
-          .border-box { border: 2px solid #1e3a8a; padding: 16px; border-radius: 8px; }
-          .header { text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 15px; }
-          .title { font-size: 18px; font-weight: 900; color: #1e3a8a; text-transform: uppercase; }
-          .sub { font-size: 12px; font-weight: 700; color: #475569; margin-top: 3px; }
-          .badge { display: inline-block; background: #1e3a8a; color: white; padding: 4px 16px; border-radius: 4px; font-weight: 800; font-size: 11px; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-          .details-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 15px; margin-bottom: 15px; }
-          table.details { width: 100%; border-collapse: collapse; }
-          table.details td { padding: 4px 6px; font-size: 11.5px; }
-          table.details td.lbl { width: 35%; font-weight: 700; color: #475569; }
-          table.details td.val { width: 65%; font-weight: 800; color: #0f172a; }
-          .photo-box { border: 1.5px solid #cbd5e1; border-radius: 6px; height: 130px; display: flex; align-items: center; justify-content: center; text-align: center; background: #f8fafc; font-size: 11px; font-weight: 700; color: #64748b; }
-          table.timetable { width: 100%; border-collapse: collapse; margin-top: 15px; }
-          table.timetable th { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: #1e3a8a; }
-          table.timetable td { border: 1px solid #cbd5e1; padding: 7px 6px; font-size: 11px; text-align: center; }
-          .instructions { margin-top: 15px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 10px; color: #64748b; }
-          .instructions ul { margin: 4px 0 0 16px; padding: 0; }
-          .signatures { display: flex; justify-content: space-between; margin-top: 40px; padding: 0 20px; font-size: 11px; font-weight: 800; }
-          @media print { body { padding: 0; } }
+          * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Times New Roman", Times, Georgia, serif; }
+          body { background: #f8fafc; padding: 20px; color: #000; }
+          .hall-ticket-container {
+            width: 195mm;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 8px;
+          }
+          .hall-ticket-border {
+            border: 1.5px solid #000000;
+            padding: 12px 16px 24px 16px;
+          }
+          @media print {
+            body { background: white; padding: 0; margin: 0; }
+            .hall-ticket-container {
+              width: 100%;
+              max-width: 190mm;
+              margin: 0 auto;
+              padding: 6mm 4mm;
+            }
+          }
+          .header-wrap {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            position: relative;
+          }
+          .logo-wrap {
+            width: 65px;
+            text-align: left;
+            flex-shrink: 0;
+          }
+          .college-logo {
+            width: 58px;
+            height: 58px;
+            object-fit: contain;
+          }
+          .title-wrap {
+            flex: 1;
+            text-align: center;
+            padding-right: 65px;
+          }
+          .college-name {
+            font-size: 16px;
+            font-weight: 900;
+            color: #000;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            line-height: 1.2;
+          }
+          .college-loc {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #111;
+            margin-top: 1px;
+          }
+          .college-contact {
+            font-size: 9px;
+            font-weight: 700;
+            color: #222;
+            margin-top: 2px;
+          }
+          .exam-title {
+            font-size: 12px;
+            font-weight: 900;
+            color: #000;
+            text-transform: uppercase;
+            margin-top: 6px;
+            letter-spacing: 0.3px;
+          }
+          .ticket-badge {
+            font-size: 13px;
+            font-weight: 900;
+            color: #000;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-top: 3px;
+            text-decoration: underline;
+          }
+          .meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: #000;
+            margin: 10px 0 6px 0;
+            padding: 0 4px;
+          }
+          .student-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #000;
+            margin-bottom: 8px;
+          }
+          .student-table td {
+            padding: 5px 8px;
+            font-size: 11.5px;
+            border: 1px solid #000;
+          }
+          .st-lbl {
+            width: 22%;
+            font-weight: 700;
+            color: #000;
+            white-space: nowrap;
+          }
+          .st-val {
+            width: 78%;
+            font-weight: 700;
+            color: #000;
+          }
+          .tt-heading {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-decoration: underline;
+            margin: 6px 0 4px 0;
+          }
+          .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #000;
+            margin-bottom: 30px;
+          }
+          .schedule-table th {
+            border: 1px solid #000;
+            padding: 4px 4px;
+            font-size: 10.5px;
+            font-weight: 900;
+            text-align: center;
+            color: #000;
+            background: #fafafa;
+          }
+          .schedule-table td {
+            border: 1px solid #000;
+            padding: 6px 6px;
+            font-size: 10.5px;
+            color: #000;
+            height: 28px;
+          }
+          .signatures-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 0 16px;
+            margin-top: 45px;
+          }
+          .sig-col {
+            text-align: center;
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #000;
+            min-width: 70px;
+          }
         </style>
       </head>
       <body>
-        <div class="border-box">
-          <div class="header">
-            <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:6px;">
-              ${getCollegeLogoHtml(46)}
-              <div>
-                <div class="title">Vivekanandha College of Arts and Sciences</div>
-                <div class="sub">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</div>
+        <div class="hall-ticket-container">
+          <div class="hall-ticket-border">
+            <!-- Header Section -->
+            <div class="header-wrap">
+              <div class="logo-wrap">
+                <img src="/vcas-logo.png" class="college-logo" alt="Crest Logo" />
+              </div>
+              <div class="title-wrap">
+                <div class="college-name">VIVEKANANDA COLLEGE OF ARTS AND SCIENCE</div>
+                <div class="college-loc">Vellalankulam, Tenkasi Dist</div>
+                <div class="college-contact">PHONE: 04636298128, 7094462393, 7094462394 &nbsp;&nbsp; EMAIL: vivekanandacas@gmail.com</div>
+                <div class="exam-title">${(hallTicketInfo?.examName || 'MODEL SEMESTER EXAMINATION - NOVEMBER 2026').toUpperCase()}</div>
+                <div class="ticket-badge">HALL TICKET</div>
               </div>
             </div>
-            <div class="badge">End Semester University Examination Hall Ticket</div>
-          </div>
 
-          <div class="details-grid">
-            <table class="details">
-              <tr><td class="lbl">Register Number (Reg No):</td><td class="val" style="font-family:monospace;font-size:13px;color:#1e3a8a;">${regNo}</td></tr>
-              <tr><td class="lbl">Student Name:</td><td class="val">${name}</td></tr>
-              <tr><td class="lbl">Roll Number:</td><td class="val">${rollNo}</td></tr>
-              <tr><td class="lbl">Course / Degree:</td><td class="val">${course}</td></tr>
-              <tr><td class="lbl">Department:</td><td class="val">${department}</td></tr>
-              <tr><td class="lbl">Year / Semester:</td><td class="val">${year} / ${sem}</td></tr>
-              <tr><td class="lbl">Examination Hall:</td><td class="val"><strong>${allocatedHall}</strong></td></tr>
-              <tr><td class="lbl">Allotted Seat Number:</td><td class="val" style="font-family:monospace;font-weight:900;color:#1e3a8a;font-size:13px;">${allocatedSeat}</td></tr>
-            </table>
-            <div class="photo-box">
-              <div>
-                <div style="font-size:24px;margin-bottom:4px;">🎓</div>
-                <span>Candidate Photo Verified</span>
-              </div>
+            <!-- Dept / Year / Semester Meta Row -->
+            <div class="meta-row">
+              <div><strong>DEPARTMENT:</strong> ${(department || 'CFS').toUpperCase()}</div>
+              <div><strong>YEAR:</strong> ${yearRoman}</div>
+              <div><strong>SEMESTER:</strong> ${semRoman}</div>
             </div>
-          </div>
 
-          <table class="timetable">
-            <thead>
+            <!-- Student Particulars Table -->
+            <table class="student-table">
               <tr>
-                <th>Date</th>
-                <th>Session & Time</th>
-                <th>Subject Code</th>
-                <th>Course / Subject Title</th>
-                <th>Invigilator Sign</th>
+                <td class="st-lbl">Student Name:</td>
+                <td class="st-val">${(name || '').toUpperCase()}</td>
               </tr>
-            </thead>
-            <tbody>
-              ${activeExamTimetable.map(e => `
+              <tr>
+                <td class="st-lbl">Register No :</td>
+                <td class="st-val font-bold">${regNo || rollNo || ''}</td>
+              </tr>
+            </table>
+
+            <!-- Time Table Title -->
+            <div class="tt-heading">TIME TABLE</div>
+
+            <!-- Time Table Schedule -->
+            <table class="schedule-table">
+              <thead>
                 <tr>
-                  <td style="font-weight:700;">${e.date}</td>
-                  <td>${e.session}</td>
-                  <td style="font-family:monospace;font-weight:800;color:#1e3a8a;">${e.code}</td>
-                  <td style="text-align:left;font-weight:700;">${e.subject}</td>
-                  <td>__________</td>
+                  <th style="width: 5%;">NO</th>
+                  <th style="width: 17%;">DATE</th>
+                  <th style="width: 10%;">FN<br/>AN</th>
+                  <th style="width: 44%;">SUBJECT</th>
+                  <th style="width: 14%;">Sub. Code</th>
+                  <th style="width: 10%;">Sign</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
 
-          <div class="instructions">
-            <strong>Important Instructions for Candidate:</strong>
-            <ul>
-              ${activeInstructions.map(inst => `<li>${inst}</li>`).join('')}
-            </ul>
-          </div>
-
-          <div class="signatures">
-            <div>Signature of Candidate</div>
-            <div>${allocatedStaffName || 'Chief Superintendent'}</div>
-            <div>Controller of Examinations</div>
+            <!-- Signatures Row -->
+            <div class="signatures-row">
+              <div class="sig-col">Office</div>
+              <div class="sig-col">HOD</div>
+              <div class="sig-col">Principal</div>
+              <div class="sig-col">MD</div>
+            </div>
           </div>
         </div>
-        <script>window.onload = function() { window.print(); };</script>
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          }
+        </script>
       </body>
       </html>
     `;
@@ -728,51 +886,50 @@ CONTACT:
     printWindow.document.close();
   };
 
+  // 5 Hours Timetable Structure:
+  // Periods 1, 2 -> Morning Break -> Period 3 -> Lunch Break -> Periods 4, 5
   const DEFAULT_WEEKLY_TIMETABLE = {
     'Monday': [
-      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
-      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
-      { slot: 3, time: '10:10 – 11:00 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
-      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS303L', subject: 'Data Structures Lab', faculty: 'Dr. K. Ramesh', room: 'CS Lab 2', type: 'lab', color: 'emerald' },
-      { slot: 5, time: '12:05 – 12:55 PM', code: 'CS303L', subject: 'Data Structures Lab', faculty: 'Dr. K. Ramesh', room: 'CS Lab 2', type: 'lab', color: 'emerald' },
-      { slot: 6, time: '1:45 – 2:35 PM', code: 'ENG102', subject: 'Professional Communication', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' }
+      { slot: 1, time: '09:30 – 10:30 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 2, time: '10:30 – 11:30 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 3, time: '11:45 AM – 12:45 PM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
+      { slot: 4, time: '01:30 – 02:30 PM', code: 'CS303L', subject: 'Data Structures Lab', faculty: 'Dr. K. Ramesh', room: 'CS Lab 2', type: 'lab', color: 'emerald' },
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'ENG102', subject: 'Professional Communication', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' }
     ],
     'Tuesday': [
-      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
-      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
-      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
-      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS305L', subject: 'RDBMS & SQL Lab', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab', color: 'emerald' },
-      { slot: 5, time: '12:05 – 12:55 PM', code: 'CS305L', subject: 'RDBMS & SQL Lab', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab', color: 'emerald' },
-      { slot: 6, time: '1:45 – 2:35 PM', code: 'EVS101', subject: 'Environmental Studies', faculty: 'Dr. G. Lakshmi', room: 'LH-102', type: 'theory', color: 'amber' }
+      { slot: 1, time: '09:30 – 10:30 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
+      { slot: 2, time: '10:30 – 11:30 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 4, time: '01:30 – 02:30 PM', code: 'CS305L', subject: 'RDBMS & SQL Lab', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab', color: 'emerald' },
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'EVS101', subject: 'Environmental Studies', faculty: 'Dr. G. Lakshmi', room: 'LH-102', type: 'theory', color: 'amber' }
     ],
     'Wednesday': [
-      { slot: 1, time: '8:30 – 9:20 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
-      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
-      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
-      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
-      { slot: 5, time: '12:05 – 12:55 PM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
-      { slot: 6, time: '1:45 – 2:35 PM', code: 'LIB101', subject: 'Library & Research Hour', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' }
+      { slot: 1, time: '09:30 – 10:30 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
+      { slot: 2, time: '10:30 – 11:30 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
+      { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 4, time: '01:30 – 02:30 PM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'LIB101', subject: 'Library & Research Hour', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' }
     ],
     'Thursday': [
-      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
-      { slot: 2, time: '9:20 – 10:10 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
-      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
-      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS307L', subject: 'Web Development Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab', color: 'emerald' },
-      { slot: 5, time: '12:05 – 12:55 PM', code: 'CS307L', subject: 'Web Development Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab', color: 'emerald' },
-      { slot: 6, time: '1:45 – 2:35 PM', code: 'SEM101', subject: 'Student Seminar & Presentation', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'amber' }
+      { slot: 1, time: '09:30 – 10:30 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 2, time: '10:30 – 11:30 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
+      { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
+      { slot: 4, time: '01:30 – 02:30 PM', code: 'CS307L', subject: 'Web Development Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab', color: 'emerald' },
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'SEM101', subject: 'Student Seminar & Presentation', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'amber' }
     ],
     'Friday': [
-      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
-      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
-      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
-      { slot: 4, time: '11:15 AM – 12:05 PM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
-      { slot: 5, time: '12:05 – 12:55 PM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
-      { slot: 6, time: '1:45 – 2:35 PM', code: 'SPO101', subject: 'Physical Education / Sports', faculty: 'Director of PE', room: 'Sports Ground', type: 'theory', color: 'amber' }
+      { slot: 1, time: '09:30 – 10:30 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 2, time: '10:30 – 11:30 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
+      { slot: 4, time: '01:30 – 02:30 PM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' }
     ],
     'Saturday': [
-      { slot: 1, time: '8:30 – 9:20 AM', code: 'CS308', subject: 'Cloud Computing & DevOps', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
-      { slot: 2, time: '9:20 – 10:10 AM', code: 'CS309', subject: 'Technical Soft Skills & Aptitude', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' },
-      { slot: 3, time: '10:10 – 11:00 AM', code: 'CS310', subject: 'Mentorship & Project Lab', faculty: 'Dr. R. Suresh', room: 'CS Lab 1', type: 'lab', color: 'emerald' }
+      { slot: 1, time: '09:30 – 10:30 AM', code: 'CS308', subject: 'Cloud Computing & DevOps', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
+      { slot: 2, time: '10:30 – 11:30 AM', code: 'CS309', subject: 'Technical Soft Skills & Aptitude', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' },
+      { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS310', subject: 'Mentorship & Project Lab', faculty: 'Dr. R. Suresh', room: 'CS Lab 1', type: 'lab', color: 'emerald' },
+      { slot: 4, time: '01:30 – 02:30 PM', code: 'SPO101', subject: 'Physical Education / Sports', faculty: 'Director of PE', room: 'Sports Ground', type: 'theory', color: 'emerald' },
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'LIB102', subject: 'Digital Library & Self-Study', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' }
     ]
   };
 
@@ -1620,14 +1777,6 @@ CONTACT:
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button
-                      onClick={fetchAllStudentData}
-                      disabled={loading}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
-                      <span>Sync</span>
-                    </button>
                     <div className={`px-4 py-1.5 rounded-xl text-xs font-black border ${
                       effectiveAttendance >= 75 
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
@@ -1775,14 +1924,6 @@ CONTACT:
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button
-                      onClick={fetchAllStudentData}
-                      disabled={loading}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-purple-600' : ''}`} />
-                      <span>Sync Marks</span>
-                    </button>
                     <span className="text-xs font-bold px-3.5 py-1.5 bg-purple-50 text-purple-700 rounded-xl border border-purple-200 font-mono">
                       Reg No: {regNo}
                     </span>
@@ -2265,106 +2406,97 @@ CONTACT:
                     </p>
                   </div>
                 ) : (
-                <div className="border-2 border-blue-900/40 rounded-2xl p-6 sm:p-8 bg-white space-y-6 shadow-xs">
-                  
+                <div className="border-2 border-black p-5 sm:p-7 bg-white text-black font-serif max-w-2xl mx-auto shadow-md">
                   {/* College Header */}
-                  <div className="text-center border-b-2 border-blue-900 pb-4">
-                    <div className="flex items-center justify-center gap-3 mb-2">
-                      <CollegeLogo size="sm" showText={false} />
-                      <div>
-                        <h4 className="text-base font-black text-blue-950 uppercase tracking-wide">Vivekanandha College of Arts and Sciences</h4>
-                        <p className="text-[11px] font-bold text-slate-600">Affiliated with Manonmaniam Sundaranar University • Vellalankulam</p>
-                      </div>
+                  <div className="flex items-center gap-3 pb-2">
+                    <div className="w-14 h-14 shrink-0 flex items-center justify-center">
+                      <img src="/vcas-logo.png" alt="Crest Logo" className="w-14 h-14 object-contain" />
                     </div>
-                    <span className="inline-block bg-blue-900 text-white px-4 py-1 rounded-md text-[11px] font-extrabold uppercase tracking-wider mt-1">
-                      {hallTicketInfo?.examName || 'End Semester University Examination Hall Ticket'}
-                    </span>
+                    <div className="text-center flex-1 pr-14">
+                      <h4 className="text-base font-black text-black uppercase tracking-wide leading-tight">
+                        VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
+                      </h4>
+                      <p className="text-[11px] font-semibold text-slate-800 mt-0.5">Vellalankulam, Tenkasi Dist</p>
+                      <p className="text-[9px] font-bold text-slate-700 mt-0.5">
+                        PHONE: 04636298128, 7094462393, 7094462394 &nbsp;&nbsp; EMAIL: vivekanandacas@gmail.com
+                      </p>
+                      <p className="font-extrabold text-xs uppercase tracking-wide mt-1.5 text-black">
+                        {(hallTicketInfo?.examName || 'MODEL SEMESTER EXAMINATION - NOVEMBER 2026').toUpperCase()}
+                      </p>
+                      <p className="font-black text-xs uppercase tracking-widest underline mt-1 text-black">
+                        HALL TICKET
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Candidate Particulars & Photo Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                    <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50/70 p-4 rounded-xl border border-slate-200">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Register Number (Reg No)</span>
-                        <strong className="text-blue-800 font-mono text-sm">{regNo}</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Student Name</span>
-                        <strong className="text-slate-900 text-sm">{name}</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Course / Degree</span>
-                        <strong className="text-slate-800">{course}</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Department</span>
-                        <strong className="text-slate-800">{department}</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Year / Semester</span>
-                        <strong className="text-amber-800">{year} / {sem}</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Examination Hall &amp; Seat No</span>
-                        <strong className="text-blue-900 font-mono font-bold">{allocatedHall} ({allocatedSeat})</strong>
-                      </div>
-                    </div>
+                  {/* Dept / Year / Sem Meta Row */}
+                  <div className="flex items-center justify-between text-xs font-bold py-2 px-1 text-black">
+                    <div><span>DEPARTMENT:</span> {(department || 'CFS').toUpperCase()}</div>
+                    <div><span>YEAR:</span> {(() => {
+                      const s = Number(sem?.replace(/\D/g, '')) || 1;
+                      const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
+                      return map[Math.ceil(s / 2)] || 'I';
+                    })()}</div>
+                    <div><span>SEMESTER:</span> {(() => {
+                      const s = Number(sem?.replace(/\D/g, '')) || 1;
+                      const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+                      return map[s] || 'I';
+                    })()}</div>
+                  </div>
 
-                    <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl p-4 bg-slate-50 text-center">
-                      <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xl mb-2">
-                        {name.charAt(0)}
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-500">Candidate Photo</span>
-                      <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full mt-1 border border-emerald-200">
-                        Verified Pass
-                      </span>
-                    </div>
+                  {/* Candidate Info 2-Row Box */}
+                  <table className="w-full border-collapse border border-black text-xs mb-2">
+                    <tbody>
+                      <tr className="border-b border-black">
+                        <td className="w-28 font-bold p-1.5 border-r border-black bg-slate-50">Student Name:</td>
+                        <td className="font-bold p-1.5 uppercase text-black">{name}</td>
+                      </tr>
+                      <tr>
+                        <td className="w-28 font-bold p-1.5 border-r border-black bg-slate-50">Register No :</td>
+                        <td className="font-bold p-1.5 font-mono text-black">{regNo || rollNo}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Time Table Heading */}
+                  <div className="text-center font-black text-xs uppercase tracking-wider underline my-2 text-black">
+                    TIME TABLE
                   </div>
 
                   {/* Examination Timetable Table */}
-                  <div>
-                    <h5 className="text-xs font-extrabold uppercase text-slate-900 mb-2">Examination Schedule</h5>
-                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="bg-slate-100 text-[10px] font-extrabold uppercase text-blue-900 border-b border-slate-200">
-                            <th className="py-2.5 px-3">Date</th>
-                            <th className="py-2.5 px-3">Session &amp; Time</th>
-                            <th className="py-2.5 px-3">Subject Code</th>
-                            <th className="py-2.5 px-3">Subject Title</th>
-                            <th className="py-2.5 px-3 text-right">Invigilator Sign</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {activeExamTimetable.map((e, idx) => (
-                            <tr key={idx}>
-                              <td className="py-2.5 px-3 font-bold text-slate-800">{e.date}</td>
-                              <td className="py-2.5 px-3 text-slate-600 font-medium">{e.session}</td>
-                              <td className="py-2.5 px-3 font-mono font-bold text-blue-700">{e.code}</td>
-                              <td className="py-2.5 px-3 font-extrabold text-slate-900">{e.subject}</td>
-                              <td className="py-2.5 px-3 text-right text-slate-300">__________</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <table className="w-full border-collapse border border-black text-[11px] text-left">
+                    <thead>
+                      <tr className="border-b border-black bg-slate-50 text-center font-bold">
+                        <th className="border border-black px-1.5 py-1.5 w-8">NO</th>
+                        <th className="border border-black px-2 py-1.5 w-24">DATE</th>
+                        <th className="border border-black px-1.5 py-1.5 w-12">FN<br/>AN</th>
+                        <th className="border border-black px-2.5 py-1.5">SUBJECT</th>
+                        <th className="border border-black px-2 py-1.5 w-20">Sub. Code</th>
+                        <th className="border border-black px-1.5 py-1.5 w-12">Sign</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(activeExamTimetable || []).map((e, idx) => (
+                        <tr key={idx} className="border-b border-black">
+                          <td className="border border-black px-1.5 py-2 text-center font-bold">{idx + 1}</td>
+                          <td className="border border-black px-2 py-2 text-center font-bold">{e.date || '21.10.26'}</td>
+                          <td className="border border-black px-1.5 py-2 text-center font-bold">
+                            {String(e.session || 'FN').toUpperCase().includes('AN') ? 'AN' : 'FN'}
+                          </td>
+                          <td className="border border-black px-2.5 py-2 font-bold uppercase">{e.subject}</td>
+                          <td className="border border-black px-2 py-2 text-center font-bold">{e.code || ''}</td>
+                          <td className="border border-black px-1.5 py-2 text-center h-8"></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
 
-                  {/* Rules and Signatures */}
-                  <div className="border-t border-slate-200 pt-4 text-[11px] text-slate-600 space-y-4">
-                    <div>
-                      <strong className="text-slate-800">Important Instructions:</strong>
-                      <ol className="text-[10px] text-slate-500 mt-1 space-y-1 list-decimal list-inside">
-                        {activeInstructions.map((inst, i) => (
-                          <li key={i}>{inst}</li>
-                        ))}
-                      </ol>
-                    </div>
-                    <div className="flex justify-between pt-6 px-4 font-bold text-xs text-slate-800">
-                      <div>Signature of Candidate</div>
-                      <div>{allocatedStaffName || 'Chief Superintendent'}</div>
-                      <div>Controller of Examinations</div>
-                    </div>
+                  {/* Signatures */}
+                  <div className="pt-10 pb-2 flex items-center justify-between text-center text-xs font-bold px-4">
+                    <div>Office</div>
+                    <div>HOD</div>
+                    <div>Principal</div>
+                    <div>MD</div>
                   </div>
 
                 </div>

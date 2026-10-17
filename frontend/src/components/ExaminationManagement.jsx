@@ -40,14 +40,17 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
-const DEPARTMENTS = [
-  'All Departments',
-  'Commerce',
+const STANDARD_DEPARTMENTS = [
+  'BSc. Computer science',
   'Computer Science',
-  'English Literature',
+  'Commerce',
+  'Mathematics',
   'Business Administration (BBA)',
   'Computer Applications (BCA)',
-  'Mathematics'
+  'Tamil',
+  'English',
+  'Physical Education',
+  'Office'
 ];
 
 const EXAM_SESSIONS = [
@@ -71,7 +74,10 @@ export default function ExaminationManagement({ user }) {
   const [studentMarksList, setStudentMarksList] = useState([]);
   const [hallsList, setHallsList] = useState([]);
   const [availableSubjects, setAvailableSubjects] = useState([]);
-  const [availableDepartments, setAvailableDepartments] = useState([]);
+  const [availableDepartments, setAvailableDepartments] = useState(STANDARD_DEPARTMENTS);
+  const [facultyList, setFacultyList] = useState([]);
+  const [invigilatorCategoryFilter, setInvigilatorCategoryFilter] = useState('All');
+  const [availableVenues, setAvailableVenues] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [internalMarksheets, setInternalMarksheets] = useState([]);
 
@@ -79,7 +85,7 @@ export default function ExaminationManagement({ user }) {
   const fetchAllExaminationData = async () => {
     try {
       setIsSyncing(true);
-      const [resExams, resMarks, resHalls, resStudents, resTickets, resSubjects, resClasses, resDepts] = await Promise.allSettled([
+      const [resExams, resMarks, resHalls, resStudents, resTickets, resSubjects, resClasses, resDepts, resStaff] = await Promise.allSettled([
         fetch(`${API_BASE}/exams`),
         fetch(`${API_BASE}/internal-marks`),
         fetch(`${API_BASE}/exams/halls`),
@@ -87,16 +93,42 @@ export default function ExaminationManagement({ user }) {
         fetch(`${API_BASE}/hall-tickets`),
         fetch(`${API_BASE}/subjects`),
         fetch(`${API_BASE}/classes`),
-        fetch(`${API_BASE}/departments`)
+        fetch(`${API_BASE}/departments`),
+        fetch(`${API_BASE}/staff`)
       ]);
 
+      let staffArr = [];
+      if (resStaff.status === 'fulfilled' && resStaff.value.ok) {
+        const d = await resStaff.value.json();
+        staffArr = d?.data || d?.staff || (Array.isArray(d) ? d : []);
+        setFacultyList(staffArr);
+      }
+
+      let deptNames = [];
       if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
         const d = await resDepts.value.json();
         if (d.success && Array.isArray(d.data)) {
-          const names = d.data.map(dept => dept.name).filter(Boolean);
-          setAvailableDepartments(names);
+          deptNames = d.data.map(dept => dept.name).filter(Boolean);
         }
       }
+      const staffDepts = staffArr.map(s => s.department || s.dept || s.departmentName).filter(Boolean);
+      let subjectDepts = [];
+      if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
+        const sd = await resSubjects.value.json();
+        if (sd.success && Array.isArray(sd.data)) {
+          subjectDepts = sd.data.map(s => s.department).filter(Boolean);
+        }
+      }
+      const combinedDepts = Array.from(new Set([...STANDARD_DEPARTMENTS, ...deptNames, ...staffDepts, ...subjectDepts]));
+      setAvailableDepartments(combinedDepts);
+
+      // Collect real-time venues strictly from real exam halls and user-added custom venues
+      const venueSet = new Set();
+      try {
+        const custom = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
+        if (Array.isArray(custom)) custom.forEach(v => { if (v && typeof v === 'string' && v.trim()) venueSet.add(v.trim()); });
+      } catch (e) {}
+      setAvailableVenues(Array.from(venueSet));
 
       // 1. Process Exams
       let realExams = [];
@@ -119,16 +151,32 @@ export default function ExaminationManagement({ user }) {
       }
 
       // 2. Process Halls
+      let loadedHalls = [];
       if (resHalls.status === 'fulfilled' && resHalls.value.ok) {
         const d = await resHalls.value.json();
         if (d.success && Array.isArray(d.halls)) {
-          setHallsList(d.halls);
-        } else {
-          setHallsList([]);
+          loadedHalls = d.halls;
         }
-      } else {
-        setHallsList([]);
       }
+      let localHalls = [];
+      try {
+        localHalls = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
+      } catch (e) {}
+      const hallMap = new Map();
+      loadedHalls.forEach(h => {
+        const k = (h.hallName || '').trim().toLowerCase();
+        if (k) hallMap.set(k, h);
+      });
+      localHalls.forEach(h => {
+        const k = (h.hallName || '').trim().toLowerCase();
+        if (k && !hallMap.has(k)) hallMap.set(k, h);
+      });
+      const finalHalls = Array.from(hallMap.values());
+      setHallsList(finalHalls);
+      finalHalls.forEach(h => {
+        if (h.hallName) venueSet.add(h.hallName.trim());
+      });
+      setAvailableVenues(Array.from(venueSet));
 
       // 3. Process Staff Uploaded Internal Marks + Students
       let staffMarksheets = [];
@@ -198,13 +246,10 @@ export default function ExaminationManagement({ user }) {
         const roll = (st.rollNo || '').trim().toUpperCase();
         if (!roll) return;
         const attNum = typeof st.attendance === 'number' ? st.attendance : parseFloat(st.attendance) || 0;
-        const isFeeCleared = st.feeStatus ? st.feeStatus.toLowerCase() === 'paid' : false;
-        const isEligible = attNum >= 75 && isFeeCleared;
+        const isEligible = attNum >= 75;
         const statusStr = isEligible
           ? 'Eligible'
-          : attNum < 75
-            ? 'Blocked (Shortage <75%)'
-            : 'Blocked (Fee Due)';
+          : 'Blocked (Shortage <75%)';
 
         studentMap.set(roll, {
           id: st._id || st.id || idx + 1,
@@ -231,8 +276,8 @@ export default function ExaminationManagement({ user }) {
           assignment3: 4,
           assignment4: 5,
           assignment: 9,
-          ciaTotal: 35,
-          eseMarks: 52,
+          ciaTotal: 22,
+          eseMarks: 65,
           totalMarks: 87,
           grade: 'A+',
           gradePoint: 9,
@@ -265,10 +310,10 @@ export default function ExaminationManagement({ user }) {
             const a4Val = stMark.assignment4 !== null && stMark.assignment4 !== undefined ? stMark.assignment4 : 5;
             const assignVal = typeof stMark.assignment === 'number' ? stMark.assignment : (existing.assignment || 8);
             const ciaTot = typeof stMark.consolidated === 'number' && stMark.consolidated > 0
-              ? stMark.consolidated
-              : Math.round(((Number(it1Val) || 0) + (Number(it2Val) || 0)) * 0.4 + assignVal);
+              ? Math.min(25, stMark.consolidated)
+              : Math.min(25, Math.round(((Number(it1Val) || 0) + (Number(it2Val) || 0)) * 0.25 + (assignVal * 0.5)));
 
-            const ese = 52;
+            const ese = typeof stMark.ese === 'number' ? Math.min(75, stMark.ese) : (typeof stMark.eseMarks === 'number' ? Math.min(75, stMark.eseMarks) : 65);
             const total = ciaTot + ese;
             const grade = total >= 90 ? 'O' : total >= 80 ? 'A+' : total >= 70 ? 'A' : total >= 60 ? 'B+' : total >= 50 ? 'B' : 'U';
             const gradePoint = total >= 90 ? 10 : total >= 80 ? 9 : total >= 70 ? 8 : total >= 60 ? 7 : total >= 50 ? 6 : 0;
@@ -415,11 +460,11 @@ export default function ExaminationManagement({ user }) {
   const [scheduleForm, setScheduleForm] = useState({
     code: '',
     name: '',
-    department: '',
+    department: 'BSc. Computer science',
     year: 1,
     sem: 'Sem 1',
     date: '',
-    session: 'FN (09:30 AM - 12:30 PM)',
+    session: 'Forenoon (FN)',
     hall: '',
     qpCode: '',
     invigilator: '',
@@ -430,6 +475,27 @@ export default function ExaminationManagement({ user }) {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
+
+  // Filtered Faculty for Invigilator Selection by category (including 6. Tamil, 7. English, 8. Physical Education, 9. Office)
+  const filteredInvigilatorFaculty = useMemo(() => {
+    if (invigilatorCategoryFilter === 'All') return facultyList;
+    return facultyList.filter(s => {
+      const dept = String(s.department || s.dept || s.departmentName || '');
+      if (invigilatorCategoryFilter === 'Office') {
+        return s.role === 'Office Staff' || dept.toLowerCase().includes('office');
+      }
+      if (invigilatorCategoryFilter === 'English') {
+        return dept === 'English' || dept === 'English Literature';
+      }
+      if (invigilatorCategoryFilter === 'Tamil') {
+        return dept.toLowerCase().includes('tamil');
+      }
+      if (invigilatorCategoryFilter === 'Physical Education') {
+        return dept.toLowerCase().includes('physical');
+      }
+      return dept === invigilatorCategoryFilter;
+    });
+  }, [facultyList, invigilatorCategoryFilter]);
 
   // Filtered Exam Schedules
   const filteredExams = useMemo(() => {
@@ -442,7 +508,18 @@ export default function ExaminationManagement({ user }) {
         String(e.qpCode || '').toLowerCase().includes(q)
       );
 
-      const matchesDept = selectedDept === 'All Departments' || e.department === selectedDept;
+      const normalize = (d) => String(d || '').toLowerCase().trim();
+      const matchesDept = selectedDept === 'All Departments' || 
+        normalize(e.department) === normalize(selectedDept) ||
+        (normalize(selectedDept).includes('computer science') && normalize(e.department).includes('computer science')) ||
+        (normalize(selectedDept).includes('commerce') && normalize(e.department).includes('commerce')) ||
+        (normalize(selectedDept).includes('bba') && normalize(e.department).includes('bba')) ||
+        (normalize(selectedDept).includes('bca') && normalize(e.department).includes('bca')) ||
+        (normalize(selectedDept).includes('math') && normalize(e.department).includes('math')) ||
+        (normalize(selectedDept).includes('tamil') && normalize(e.department).includes('tamil')) ||
+        (normalize(selectedDept).includes('english') && normalize(e.department).includes('english')) ||
+        (normalize(selectedDept).includes('physical') && normalize(e.department).includes('physical')) ||
+        (normalize(selectedDept).includes('office') && normalize(e.department).includes('office'));
       const matchesType = selectedType === 'ALL' || e.type === selectedType;
 
       return matchesSearch && matchesDept && matchesType;
@@ -540,11 +617,11 @@ export default function ExaminationManagement({ user }) {
       setScheduleForm({
         code: '',
         name: '',
-        department: 'Computer Science',
+        department: 'BSc. Computer science',
         year: 1,
         sem: 'Sem 1',
         date: '',
-        session: 'FN (09:30 AM - 12:30 PM)',
+        session: 'Forenoon (FN)',
         hall: '',
         qpCode: '',
         invigilator: '',
@@ -586,7 +663,69 @@ export default function ExaminationManagement({ user }) {
     status: 'Allocated'
   });
 
+  const [selectedHallDept, setSelectedHallDept] = useState('');
+  const [selectedHallSubjectCode, setSelectedHallSubjectCode] = useState('');
+  const [customHallSubCode, setCustomHallSubCode] = useState('');
+  const [customHallSubName, setCustomHallSubName] = useState('');
+  const [hallAllocatedSubjects, setHallAllocatedSubjects] = useState([]);
+
+  const deptFilteredSubjects = availableSubjects.filter(s => {
+    if (!selectedHallDept) return true;
+    const sDept = (s.department || '').toLowerCase();
+    const target = selectedHallDept.toLowerCase();
+    return sDept.includes(target) || target.includes(sDept);
+  });
+
+  const handleAddSubjectToHall = () => {
+    let code = selectedHallSubjectCode;
+    let name = '';
+    if (code === 'CUSTOM') {
+      code = (customHallSubCode || '').trim();
+      name = (customHallSubName || '').trim() || code;
+    }
+    if (!code) return;
+
+    const matched = availableSubjects.find(s => s.code.toUpperCase() === code.toUpperCase());
+    const finalName = name || (matched ? matched.name : code);
+    const finalDept = selectedHallDept || (matched ? matched.department : 'General');
+
+    if (!hallAllocatedSubjects.some(s => s.code.toUpperCase() === code.toUpperCase())) {
+      const newSubjectItem = {
+        code,
+        name: finalName,
+        department: finalDept,
+        date: '',
+        session: 'FN (09:30 AM - 12:30 PM)'
+      };
+      const updated = [...hallAllocatedSubjects, newSubjectItem];
+      setHallAllocatedSubjects(updated);
+
+      const summaryArr = Array.from(new Set(updated.map(s => `${s.department} (${s.code})`)));
+      setHallForm(prev => ({ ...prev, departments: summaryArr.join(' + ') }));
+    }
+    setSelectedHallSubjectCode('');
+    setCustomHallSubCode('');
+    setCustomHallSubName('');
+  };
+
+  const handleRemoveSubjectFromHall = (codeToRemove) => {
+    const updated = hallAllocatedSubjects.filter(s => s.code.toUpperCase() !== codeToRemove.toUpperCase());
+    setHallAllocatedSubjects(updated);
+    const summaryArr = Array.from(new Set(updated.map(s => `${s.department} (${s.code})`)));
+    setHallForm(prev => ({ ...prev, departments: summaryArr.join(' + ') }));
+  };
+
+  const handleUpdateSubjectTiming = (codeToUpdate, field, value) => {
+    setHallAllocatedSubjects(prev =>
+      prev.map(s => s.code.toUpperCase() === codeToUpdate.toUpperCase() ? { ...s, [field]: value } : s)
+    );
+  };
+
   const handleOpenAddHall = (hallToEdit = null) => {
+    setSelectedHallDept('');
+    setSelectedHallSubjectCode('');
+    setCustomHallSubCode('');
+    setCustomHallSubName('');
     if (hallToEdit) {
       setEditingHallId(hallToEdit._id || hallToEdit.id);
       setHallForm({
@@ -599,6 +738,11 @@ export default function ExaminationManagement({ user }) {
         invigilatorDept: hallToEdit.invigilatorDept || '',
         status: hallToEdit.status || 'Allocated'
       });
+      if (Array.isArray(hallToEdit.allocatedSubjects) && hallToEdit.allocatedSubjects.length > 0) {
+        setHallAllocatedSubjects(hallToEdit.allocatedSubjects);
+      } else {
+        setHallAllocatedSubjects([]);
+      }
     } else {
       setEditingHallId(null);
       setHallForm({
@@ -611,6 +755,7 @@ export default function ExaminationManagement({ user }) {
         invigilatorDept: '',
         status: 'Allocated'
       });
+      setHallAllocatedSubjects([]);
     }
     setIsAddHallOpen(true);
   };
@@ -626,7 +771,8 @@ export default function ExaminationManagement({ user }) {
       const payload = {
         ...hallForm,
         capacity: Number(hallForm.capacity) || 60,
-        allocatedStudents: Number(hallForm.allocatedStudents) || 0
+        allocatedStudents: Number(hallForm.allocatedStudents) || 0,
+        allocatedSubjects: hallAllocatedSubjects
       };
 
       if (editingHallId) {
@@ -649,19 +795,38 @@ export default function ExaminationManagement({ user }) {
           body: JSON.stringify(payload)
         });
         const data = await res.json();
+        let savedHall = null;
         if (data.success && data.hall) {
-          setHallsList(prev => [data.hall, ...prev]);
+          savedHall = data.hall;
         } else {
-          const newH = { id: `hall-${Date.now()}`, ...payload };
-          setHallsList(prev => [newH, ...prev]);
+          savedHall = { id: `hall-${Date.now()}`, ...payload };
         }
+        setHallsList(prev => [savedHall, ...prev.filter(h => (h._id !== savedHall._id && h.hallName !== payload.hallName))]);
         showToast(`Exam Hall "${payload.hallName}" registered successfully.`);
       }
+
+      // Synchronize with localStorage & availableVenues so it's globally persistent
+      try {
+        const stored = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
+        const updated = [payload, ...stored.filter(h => (h.hallName || '').trim().toLowerCase() !== payload.hallName.trim().toLowerCase())];
+        localStorage.setItem('vcas_custom_exam_halls', JSON.stringify(updated));
+        const venues = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
+        if (!venues.includes(payload.hallName)) {
+          venues.push(payload.hallName);
+          localStorage.setItem('vcas_custom_venues', JSON.stringify(venues));
+        }
+      } catch (e) {}
+      setAvailableVenues(prev => Array.from(new Set([payload.hallName, ...prev])));
+
       setIsAddHallOpen(false);
     } catch (err) {
       console.error('Error saving exam hall:', err);
       const newH = { id: `hall-${Date.now()}`, ...hallForm };
       setHallsList(prev => [newH, ...prev]);
+      try {
+        const stored = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
+        localStorage.setItem('vcas_custom_exam_halls', JSON.stringify([newH, ...stored]));
+      } catch (e) {}
       showToast('Exam Hall saved.');
       setIsAddHallOpen(false);
     } finally {
@@ -675,9 +840,17 @@ export default function ExaminationManagement({ user }) {
     try {
       await fetch(`${API_BASE}/exams/halls/${hallId}`, { method: 'DELETE' });
       setHallsList(prev => prev.filter(h => h._id !== hallId && h.id !== hallId));
+      try {
+        const stored = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
+        localStorage.setItem('vcas_custom_exam_halls', JSON.stringify(stored.filter(h => h._id !== hallId && h.hallName !== hallName)));
+      } catch (e) {}
       showToast(`${hallName || 'Exam hall'} removed successfully.`);
     } catch (err) {
       setHallsList(prev => prev.filter(h => h._id !== hallId && h.id !== hallId));
+      try {
+        const stored = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
+        localStorage.setItem('vcas_custom_exam_halls', JSON.stringify(stored.filter(h => h._id !== hallId && h.hallName !== hallName)));
+      } catch (e) {}
       showToast('Exam hall removed.');
     }
   };
@@ -759,12 +932,13 @@ export default function ExaminationManagement({ user }) {
                        (typeof updated.assignment4 === 'number' ? updated.assignment4 : 0);
         const numAsg = asgSum > 0 ? asgSum : (typeof updated.assignment === 'number' ? updated.assignment : 0);
 
-        // Scaled CIA: IT scaled to 20 + Model scaled to 10 + Assignment scaled to 10 = 40 max
-        const itScaled = ((numIt1 + numIt2) / 50) * 20;
+        // Scaled CIA: IT scaled to 10 + Model scaled to 10 + Assignment scaled to 5 = 25 max
+        const itScaled = ((numIt1 + numIt2) / 50) * 10;
         const modelScaled = (numModel / 75) * 10;
-        const asgScaled = Math.min(10, (numAsg / 20) * 10);
-        const totalCIA = Math.min(40, Math.round(itScaled + modelScaled + asgScaled));
-        const total = totalCIA + (updated.eseMarks || 52);
+        const asgScaled = Math.min(5, (numAsg / 20) * 5);
+        const totalCIA = Math.min(25, Math.round(itScaled + modelScaled + asgScaled));
+        const ese = typeof updated.eseMarks === 'number' ? Math.min(75, updated.eseMarks) : 65;
+        const total = totalCIA + ese;
 
         let gr = 'U';
         let gp = 0;
@@ -1017,15 +1191,6 @@ export default function ExaminationManagement({ user }) {
           )}
 
           <button
-            onClick={fetchAllExaminationData}
-            disabled={isSyncing}
-            title="Sync Examination Schedules & Staff Marks"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs disabled:opacity-60"
-          >
-            <Sparkles className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Examination Data'}</span>
-          </button>
-          <button
             onClick={() => setIsAddScheduleOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs shadow-rose-500/20 transition-all"
           >
@@ -1191,7 +1356,8 @@ export default function ExaminationManagement({ user }) {
                   onChange={(e) => setSelectedDept(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-rose-500 focus:outline-none cursor-pointer"
                 >
-                  {DEPARTMENTS.map(d => (
+                  <option value="All Departments">All Departments</option>
+                  {availableDepartments.filter(d => d !== 'All Departments').map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
@@ -1224,7 +1390,8 @@ export default function ExaminationManagement({ user }) {
                     <th className="py-4 px-4">DEPARTMENT</th>
                     <th className="py-4 px-4">EXAM HALL & QP</th>
                     <th className="py-4 px-4">CHIEF INVIGILATOR</th>
-                    <th className="py-4 px-6 text-right">STATUS</th>
+                    <th className="py-4 px-4 text-center">STATUS</th>
+                    <th className="py-4 px-6 text-right">ACTION</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
@@ -1232,7 +1399,9 @@ export default function ExaminationManagement({ user }) {
                     <tr key={exam._id || exam.id || `${exam.code}_${exam.date}_${exam.session}_${idx}`} className="hover:bg-rose-50/20 transition-colors">
                       <td className="py-4 px-6">
                         <p className="font-extrabold text-slate-900 leading-tight">{exam.date}</p>
-                        <span className="text-[11px] text-rose-600 font-bold">{exam.session}</span>
+                        <span className="text-[11px] text-rose-600 font-bold">
+                          {exam.session?.includes('AN') || exam.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
+                        </span>
                       </td>
 
                       <td className="py-4 px-4">
@@ -1256,10 +1425,20 @@ export default function ExaminationManagement({ user }) {
                         {exam.invigilator}
                       </td>
 
-                      <td className="py-4 px-6 text-right">
+                      <td className="py-4 px-4 text-center">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           {exam.status}
                         </span>
+                      </td>
+
+                      <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => handleDeleteSchedule(exam._id || exam.id, e)}
+                          title="Delete Exam Entry"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1298,7 +1477,6 @@ export default function ExaminationManagement({ user }) {
                     <th className="py-4 px-6">STUDENT ROLL & NAME</th>
                     <th className="py-4 px-4">DEPARTMENT</th>
                     <th className="py-4 px-4">ATTENDANCE %</th>
-                    <th className="py-4 px-4">FEE STATUS</th>
                     <th className="py-4 px-4">ELIGIBILITY</th>
                     <th className="py-4 px-6 text-right">HALL TICKET</th>
                   </tr>
@@ -1330,13 +1508,6 @@ export default function ExaminationManagement({ user }) {
                         </span>
                       </td>
 
-                      <td className="py-4 px-4 text-xs font-bold">
-                        {s.feeCleared ? (
-                          <span className="text-emerald-600">✓ No Dues</span>
-                        ) : (
-                          <span className="text-rose-600">✕ Fee Due Pending</span>
-                        )}
-                      </td>
 
                       <td className="py-4 px-4">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${
@@ -1414,7 +1585,7 @@ export default function ExaminationManagement({ user }) {
                     <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 bg-purple-100/70 text-purple-950 font-black min-w-[65px]">MODEL</th>
                     <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 bg-emerald-100/70 text-emerald-950 font-black min-w-[100px]">PROJECT / SEMINAR</th>
                     <th colSpan={4} className="py-1 px-2 border-r border-slate-200 bg-amber-100/70 text-amber-950 font-black">ASSIGNMENT</th>
-                    <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 bg-blue-100/70 text-blue-950 font-black min-w-[85px]">TOTAL CIA (40)</th>
+                    <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 bg-blue-100/70 text-blue-950 font-black min-w-[85px]">TOTAL CIA (25)</th>
                     <th rowSpan={2} className="py-2.5 px-4 text-right">GRADE</th>
                   </tr>
                   <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-600 uppercase text-center">
@@ -1510,7 +1681,7 @@ export default function ExaminationManagement({ user }) {
 
                       {/* TOTAL CIA */}
                       <td className="py-2 px-3 text-center font-black text-sm text-indigo-700 bg-blue-50/30 border-r border-slate-100">
-                        {s.ciaTotal} / 40
+                        {s.ciaTotal} / 25
                       </td>
 
                       {/* GRADE */}
@@ -1583,8 +1754,8 @@ export default function ExaminationManagement({ user }) {
                   <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     <th className="py-4 px-6">STUDENT ROLL & NAME</th>
                     <th className="py-4 px-4">DEPARTMENT</th>
-                    <th className="py-4 px-4 text-center">INTERNAL (40)</th>
-                    <th className="py-4 px-4 text-center">ESE (60)</th>
+                    <th className="py-4 px-4 text-center">INTERNAL (25)</th>
+                    <th className="py-4 px-4 text-center">EXTERNAL (75)</th>
                     <th className="py-4 px-4 text-center">TOTAL (100)</th>
                     <th className="py-4 px-4 text-center">SGPA / CGPA</th>
                     <th className="py-4 px-6 text-right">GRADE CARD</th>
@@ -1656,26 +1827,6 @@ export default function ExaminationManagement({ user }) {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleAutoAllocateSeating}
-                  className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all border border-indigo-200 flex items-center gap-1.5 cursor-pointer"
-                  title="Auto-balance student allocations across halls"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Auto-Allocate Seats</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSyncStaffHalls}
-                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 flex items-center gap-1.5 cursor-pointer"
-                  title="Synchronize live examination halls from staff portal"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>Sync Staff Halls</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={() => handleOpenAddHall(null)}
@@ -1888,21 +2039,13 @@ export default function ExaminationManagement({ user }) {
                     Clear Filter
                   </button>
                 ) : (
-                  <>
-                    <button
-                      onClick={handleSyncStaffHalls}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Sync Staff Halls</span>
-                    </button>
-                    <button
-                      onClick={() => handleOpenAddHall(null)}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
-                    >
-                      + Add New Hall
-                    </button>
-                  </>
+                  <button
+                    onClick={() => handleOpenAddHall(null)}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs shadow-rose-500/20 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Add New Hall</span>
+                  </button>
                 )}
               </div>
             </div>
@@ -1993,7 +2136,8 @@ export default function ExaminationManagement({ user }) {
                   onChange={(e) => setScheduleForm({ ...scheduleForm, department: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                 >
-                  {DEPARTMENTS.filter(d => d !== 'All Departments').map(d => (
+                  <option value="">-- Select Department --</option>
+                  {availableDepartments.filter(d => d !== 'All Departments').map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
@@ -2014,12 +2158,13 @@ export default function ExaminationManagement({ user }) {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Session Timing *</label>
                   <select
-                    value={scheduleForm.session}
+                    value={scheduleForm.session?.includes('AN') || scheduleForm.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, session: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
+                    required
                   >
-                    <option value="FN (09:30 AM - 12:30 PM)">FN (09:30 AM - 12:30 PM)</option>
-                    <option value="AN (01:30 PM - 04:30 PM)">AN (01:30 PM - 04:30 PM)</option>
+                    <option value="Forenoon (FN)">Forenoon (FN)</option>
+                    <option value="Afternoon (AN)">Afternoon (AN)</option>
                   </select>
                 </div>
               </div>
@@ -2259,9 +2404,7 @@ export default function ExaminationManagement({ user }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(examsList.length > 0 ? examsList : [
-                      { code: viewingGradeCardStudent.subjectCode || 'CS2001', name: viewingGradeCardStudent.subjectName || 'Web Applications & Frameworks', credits: 4 }
-                    ]).slice(0, 5).map((c, cIdx) => (
+                    {((examsList.length > 0 ? examsList : (viewingGradeCardStudent.subjectCode ? [{ code: viewingGradeCardStudent.subjectCode, name: viewingGradeCardStudent.subjectName || viewingGradeCardStudent.subjectCode, credits: 4 }] : [])).slice(0, 5)).map((c, cIdx) => (
                       <tr key={cIdx}>
                         <td className="p-2.5 font-bold font-mono text-blue-600">{c.code}</td>
                         <td className="p-2.5 font-semibold text-slate-800">{c.name}</td>
@@ -2270,6 +2413,11 @@ export default function ExaminationManagement({ user }) {
                         <td className="p-2.5 text-center font-bold text-emerald-600">{viewingGradeCardStudent.result || 'PASS'}</td>
                       </tr>
                     ))}
+                    {examsList.length === 0 && !viewingGradeCardStudent.subjectCode && (
+                      <tr>
+                        <td colSpan={5} className="p-4 text-center text-xs text-slate-400 font-medium">No examination courses registered yet</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -2326,8 +2474,24 @@ export default function ExaminationManagement({ user }) {
             </div>
 
             <form onSubmit={handleSaveHall} className="space-y-4">
+              {/* 1. HALL NAME & VENUE */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Hall Name & Block *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">Hall Name & Block *</label>
+                  <span className="text-[11px] font-semibold text-indigo-600">Real Venues Dropdown</span>
+                </div>
+                <select
+                  value={availableVenues.includes(hallForm.hallName) ? hallForm.hallName : ''}
+                  onChange={(e) => {
+                    if (e.target.value) setHallForm({ ...hallForm, hallName: e.target.value });
+                  }}
+                  className="w-full px-3.5 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 mb-1.5 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="">-- Quick Select Added Examination Venue / Hall --</option>
+                  {availableVenues.map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
                 <input
                   type="text"
                   value={hallForm.hallName}
@@ -2338,6 +2502,7 @@ export default function ExaminationManagement({ user }) {
                 />
               </div>
 
+              {/* 2. CAPACITY & ALLOCATED STUDENTS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Seating Capacity *</label>
@@ -2356,7 +2521,7 @@ export default function ExaminationManagement({ user }) {
                   <input
                     type="number"
                     min="0"
-                    max={hallForm.capacity}
+                    max={hallForm.capacity || 500}
                     value={hallForm.allocatedStudents}
                     onChange={(e) => setHallForm({ ...hallForm, allocatedStudents: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
@@ -2365,17 +2530,163 @@ export default function ExaminationManagement({ user }) {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Allocated Branches / Departments</label>
-                <input
-                  type="text"
-                  value={hallForm.departments}
-                  onChange={(e) => setHallForm({ ...hallForm, departments: e.target.value })}
-                  placeholder="e.g. Computer Science (Sem 5) + Commerce (Sem 3)"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
-                />
+              {/* 3. ALLOCATE SUBJECTS BY DEPARTMENT & SET TIMING */}
+              <div className="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Allocated Subjects &amp; Timing
+                  </label>
+                  <span className="text-[11px] font-semibold text-indigo-600">Department ➔ Subject Filter</span>
+                </div>
+
+                {/* 1. Pick Department */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      1. Select Department *
+                    </label>
+                    <select
+                      value={selectedHallDept}
+                      onChange={(e) => {
+                        setSelectedHallDept(e.target.value);
+                        setSelectedHallSubjectCode('');
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                    >
+                      <option value="">-- Choose Department --</option>
+                      {availableDepartments.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 2. Pick Subject under that department & Add */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      2. Subject ({deptFilteredSubjects.length} Found)
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedHallSubjectCode}
+                        onChange={(e) => setSelectedHallSubjectCode(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      >
+                        <option value="">-- Select Subject (Course Code) --</option>
+                        {deptFilteredSubjects.map(s => (
+                          <option key={s.code} value={s.code}>
+                            {s.code} — {s.name}
+                          </option>
+                        ))}
+                        <option value="CUSTOM">+ Enter Custom Code...</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={handleAddSubjectToHall}
+                        disabled={!selectedHallSubjectCode}
+                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Subject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom code inputs if selected */}
+                {selectedHallSubjectCode === 'CUSTOM' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <input
+                      type="text"
+                      placeholder="Subject Code (e.g. CS301)"
+                      value={customHallSubCode}
+                      onChange={(e) => setCustomHallSubCode(e.target.value.toUpperCase())}
+                      className="px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-mono font-bold uppercase focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Subject Name (e.g. Operating Systems)"
+                      value={customHallSubName}
+                      onChange={(e) => setCustomHallSubName(e.target.value)}
+                      className="px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-medium focus:outline-none"
+                    />
+                  </div>
+                )}
+
+                {/* Configured Subjects List with Date & Timing Configuration ("and the timing will be set after that") */}
+                {hallAllocatedSubjects.length > 0 ? (
+                  <div className="space-y-2 pt-2 border-t border-indigo-100">
+                    <div className="text-[11px] font-bold text-indigo-900 flex items-center justify-between">
+                      <span>Configured Examination Subjects ({hallAllocatedSubjects.length}):</span>
+                      <span className="text-[10px] text-slate-500">Set exam date &amp; session timing below</span>
+                    </div>
+                    {hallAllocatedSubjects.map((sub, sIdx) => (
+                      <div key={sub.code || sIdx} className="bg-white rounded-xl p-2.5 border border-indigo-200/70 shadow-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                              {sub.code}
+                            </span>
+                            <span className="text-xs font-bold text-slate-800">{sub.name}</span>
+                            <span className="text-[10px] font-semibold text-slate-500">({sub.department})</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSubjectFromHall(sub.code)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                            title="Remove Subject"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Exam Date</label>
+                            <input
+                              type="date"
+                              value={sub.date || ''}
+                              onChange={(e) => handleUpdateSubjectTiming(sub.code, 'date', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Session Timing</label>
+                            <select
+                              value={sub.session?.includes('AN') || sub.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
+                              onChange={(e) => handleUpdateSubjectTiming(sub.code, 'session', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                            >
+                              <option value="Forenoon (FN)">Forenoon (FN)</option>
+                              <option value="Afternoon (AN)">Afternoon (AN)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500 italic py-1">
+                    No subjects added yet. Select a department above and click "Add Subject" to configure subjects and timing for this hall.
+                  </p>
+                )}
+
+                {/* Branches / Departments Summary text */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Allocated Branches / Summary Text
+                  </label>
+                  <input
+                    type="text"
+                    value={hallForm.departments}
+                    onChange={(e) => setHallForm({ ...hallForm, departments: e.target.value })}
+                    placeholder="e.g. Computer Science (Sem 5) + Commerce (Sem 3)"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:border-indigo-500 focus:outline-none transition-all"
+                  />
+                </div>
               </div>
 
+              {/* 4. ROLL NUMBER RANGE */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Roll Number Range</label>
                 <input
@@ -2387,36 +2698,81 @@ export default function ExaminationManagement({ user }) {
                 />
               </div>
 
+              {/* 5. CHIEF INVIGILATOR & INVIGILATOR DEPARTMENT (REAL DATA) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Chief Invigilator</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">Chief Invigilator</label>
+                    <span className="text-[11px] font-semibold text-indigo-600">Category Filter</span>
+                  </div>
+                  {/* Category Selection Filter (6. Tamil, 7. English, 8. Physical Education, 9. Office) */}
+                  <select
+                    value={invigilatorCategoryFilter}
+                    onChange={(e) => setInvigilatorCategoryFilter(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 mb-1.5 focus:bg-white focus:outline-none cursor-pointer"
+                  >
+                    <option value="All">All Staff Categories ({facultyList.length})</option>
+                    <option value="Computer Science">1. Computer Science</option>
+                    <option value="Commerce">2. Commerce</option>
+                    <option value="Mathematics">3. Mathematics</option>
+                    <option value="Business Administration (BBA)">4. BBA</option>
+                    <option value="Computer Applications (BCA)">5. BCA</option>
+                    <option value="Tamil">6. Tamil</option>
+                    <option value="English">7. English</option>
+                    <option value="Physical Education">8. Physical Education</option>
+                    <option value="Office">9. Office</option>
+                  </select>
+
+                  <select
+                    value={facultyList.find(f => f.name === hallForm.invigilator)?.staffId || ''}
+                    onChange={(e) => {
+                      const staffId = e.target.value;
+                      const member = facultyList.find(f => f.staffId === staffId);
+                      if (member) {
+                        setHallForm(prev => ({
+                          ...prev,
+                          invigilator: member.name,
+                          invigilatorDept: member.department || member.dept || member.departmentName || (member.role === 'Office Staff' ? 'Office' : prev.invigilatorDept)
+                        }));
+                      }
+                    }}
+                    className="w-full px-3.5 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 mb-1.5 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Choose Real Faculty Invigilator ({filteredInvigilatorFaculty.length}) --</option>
+                    {filteredInvigilatorFaculty.map(s => {
+                      const deptStr = s.department || s.dept || s.departmentName || (s.role === 'Office Staff' ? 'Office' : 'General');
+                      return (
+                        <option key={s.staffId || s._id} value={s.staffId}>
+                          [{deptStr}] {s.name} ({s.staffId})
+                        </option>
+                      );
+                    })}
+                  </select>
                   <input
                     type="text"
                     value={hallForm.invigilator}
                     onChange={(e) => setHallForm({ ...hallForm, invigilator: e.target.value })}
                     placeholder="e.g. Dr. S. Rajagopalan"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
                   />
                 </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Invigilator Department</label>
                   <select
                     value={hallForm.invigilatorDept}
                     onChange={(e) => setHallForm({ ...hallForm, invigilatorDept: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
                   >
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Commerce">Commerce</option>
-                    <option value="Business Administration (BBA)">Business Administration (BBA)</option>
-                    <option value="Computer Applications (BCA)">Computer Applications (BCA)</option>
-                    <option value="English Literature">English Literature</option>
-                    <option value="Mathematics">Mathematics</option>
-                    <option value="Artificial Intelligence (AI)">Artificial Intelligence (AI)</option>
-                    <option value="Physics">Physics</option>
+                    <option value="">-- Select Real Department --</option>
+                    {availableDepartments.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
                   </select>
                 </div>
               </div>
 
+              {/* 6. STATUS */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Status</label>
                 <select
@@ -2424,8 +2780,8 @@ export default function ExaminationManagement({ user }) {
                   onChange={(e) => setHallForm({ ...hallForm, status: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
                 >
-                  <option value="Fully Allocated">Fully Allocated</option>
                   <option value="Allocated">Allocated</option>
+                  <option value="Fully Allocated">Fully Allocated</option>
                   <option value="Available">Available</option>
                 </select>
               </div>

@@ -20,14 +20,15 @@ const DEFAULT_INSTRUCTIONS = [
 
 const ALL_SEMESTERS = [1, 2, 3, 4, 5, 6];
 const DEFAULT_DEPTS = [
+  'BSc. Computer science',
   'Computer Science',
-  'Information Technology',
   'Commerce',
   'Mathematics',
-  'Physics',
-  'Chemistry',
   'Business Administration',
-  'English'
+  'English',
+  'Tamil',
+  'Physical Education',
+  'Office'
 ];
 
 export default function StaffHallTicket({ staffUser, onNavigate }) {
@@ -89,13 +90,13 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [previewStudent, setPreviewStudent] = useState(null);
   const [previewExam, setPreviewExam] = useState(null);
 
-  // Available departments & semesters (all 8 semesters always selectable)
-  const [availableDepts, setAvailableDepts] = useState(DEFAULT_DEPTS);
+  // Available departments & semesters (dynamically fetched from database)
+  const [availableDepts, setAvailableDepts] = useState([]);
   const [availableSemesters, setAvailableSemesters] = useState(ALL_SEMESTERS);
   const [availableSections, setAvailableSections] = useState(['All', 'A', 'B', 'C']);
 
   // Examination plan selection & typing mode states
-  const [planFilterDept, setPlanFilterDept] = useState(staffUser?.department || 'Computer Science');
+  const [planFilterDept, setPlanFilterDept] = useState(staffUser?.department || '');
   const [planFilterSem, setPlanFilterSem] = useState(3);
   const [planTypingExamName, setPlanTypingExamName] = useState('Semester End Theory Examinations - 2026');
 
@@ -113,7 +114,7 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [formExamName, setFormExamName] = useState('Semester End Theory Examinations - 2026');
   const [formExamType, setFormExamType] = useState('Semester End Examination');
   const [formAcademicYear, setFormAcademicYear] = useState('2025-2026');
-  const [formDept, setFormDept] = useState(staffUser?.department || 'Computer Science');
+  const [formDept, setFormDept] = useState(staffUser?.department || '');
   const [formSemester, setFormSemester] = useState(3);
   const [formSection, setFormSection] = useState('All');
 
@@ -177,34 +178,62 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
   const [manualHall, setManualHall] = useState('');
   const [manualSeat, setManualSeat] = useState('');
 
-  // Fetch metadata on mount (ensuring all 8 semesters are always selectable)
+  // Fetch real departments and metadata on mount
   useEffect(() => {
-    fetch(`${API_BASE}/hall-tickets/meta`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          if (data.departments?.length > 0) {
-            const combined = Array.from(new Set([...DEFAULT_DEPTS, ...data.departments]));
-            setAvailableDepts(combined);
-            const match = combined.find(d => staffUser?.department && d.toLowerCase().includes(staffUser.department.toLowerCase()));
-            const targetDept = match || combined[0];
-            setFormDept(targetDept);
-            loadAvailableSubjects(targetDept, formSemester, formSection);
-          } else {
-            setAvailableDepts(DEFAULT_DEPTS);
-            loadAvailableSubjects(formDept, formSemester, formSection);
+    const fetchMetaAndDepartments = async () => {
+      try {
+        let depts = [];
+
+        // 1. Fetch real departments from /api/departments
+        try {
+          const deptRes = await fetch(`${API_BASE}/departments`);
+          const deptData = await deptRes.json();
+          if (deptData.success && Array.isArray(deptData.data)) {
+            const list = deptData.data.map(d => d.name?.trim()).filter(Boolean);
+            depts.push(...list);
           }
-          // Always ensure all 8 semesters are selectable
-          setAvailableSemesters(ALL_SEMESTERS);
-          if (data.sections?.length > 0) setAvailableSections(data.sections);
+        } catch (e) {
+          console.warn('Error fetching departments:', e);
         }
-      })
-      .catch(err => {
-        console.error('Error loading meta:', err);
+
+        // 2. Fetch metadata from /api/hall-tickets/meta
+        try {
+          const metaRes = await fetch(`${API_BASE}/hall-tickets/meta`);
+          const metaData = await metaRes.json();
+          if (metaData.success) {
+            if (metaData.departments?.length > 0) {
+              depts.push(...metaData.departments);
+            }
+            if (metaData.sections?.length > 0) {
+              setAvailableSections(metaData.sections);
+            }
+          }
+        } catch (e) {
+          console.warn('Error fetching hall-tickets meta:', e);
+        }
+
+        // Deduplicate departments
+        const uniqueDepts = Array.from(new Set(depts.filter(Boolean)));
+        const finalDepts = uniqueDepts.length > 0 ? uniqueDepts : DEFAULT_DEPTS;
+
+        setAvailableDepts(finalDepts);
+        setAvailableSemesters(ALL_SEMESTERS);
+
+        // Pick matching department or first
+        const match = finalDepts.find(d => staffUser?.department && d.toLowerCase().includes(staffUser.department.toLowerCase()));
+        const targetDept = match || finalDepts[0] || 'Computer Science';
+        setFormDept(targetDept);
+        setPlanFilterDept(targetDept);
+        loadAvailableSubjects(targetDept, formSemester, formSection);
+      } catch (err) {
+        console.error('Error in fetchMetaAndDepartments:', err);
         setAvailableDepts(DEFAULT_DEPTS);
         setAvailableSemesters(ALL_SEMESTERS);
         loadAvailableSubjects(formDept, formSemester, formSection);
-      });
+      }
+    };
+
+    fetchMetaAndDepartments();
   }, [staffUser?.department]);
 
   // Sync plan filter, editable instructions, and subjects schedule when currentAllocation changes
@@ -279,22 +308,56 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       const res = await fetch(`${API_BASE}/hall-tickets/eligible-students?${params.toString()}`);
       const data = await res.json();
 
-      if (data.success && Array.isArray(data.students) && data.students.length > 0) {
+      let fetchedStudents = (data.success && Array.isArray(data.students)) ? data.students : [];
+
+      // Fallback: If no students returned, fetch all active registered students from /students
+      if (fetchedStudents.length === 0) {
+        try {
+          const sRes = await fetch(`${API_BASE}/students`);
+          const sData = await sRes.json();
+          if (sData.success && Array.isArray(sData.data)) {
+            fetchedStudents = sData.data;
+          }
+        } catch (sErr) {
+          console.warn('Error fetching fallback students:', sErr);
+        }
+      }
+
+      if (fetchedStudents.length > 0) {
         setStudentsToAllocate(prev => {
-          if (prev.length > 0) return prev;
           const cleanSubs = (data.subjects || []).filter(s => !deletedSubjectCodes.has(s.code.toUpperCase()));
-          return data.students.map(st => ({
-            rollNo: st.rollNo,
-            name: st.name,
-            dept: st.dept || activeDept,
-            semester: st.semester || 1,
-            section: st.section || 'A',
-            hallNo: '',
-            seatNo: '',
-            eligible: true,
-            remarks: 'Eligible for Examination',
-            subjects: cleanSubs
-          }));
+          const existingMap = new Map(prev.map(s => [(s.rollNo || '').toUpperCase(), s]));
+
+          fetchedStudents.forEach(st => {
+            const roll = (st.rollNo || st.regNo || st.studentId || '').toUpperCase();
+            if (!roll) return;
+            if (existingMap.has(roll)) {
+              const cur = existingMap.get(roll);
+              existingMap.set(roll, {
+                ...cur,
+                name: st.name || st.fullName || cur.name,
+                dept: st.dept || st.department || cur.dept || activeDept,
+                semester: st.semester || (st.sem ? parseInt(st.sem) || cur.semester : cur.semester) || 1,
+                section: st.section || cur.section || 'A',
+                subjects: (cur.subjects && cur.subjects.length > 0) ? cur.subjects : cleanSubs
+              });
+            } else {
+              existingMap.set(roll, {
+                rollNo: st.rollNo || st.regNo || roll,
+                name: st.name || st.fullName || 'Student',
+                dept: st.dept || st.department || activeDept,
+                semester: st.semester || (st.sem ? parseInt(st.sem) || 1 : 1),
+                section: st.section || 'A',
+                hallNo: '',
+                seatNo: '',
+                eligible: true,
+                remarks: 'Eligible for Examination',
+                subjects: cleanSubs
+              });
+            }
+          });
+
+          return Array.from(existingMap.values());
         });
       }
 
@@ -767,6 +830,19 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
     }
 
     setStatusMessage({ type: 'info', text: `Removed subject ${code} from schedule.` });
+    setTimeout(() => setStatusMessage(null), 3000);
+  };
+
+  // Clear / delete exam time from a scheduled subject
+  const handleClearSubjectTime = (code) => {
+    const cleanCode = code.toUpperCase();
+    setSubjectsSchedule(prev => prev.map(s => {
+      if (s.code.toUpperCase() === cleanCode) {
+        return { ...s, time: '' };
+      }
+      return s;
+    }));
+    setStatusMessage({ type: 'info', text: `Exam time deleted for ${code}.` });
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
@@ -1395,120 +1471,116 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
       return;
     }
 
-    const examTitle = examData?.examName || 'SEMESTER END EXAMINATIONS';
-    const academicYear = examData?.academicYear || '2025-2026';
-    const examType = examData?.examType || 'Regular Examination';
-    const instructions = (examData?.instructions && examData.instructions.length > 0)
-      ? examData.instructions
-      : (instructionsList && instructionsList.length > 0 ? instructionsList : DEFAULT_INSTRUCTIONS);
+    const examTitle = examData?.examName || 'MODEL SEMESTER EXAMINATION - NOVEMBER 2026';
+
+    const toRoman = (num) => {
+      const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+      return map[Number(num)] || (num ? String(num).toUpperCase() : 'I');
+    };
+    const getYearRoman = (sem) => {
+      const s = Number(sem) || 1;
+      return toRoman(Math.ceil(s / 2));
+    };
+    const formatDateShort = (dateStr) => {
+      if (!dateStr || dateStr === 'TBA') return '';
+      try {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+          const day = String(d.getDate()).padStart(2, '0');
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const yr = String(d.getFullYear()).slice(-2);
+          return `${day}.${month}.${yr}`;
+        }
+      } catch (e) {}
+      return dateStr;
+    };
+    const formatSessionShort = (session) => {
+      if (!session) return 'FN';
+      const upper = String(session).toUpperCase();
+      if (upper.includes('AN') || upper.includes('AFTERNOON')) return 'AN';
+      return 'FN';
+    };
 
     const ticketsHtml = studentsList.map((st, index) => {
       const subjects = (st.subjects && st.subjects.length > 0) ? st.subjects : (examData?.commonSubjects || subjectsSchedule);
+      const studentDept = st.dept || examData?.department || 'CFS';
+      const semNum = st.semester || examData?.semester || 1;
+      const yearRoman = getYearRoman(semNum);
+      const semRoman = toRoman(semNum);
 
       const rows = subjects.map((sub, sIdx) => `
         <tr>
-          <td style="text-align: center; font-weight: 600;">${sIdx + 1}</td>
-          <td style="font-weight: 700; color: #1e293b;">${sub.code}</td>
-          <td>${sub.name}</td>
-          <td style="text-align: center; font-weight: 600;">${sub.date || 'TBA'}</td>
-          <td style="text-align: center;">${sub.session || 'FN'}<br/><span style="font-size: 10px; color: #64748b;">${sub.time || '09:30 AM'}</span></td>
-          <td style="text-align: center; height: 38px;"></td>
-          <td style="text-align: center; height: 38px;"></td>
+          <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 6px 4px;">${sIdx + 1}</td>
+          <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 6px 4px;">${formatDateShort(sub.date) || '21.10.26'}</td>
+          <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 6px 4px;">${formatSessionShort(sub.session)}</td>
+          <td style="text-align: left; font-weight: 700; border: 1px solid #000; padding: 6px 8px; text-transform: uppercase;">${sub.name}</td>
+          <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 6px 4px;">${sub.code || ''}</td>
+          <td style="text-align: center; border: 1px solid #000; padding: 6px 4px; height: 32px;"></td>
         </tr>
       `).join('');
 
       return `
-        <div class="hall-ticket-page ${index < studentsList.length - 1 ? 'page-break' : ''}">
-          <!-- College Header -->
-          <div class="header-table">
-            <div class="logo-box">
-              <div class="logo-circle">
-                <img src="/vcas-logo.png" style="width:52px;height:52px;object-fit:contain;" alt="VCAS Official Logo" />
+        <div class="hall-ticket-container ${index < studentsList.length - 1 ? 'page-break' : ''}">
+          <div class="hall-ticket-border">
+            <!-- Header Section -->
+            <div class="header-wrap">
+              <div class="logo-wrap">
+                <img src="/vcas-logo.png" class="college-logo" alt="Crest Logo" />
+              </div>
+              <div class="title-wrap">
+                <div class="college-name">VIVEKANANDA COLLEGE OF ARTS AND SCIENCE</div>
+                <div class="college-loc">Vellalankulam, Tenkasi Dist</div>
+                <div class="college-contact">PHONE: 04636298128, 7094462393, 7094462394 &nbsp;&nbsp; EMAIL: vivekanandacas@gmail.com</div>
+                <div class="exam-title">${examTitle.toUpperCase()}</div>
+                <div class="ticket-badge">HALL TICKET</div>
               </div>
             </div>
-            <div class="header-text">
-              <div class="college-title">VIVEKANANDA COLLEGE OF ARTS AND SCIENCES</div>
-              <div class="college-loc">Tiruchengode, Namakkal District, Tamil Nadu - 637 205</div>
-              <div class="admit-badge">EXAMINATION HALL TICKET</div>
+
+            <!-- Dept / Year / Semester Meta Row -->
+            <div class="meta-row">
+              <div><strong>DEPARTMENT:</strong> ${studentDept.toUpperCase()}</div>
+              <div><strong>YEAR:</strong> ${yearRoman}</div>
+              <div><strong>SEMESTER:</strong> ${semRoman}</div>
             </div>
-            <div class="photo-box">
-              <div class="photo-placeholder">
-                <span>AFFIX RECENT<br/>PASSPORT SIZE<br/>PHOTOGRAPH</span>
-              </div>
-            </div>
-          </div>
 
-          <!-- Exam Header Banner -->
-          <div class="exam-banner">
-            <div><strong>EXAMINATION:</strong> ${examTitle.toUpperCase()}</div>
-            <div><strong>ACADEMIC YEAR:</strong> ${academicYear} &nbsp;|&nbsp; <strong>SESSION:</strong> ${examType.toUpperCase()}</div>
-          </div>
-
-          <!-- Candidate & Seat Allocation Info -->
-          <table class="info-table">
-            <tr>
-              <td class="info-label">Register / Roll No:</td>
-              <td class="info-val font-bold highlight">${st.rollNo}</td>
-              <td class="info-label">Student Name:</td>
-              <td class="info-val font-bold">${st.name.toUpperCase()}</td>
-            </tr>
-            <tr>
-              <td class="info-label">Degree & Branch:</td>
-              <td class="info-val">${st.dept || examData?.department || 'Computer Science'}</td>
-              <td class="info-label">Semester / Section:</td>
-              <td class="info-val">Semester ${st.semester || examData?.semester || 'VI'} - Sec ${st.section || 'A'}</td>
-            </tr>
-            <tr>
-              <td class="info-label">Allocated Hall / Room:</td>
-              <td class="info-val font-bold highlight">${st.hallNo || 'Room TBA'}</td>
-              <td class="info-label">Allocated Seat No:</td>
-              <td class="info-val font-bold highlight" style="font-size: 14px; color: #1e3a8a;">${st.seatNo || 'TBA'}</td>
-            </tr>
-          </table>
-
-          <!-- Subjects Timetable to be Written -->
-          <div class="section-title">SCHEDULE OF COURSES / SUBJECTS TO APPEAR</div>
-          <table class="subjects-table">
-            <thead>
+            <!-- Student Particulars Table -->
+            <table class="student-table">
               <tr>
-                <th style="width: 5%;">S.No</th>
-                <th style="width: 14%;">Course Code</th>
-                <th style="width: 35%;">Course / Subject Title</th>
-                <th style="width: 13%;">Exam Date</th>
-                <th style="width: 15%;">Session & Time</th>
-                <th style="width: 9%;">Student Sign</th>
-                <th style="width: 9%;">Invigilator Sign</th>
+                <td class="st-lbl">Student Name:</td>
+                <td class="st-val">${(st.name || '').toUpperCase()}</td>
               </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
+              <tr>
+                <td class="st-lbl">Register No :</td>
+                <td class="st-val font-bold">${st.rollNo || st.regNo || ''}</td>
+              </tr>
+            </table>
 
-          <!-- Rules and Instructions -->
-          <div class="rules-box">
-            <div class="rules-title">IMPORTANT INSTRUCTIONS TO THE CANDIDATE:</div>
-            <ol class="rules-list">
-              ${instructions.map(rule => `<li>${rule}</li>`).join('')}
-            </ol>
-          </div>
+            <!-- Time Table Title -->
+            <div class="tt-heading">TIME TABLE</div>
 
-          <!-- Official Signatures -->
-          <div class="signatures-row">
-            <div class="sign-block">
-              <div class="sign-line"></div>
-              <div class="sign-label">Signature of Candidate</div>
-              <div class="sign-sub">(To be signed before exam)</div>
-            </div>
-            <div class="sign-block">
-              <div class="stamp-seal">OFFICIAL<br/>SEAL</div>
-              <div class="sign-label">College Examination Cell</div>
-            </div>
-            <div class="sign-block">
-              <div style="height: 28px;"></div>
-              <div class="sign-line"></div>
-              <div class="sign-label">Controller of Examinations (COE)</div>
-              <div class="sign-sub">Vivekananda College</div>
+            <!-- Time Table Schedule -->
+            <table class="schedule-table">
+              <thead>
+                <tr>
+                  <th style="width: 5%;">NO</th>
+                  <th style="width: 17%;">DATE</th>
+                  <th style="width: 10%;">FN<br/>AN</th>
+                  <th style="width: 44%;">SUBJECT</th>
+                  <th style="width: 14%;">Sub. Code</th>
+                  <th style="width: 10%;">Sign</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+
+            <!-- Signatures Row -->
+            <div class="signatures-row">
+              <div class="sig-col">Office</div>
+              <div class="sig-col">HOD</div>
+              <div class="sig-col">Principal</div>
+              <div class="sig-col">MD</div>
             </div>
           </div>
         </div>
@@ -1522,27 +1594,26 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
         <meta charset="utf-8" />
         <title>Hall Tickets - ${examTitle}</title>
         <style>
-          * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-          body { background: #525659; padding: 20px; }
-          .hall-ticket-page {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 14mm 14mm 12mm 14mm;
-            margin: 0 auto 20px auto;
+          * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Times New Roman", Times, Georgia, serif; }
+          body { background: #f8fafc; padding: 20px; color: #000; }
+          .hall-ticket-container {
+            width: 195mm;
+            margin: 0 auto 30px auto;
             background: #ffffff;
-            border: 2px solid #0f1e3c;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            position: relative;
+            padding: 8px;
+          }
+          .hall-ticket-border {
+            border: 1.5px solid #000000;
+            padding: 12px 16px 24px 16px;
           }
           @media print {
-            body { background: white; padding: 0; }
+            body { background: white; padding: 0; margin: 0; }
             .no-print { display: none !important; }
-            .hall-ticket-page {
+            .hall-ticket-container {
               width: 100%;
-              min-height: 100vh;
-              margin: 0;
-              padding: 10mm 12mm;
-              border: 2px solid #0f1e3c;
+              max-width: 190mm;
+              margin: 0 auto;
+              padding: 6mm 4mm;
               box-shadow: none;
             }
             .page-break {
@@ -1551,161 +1622,146 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
             }
           }
 
-          .header-table {
+          .header-wrap {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            border-bottom: 2px solid #0f1e3c;
-            padding-bottom: 8px;
             margin-bottom: 8px;
-            gap: 10px;
+            position: relative;
           }
-          .logo-box { width: 65px; text-align: center; }
-          .logo-circle { width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; }
-          .header-text { flex: 1; text-align: center; }
-          .college-title { font-size: 15px; font-weight: 900; color: #0f1e3c; letter-spacing: 0.5px; }
-          .college-sub { font-size: 9.5px; font-weight: 600; color: #475569; margin-top: 1px; }
-          .college-loc { font-size: 9px; color: #64748b; }
-          .admit-badge {
-            display: inline-block;
-            background: #0f1e3c;
-            color: #ffffff;
-            font-size: 11px;
-            font-weight: 800;
-            padding: 3px 14px;
-            border-radius: 4px;
-            margin-top: 5px;
-            letter-spacing: 1px;
+          .logo-wrap {
+            width: 65px;
+            text-align: left;
+            flex-shrink: 0;
           }
-          .photo-box { width: 85px; height: 105px; text-align: center; }
-          .photo-placeholder {
-            width: 100%;
-            height: 100%;
-            border: 1px dashed #64748b;
-            background: #f8fafc;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 8px;
-            color: #64748b;
+          .college-logo {
+            width: 58px;
+            height: 58px;
+            object-fit: contain;
+          }
+          .title-wrap {
+            flex: 1;
+            text-align: center;
+            padding-right: 65px; /* balance logo on left */
+          }
+          .college-name {
+            font-size: 16px;
+            font-weight: 900;
+            color: #000;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            line-height: 1.2;
+          }
+          .college-loc {
+            font-size: 11.5px;
             font-weight: 600;
-            line-height: 1.3;
+            color: #111;
+            margin-top: 1px;
+          }
+          .college-contact {
+            font-size: 9px;
+            font-weight: 700;
+            color: #222;
+            margin-top: 2px;
+          }
+          .exam-title {
+            font-size: 12px;
+            font-weight: 900;
+            color: #000;
+            text-transform: uppercase;
+            margin-top: 6px;
+            letter-spacing: 0.3px;
+          }
+          .ticket-badge {
+            font-size: 13px;
+            font-weight: 900;
+            color: #000;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-top: 3px;
+            text-decoration: underline;
           }
 
-          .exam-banner {
-            background: #f8fafc;
-            border: 1px solid #cbd5e1;
-            padding: 5px 10px;
+          .meta-row {
             display: flex;
             justify-content: space-between;
-            font-size: 10px;
-            color: #1e293b;
-            margin-bottom: 8px;
+            align-items: center;
+            font-size: 11px;
+            color: #000;
+            margin: 10px 0 6px 0;
+            padding: 0 4px;
           }
 
-          .info-table {
+          .student-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 11px;
-            margin-bottom: 10px;
-            border: 1px solid #cbd5e1;
+            border: 1px solid #000;
+            margin-bottom: 8px;
           }
-          .info-table td {
+          .student-table td {
             padding: 5px 8px;
-            border: 1px solid #e2e8f0;
+            font-size: 11.5px;
+            border: 1px solid #000;
           }
-          .info-label {
-            background: #f1f5f9;
+          .st-lbl {
+            width: 22%;
             font-weight: 700;
-            color: #334155;
-            width: 18%;
+            color: #000;
+            white-space: nowrap;
           }
-          .info-val {
-            color: #0f172a;
-            width: 32%;
+          .st-val {
+            width: 78%;
+            font-weight: 700;
+            color: #000;
           }
-          .font-bold { font-weight: 700; }
-          .highlight { color: #1e3a8a; }
 
-          .section-title {
-            font-size: 10.5px;
-            font-weight: 800;
-            color: #0f1e3c;
+          .tt-heading {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 900;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 4px;
-            border-left: 3px solid #2563eb;
-            padding-left: 6px;
+            text-decoration: underline;
+            margin: 6px 0 4px 0;
           }
 
-          .subjects-table {
+          .schedule-table {
             width: 100%;
             border-collapse: collapse;
+            border: 1px solid #000;
+            margin-bottom: 30px;
+          }
+          .schedule-table th {
+            border: 1px solid #000;
+            padding: 4px 4px;
             font-size: 10.5px;
-            margin-bottom: 10px;
-            border: 1px solid #94a3b8;
-          }
-          .subjects-table th {
-            background: #e2e8f0;
-            color: #0f1e3c;
-            font-weight: 800;
-            padding: 5px;
-            border: 1px solid #94a3b8;
+            font-weight: 900;
             text-align: center;
+            color: #000;
+            background: #fafafa;
           }
-          .subjects-table td {
-            padding: 5px 6px;
-            border: 1px solid #cbd5e1;
-            vertical-align: middle;
+          .schedule-table td {
+            border: 1px solid #000;
+            padding: 6px 6px;
+            font-size: 10.5px;
+            color: #000;
+            height: 28px;
           }
-
-          .rules-box {
-            background: #fafaf9;
-            border: 1px solid #e7e5e4;
-            padding: 6px 10px;
-            margin-bottom: 15px;
-            border-radius: 4px;
-          }
-          .rules-title { font-size: 9px; font-weight: 800; color: #44403c; margin-bottom: 3px; }
-          .rules-list { font-size: 8.5px; color: #57534e; padding-left: 14px; line-height: 1.4; }
 
           .signatures-row {
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
-            margin-top: 15px;
-            padding: 0 10px;
+            padding: 0 16px;
+            margin-top: 45px;
           }
-          .sign-block {
+          .sig-col {
             text-align: center;
-            width: 28%;
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #000;
+            min-width: 70px;
           }
-          .sign-line {
-            height: 1px;
-            background: #0f1e3c;
-            margin-bottom: 4px;
-          }
-          .sign-label { font-size: 10px; font-weight: 800; color: #0f1e3c; }
-          .sign-sub { font-size: 8.5px; color: #64748b; }
-          .stamp-seal {
-            width: 50px;
-            height: 50px;
-            border: 1.5px dashed #94a3b8;
-            border-radius: 50%;
-            margin: 0 auto 4px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 7.5px;
-            color: #94a3b8;
-            font-weight: 700;
-          }
-          .coe-signature {
-            font-family: 'Brush Script MT', cursive, sans-serif;
-            font-size: 15px;
-            color: #1e3a8a;
-            margin-bottom: 2px;
-          }
+
           .print-bar {
             position: fixed;
             top: 12px;
@@ -2383,13 +2439,13 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
 
                 <div>
                   <select
-                    value={newSubSession}
+                    value={newSubSession?.includes('AN') || newSubSession?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
                     onChange={(e) => {
                       const sess = e.target.value;
                       setNewSubSession(sess);
                       setNewSubTime(sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM');
                     }}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   >
                     <option value="Forenoon (FN)">Forenoon (FN)</option>
                     <option value="Afternoon (AN)">Afternoon (AN)</option>
@@ -2469,22 +2525,34 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
                               </td>
                               <td className="px-3 py-2">
                                 <select
-                                  value={editSubForm.session}
+                                  value={editSubForm.session?.includes('AN') || editSubForm.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
                                   onChange={(e) => setEditSubForm(prev => ({ ...prev, session: e.target.value }))}
-                                  className="w-full bg-white border border-blue-300 rounded px-1.5 py-1 text-xs font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
+                                  className="w-full bg-white border border-blue-300 rounded px-1.5 py-1 text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer"
                                 >
                                   <option value="Forenoon (FN)">Forenoon (FN)</option>
                                   <option value="Afternoon (AN)">Afternoon (AN)</option>
                                 </select>
                               </td>
                               <td className="px-3 py-2">
-                                <input
-                                  type="text"
-                                  value={editSubForm.time}
-                                  onChange={(e) => setEditSubForm(prev => ({ ...prev, time: e.target.value }))}
-                                  placeholder="Time (e.g. 10:00 AM - 01:00 PM)"
-                                  className="w-full bg-white border border-blue-300 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:ring-1 focus:ring-blue-500"
-                                />
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={editSubForm.time}
+                                    onChange={(e) => setEditSubForm(prev => ({ ...prev, time: e.target.value }))}
+                                    placeholder="Time (e.g. 10:00 AM - 01:00 PM)"
+                                    className="w-full bg-white border border-blue-300 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:ring-1 focus:ring-blue-500"
+                                  />
+                                  {editSubForm.time && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditSubForm(prev => ({ ...prev, time: '' }))}
+                                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
+                                      title="Delete / Clear Exam Time"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
@@ -2515,7 +2583,21 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
                                   {sub.session}
                                 </span>
                               </td>
-                              <td className="px-4 py-2 text-slate-500">{sub.time}</td>
+                              <td className="px-4 py-2 text-slate-500">
+                                <div className="flex items-center gap-1.5">
+                                  <span>{sub.time || '—'}</span>
+                                  {sub.time && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClearSubjectTime(sub.code)}
+                                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
+                                      title="Delete / Clear Exam Time"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
                               <td className="px-4 py-2 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
                                   <button
@@ -3142,105 +3224,99 @@ export default function StaffHallTicket({ staffUser, onNavigate }) {
             </div>
 
             {/* Modal Hall Ticket Body */}
-            <div className="p-6 overflow-y-auto space-y-4 bg-slate-50 text-slate-800 text-xs">
-              <div className="bg-white p-6 rounded-xl border border-slate-300 shadow-sm space-y-4">
+            <div className="p-4 sm:p-6 overflow-y-auto bg-slate-100 flex justify-center">
+              <div className="bg-white p-5 sm:p-6 border-2 border-black max-w-xl w-full text-black shadow-lg font-serif">
                 {/* College Header */}
-                <div className="flex items-center justify-between pb-3 border-b-2 border-slate-800">
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-2xl">🏛️</div>
-                  <div className="text-center flex-1">
-                    <p className="font-extrabold text-sm text-slate-900 tracking-wide">VIVEKANANDA COLLEGE OF ARTS AND SCIENCES</p>
-                    <span className="inline-block mt-1 px-3 py-0.5 bg-slate-900 text-white rounded text-[10px] font-bold">
-                      EXAMINATION HALL TICKET
-                    </span>
+                <div className="flex items-center gap-3 pb-2">
+                  <div className="w-14 h-14 shrink-0 flex items-center justify-center">
+                    <img src="/vcas-logo.png" alt="Crest Logo" className="w-14 h-14 object-contain" />
                   </div>
-                  <div className="w-16 h-20 border border-dashed border-slate-400 bg-slate-50 flex items-center justify-center text-center text-[8px] text-slate-400 font-semibold p-1">
-                    AFFIX PHOTO
-                  </div>
-                </div>
-
-                {/* Candidate Info Grid */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <div>
-                    <span className="font-bold text-slate-500">Register / Roll No:</span>
-                    <span className="ml-2 font-bold text-blue-700">{previewStudent.rollNo}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-500">Student Name:</span>
-                    <span className="ml-2 font-bold text-slate-900">{previewStudent.name}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-500">Department:</span>
-                    <span className="ml-2 text-slate-800">{previewStudent.dept || previewExam?.department}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-500">Semester:</span>
-                    <span className="ml-2 text-slate-800">Semester {previewStudent.semester || previewExam?.semester}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-500">Allocated Hall / Room:</span>
-                    <span className="ml-2 font-extrabold text-indigo-700">{previewStudent.hallNo || 'TBA'}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-500">Seat / Desk No:</span>
-                    <span className="ml-2 font-mono font-bold text-indigo-700">{previewStudent.seatNo || 'TBA'}</span>
+                  <div className="text-center flex-1 pr-14">
+                    <h3 className="font-black text-sm uppercase tracking-wide leading-tight text-black">
+                      VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
+                    </h3>
+                    <p className="text-[11px] font-semibold text-slate-900 mt-0.5">Vellalankulam, Tenkasi Dist</p>
+                    <p className="text-[9px] font-bold text-slate-800 mt-0.5">
+                      PHONE: 04636298128, 7094462393, 7094462394 &nbsp;&nbsp; EMAIL: vivekanandacas@gmail.com
+                    </p>
+                    <p className="font-extrabold text-[11px] uppercase tracking-wide mt-1.5 text-black">
+                      {(previewExam?.examName || 'MODEL SEMESTER EXAMINATION - NOVEMBER 2026').toUpperCase()}
+                    </p>
+                    <p className="font-black text-xs uppercase tracking-widest underline mt-1 text-black">
+                      HALL TICKET
+                    </p>
                   </div>
                 </div>
 
-                {/* Subjects Table */}
-                <div>
-                  <p className="font-extrabold text-[11px] text-slate-700 uppercase tracking-wide mb-1.5">Subjects to Appear:</p>
-                  <table className="w-full border-collapse border border-slate-300 text-left text-[11px]">
-                    <thead className="bg-slate-100 text-slate-700 font-bold">
-                      <tr>
-                        <th className="border border-slate-300 px-2 py-1.5">S.No</th>
-                        <th className="border border-slate-300 px-2 py-1.5">Code</th>
-                        <th className="border border-slate-300 px-2 py-1.5">Subject Title</th>
-                        <th className="border border-slate-300 px-2 py-1.5">Date</th>
-                        <th className="border border-slate-300 px-2 py-1.5">Session</th>
-                        <th className="border border-slate-300 px-2 py-1.5 text-center">Invigilator Sign</th>
+                {/* Dept / Year / Sem Meta Row */}
+                <div className="flex items-center justify-between text-[11px] font-bold py-2 px-1 text-black">
+                  <div><span>DEPARTMENT:</span> {(previewStudent.dept || previewExam?.department || 'CFS').toUpperCase()}</div>
+                  <div><span>YEAR:</span> {(() => {
+                    const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+                    const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
+                    return map[Math.ceil(s / 2)] || 'I';
+                  })()}</div>
+                  <div><span>SEMESTER:</span> {(() => {
+                    const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+                    const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+                    return map[s] || 'I';
+                  })()}</div>
+                </div>
+
+                {/* Candidate Info 2-Row Box */}
+                <table className="w-full border-collapse border border-black text-xs mb-2">
+                  <tbody>
+                    <tr className="border-b border-black">
+                      <td className="w-28 font-bold p-1.5 border-r border-black bg-slate-50">Student Name:</td>
+                      <td className="font-bold p-1.5 uppercase text-black">{previewStudent.name}</td>
+                    </tr>
+                    <tr>
+                      <td className="w-28 font-bold p-1.5 border-r border-black bg-slate-50">Register No :</td>
+                      <td className="font-bold p-1.5 font-mono text-black">{previewStudent.rollNo || previewStudent.regNo}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* Time Table Heading */}
+                <div className="text-center font-black text-xs uppercase tracking-wider underline my-1.5 text-black">
+                  TIME TABLE
+                </div>
+
+                {/* Schedule Table */}
+                <table className="w-full border-collapse border border-black text-[10.5px] text-left">
+                  <thead>
+                    <tr className="border-b border-black bg-slate-50 text-center font-bold">
+                      <th className="border border-black px-1.5 py-1 w-8">NO</th>
+                      <th className="border border-black px-1.5 py-1 w-24">DATE</th>
+                      <th className="border border-black px-1 py-1 w-12">FN<br/>AN</th>
+                      <th className="border border-black px-2 py-1">SUBJECT</th>
+                      <th className="border border-black px-1.5 py-1 w-20">Sub. Code</th>
+                      <th className="border border-black px-1.5 py-1 w-12">Sign</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {((previewStudent.subjects?.length > 0 ? previewStudent.subjects : previewExam?.commonSubjects) || subjectsSchedule).map((sub, idx) => (
+                      <tr key={sub.code || idx} className="border-b border-black">
+                        <td className="border border-black px-1.5 py-1.5 text-center font-bold">{idx + 1}</td>
+                        <td className="border border-black px-1.5 py-1.5 text-center font-bold">{sub.date || '21.10.26'}</td>
+                        <td className="border border-black px-1 py-1.5 text-center font-bold">
+                          {String(sub.session || 'FN').toUpperCase().includes('AN') ? 'AN' : 'FN'}
+                        </td>
+                        <td className="border border-black px-2 py-1.5 font-bold uppercase">{sub.name}</td>
+                        <td className="border border-black px-1.5 py-1.5 text-center font-bold">{sub.code || ''}</td>
+                        <td className="border border-black px-1 py-1.5 text-center h-7"></td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {((previewStudent.subjects?.length > 0 ? previewStudent.subjects : previewExam?.commonSubjects) || subjectsSchedule).map((sub, idx) => (
-                        <tr key={sub.code}>
-                          <td className="border border-slate-300 px-2 py-1 text-center font-semibold">{idx + 1}</td>
-                          <td className="border border-slate-300 px-2 py-1 font-bold text-blue-700">{sub.code}</td>
-                          <td className="border border-slate-300 px-2 py-1 font-medium">{sub.name}</td>
-                          <td className="border border-slate-300 px-2 py-1">{sub.date || 'TBA'}</td>
-                          <td className="border border-slate-300 px-2 py-1">{sub.session || 'FN'}</td>
-                          <td className="border border-slate-300 px-2 py-1 text-center h-8"></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Instructions */}
-                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 text-[10px] text-slate-500 leading-relaxed">
-                  <p className="font-bold text-slate-700 uppercase">Instructions:</p>
-                  <ul className="list-disc list-inside mt-0.5 space-y-0.5">
-                    {(previewExam?.instructions?.length > 0 ? previewExam.instructions : instructionsList).slice(0, 4).map((r, i) => (
-                      <li key={i}>{r}</li>
                     ))}
-                  </ul>
-                </div>
+                  </tbody>
+                </table>
 
                 {/* Signatures */}
-                <div className="pt-6 flex items-center justify-between text-center text-[10px]">
-                  <div>
-                    <div className="w-28 border-b border-slate-800 mb-1"></div>
-                    <p className="font-bold text-slate-800">Student Signature</p>
-                  </div>
-                  <div>
-                    <div className="w-16 h-16 rounded-full border border-dashed border-slate-400 mx-auto flex items-center justify-center text-[8px] text-slate-400">SEAL</div>
-                  </div>
-                  <div>
-                    <div className="h-5"></div>
-                    <div className="w-36 border-b border-slate-800 mb-1"></div>
-                    <p className="font-bold text-slate-800">Controller of Examinations</p>
-                  </div>
+                <div className="pt-8 pb-2 flex items-center justify-between text-center text-xs font-bold px-2">
+                  <div>Office</div>
+                  <div>HOD</div>
+                  <div>Principal</div>
+                  <div>MD</div>
                 </div>
-
               </div>
             </div>
           </div>

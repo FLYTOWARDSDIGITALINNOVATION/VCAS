@@ -44,7 +44,7 @@ const subjectSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    default: 'Core Theory',
+    default: 'Theory',
     trim: true
   },
   faculty: {
@@ -61,6 +61,18 @@ const subjectSchema = new mongoose.Schema({
     type: String,
     default: '3 hrs/wk',
     trim: true
+  },
+  theoryHours: {
+    type: Number,
+    default: 3
+  },
+  labHours: {
+    type: Number,
+    default: 0
+  },
+  isContinuousLab: {
+    type: Boolean,
+    default: true
   },
   prerequisite: {
     type: String,

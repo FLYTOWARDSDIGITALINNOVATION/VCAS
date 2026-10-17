@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BACKEND_URL } from '../apiConfig';
 import { 
   GraduationCap, 
@@ -28,16 +28,13 @@ const API_BASE = BACKEND_URL;
 const DEPARTMENTS = [
   'Computer Science',
   'Commerce',
-  'Business Administration (BBA)',
-  'Artificial Intelligence (AI)',
-  'Cyber Forensics & Security (CFS)',
-  'Computer Applications (BCA)',
-  'Accounts & Finance',
-  'Administrative Office',
   'Mathematics',
-  'Physics',
-  'English Literature',
-  'Economics'
+  'Business Administration (BBA)',
+  'Computer Applications (BCA)',
+  'Tamil',
+  'English',
+  'Physical Education',
+  'Office'
 ];
 
 export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
@@ -66,6 +63,20 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
   });
   const [showSignupPw, setShowSignupPw] = useState(false);
   const [showSignupCPw, setShowSignupCPw] = useState(false);
+  const [departmentsList, setDepartmentsList] = useState(DEPARTMENTS);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/departments`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.data)) {
+          const names = d.data.map(item => item.name).filter(Boolean);
+          const combined = Array.from(new Set([...DEPARTMENTS, ...names]));
+          setDepartmentsList(combined);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // ── Shared state ──────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
@@ -466,13 +477,20 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-bold text-slate-800 mb-1">Department</label>
+              <label className="block font-bold text-slate-800 mb-1">Department / Category</label>
               <select
                 value={signup.department}
-                onChange={(e) => setSignup({ ...signup, department: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSignup(prev => ({
+                    ...prev,
+                    department: val,
+                    staffRole: val === 'Office' ? 'Office Staff' : prev.staffRole
+                  }));
+                }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:outline-none"
               >
-                {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                {departmentsList.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
             <div>

@@ -75,13 +75,65 @@ const INITIAL_STAFF = [];
 
 const DEPARTMENTS = [
   'All Departments',
-  'Commerce',
   'Computer Science',
-  'English Literature',
+  'Commerce',
+  'Mathematics',
   'Business Administration (BBA)',
   'Computer Applications (BCA)',
-  'Mathematics'
+  'Tamil',
+  'English',
+  'Physical Education',
+  'Office'
 ];
+
+export const STANDARD_STAFF_CATEGORIES = [
+  { value: 'All Departments', label: 'All Staff' },
+  { value: 'Computer Science', label: '1. Computer Science' },
+  { value: 'Commerce', label: '2. Commerce' },
+  { value: 'Mathematics', label: '3. Mathematics' },
+  { value: 'Business Administration (BBA)', label: '4. BBA' },
+  { value: 'Computer Applications (BCA)', label: '5. BCA' },
+  { value: 'Tamil', label: '6. Tamil' },
+  { value: 'English', label: '7. English' },
+  { value: 'Physical Education', label: '8. Physical Education' },
+  { value: 'Office', label: '9. Office' }
+];
+
+export const isStaffInDeptCategory = (s, deptValue) => {
+  if (!s) return false;
+  if (deptValue === 'All Departments') return true;
+  const sDept = String(s.department || '').toLowerCase().trim();
+  const sRole = String(s.role || '').toLowerCase().trim();
+
+  if (deptValue === 'Office') {
+    return sRole === 'office staff' || sDept.includes('office') || sDept.includes('admin');
+  }
+  if (deptValue === 'English') {
+    return sDept.includes('english');
+  }
+  if (deptValue === 'Tamil') {
+    return sDept.includes('tamil');
+  }
+  if (deptValue === 'Physical Education') {
+    return sDept.includes('physical') || sDept.includes('sports');
+  }
+  if (deptValue === 'Business Administration (BBA)' || deptValue === 'BBA') {
+    return sDept.includes('bba') || sDept.includes('business administration');
+  }
+  if (deptValue === 'Computer Applications (BCA)' || deptValue === 'BCA') {
+    return sDept.includes('bca') || sDept.includes('computer application');
+  }
+  if (deptValue === 'Computer Science') {
+    return (sDept.includes('computer science') || sDept === 'cs') && !sDept.includes('bca') && !sDept.includes('application');
+  }
+  if (deptValue === 'Commerce') {
+    return sDept.includes('commerce') || sDept.includes('b.com') || sDept.includes('m.com');
+  }
+  if (deptValue === 'Mathematics') {
+    return sDept.includes('math');
+  }
+  return s.department === deptValue || sDept === String(deptValue).toLowerCase().trim();
+};
 
 const DESIGNATIONS = [
   'All Designations',
@@ -150,9 +202,13 @@ export default function StaffManagement({ user }) {
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
+  const [selectedRoleCategory, setSelectedRoleCategory] = useState('All Roles');
   const [selectedDesignation, setSelectedDesignation] = useState('All Designations');
   const [selectedStatus, setSelectedStatus] = useState('All Status');
   const [selectedNetSetFilter, setSelectedNetSetFilter] = useState('All');
+  const [selectedSubject, setSelectedSubject] = useState('All Subjects');
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [subjectsList, setSubjectsList] = useState([]);
 
   // Selected staff for full detailed view
   const [selectedStaffForDetails, setSelectedStaffForDetails] = useState(null);
@@ -375,6 +431,52 @@ is authorized to export or issue this credential sheet.
 
   React.useEffect(() => {
     fetchStaffList();
+
+    // Fetch real departments
+    fetch(`${API_BASE}/api/departments`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          setDepartmentsList(data.data);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch original real subjects
+    fetch(`${API_BASE}/api/subjects`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          setSubjectsList(data.data);
+        }
+      })
+      .catch(() => {});
+
+    // Also fetch classes to include any newly configured subjects
+    fetch(`${API_BASE}/api/classes`)
+      .then(res => res.json())
+      .then(data => {
+        const cls = data.classes || (Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []));
+        if (Array.isArray(cls)) {
+          setSubjectsList(prev => {
+            const seenCodes = new Set(prev.map(s => (s.code || '').toUpperCase()));
+            const merged = [...prev];
+            cls.forEach(c => {
+              const code = (c.code || c.classCode || '').toUpperCase();
+              if (code && !seenCodes.has(code)) {
+                seenCodes.add(code);
+                merged.push({
+                  code,
+                  name: c.name || c.className || code,
+                  department: c.dept || c.department || ''
+                });
+              }
+            });
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Lock background scroll when any modal is open
@@ -478,7 +580,8 @@ is authorized to export or issue this credential sheet.
       emergencyContact: '',
       netSetExamStatus: 'Not Applicable',
       netSetExamCertificate: '',
-      netSetCertificateName: ''
+      netSetCertificateName: '',
+      role: 'Staff'
     });
     setFormErrors({});
     setModalError('');
@@ -512,7 +615,8 @@ is authorized to export or issue this credential sheet.
       emergencyContact: staff.emergencyContact || '',
       netSetExamStatus: staff.netSetExamStatus || 'Not Applicable',
       netSetExamCertificate: staff.netSetExamCertificate || '',
-      netSetCertificateName: staff.netSetCertificateName || ''
+      netSetCertificateName: staff.netSetCertificateName || '',
+      role: staff.role || (staff.department === 'Office' ? 'Office Staff' : 'Staff')
     });
     setFormErrors({});
     setModalError('');
@@ -660,6 +764,69 @@ is authorized to export or issue this credential sheet.
     }
   };
 
+  // Dynamic list of categories combining standard 9 numbered categories + any dynamic departments
+  const dynamicCategories = useMemo(() => {
+    const list = [...STANDARD_STAFF_CATEGORIES];
+    const coveredValues = new Set(STANDARD_STAFF_CATEGORIES.map(c => c.value.toLowerCase()));
+
+    const isStandardCovered = (name) => {
+      const n = (name || '').toLowerCase();
+      return n.includes('computer science') || n.includes('commerce') || n.includes('math') ||
+             n.includes('bba') || n.includes('business administration') || n.includes('bca') ||
+             n.includes('computer application') || n.includes('tamil') || n.includes('english') ||
+             n.includes('physical') || n.includes('sports') || n.includes('office');
+    };
+
+    let extraIndex = 10;
+    const addedExtra = new Set();
+
+    departmentsList.forEach(d => {
+      const name = (d.name || '').trim();
+      if (name && !coveredValues.has(name.toLowerCase()) && !isStandardCovered(name) && !addedExtra.has(name.toLowerCase())) {
+        addedExtra.add(name.toLowerCase());
+        list.push({
+          value: name,
+          label: `${extraIndex}. ${name}`
+        });
+        extraIndex++;
+      }
+    });
+
+    staffList.forEach(s => {
+      const name = (s.department || '').trim();
+      if (name && !coveredValues.has(name.toLowerCase()) && !isStandardCovered(name) && !addedExtra.has(name.toLowerCase())) {
+        addedExtra.add(name.toLowerCase());
+        list.push({
+          value: name,
+          label: `${extraIndex}. ${name}`
+        });
+        extraIndex++;
+      }
+    });
+
+    return list;
+  }, [departmentsList, staffList]);
+
+  // Dynamic list of original subjects combining database subjects and assigned staff classes
+  const dynamicSubjects = useMemo(() => {
+    const map = new Map();
+    subjectsList.forEach(s => {
+      const code = (s.code || '').trim().toUpperCase();
+      if (code) map.set(code, { code, name: s.name || code });
+    });
+    staffList.forEach(s => {
+      if (Array.isArray(s.classes)) {
+        s.classes.forEach(c => {
+          const code = (c.code || '').trim().toUpperCase();
+          if (code && !map.has(code)) {
+            map.set(code, { code, name: c.name || code });
+          }
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [subjectsList, staffList]);
+
   // Filtered staff list
   const filteredStaff = useMemo(() => {
     return staffList.filter(item => {
@@ -673,16 +840,26 @@ is authorized to export or issue this credential sheet.
         String(item.designation || '').toLowerCase().includes(q)
       );
 
-      const matchesDept = selectedDept === 'All Departments' || item.department === selectedDept;
+      const matchesDept = selectedDept === 'All Departments' || isStaffInDeptCategory(item, selectedDept);
+      const matchesRole = selectedRoleCategory === 'All Roles' ||
+        (selectedRoleCategory === 'Staff' && (item.role === 'Staff' || !item.role || item.role === 'Teaching Faculty')) ||
+        item.role === selectedRoleCategory;
       const matchesDesignation = selectedDesignation === 'All Designations' || item.designation === selectedDesignation;
       const matchesStatus = selectedStatus === 'All Status' || item.status === selectedStatus;
       const matchesNetSet = selectedNetSetFilter === 'All'
         || (selectedNetSetFilter === 'Uploaded' && Boolean(item.netSetExamCertificate))
         || (selectedNetSetFilter === 'Pending' && !item.netSetExamCertificate);
 
-      return matchesSearch && matchesDept && matchesDesignation && matchesStatus && matchesNetSet;
+      const matchesSubject = selectedSubject === 'All Subjects' || (
+        Array.isArray(item.classes) && item.classes.some(c => 
+          (c.code || '').toUpperCase() === selectedSubject.toUpperCase() ||
+          (c.name || '').toLowerCase() === selectedSubject.toLowerCase()
+        )
+      ) || (item.department || '').toLowerCase().includes(selectedSubject.toLowerCase());
+
+      return matchesSearch && matchesDept && matchesRole && matchesDesignation && matchesStatus && matchesNetSet && matchesSubject;
     });
-  }, [staffList, searchQuery, selectedDept, selectedDesignation, selectedStatus, selectedNetSetFilter]);
+  }, [staffList, searchQuery, selectedDept, selectedRoleCategory, selectedDesignation, selectedStatus, selectedNetSetFilter, selectedSubject]);
 
   return (
     <>
@@ -748,21 +925,22 @@ is authorized to export or issue this credential sheet.
           </div>
 
           {/* 2. SEARCH & FILTER BAR */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs space-y-3 lg:space-y-0 lg:flex lg:items-center lg:gap-3">
-            {/* Search input */}
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col xl:flex-row xl:items-center gap-3.5">
+            {/* Search input - Prominent, Wide, Never Squished */}
+            <div className="relative flex-1 min-w-[280px] lg:min-w-[360px]">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, employee ID, email, department..."
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all"
+                className="w-full pl-10 pr-10 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all h-11"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                  title="Clear search"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -770,28 +948,45 @@ is authorized to export or issue this credential sheet.
             </div>
 
             {/* Dropdown Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-2.5">
 
               {/* Department */}
-              <div className="relative">
+              <div className="relative min-w-[150px]">
                 <select
                   value={selectedDept}
                   onChange={(e) => setSelectedDept(e.target.value)}
-                  className="w-full appearance-none bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none cursor-pointer transition-all"
+                  className="w-full appearance-none bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none cursor-pointer transition-all h-11"
                 >
-                  {DEPARTMENTS.map(d => (
+                  {dynamicDepartments.map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
                 <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
 
+              {/* Original Real Subjects Filter */}
+              <div className="relative min-w-[150px]">
+                <select
+                  value={selectedSubject}
+                  onChange={(e) => setSelectedSubject(e.target.value)}
+                  className="w-full appearance-none bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none cursor-pointer transition-all h-11"
+                >
+                  <option value="All Subjects">All Subjects</option>
+                  {dynamicSubjects.map(sub => (
+                    <option key={sub.code} value={sub.code}>
+                      {sub.code} - {sub.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
               {/* Designation */}
-              <div className="relative">
+              <div className="relative min-w-[140px]">
                 <select
                   value={selectedDesignation}
                   onChange={(e) => setSelectedDesignation(e.target.value)}
-                  className="w-full appearance-none bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none cursor-pointer transition-all"
+                  className="w-full appearance-none bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none cursor-pointer transition-all h-11"
                 >
                   {DESIGNATIONS.map(des => (
                     <option key={des} value={des}>{des}</option>
@@ -801,11 +996,11 @@ is authorized to export or issue this credential sheet.
               </div>
 
               {/* Status */}
-              <div className="relative">
+              <div className="relative min-w-[120px]">
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full appearance-none bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none cursor-pointer transition-all"
+                  className="w-full appearance-none bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none cursor-pointer transition-all h-11"
                 >
                   {STATUSES.map(s => (
                     <option key={s} value={s}>{s}</option>
@@ -815,11 +1010,11 @@ is authorized to export or issue this credential sheet.
               </div>
 
               {/* NET / SET Certificate Filter */}
-              <div className="relative">
+              <div className="relative min-w-[150px]">
                 <select
                   value={selectedNetSetFilter}
                   onChange={(e) => setSelectedNetSetFilter(e.target.value)}
-                  className="w-full appearance-none bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-semibold text-indigo-900 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none cursor-pointer transition-all"
+                  className="w-full appearance-none bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-semibold text-indigo-900 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none cursor-pointer transition-all h-11"
                 >
                   <option value="All">All NET/SET Status</option>
                   <option value="Uploaded">📜 Certificate Uploaded</option>
@@ -828,7 +1023,52 @@ is authorized to export or issue this credential sheet.
                 <ChevronDown className="w-4 h-4 text-indigo-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
 
+              {/* Role Category Filter (Image 2) */}
+              <div className="relative min-w-[150px]">
+                <select
+                  value={selectedRoleCategory}
+                  onChange={(e) => setSelectedRoleCategory(e.target.value)}
+                  className="w-full appearance-none bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-8 text-xs sm:text-sm font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none cursor-pointer transition-all h-11"
+                >
+                  <option value="All Roles">All Role Categories</option>
+                  <option value="Staff">Teaching Faculty</option>
+                  <option value="Accountant">Accountant</option>
+                  <option value="Office Staff">Office Staff</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
             </div>
+          </div>
+
+          {/* 2.1 STAFF CATEGORY SELECTION PILLS (Guaranteed 1-9 standard categories + extra DB depts) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+              Category:
+            </span>
+            {dynamicCategories.map((catItem) => {
+              const isSelected = selectedDept === catItem.value;
+              const count = catItem.value === 'All Departments'
+                ? staffList.length
+                : staffList.filter(s => isStaffInDeptCategory(s, catItem.value)).length;
+              return (
+                <button
+                  key={catItem.value}
+                  type="button"
+                  onClick={() => setSelectedDept(catItem.value)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                    isSelected 
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' 
+                      : 'bg-white text-slate-600 border border-slate-200/90 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <span>{catItem.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* 3. STAFF TABLE CARD */}
@@ -892,9 +1132,18 @@ is authorized to export or issue this credential sheet.
                           {staff.department}
                         </td>
 
-                        {/* DESIGNATION */}
-                        <td className="py-4 px-4 font-medium text-slate-600 text-xs">
-                          {staff.designation}
+                        {/* DESIGNATION & ROLE CATEGORY */}
+                        <td className="py-4 px-4 text-xs">
+                          <p className="font-semibold text-slate-800">{staff.designation}</p>
+                          <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            staff.role === 'Office Staff' 
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : staff.role === 'Accountant'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-blue-50 text-blue-700 border border-blue-200'
+                          }`}>
+                            {staff.role === 'Staff' ? 'Teaching Faculty' : (staff.role || 'Teaching Faculty')}
+                          </span>
                         </td>
 
                         {/* EMAIL */}
@@ -1258,6 +1507,26 @@ is authorized to export or issue this credential sheet.
                   </div>
 
                   <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Role Category *</label>
+                    <select
+                      value={formData.role || 'Staff'}
+                      onChange={(e) => {
+                        const r = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          role: r,
+                          department: r === 'Office Staff' ? 'Office' : prev.department
+                        }));
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    >
+                      <option value="Staff">Teaching Faculty</option>
+                      <option value="Accountant">Accountant</option>
+                      <option value="Office Staff">Office Staff</option>
+                    </select>
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Department *</label>
                     <select
                       value={formData.department}
@@ -1604,6 +1873,26 @@ is authorized to export or issue this credential sheet.
                         }`}
                     />
                     {formErrors.empId && <p className="text-[11px] text-rose-500 mt-1">{formErrors.empId}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Role Category *</label>
+                    <select
+                      value={formData.role || 'Staff'}
+                      onChange={(e) => {
+                        const r = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          role: r,
+                          department: r === 'Office Staff' ? 'Office' : prev.department
+                        }));
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    >
+                      <option value="Staff">Teaching Faculty</option>
+                      <option value="Accountant">Accountant</option>
+                      <option value="Office Staff">Office Staff</option>
+                    </select>
                   </div>
 
                   <div>

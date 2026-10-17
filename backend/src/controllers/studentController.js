@@ -209,6 +209,7 @@ exports.createStudent = async (req, res) => {
       regNo: finalRegNo,
       admNo: finalAdmNo || finalRegNo,
       rollNo: (body.rollNo || '').trim().toUpperCase(),
+      umisNumber: (body.umisNumber || body.umis || '').trim().toUpperCase(),
       year: body.year || '1st Year',
       loginId: (body.loginId || finalRegNo).trim().toUpperCase(),
       name: studentName.trim(),

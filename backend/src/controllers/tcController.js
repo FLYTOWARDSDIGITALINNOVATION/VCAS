@@ -133,6 +133,7 @@ exports.getStudentForTC = async (req, res) => {
       dateOfAdmission: student.dateOfAdmission || '',
       courseAdmitted: student.courseAdmitted || student.course || student.department || '',
       classAtLeaving: student.year ? `${student.year} (${student.sem || ''})` : (student.sem || ''),
+      umisNumber: student.umisNumber || student.umis || '',
       idMark1: student.idMark1 || '',
       idMark2: student.idMark2 || '',
       studentId: student._id

@@ -33,7 +33,7 @@ const examSchema = new mongoose.Schema({
   },
   session: {
     type: String,
-    default: 'FN (09:30 AM - 12:30 PM)',
+    default: 'Forenoon (FN)',
     trim: true
   },
   hall: {
@@ -126,6 +126,10 @@ const examHallSchema = new mongoose.Schema({
     type: String,
     default: 'Available',
     trim: true
+  },
+  allocatedSubjects: {
+    type: Array,
+    default: []
   }
 }, {
   timestamps: true,

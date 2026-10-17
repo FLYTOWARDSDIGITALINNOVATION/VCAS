@@ -42,15 +42,7 @@ const INITIAL_PROGRAMS = [];
 
 const INITIAL_SUBJECTS = [];
 
-const SUBJECT_TYPES = [
-  'All Types',
-  'Core Theory',
-  'Practical / Lab',
-  'Allied / Ancillary',
-  'Skill-Based Elective (SBE)',
-  'Non-Major Elective (NME)',
-  'Project / Dissertation'
-];
+// Subject Types are dynamically derived from real database subjects
 
 const SEMESTERS = [
   'All Semesters',
@@ -194,6 +186,17 @@ export default function CourseSubjectManagement({ user }) {
   const [selectedType, setSelectedType] = useState('All Types');
   const [selectedCredits, setSelectedCredits] = useState('ALL');
 
+  // Dynamic Subject Types from real database subjects
+  const dynamicSubjectTypes = useMemo(() => {
+    const typesSet = new Set();
+    subjectsList.forEach(s => {
+      if (s.type && String(s.type).trim()) {
+        typesSet.add(String(s.type).trim());
+      }
+    });
+    return ['All Types', ...Array.from(typesSet)];
+  }, [subjectsList]);
+
   // Modals state
   const [viewingSubject, setViewingSubject] = useState(null);
   const [viewingProgram, setViewingProgram] = useState(null);
@@ -292,10 +295,13 @@ export default function CourseSubjectManagement({ user }) {
     year: 1,
     sem: 'Sem 1',
     credits: 4,
-    type: 'Core Theory',
+    type: 'Theory',
     faculty: '',
-    ltp: '3-1-0',
-    hours: '4 hrs/wk (3L + 1T)',
+    ltp: '3-0-0',
+    theoryHours: 3,
+    labHours: 0,
+    isContinuousLab: true,
+    hours: '3 hrs/wk',
     prerequisite: 'None',
     textbooks: ''
   });
@@ -468,10 +474,13 @@ export default function CourseSubjectManagement({ user }) {
       year: initialYear,
       sem: semValue,
       credits: 4,
-      type: 'Core Theory',
+      type: 'Theory',
       faculty: deptObj?.hod || '',
-      ltp: '3-1-0',
-      hours: '4 hrs/wk (3L + 1T)',
+      ltp: '3-0-0',
+      theoryHours: 3,
+      labHours: 0,
+      isContinuousLab: true,
+      hours: '3 hrs/wk',
       prerequisite: 'None',
       textbooks: '',
       studentsEnrolled: 0
@@ -521,8 +530,11 @@ export default function CourseSubjectManagement({ user }) {
       credits: subj.credits,
       type: subj.type,
       faculty: subj.faculty,
-      ltp: subj.ltp || '3-1-0',
-      hours: subj.hours || '4 hrs/wk',
+      ltp: subj.ltp || '3-0-0',
+      theoryHours: subj.theoryHours !== undefined ? subj.theoryHours : 3,
+      labHours: subj.labHours !== undefined ? subj.labHours : (subj.type === 'Practical / Lab' ? 3 : 0),
+      isContinuousLab: true,
+      hours: subj.hours || '3 hrs/wk',
       prerequisite: subj.prerequisite || 'None',
       textbooks: subj.textbooks || '',
       studentsEnrolled: subj.studentsEnrolled || 0
@@ -543,10 +555,19 @@ export default function CourseSubjectManagement({ user }) {
     if (editingSubject) {
       // Update
       const targetId = editingSubject._id || editingSubject.id || editingSubject.code;
+      const tHours = Number(subjectForm.theoryHours) >= 0 ? Number(subjectForm.theoryHours) : 3;
+      const lHours = Number(subjectForm.labHours) >= 0 ? Number(subjectForm.labHours) : 0;
+      const computedHours = lHours > 0 ? `${tHours}h Theory + ${lHours}h Continuous Lab` : `${tHours} hrs/wk`;
+
       const updated = {
         ...editingSubject,
         ...subjectForm,
         code: subjectForm.code.trim().toUpperCase(),
+        theoryHours: tHours,
+        labHours: lHours,
+        hours: computedHours,
+        isContinuousLab: true,
+        type: lHours > 0 && (subjectForm.type === 'Core Theory' || subjectForm.type === 'Theory') ? 'Practical / Lab' : subjectForm.type,
         studentsEnrolled: Number(subjectForm.studentsEnrolled) || 0
       };
       setSubjectsList(prev => prev.map(s => (s.id === editingSubject.id || s._id === editingSubject._id) ? updated : s));
@@ -554,7 +575,7 @@ export default function CourseSubjectManagement({ user }) {
         setViewingSubject(updated);
       }
       setEditingSubject(null);
-      showToast(`Subject ${updated.code} updated successfully.`);
+      showToast(`Subject ${updated.code} updated. Hall Ticket & Timetable synchronized.`);
 
       // Sync with MongoDB backend
       fetch(`${API_BASE}/subjects/${targetId}`, {
@@ -572,11 +593,20 @@ export default function CourseSubjectManagement({ user }) {
       const semStr = (typeof subjectForm.sem === 'string' && subjectForm.sem.trim())
         ? subjectForm.sem.trim()
         : `Sem ${(Number(subjectForm.year) || 1) * 2 - 1}`;
+      const tHours = Number(subjectForm.theoryHours) >= 0 ? Number(subjectForm.theoryHours) : 3;
+      const lHours = Number(subjectForm.labHours) >= 0 ? Number(subjectForm.labHours) : 0;
+      const computedHours = lHours > 0 ? `${tHours}h Theory + ${lHours}h Continuous Lab` : `${tHours} hrs/wk`;
+
       const newSubj = {
         id: Date.now(),
         ...subjectForm,
         code: subjectForm.code.trim().toUpperCase(),
         sem: semStr,
+        theoryHours: tHours,
+        labHours: lHours,
+        hours: computedHours,
+        isContinuousLab: true,
+        type: lHours > 0 && (subjectForm.type === 'Core Theory' || subjectForm.type === 'Theory') ? 'Practical / Lab' : (subjectForm.type || 'Theory'),
         studentsEnrolled: Number(subjectForm.studentsEnrolled) || 0,
         units: [
           { unit: 'Unit 1', title: 'Foundational Principles & Core Concepts', hours: 9 },
@@ -589,7 +619,7 @@ export default function CourseSubjectManagement({ user }) {
       };
       setSubjectsList(prev => [newSubj, ...prev]);
       setIsAddSubjectOpen(false);
-      showToast(`New subject ${newSubj.code} added to catalog.`);
+      showToast(`Class & Subject ${newSubj.code} added. Weekly timetable automatically generated with continuous lab hours!`);
 
       // Sync with MongoDB backend
       fetch(`${API_BASE}/subjects`, {
@@ -830,7 +860,7 @@ export default function CourseSubjectManagement({ user }) {
 
           <button
             onClick={() => handleOpenAddSubject()}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs shadow-blue-500/20 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs shadow-blue-500/20 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Add Subject</span>
@@ -1063,8 +1093,8 @@ export default function CourseSubjectManagement({ user }) {
               </div>
             )}
 
-            {/* Subject Type Filter */}
-            {activeTab === 'subjects' && (
+            {/* Subject Type Filter - Only shown when multiple distinct types exist */}
+            {activeTab === 'subjects' && dynamicSubjectTypes.length > 2 && (
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Subject Type</label>
                 <select
@@ -1072,7 +1102,7 @@ export default function CourseSubjectManagement({ user }) {
                   onChange={(e) => setSelectedType(e.target.value)}
                   className="w-full bg-slate-50/80 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                 >
-                  {SUBJECT_TYPES.map(t => (
+                  {dynamicSubjectTypes.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
@@ -1162,7 +1192,7 @@ export default function CourseSubjectManagement({ user }) {
                         {/* Type Badge */}
                         <td className="py-4 px-4">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${
-                            subj.type === 'Core Theory'
+                            subj.type === 'Core Theory' || subj.type === 'Theory'
                               ? 'bg-blue-50 text-blue-700 border-blue-200'
                               : subj.type === 'Practical / Lab'
                               ? 'bg-purple-50 text-purple-700 border-purple-200'
@@ -1323,7 +1353,7 @@ export default function CourseSubjectManagement({ user }) {
                         {subj.code}
                       </span>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${
-                        subj.type === 'Core Theory' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
+                        (subj.type === 'Core Theory' || subj.type === 'Theory') ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
                       }`}>
                         {subj.type}
                       </span>
@@ -1993,21 +2023,100 @@ export default function CourseSubjectManagement({ user }) {
                 </div>
               </div>
 
+              {/* Separate Theory & Lab Hours (Continuous Lab) */}
+              <div className="p-3.5 bg-purple-50/50 rounded-2xl border border-purple-200/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Teaching Hours Allocation (Separate Theory &amp; Lab) *
+                  </label>
+                  <span className="text-[11px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                    Continuous Lab Block Enabled
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Theory Hours (per week) *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={subjectForm.theoryHours}
+                      onChange={(e) => {
+                        const th = Number(e.target.value);
+                        setSubjectForm(prev => ({
+                          ...prev,
+                          theoryHours: th,
+                          ltp: `${th}-0-${prev.labHours || 0}`
+                        }));
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-white border border-purple-200 rounded-xl text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Lab Hours (per week) *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={subjectForm.labHours}
+                      onChange={(e) => {
+                        const lh = Number(e.target.value);
+                        setSubjectForm(prev => ({
+                          ...prev,
+                          labHours: lh,
+                          type: lh > 0 ? 'Practical / Lab' : prev.type,
+                          ltp: `${prev.theoryHours || 3}-0-${lh}`
+                        }));
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-white border border-purple-200 rounded-xl text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {Number(subjectForm.labHours) > 0 && (
+                  <div className="p-2.5 bg-white rounded-xl border border-purple-200 text-xs text-purple-900 font-medium flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>
+                      <strong>⚡ Continuous Lab:</strong> The <strong>{subjectForm.labHours} lab hours</strong> will be allocated as a single continuous block in timetable scheduling (e.g. 3 continuous hours without breaks).
+                    </span>
+                  </div>
+                )}
+
+                <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 font-medium flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>📅 Automatic Timetable Generation:</strong> Setting hours for this subject/class automatically generates the weekly timetable. Theory hours are distributed across days, and lab hours (e.g. 3 hrs) are scheduled as continuous, uninterrupted periods.
+                  </span>
+                </div>
+              </div>
+
               {/* Type, LTP & Faculty */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Subject Type</label>
-                  <select
+                  <input
+                    type="text"
+                    list="availableSubjectTypesList"
                     value={subjectForm.type}
                     onChange={(e) => setSubjectForm({ ...subjectForm, type: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
-                  >
-                    <option value="Core Theory">Core Theory</option>
-                    <option value="Practical / Lab">Practical / Lab</option>
-                    <option value="Professional Elective">Professional Elective</option>
-                    <option value="Open Elective">Open Elective</option>
-                    <option value="Capstone / Project">Capstone / Project</option>
-                  </select>
+                    placeholder="e.g. Theory"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  />
+                  <datalist id="availableSubjectTypesList">
+                    {dynamicSubjectTypes.filter(t => t !== 'All Types').map(t => (
+                      <option key={t} value={t} />
+                    ))}
+                    <option value="Theory" />
+                    <option value="Practical / Lab" />
+                  </datalist>
                 </div>
 
                 <div>
@@ -2016,7 +2125,7 @@ export default function CourseSubjectManagement({ user }) {
                     type="text"
                     value={subjectForm.ltp}
                     onChange={(e) => setSubjectForm({ ...subjectForm, ltp: e.target.value })}
-                    placeholder="e.g. 3-1-0"
+                    placeholder="e.g. 3-0-3"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none font-mono"
                   />
                 </div>

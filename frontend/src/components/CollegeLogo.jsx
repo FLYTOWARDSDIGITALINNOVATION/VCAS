@@ -42,7 +42,7 @@ export default function CollegeLogo({
       {showText && (
         <div className={`leading-tight min-w-0 flex-1 ${textClassName}`}>
           <h1 className="font-extrabold tracking-tight text-slate-900 text-sm truncate leading-snug">
-            Vivekanandha College
+            Vivekananda College
           </h1>
           <div className="flex items-center gap-2 mt-1">
             <span 

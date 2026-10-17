@@ -1409,17 +1409,6 @@ export default function AssignmentManagement({ user }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleAdminImportClass}
-                    disabled={isUpdatingAdminSubs}
-                    className="px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    title="Import all registered students from the corresponding class"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingAdminSubs ? 'animate-spin' : ''}`} />
-                    <span>Sync Class Roster</span>
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => setShowAdminAddStudentForm(!showAdminAddStudentForm)}
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                   >

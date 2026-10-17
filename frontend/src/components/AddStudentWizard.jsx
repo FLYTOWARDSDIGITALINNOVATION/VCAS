@@ -762,21 +762,6 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-semibold focus:outline-none"
                 />
               </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Fee Status</label>
-                <select
-                  name="feeStatus"
-                  value={formData.feeStatus}
-                  onChange={handleChange}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none"
-                >
-                  <option value="">Select Fee Status</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Paid">Paid</option>
-                  <option value="Partial">Partial</option>
-                  <option value="Overdue">Overdue</option>
-                </select>
-              </div>
             </div>
           </div>
 

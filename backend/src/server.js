@@ -111,7 +111,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: 'Internal Server Error', error: err.message });
 });
 
-app.listen(PORT, () => {
+// Process-level error protection to prevent crashes from unhandled network/DNS drops
+process.on('uncaughtException', (err) => {
+  console.error('[Process Uncaught Exception]:', err.message);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Process Unhandled Rejection]:', reason);
+});
+
+const server = app.listen(PORT, () => {
   console.log(`=================================================`);
   console.log(`🚀 VCAS Backend Server running on port ${PORT}`);
   console.log(`🌐 Health:        http://localhost:${PORT}/api/health`);
@@ -126,5 +135,12 @@ app.listen(PORT, () => {
   console.log(`🏖️ Leave:         http://localhost:${PORT}/api/leave`);
   console.log(`=================================================`);
 });
-// Nodemon fresh 1792055480688
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is currently in use. Attempting graceful recovery...`);
+  } else {
+    console.error('Server listener error:', err);
+  }
+});
 

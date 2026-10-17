@@ -258,7 +258,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       // Process classes / active subjects
       const rawClassesList = classesData?.classes || (Array.isArray(classesData) ? classesData : []);
       const classesList = rawClassesList.filter(c => c.code && c.code.toUpperCase() !== 'SF76');
-      const totalCoursesCount = classesList.length > 0 ? classesList.length : 2;
+      const totalCoursesCount = classesList.length;
 
       // Process real students strictly from student directory (do not inject phantom seed class enrollments)
       const rawStudentsList = studentsData?.data || (Array.isArray(studentsData) ? studentsData : []);
@@ -506,10 +506,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       const rawSubjects = Array.isArray(subjectsData?.data) ? subjectsData.data : (Array.isArray(subjectsData) ? subjectsData : []);
       const validSubjects = rawSubjects.filter(s => s.code && !['SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()));
 
-      const subjectAttendance = (validSubjects.length > 0 ? validSubjects.slice(0, 4) : [
-        { code: 'CS2001', name: 'Cloud Computing' },
-        { code: 'CS2005', name: 'Database Management Systems (DBMS)' }
-      ]).map((item, idx) => {
+      const subjectAttendance = validSubjects.slice(0, 4).map((item, idx) => {
         const pcts = [92, 88, 95, 84];
         const pct = pcts[idx % pcts.length];
         return {
@@ -830,8 +827,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     { 
       title: 'TOTAL COURSES', 
       value: String(dashboardStats.totalCourses), 
-      change: 'CS2001 & CS2005 Active', 
-      isUp: true, 
+      change: dashboardStats.totalCourses > 0 ? `${dashboardStats.totalCourses} Active Courses` : 'No courses added', 
+      isUp: dashboardStats.totalCourses > 0, 
       icon: BookOpen, 
       bg: 'bg-indigo-500', 
       textColor: 'text-indigo-600', 
@@ -1391,7 +1388,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                   title="Refresh Dashboard Real Data"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${dashboardStats.loading ? 'animate-spin' : ''}`} />
-                  <span>{dashboardStats.loading ? 'Syncing...' : 'Sync Live Data'}</span>
+                  <span>{dashboardStats.loading ? 'Refreshing...' : 'Refresh'}</span>
                 </button>
               </div>
             </div>

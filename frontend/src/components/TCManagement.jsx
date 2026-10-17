@@ -22,6 +22,7 @@ export default function TCManagement({ user }) {
   const [formData, setFormData] = useState({
     regNo: '',
     tcNumber: '',
+    umisNumber: '',
     studentName: '',
     photo: '',
     gender: 'Male',
@@ -207,6 +208,7 @@ export default function TCManagement({ user }) {
         setFormData(prev => ({
           ...prev,
           regNo: st.regNo || regToQuery.toUpperCase(),
+          umisNumber: st.umisNumber || st.umis || prev.umisNumber || '',
           studentName: st.studentName || prev.studentName,
           gender: st.gender || prev.gender,
           dob: st.dob || prev.dob,
@@ -679,7 +681,7 @@ export default function TCManagement({ user }) {
                 </h4>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
                 
                 {/* 1. Register Number */}
                 <div>
@@ -700,6 +702,20 @@ export default function TCManagement({ user }) {
                   {validationErrors.regNo && (
                     <p className="text-[11px] text-rose-500 font-semibold mt-1">{validationErrors.regNo}</p>
                   )}
+                </div>
+
+                {/* 1b. UMIS Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    UMIS Number (University MIS)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.umisNumber}
+                    onChange={(e) => handleChange('umisNumber', e.target.value.toUpperCase())}
+                    placeholder="e.g. UMIS/2026/08912"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold font-mono text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
                 </div>
 
                 {/* 2. TC Number */}

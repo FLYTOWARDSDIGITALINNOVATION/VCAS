@@ -1,6 +1,8 @@
 const HallTicket = require('../models/HallTicket');
 const Class = require('../models/Class');
 const Student = require('../models/Student');
+const Department = require('../models/Department');
+const Course = require('../models/Course');
 
 // Helper: Normalize & deduplicate subjects array
 const deduplicateSubjects = (subjects = []) => {
@@ -79,20 +81,37 @@ const deduplicateStudents = (students = [], defaultSubjects = []) => {
 // @route   GET /api/hall-tickets/meta
 exports.getHallTicketMeta = async (req, res) => {
   try {
-    const classes = await Class.find({}, 'dept semester section code name students');
-    const depts = new Set(['Computer Science', 'Information Technology', 'Commerce', 'Mathematics']);
+    const depts = new Set();
     const semesters = new Set([1, 2, 3, 4, 5, 6, 7, 8]);
     const sections = new Set(['A', 'B', 'C', 'All']);
 
-    classes.forEach(c => {
-      if (c.dept) depts.add(c.dept);
-      if (c.semester) semesters.add(Number(c.semester));
-      if (c.section) sections.add(c.section);
-    });
+    // Fetch ONLY official departments added by Admin in Department collection
+    try {
+      const dbDepts = await Department.find({}, 'name code');
+      dbDepts.forEach(d => {
+        if (d.name && d.name.trim()) depts.add(d.name.trim());
+      });
+    } catch (e) {
+      console.warn('Could not fetch Department collection:', e.message);
+    }
+
+    // Fallback only if no departments exist in database
+    if (depts.size === 0) {
+      depts.add('Computer Science');
+    }
+
+    // Fetch classes for semesters and sections only (do NOT pull unverified depts)
+    try {
+      const classes = await Class.find({}, 'semester section');
+      classes.forEach(c => {
+        if (c.semester) semesters.add(Number(c.semester));
+        if (c.section && c.section.trim()) sections.add(c.section.trim());
+      });
+    } catch (_) {}
 
     res.status(200).json({
       success: true,
-      departments: Array.from(depts),
+      departments: Array.from(depts).sort((a, b) => a.localeCompare(b)),
       semesters: Array.from(semesters).sort((a, b) => a - b),
       sections: Array.from(sections)
     });
@@ -240,12 +259,18 @@ exports.getEligibleStudents = async (req, res) => {
 
     // Also include students registered in the main Student collection and enrich feeStatus & attendance
     try {
-      const stuFilter = {};
+      let stuFilter = {};
       if (deptRegex) {
-        stuFilter.$or = [
-          { department: deptRegex },
-          { course: deptRegex }
-        ];
+        stuFilter = {
+          $or: [
+            { department: deptRegex },
+            { course: deptRegex },
+            { courseAdmitted: deptRegex },
+            { department: 'General' },
+            { department: '' },
+            { department: { $exists: false } }
+          ]
+        };
       }
       const registeredStudents = await Student.find(stuFilter);
       registeredStudents.forEach(st => {
@@ -256,7 +281,7 @@ exports.getEligibleStudents = async (req, res) => {
             regNo: st.regNo || rollNo,
             name: (st.name || '').trim(),
             dept: st.department || department || 'Computer Science',
-            semester: st.sem ? parseInt(st.sem) || 1 : 1,
+            semester: st.sem ? parseInt(st.sem) || 1 : (st.semester ? parseInt(st.semester) || 1 : 1),
             section: st.section || 'A',
             feeStatus: st.feeStatus || 'Pending',
             attendance: st.attendance !== undefined ? st.attendance : 85,

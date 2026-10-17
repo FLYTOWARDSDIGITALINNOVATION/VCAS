@@ -11,16 +11,13 @@ import {
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const SLOT_TIMES = [
-  { slot: 1, time: '8:30 – 9:20 AM' },
-  { slot: 2, time: '9:20 – 10:10 AM' },
-  { slot: 3, time: '10:10 – 11:00 AM' },
-  { slot: 'B', time: '11:00 – 11:15 AM', isBreak: true, label: 'Break' },
-  { slot: 4, time: '11:15 AM – 12:05 PM' },
-  { slot: 5, time: '12:05 – 12:55 PM' },
-  { slot: 'L', time: '12:55 – 1:45 PM', isBreak: true, label: 'Lunch' },
-  { slot: 6, time: '1:45 – 2:35 PM' },
-  { slot: 7, time: '2:35 – 3:25 PM' },
-  { slot: 8, time: '3:25 – 4:15 PM' },
+  { slot: 1, time: '09:30 – 10:30 AM' },
+  { slot: 2, time: '10:30 – 11:30 AM' },
+  { slot: 'B', time: '11:30 – 11:45 AM', isBreak: true, label: 'Break' },
+  { slot: 3, time: '11:45 AM – 12:45 PM' },
+  { slot: 'L', time: '12:45 – 01:30 PM', isBreak: true, label: 'Lunch' },
+  { slot: 4, time: '01:30 – 02:30 PM' },
+  { slot: 5, time: '02:30 – 03:30 PM' },
 ];
 
 const COLOR_MAP = {
@@ -73,6 +70,32 @@ export default function StaffTimetable({ staffUser }) {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Derive real-time added venues from classes & localStorage
+  const allVenues = useMemo(() => {
+    const set = new Set();
+    classes.forEach(c => {
+      if (c.room && typeof c.room === 'string' && c.room.trim()) set.add(c.room.trim());
+    });
+    try {
+      const custom = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
+      if (Array.isArray(custom)) {
+        custom.forEach(v => {
+          if (v && typeof v === 'string' && v.trim()) set.add(v.trim());
+        });
+      }
+    } catch (e) {}
+    try {
+      const halls = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
+      if (Array.isArray(halls)) {
+        halls.forEach(h => {
+          const name = typeof h === 'string' ? h : (h.name || h.room || h.hallName);
+          if (name && typeof name === 'string' && name.trim()) set.add(name.trim());
+        });
+      }
+    } catch (e) {}
+    return Array.from(set);
+  }, [classes]);
+
   // Edit / Assign Slot Modal State
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
   const [isSavingSlot, setIsSavingSlot] = useState(false);
@@ -82,11 +105,14 @@ export default function StaffTimetable({ staffUser }) {
   const [slotForm, setSlotForm] = useState({
     day: 'Monday',
     slot: 1,
+    typedPeriods: '1, 2, 3',
     code: '',
     name: '',
     room: '',
     type: 'theory',
-    color: 'blue'
+    color: 'blue',
+    isContinuousLab: false,
+    continuousHours: 3
   });
 
   const showToast = (msg) => {
@@ -130,40 +156,65 @@ export default function StaffTimetable({ staffUser }) {
     const existing = schedule[day]?.[String(slot)] || null;
 
     if (existing) {
+      // Find all periods on this day assigned to this same subject
+      const matching = Object.keys(schedule[day] || {})
+        .filter(k => schedule[day][k]?.code === existing.code)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+      const periodStr = matching.length > 0 ? matching.join(', ') : String(slot);
+
       setSlotForm({
         day,
         slot: Number(slot),
+        typedPeriods: periodStr,
         code: existing.code || '',
         name: existing.name || '',
         room: existing.room || '',
         type: (existing.type || 'theory').toLowerCase(),
-        color: (existing.color || 'blue').toLowerCase()
+        color: (existing.color || (existing.type === 'lab' ? 'emerald' : 'blue')).toLowerCase(),
+        isContinuousLab: Boolean(existing.isContinuousLab || existing.type === 'lab'),
+        continuousHours: matching.length > 0 ? matching.length : (Number(existing.labHours) || 3)
       });
     } else {
       // Default to first class if available
       const firstClass = classes[0] || null;
+      const isLab = Boolean(firstClass && (firstClass.labHours > 0 || firstClass.type === 'lab' || firstClass.name?.toLowerCase().includes('lab')));
       setSlotForm({
         day,
         slot: Number(slot),
+        typedPeriods: '1, 2, 3',
         code: firstClass ? firstClass.code : '',
         name: firstClass ? firstClass.name : '',
-        room: firstClass ? (firstClass.room || 'LH-101') : 'LH-101',
-        type: 'theory',
-        color: 'blue'
+        room: firstClass?.room || (isLab ? 'Computer Lab 1' : (allVenues[0] || '')),
+        type: isLab ? 'lab' : 'theory',
+        color: isLab ? 'emerald' : 'blue',
+        isContinuousLab: isLab,
+        continuousHours: firstClass?.labHours || 3
       });
     }
     setIsSlotModalOpen(true);
   };
 
-  // When user picks a class from dropdown, auto-fill code, name, room
+  // When user picks a class from dropdown, auto-fill code, name, room, and continuous lab hours
   const handleSelectClass = (classCode) => {
     const selected = classes.find(c => c.code === classCode);
     if (selected) {
+      const isLab = Boolean(selected.labHours > 0 || selected.type === 'lab' || selected.name?.toLowerCase().includes('lab'));
+      const hrs = Number(selected.theoryHours || selected.labHours) || 3;
+      const defaultSlots = [];
+      for (let i = 1; i <= Math.min(8, hrs); i++) defaultSlots.push(i);
+
       setSlotForm(prev => ({
         ...prev,
         code: selected.code,
         name: selected.name,
-        room: selected.room || prev.room || 'LH-101'
+        room: selected.room || prev.room || (isLab ? 'Computer Lab 1' : (allVenues[0] || '')),
+        type: isLab ? 'lab' : prev.type,
+        color: isLab ? 'emerald' : prev.color,
+        isContinuousLab: isLab ? true : prev.isContinuousLab,
+        continuousHours: hrs,
+        typedPeriods: defaultSlots.join(', ')
       }));
     } else {
       setSlotForm(prev => ({ ...prev, code: classCode }));
@@ -182,15 +233,48 @@ export default function StaffTimetable({ staffUser }) {
 
     try {
       setIsSavingSlot(true);
+      const isLabContinuous = Boolean(slotForm.type === 'lab' && slotForm.isContinuousLab);
+
+      // Parse continuous periods from typedPeriods string (e.g. "1, 2, 3" or "1-3" or "1,2,3")
+      let parsedPeriods = [];
+      if (slotForm.typedPeriods && slotForm.typedPeriods.trim()) {
+        const parts = slotForm.typedPeriods.split(/[,\s]+/);
+        parts.forEach(part => {
+          if (part.includes('-')) {
+            const [start, end] = part.split('-').map(Number);
+            if (!isNaN(start) && !isNaN(end)) {
+              for (let p = Math.min(start, end); p <= Math.max(start, end); p++) {
+                if (p >= 1 && p <= 8) parsedPeriods.push(p);
+              }
+            }
+          } else {
+            const p = Number(part);
+            if (!isNaN(p) && p >= 1 && p <= 8) parsedPeriods.push(p);
+          }
+        });
+      }
+
+      if (parsedPeriods.length === 0) {
+        parsedPeriods = [Number(slotForm.slot) || 1];
+      }
+
+      // Deduplicate and sort periods
+      parsedPeriods = Array.from(new Set(parsedPeriods)).sort((a, b) => a - b);
+
       const payload = {
         day: slotForm.day,
-        slot: Number(slotForm.slot),
+        slot: parsedPeriods[0] || Number(slotForm.slot) || 1,
         slotData: {
           code: slotForm.code.trim().toUpperCase(),
           name: slotForm.name.trim(),
           room: (slotForm.room || '').trim(),
           type: slotForm.type,
-          color: slotForm.color
+          color: slotForm.type === 'lab' ? 'emerald' : slotForm.color,
+          isContinuousLab: isLabContinuous,
+          labHours: parsedPeriods.length,
+          continuousSlots: parsedPeriods,
+          periods: parsedPeriods,
+          clearOtherDays: true
         }
       };
 
@@ -206,7 +290,21 @@ export default function StaffTimetable({ staffUser }) {
         return;
       }
 
-      showToast(`Assigned ${payload.slotData.code} to Period ${slotForm.slot} on ${slotForm.day}!`);
+      if (payload.slotData.room) {
+        try {
+          const custom = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
+          if (!custom.includes(payload.slotData.room)) {
+            custom.push(payload.slotData.room);
+            localStorage.setItem('vcas_custom_venues', JSON.stringify(custom));
+          }
+        } catch (_) {}
+      }
+
+      const slotMsg = continuousSlots.length > 1
+        ? `Assigned ${payload.slotData.code} to Continuous Lab Periods ${continuousSlots.join(', ')} on ${slotForm.day} (${continuousSlots.length} Continuous Hours)!`
+        : `Assigned ${payload.slotData.code} to Period ${slotForm.slot} on ${slotForm.day}!`;
+
+      showToast(slotMsg);
       setIsSlotModalOpen(false);
       if (data.schedule) setSchedule(data.schedule);
       fetchData();
@@ -479,7 +577,7 @@ export default function StaffTimetable({ staffUser }) {
 
                   <div className="mt-2 pt-2 border-t border-black/5 flex items-center justify-between text-[11px] opacity-85 font-medium">
                     <span className="flex items-center gap-1">
-                      <Building2 className="w-3 h-3" /> {cls.room || 'LH-101'}
+                      <Building2 className="w-3 h-3" /> {cls.room || 'Classroom'}
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" /> {slotItem.time}
@@ -627,7 +725,7 @@ export default function StaffTimetable({ staffUser }) {
             )}
 
             <form onSubmit={handleSaveSlot} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Day</label>
                   <select
@@ -642,17 +740,59 @@ export default function StaffTimetable({ staffUser }) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Period Slot</label>
-                  <select
-                    value={slotForm.slot}
-                    onChange={(e) => setSlotForm({ ...slotForm, slot: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
-                      <option key={s} value={s}>Period {s}</option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Continuous Periods <span className="text-[10px] text-blue-600 font-normal">(e.g. 1, 2, 3)</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={slotForm.typedPeriods}
+                    onChange={(e) => setSlotForm({ ...slotForm, typedPeriods: e.target.value })}
+                    placeholder="e.g. 1, 2, 3"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                  />
                 </div>
+              </div>
+
+              {/* Quick Select Period Pills */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">
+                  Quick Select Periods on {slotForm.day}:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
+                    const currentParts = (slotForm.typedPeriods || '')
+                      .split(/[,\s-]+/)
+                      .map(Number)
+                      .filter(Boolean);
+                    const isSelected = currentParts.includes(p);
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          let next;
+                          if (isSelected) {
+                            next = currentParts.filter(x => x !== p);
+                          } else {
+                            next = [...currentParts, p].sort((a, b) => a - b);
+                          }
+                          setSlotForm({ ...slotForm, typedPeriods: next.join(', ') || String(p) });
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        P{p}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  💡 Periods are scheduled continuously (1, 2, 3..) on {slotForm.day} and not scattered across other days.
+                </p>
               </div>
 
               {/* Class Quick Selection */}
@@ -692,11 +832,32 @@ export default function StaffTimetable({ staffUser }) {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Classroom / Lab Venue
-                    <span className="ml-1 text-[11px] font-normal text-slate-400">— Type venue</span>
+                    <span className="ml-1 text-[11px] font-normal text-blue-600">(Dropdown Option)</span>
                   </label>
+                  <select
+                    value={allVenues.includes(slotForm.room) ? slotForm.room : (slotForm.room ? '__custom__' : (allVenues[0] || ''))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val !== '__custom__') {
+                        const isLab = val.toLowerCase().includes('lab');
+                        setSlotForm(prev => ({
+                          ...prev,
+                          room: val,
+                          type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
+                        }));
+                      }
+                    }}
+                    className="w-full bg-blue-50/60 border border-blue-200 rounded-xl px-3 py-2 text-xs font-bold text-blue-900 focus:outline-none focus:border-blue-600 mb-1.5 cursor-pointer"
+                  >
+                    <option value="">-- Choose Added Venue --</option>
+                    {allVenues.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                    <option value="__custom__">-- Type Custom Venue Below --</option>
+                  </select>
                   <input
                     type="text"
-                    placeholder="e.g. Room 102, LH-1, Lab 2"
+                    placeholder="Or type custom classroom / lab venue"
                     value={slotForm.room}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -707,7 +868,7 @@ export default function StaffTimetable({ staffUser }) {
                         type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
                       }));
                     }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 transition-all"
                   />
                 </div>
               </div>
@@ -753,6 +914,46 @@ export default function StaffTimetable({ staffUser }) {
                   </select>
                 </div>
               </div>
+
+              {/* Continuous Lab Hours Block Config (if lab type) */}
+              {slotForm.type === 'lab' && (
+                <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-extrabold text-emerald-950">
+                      <input
+                        type="checkbox"
+                        checked={slotForm.isContinuousLab}
+                        onChange={(e) => setSlotForm({ ...slotForm, isContinuousLab: e.target.checked })}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                      />
+                      <span>Continuous Lab Hours Block</span>
+                    </label>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900">
+                      Lab Hours Continuous
+                    </span>
+                  </div>
+
+                  {slotForm.isContinuousLab && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="w-1/2">
+                        <label className="block text-[11px] font-bold text-emerald-800 mb-0.5">Continuous Hours (e.g. 3)</label>
+                        <select
+                          value={slotForm.continuousHours}
+                          onChange={(e) => setSlotForm({ ...slotForm, continuousHours: Number(e.target.value) })}
+                          className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-1.5 text-xs font-black text-emerald-950 focus:outline-none focus:border-emerald-600"
+                        >
+                          <option value={2}>2 Continuous Hours (2 Periods)</option>
+                          <option value={3}>3 Continuous Hours (3 Periods)</option>
+                          <option value={4}>4 Continuous Hours (4 Periods)</option>
+                        </select>
+                      </div>
+                      <div className="w-1/2 text-[11px] font-bold text-emerald-900 bg-emerald-100/60 p-2 rounded-xl border border-emerald-200">
+                        ⚡ Will occupy Period {slotForm.slot} to Period {Math.min(5, Number(slotForm.slot) + Number(slotForm.continuousHours) - 1)} consecutively.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center gap-3 pt-2">
                 {schedule[slotForm.day]?.[String(slotForm.slot)] && (

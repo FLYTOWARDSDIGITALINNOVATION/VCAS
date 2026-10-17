@@ -179,17 +179,6 @@ export default function StaffHome({ staffUser, onNavigate }) {
             Welcome back, {staffUser?.name || 'Faculty Member'}. Here is your live teaching schedule and institutional overview today.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchStaffData}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-all disabled:opacity-60 cursor-pointer"
-            title="Refresh Live Data"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>{refreshing ? 'Syncing...' : 'Sync Live Data'}</span>
-          </button>
-        </div>
       </div>
 
       {/* Light Banner Matching Super Admin banner style in Dashboard.jsx */}

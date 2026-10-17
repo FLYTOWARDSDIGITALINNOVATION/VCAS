@@ -31,7 +31,8 @@ import {
   Check,
   Building2,
   Eye,
-  EyeOff
+  EyeOff,
+  CreditCard
 } from 'lucide-react';
 import CollegeLogo from '../CollegeLogo';
 
@@ -268,6 +269,14 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
   const [experienceCertificatesDoc, setExperienceCertificatesDoc] = useState(staffUser?.experienceCertificatesDoc || '');
   const [expCertName, setExpCertName] = useState('');
 
+  // Statutory & Bank Account Details
+  const [aadhaar, setAadhaar] = useState(staffUser?.aadhaar || '');
+  const [pan, setPan] = useState(staffUser?.pan || '');
+  const [bankAccountNo, setBankAccountNo] = useState(staffUser?.bankAccountNo || '');
+  const [bankName, setBankName] = useState(staffUser?.bankName || '');
+  const [ifscCode, setIfscCode] = useState(staffUser?.ifscCode || '');
+  const [bankBranch, setBankBranch] = useState(staffUser?.bankBranch || '');
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -418,7 +427,13 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
         netSetExamCertificate: netSetExamCertificate || undefined,
         netSetCertificateName: netSetCertificateName || undefined,
         educationalCertificatesDoc: educationalCertificatesDoc || undefined,
-        experienceCertificatesDoc: experienceCertificatesDoc || undefined,
+        // Statutory & Bank Details
+        aadhaar: aadhaar.trim(),
+        pan: pan.trim().toUpperCase(),
+        bankAccountNo: bankAccountNo.trim(),
+        bankName: bankName.trim(),
+        ifscCode: ifscCode.trim().toUpperCase(),
+        bankBranch: bankBranch.trim(),
 
         newPassword: newPassword.trim() ? newPassword.trim() : undefined
       };
@@ -1600,6 +1615,88 @@ export default function StaffFirstTimeSetup({ staffUser, onComplete, onLogout })
                       />
                     </label>
                   )}
+                </div>
+              </div>
+
+              {/* Statutory & Bank Account Details */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-700/80 space-y-4 mt-6">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-white">Statutory &amp; Bank Account Details</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Aadhaar Card Number
+                    </label>
+                    <input
+                      type="text"
+                      value={aadhaar}
+                      onChange={(e) => setAadhaar(e.target.value)}
+                      placeholder="e.g. 1234 5678 9012"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      PAN Card Number
+                    </label>
+                    <input
+                      type="text"
+                      value={pan}
+                      onChange={(e) => setPan(e.target.value.toUpperCase())}
+                      placeholder="e.g. ABCDE1234F"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono uppercase focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Bank Account Number
+                    </label>
+                    <input
+                      type="text"
+                      value={bankAccountNo}
+                      onChange={(e) => setBankAccountNo(e.target.value)}
+                      placeholder="e.g. 987654321012"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Bank Name
+                    </label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder="e.g. State Bank of India"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      IFSC Code
+                    </label>
+                    <input
+                      type="text"
+                      value={ifscCode}
+                      onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. SBIN0001234"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono uppercase focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Branch Name
+                    </label>
+                    <input
+                      type="text"
+                      value={bankBranch}
+                      onChange={(e) => setBankBranch(e.target.value)}
+                      placeholder="e.g. Tenkasi Main Branch"
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 

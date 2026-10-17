@@ -1,6 +1,8 @@
 const Class = require('../models/Class');
 const Staff = require('../models/Staff');
 const Student = require('../models/Student');
+const { autoGenerateExamAndHallTickets } = require('./courseSubjectController');
+const { autoGenerateTimetableSchedule } = require('./timetableController');
 
 // Helper to find a class by ID or Code
 async function findClassByIdOrCode(identifier, staffId = null) {
@@ -147,36 +149,83 @@ exports.addClass = async (req, res) => {
       });
     }
 
-    // Check if class with this code already exists
-    const existing = await Class.findOne({ code: finalCode });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: `Class with code "${finalCode}" already exists.`
-      });
+    // Lookup staff to get department and name if missing
+    let staff = await Staff.findOne({
+      $or: [
+        { staffId: finalStaffId },
+        { name: new RegExp('^' + finalStaffId + '$', 'i') }
+      ]
+    });
+    if (!staff && staffName) {
+      staff = await Staff.findOne({ name: new RegExp('^' + staffName.trim() + '$', 'i') });
     }
 
-    // Lookup staff to get department and name if missing
-    const staff = await Staff.findOne({ staffId: finalStaffId });
-    const finalStaffName = staffName || (staff ? staff.name : '');
+    const resolvedStaffId = staff ? staff.staffId : finalStaffId;
+    const finalStaffName = staffName || (staff ? staff.name : resolvedStaffId);
     const finalDept = dept || (staff ? staff.department : '');
 
-    const newClass = new Class({
-      code: finalCode,
-      name: name.trim(),
-      dept: finalDept,
-      semester: Number(semester),
-      year: Number(year),
-      section: (section || 'A').trim().toUpperCase(),
-      credits: Number(credits) || 3,
-      staffId: finalStaffId,
-      staffName: finalStaffName,
-      room: (room || '').trim(),
-      academicYear: (academicYear || '2025-2026').trim(),
-      students: Array.isArray(students) ? students : []
-    });
+    const finalTheoryHours = Number(req.body.theoryHours) >= 0 ? Number(req.body.theoryHours) : 3;
+    const finalLabHours = Number(req.body.labHours) >= 0 ? Number(req.body.labHours) : 0;
+    const finalIsContinuousLab = Boolean(req.body.isContinuousLab || finalLabHours > 0);
+    const finalHoursStr = req.body.hours || (finalLabHours > 0 ? `${finalTheoryHours}h Theory + ${finalLabHours}h Lab` : `${finalTheoryHours} hrs/wk`);
 
-    await newClass.save();
+    // Check if class with this code already exists - if so, update (upsert)
+    let newClass = await Class.findOne({ code: finalCode });
+    if (newClass) {
+      newClass.name = name.trim();
+      newClass.dept = finalDept || newClass.dept;
+      newClass.semester = Number(semester);
+      newClass.year = Number(year);
+      newClass.section = (section || 'A').trim().toUpperCase();
+      newClass.credits = Number(credits) || newClass.credits || 3;
+      newClass.theoryHours = finalTheoryHours;
+      newClass.labHours = finalLabHours;
+      newClass.isContinuousLab = finalIsContinuousLab;
+      newClass.hours = finalHoursStr;
+      newClass.staffId = resolvedStaffId;
+      newClass.staffName = finalStaffName;
+      newClass.room = (room || '').trim() || newClass.room;
+      await newClass.save();
+    } else {
+      newClass = new Class({
+        code: finalCode,
+        name: name.trim(),
+        dept: finalDept,
+        semester: Number(semester),
+        year: Number(year),
+        section: (section || 'A').trim().toUpperCase(),
+        credits: Number(credits) || 3,
+        theoryHours: finalTheoryHours,
+        labHours: finalLabHours,
+        isContinuousLab: finalIsContinuousLab,
+        hours: finalHoursStr,
+        staffId: resolvedStaffId,
+        staffName: finalStaffName,
+        room: (room || '').trim(),
+        academicYear: (academicYear || '2025-2026').trim(),
+        students: Array.isArray(students) ? students : []
+      });
+      await newClass.save();
+    }
+
+    // Auto-generate weekly timetable schedule with continuous lab hours
+    try {
+      await autoGenerateTimetableSchedule({
+        code: newClass.code,
+        name: newClass.name,
+        dept: newClass.dept,
+        year: newClass.year,
+        sem: `Sem ${newClass.semester}`,
+        theoryHours: finalTheoryHours,
+        labHours: finalLabHours,
+        isContinuousLab: finalIsContinuousLab,
+        staffId: finalStaffId,
+        staffName: finalStaffName,
+        room: newClass.room
+      });
+    } catch (ttErr) {
+      console.error('Auto timetable generation failed for class:', ttErr.message);
+    }
 
     // Optionally sync into staff.classes array for backwards-compatibility
     if (staff) {

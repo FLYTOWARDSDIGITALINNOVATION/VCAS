@@ -1123,17 +1123,6 @@ export default function StaffAssignments({ staffUser }) {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={handleImportClassRoster}
-                      disabled={isUpdatingSubmissions}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-                      title="Import students from registered class roster"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Sync Class Roster</span>
-                    </button>
-
-                    <button
-                      type="button"
                       onClick={() => setShowAddStudentForm(prev => !prev)}
                       className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 font-bold text-xs rounded-xl transition-all cursor-pointer ${
                         showAddStudentForm

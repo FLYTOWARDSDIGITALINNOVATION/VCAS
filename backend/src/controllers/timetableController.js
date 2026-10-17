@@ -119,13 +119,54 @@ exports.updateSlot = async (req, res) => {
     }
 
     if (slotData && slotData.code) {
-      currentSchedule[day][String(slot)] = {
+      const slotObj = {
         code: (slotData.code || '').trim().toUpperCase(),
         name: (slotData.name || '').trim(),
         room: (slotData.room || '').trim(),
         type: (slotData.type || 'theory').toLowerCase(),
-        color: (slotData.color || 'blue').toLowerCase()
+        color: (slotData.color || 'blue').toLowerCase(),
+        isContinuousLab: Boolean(slotData.isContinuousLab || slotData.type === 'lab'),
+        labHours: Number(slotData.labHours) || 0
       };
+
+      currentSchedule[day][String(slot)] = slotObj;
+
+      // Check if multiple / continuous periods were specified (e.g. 1, 2, 3 or typed periods)
+      let targetSlots = [slot];
+      if (Array.isArray(slotData.continuousSlots) && slotData.continuousSlots.length > 0) {
+        targetSlots = slotData.continuousSlots;
+      } else if (slotData.periods) {
+        if (Array.isArray(slotData.periods)) {
+          targetSlots = slotData.periods.map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 8);
+        } else if (typeof slotData.periods === 'string') {
+          targetSlots = slotData.periods.split(/[,\s-]+/).map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 8);
+        }
+      } else if (slotData.isContinuousLab && Number(slotData.labHours) > 1) {
+        const startPeriod = Number(slot);
+        const totalContinuous = Number(slotData.labHours);
+        targetSlots = [];
+        for (let i = 0; i < totalContinuous; i++) {
+          const targetSlot = startPeriod + i;
+          if (targetSlot <= 8) targetSlots.push(targetSlot);
+        }
+      }
+
+      // Clear any scattered old slots for this subject in other days to keep it strictly continuous on this day
+      if (slotData.clearOtherDays !== false) {
+        Object.keys(currentSchedule).forEach(d => {
+          if (d !== day && currentSchedule[d]) {
+            Object.keys(currentSchedule[d]).forEach(sl => {
+              if (currentSchedule[d][sl]?.code === slotObj.code) {
+                delete currentSchedule[d][sl];
+              }
+            });
+          }
+        });
+      }
+
+      targetSlots.forEach(s => {
+        currentSchedule[day][String(s)] = { ...slotObj };
+      });
     } else {
       // Clear slot
       delete currentSchedule[day][String(slot)];
@@ -298,6 +339,157 @@ exports.getStudentTimetable = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Automatically schedule a subject/class into staff timetable based on configured hours
+//          Hours are scheduled as CONTINUOUS periods (1, 2, 3...) on the assigned day.
+exports.autoGenerateTimetableSchedule = async ({
+  code,
+  name,
+  dept,
+  year,
+  sem,
+  theoryHours,
+  labHours,
+  isContinuousLab,
+  staffId,
+  staffName,
+  room,
+  day,
+  periods
+}) => {
+  try {
+    const cleanCode = (code || '').trim().toUpperCase();
+    if (!cleanCode) return null;
+
+    // 1. Identify staff to assign to
+    let targetStaffId = (staffId || '').trim();
+    let staffDoc = null;
+    if (targetStaffId) {
+      staffDoc = await Staff.findOne({
+        $or: [
+          { staffId: targetStaffId },
+          { name: new RegExp('^' + targetStaffId + '$', 'i') }
+        ]
+      });
+      if (staffDoc) {
+        targetStaffId = staffDoc.staffId;
+      }
+    }
+    
+    if (!staffDoc && staffName) {
+      staffDoc = await Staff.findOne({ name: new RegExp('^' + staffName.trim() + '$', 'i') });
+      if (staffDoc) {
+        targetStaffId = staffDoc.staffId;
+      }
+    }
+
+    if (!staffDoc) {
+      if (dept) {
+        staffDoc = await Staff.findOne({ department: dept });
+      }
+      if (!staffDoc) staffDoc = await Staff.findOne({});
+      if (staffDoc) targetStaffId = staffDoc.staffId;
+    }
+
+    if (!targetStaffId) return null;
+
+    let timetable = await Timetable.findOne({ staffId: targetStaffId });
+    if (!timetable) {
+      timetable = new Timetable({
+        staffId: targetStaffId,
+        staffName: staffDoc ? staffDoc.name : (staffName || ''),
+        department: staffDoc ? staffDoc.department : (dept || ''),
+        schedule: getDefaultSchedule()
+      });
+    }
+
+    const currentSchedule = timetable.schedule instanceof Map 
+      ? Object.fromEntries(timetable.schedule)
+      : (timetable.schedule ? JSON.parse(JSON.stringify(timetable.schedule)) : getDefaultSchedule());
+
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    days.forEach(d => { if (!currentSchedule[d]) currentSchedule[d] = {}; });
+
+    const numTheory = Number(theoryHours) >= 0 ? Number(theoryHours) : 3;
+    const numLab = Number(labHours) >= 0 ? Number(labHours) : 0;
+    const targetDay = day || 'Monday';
+
+    // Clear any existing scattered instances of this subject on other days
+    days.forEach(d => {
+      if (d !== targetDay && currentSchedule[d]) {
+        Object.keys(currentSchedule[d]).forEach(sl => {
+          if (currentSchedule[d][sl]?.code === cleanCode) {
+            delete currentSchedule[d][sl];
+          }
+        });
+      }
+    });
+
+    // 2. Schedule CONTINUOUS LAB HOURS if labHours > 0
+    if (numLab > 0) {
+      const continuousCount = Math.min(5, numLab);
+      const daySlots = currentSchedule[targetDay] || {};
+      for (let s = 1; s <= continuousCount; s++) {
+        daySlots[String(s)] = {
+          code: cleanCode,
+          name: (name || cleanCode).trim(),
+          room: room && room.toLowerCase().includes('lab') ? room.trim() : 'Computer Lab 1',
+          type: 'lab',
+          color: 'emerald',
+          isContinuousLab: true,
+          labHours: continuousCount
+        };
+      }
+      currentSchedule[targetDay] = daySlots;
+    }
+
+    // 3. Schedule CONTINUOUS THEORY HOURS (e.g. 1, 2, 3...) on the target day
+    if (numTheory > 0) {
+      const daySlots = currentSchedule[targetDay] || {};
+
+      // If explicit typed periods provided (e.g. "1, 2, 3" or [1, 2, 3])
+      let periodsToAssign = [];
+      if (periods) {
+        if (Array.isArray(periods)) {
+          periodsToAssign = periods.map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 8);
+        } else if (typeof periods === 'string') {
+          periodsToAssign = periods.split(/[,\s-]+/).map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 8);
+        }
+      }
+
+      if (periodsToAssign.length === 0) {
+        // Continuous periods 1, 2, 3...
+        const totalContinuous = Math.min(8, numTheory);
+        for (let p = 1; p <= totalContinuous; p++) {
+          periodsToAssign.push(p);
+        }
+      }
+
+      periodsToAssign.forEach(period => {
+        daySlots[String(period)] = {
+          code: cleanCode,
+          name: (name || cleanCode).trim(),
+          room: (room && !room.toLowerCase().includes('lab')) ? room.trim() : 'LH-101',
+          type: 'theory',
+          color: 'blue',
+          isContinuousLab: false,
+          labHours: 0
+        };
+      });
+
+      currentSchedule[targetDay] = daySlots;
+    }
+
+    timetable.schedule = currentSchedule;
+    timetable.markModified('schedule');
+    await timetable.save();
+
+    return timetable;
+  } catch (err) {
+    console.error('Error auto-generating timetable schedule:', err);
+    return null;
   }
 };
 

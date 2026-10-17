@@ -32,28 +32,24 @@ import ModalPortal from './ModalPortal';
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const DEFAULT_FACULTY_PERIODS = [
-  { slot: 1, time: '8:30 – 9:20 AM' },
-  { slot: 2, time: '9:20 – 10:10 AM' },
-  { slot: 3, time: '10:10 – 11:00 AM' },
-  { slot: 4, time: '11:15 AM – 12:05 PM' },
-  { slot: 5, time: '12:05 – 12:55 PM' },
-  { slot: 6, time: '1:45 – 2:35 PM' },
-  { slot: 7, time: '2:35 – 3:25 PM' },
-  { slot: 8, time: '3:25 – 4:15 PM' },
+  { slot: 1, time: '09:30 – 10:30 AM' },
+  { slot: 2, time: '10:30 – 11:30 AM' },
+  { slot: 3, time: '11:45 AM – 12:45 PM' },
+  { slot: 4, time: '01:30 – 02:30 PM' },
+  { slot: 5, time: '02:30 – 03:30 PM' },
 ];
 
 const DEFAULT_CLASS_PERIODS = [
-  { slot: 1, time: '09:00 - 10:00 AM' },
-  { slot: 2, time: '10:00 - 11:00 AM' },
-  { slot: 3, time: '11:15 - 12:15 PM' },
-  { slot: 4, time: '01:15 - 02:15 PM' },
-  { slot: 5, time: '02:15 - 03:15 PM' },
-  { slot: 6, time: '03:15 - 04:15 PM' },
+  { slot: 1, time: '09:30 – 10:30 AM' },
+  { slot: 2, time: '10:30 – 11:30 AM' },
+  { slot: 3, time: '11:45 AM – 12:45 PM' },
+  { slot: 4, time: '01:30 – 02:30 PM' },
+  { slot: 5, time: '02:30 – 03:30 PM' },
 ];
 
 const DEFAULT_BREAK_TIMINGS = {
-  tea: '11:00 - 11:15 AM (15m)',
-  lunch: '12:55 - 1:45 PM (50m)'
+  tea: '11:30 – 11:45 AM (15m)',
+  lunch: '12:45 – 01:30 PM (45m)'
 };
 
 const FACULTY_PERIODS = DEFAULT_FACULTY_PERIODS;
@@ -61,8 +57,8 @@ const FACULTY_PERIODS = DEFAULT_FACULTY_PERIODS;
 const INITIAL_SCHEDULES = {};
 
 const DEFAULT_CLASS_METRICS = {
-  weeklyPeriods: '36 Hours',
-  weeklyPeriodsSub: '6 Periods / Day × 6 Days',
+  weeklyPeriods: '30 Hours',
+  weeklyPeriodsSub: '5 Periods / Day × 6 Days',
   smartClassrooms: '18 Rooms',
   smartClassroomsSub: 'Projector Enabled',
   activeLabs: '8 Labs',
@@ -80,6 +76,19 @@ const COLOR_MAP = {
   project: 'purple',
   sports: 'emerald'
 };
+
+const STAFF_CATEGORIES = [
+  { id: 'All', label: 'All Staff' },
+  { id: 'Computer Science', label: '1. Computer Science' },
+  { id: 'Commerce', label: '2. Commerce' },
+  { id: 'Mathematics', label: '3. Mathematics' },
+  { id: 'Business Administration (BBA)', label: '4. BBA' },
+  { id: 'Computer Applications (BCA)', label: '5. BCA' },
+  { id: 'Tamil', label: '6. Tamil' },
+  { id: 'English', label: '7. English' },
+  { id: 'Physical Education', label: '8. Physical Education' },
+  { id: 'Office', label: '9. Office' }
+];
 
 export default function TimetableManagement({ user }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
@@ -191,10 +200,12 @@ export default function TimetableManagement({ user }) {
   const [availableDepartments, setAvailableDepartments] = useState([]);
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
+  const [selectedStaffCategory, setSelectedStaffCategory] = useState('All');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedYear, setSelectedYear] = useState(3);
   const [selectedSem, setSelectedSem] = useState('Sem 5');
   const [selectedSection, setSelectedSection] = useState('Section A');
+  const [selectedVenue, setSelectedVenue] = useState('');
 
   // Class Metrics State (Admin Editable)
   const [classMetrics, setClassMetrics] = useState(() => {
@@ -222,7 +233,9 @@ export default function TimetableManagement({ user }) {
     name: '',
     faculty: '',
     room: '',
-    type: 'theory'
+    type: 'theory',
+    isContinuousLab: false,
+    continuousHours: 3
   });
 
   const showToast = (msg) => {
@@ -266,16 +279,23 @@ export default function TimetableManagement({ user }) {
       const timetablesArr = tData?.timetables || [];
       setAllTimetables(timetablesArr);
 
+      const staffDepts = staffArr.map(s => s.department || s.dept || s.departmentName).filter(Boolean);
+
       if (dRes && dRes.ok) {
         const dData = await dRes.json();
         const rawDepts = dData?.departments || dData?.data || (Array.isArray(dData) ? dData : []);
         const deptList = rawDepts
           .map(d => (typeof d === 'string' ? d : d.name || d.departmentName))
           .filter(Boolean);
-        setAvailableDepartments(deptList);
-        if (deptList.length > 0) {
-          setSelectedDept(prev => (prev && deptList.includes(prev) ? prev : deptList[0]));
+        const mergedDepts = Array.from(new Set([...deptList, ...staffDepts]));
+        setAvailableDepartments(mergedDepts);
+        if (mergedDepts.length > 0) {
+          setSelectedDept(prev => (prev && mergedDepts.includes(prev) ? prev : mergedDepts[0]));
         }
+      } else if (staffDepts.length > 0) {
+        const uniqueStaffDepts = Array.from(new Set(staffDepts));
+        setAvailableDepartments(uniqueStaffDepts);
+        setSelectedDept(prev => (prev && uniqueStaffDepts.includes(prev) ? prev : uniqueStaffDepts[0]));
       }
 
       if (subRes && subRes.ok) {
@@ -284,14 +304,25 @@ export default function TimetableManagement({ user }) {
         setAvailableSubjects(rawSubs);
       }
 
+      // Collect real-time venues from backend classes, custom exam halls, and stored timetables
+      let roomList = [];
       if (cRes && cRes.ok) {
         const cData = await cRes.json();
         const classes = cData?.classes || cData?.data || (Array.isArray(cData) ? cData : []);
-        const rooms = classes.map(c => c.room).filter(Boolean);
-        setAvailableRooms(rooms);
+        roomList = classes.map(c => c.room).filter(Boolean);
       }
+      try {
+        const customHalls = localStorage.getItem('vcas_custom_exam_halls');
+        if (customHalls) {
+          const parsed = JSON.parse(customHalls);
+          const hallNames = parsed.map(h => typeof h === 'string' ? h : h.name || h.hallName || h.room).filter(Boolean);
+          roomList = [...roomList, ...hallNames];
+        }
+      } catch (e) {}
+      const combinedRooms = Array.from(new Set(roomList));
+      setAvailableRooms(combinedRooms);
 
-      // Auto-select staff: prefer one who already has timetable data, or EMP001, or first staff
+      // Auto-select staff: prefer one who already has timetable data, or first staff
       if (!selectedStaffId && staffArr.length > 0) {
         const staffWithTimetable = timetablesArr.find(t => {
           if (!t.schedule) return false;
@@ -302,8 +333,7 @@ export default function TimetableManagement({ user }) {
         if (staffWithTimetable) {
           setSelectedStaffId(staffWithTimetable.staffId);
         } else {
-          const emp001 = staffArr.find(s => s.staffId === 'EMP001');
-          setSelectedStaffId(emp001 ? emp001.staffId : staffArr[0].staffId);
+          setSelectedStaffId(staffArr[0].staffId);
         }
       }
     } catch (err) {
@@ -347,6 +377,27 @@ export default function TimetableManagement({ user }) {
     return staffList.find(s => s.staffId === selectedStaffId) || null;
   }, [staffList, selectedStaffId]);
 
+  // Filtered staff list by selected category (including 6. Tamil, 7. English, 8. Physical Education, 9. Office)
+  const filteredStaffList = useMemo(() => {
+    if (selectedStaffCategory === 'All') return staffList;
+    return staffList.filter(s => {
+      const dept = String(s.department || s.dept || s.departmentName || '');
+      if (selectedStaffCategory === 'Office') {
+        return s.role === 'Office Staff' || dept.toLowerCase().includes('office');
+      }
+      if (selectedStaffCategory === 'English') {
+        return dept === 'English' || dept === 'English Literature';
+      }
+      if (selectedStaffCategory === 'Tamil') {
+        return dept.toLowerCase().includes('tamil');
+      }
+      if (selectedStaffCategory === 'Physical Education') {
+        return dept.toLowerCase().includes('physical');
+      }
+      return dept === selectedStaffCategory;
+    });
+  }, [staffList, selectedStaffCategory]);
+
   // Helper to count assigned slots for any staff member
   const getStaffAssignedCount = (staffId) => {
     const t = allTimetables.find(item => item.staffId === staffId);
@@ -389,7 +440,7 @@ export default function TimetableManagement({ user }) {
   // Derive list of ONLY the real classrooms added by staff or admin
   const allVenues = useMemo(() => {
     const set = new Set();
-    // 1. From database classes (added by staff/admin)
+    // 1. From database classes & rooms
     availableRooms.forEach(r => {
       if (r && typeof r === 'string' && r.trim()) set.add(r.trim());
     });
@@ -406,8 +457,18 @@ export default function TimetableManagement({ user }) {
         }
       });
     });
+    // 3. From custom added venues in localStorage
+    try {
+      const custom = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
+      if (Array.isArray(custom)) {
+        custom.forEach(v => {
+          if (v && typeof v === 'string' && v.trim()) set.add(v.trim());
+        });
+      }
+    } catch (e) {}
 
-    return Array.from(set);
+    const result = Array.from(set);
+    return result;
   }, [availableRooms, allTimetables]);
 
   // Get active schedule for Class View: aggregates live assigned slots across faculty + class overrides
@@ -461,6 +522,7 @@ export default function TimetableManagement({ user }) {
 
     setEditingInitialSlot(currentSlot || null);
 
+    const isLab = Boolean(currentSlot?.type === 'lab' || currentSlot?.name?.toLowerCase().includes('lab'));
     setSlotForm({
       day,
       period: periodNum,
@@ -468,7 +530,9 @@ export default function TimetableManagement({ user }) {
       name: currentSlot?.name || '',
       faculty: currentSlot?.faculty || defaultFaculty || '',
       room: currentSlot?.room || (allVenues[0] || ''),
-      type: currentSlot?.type || 'theory'
+      type: currentSlot?.type || (isLab ? 'lab' : 'theory'),
+      isContinuousLab: Boolean(currentSlot?.isContinuousLab || isLab),
+      continuousHours: Number(currentSlot?.labHours) || 3
     });
     setIsEditSlotOpen(true);
   };
@@ -553,13 +617,25 @@ export default function TimetableManagement({ user }) {
       }
     }
 
+    const isContinuous = Boolean(slotForm.type === 'lab' && slotForm.isContinuousLab);
+    const continuousHoursCount = isContinuous ? (Number(slotForm.continuousHours) || 3) : 1;
+    const continuousSlots = [];
+    if (isContinuous) {
+      const startP = Number(slotForm.period);
+      for (let i = 0; i < continuousHoursCount; i++) {
+        if (startP + i <= 5) continuousSlots.push(startP + i);
+      }
+    }
+
     const updatedSlot = {
       code: slotForm.code.trim().toUpperCase(),
       name: slotForm.name.trim(),
       faculty: slotForm.faculty,
       room: slotForm.room.trim() || (allVenues[0] || ''),
       type: slotForm.type,
-      color: COLOR_MAP[slotForm.type] || 'blue'
+      color: COLOR_MAP[slotForm.type] || (slotForm.type === 'lab' ? 'emerald' : 'blue'),
+      isContinuousLab: isContinuous,
+      labHours: isContinuous ? continuousHoursCount : 0
     };
 
     if (viewMode === 'faculty') {
@@ -576,7 +652,10 @@ export default function TimetableManagement({ user }) {
           body: JSON.stringify({
             day: slotForm.day,
             slot: slotForm.period,
-            slotData: updatedSlot
+            slotData: {
+              ...updatedSlot,
+              continuousSlots: continuousSlots.length > 0 ? continuousSlots : undefined
+            }
           })
         });
 
@@ -586,7 +665,10 @@ export default function TimetableManagement({ user }) {
           setFacultySchedule(sched || {});
           fetchStaffAndTimetables(); // Sync counts
           setIsEditSlotOpen(false);
-          showToast(`✓ Assigned Period ${slotForm.period} on ${slotForm.day} for ${currentStaff?.name || selectedStaffId}`);
+          const feedback = continuousSlots.length > 1
+            ? `✓ Assigned Continuous Lab Periods ${continuousSlots.join(', ')} (${continuousSlots.length} Hrs) on ${slotForm.day} for ${currentStaff?.name || selectedStaffId}`
+            : `✓ Assigned Period ${slotForm.period} on ${slotForm.day} for ${currentStaff?.name || selectedStaffId}`;
+          showToast(feedback);
         } else {
           showToast(`Error: ${data.message || 'Could not save slot'}`);
         }
@@ -603,7 +685,13 @@ export default function TimetableManagement({ user }) {
         const yearData = JSON.parse(JSON.stringify(baseYearData));
         const dayData = yearData[slotForm.day] || {};
 
-        dayData[slotForm.period] = updatedSlot;
+        if (continuousSlots.length > 1) {
+          continuousSlots.forEach(p => {
+            dayData[p] = { ...updatedSlot };
+          });
+        } else {
+          dayData[slotForm.period] = updatedSlot;
+        }
         yearData[slotForm.day] = dayData;
 
         return {
@@ -616,7 +704,10 @@ export default function TimetableManagement({ user }) {
       });
 
       setIsEditSlotOpen(false);
-      showToast(`✓ Saved! ${slotForm.day} Period ${slotForm.period} updated with ${updatedSlot.code} (${updatedSlot.name})`);
+      const feedback = continuousSlots.length > 1
+        ? `✓ Saved! Continuous Lab Periods ${continuousSlots.join(', ')} (${continuousSlots.length} Continuous Hrs) updated with ${updatedSlot.code}`
+        : `✓ Saved! ${slotForm.day} Period ${slotForm.period} updated with ${updatedSlot.code} (${updatedSlot.name})`;
+      showToast(feedback);
     }
   };
 
@@ -794,7 +885,7 @@ export default function TimetableManagement({ user }) {
             className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden sm:inline">Sync</span>
+            <span className="hidden sm:inline">Refresh</span>
           </button>
 
           {isSuperAdmin && (
@@ -855,11 +946,64 @@ export default function TimetableManagement({ user }) {
         <>
           {/* FACULTY SELECTOR CARD */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Staff Category Filter Pills */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Select Staff Category</span>
+              </label>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                {STAFF_CATEGORIES.map(cat => {
+                  const isSelected = selectedStaffCategory === cat.id;
+                  const count = cat.id === 'All'
+                    ? staffList.length
+                    : staffList.filter(s => {
+                        const dept = String(s.department || s.dept || s.departmentName || '');
+                        if (cat.id === 'Office') return s.role === 'Office Staff' || dept.toLowerCase().includes('office');
+                        if (cat.id === 'English') return dept === 'English' || dept === 'English Literature';
+                        if (cat.id === 'Tamil') return dept.toLowerCase().includes('tamil');
+                        if (cat.id === 'Physical Education') return dept.toLowerCase().includes('physical');
+                        return dept === cat.id;
+                      }).length;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedStaffCategory(cat.id);
+                        const match = staffList.filter(s => {
+                          if (cat.id === 'All') return true;
+                          const dept = String(s.department || s.dept || s.departmentName || '');
+                          if (cat.id === 'Office') return s.role === 'Office Staff' || dept.toLowerCase().includes('office');
+                          if (cat.id === 'English') return dept === 'English' || dept === 'English Literature';
+                          if (cat.id === 'Tamil') return dept.toLowerCase().includes('tamil');
+                          if (cat.id === 'Physical Education') return dept.toLowerCase().includes('physical');
+                          return dept === cat.id;
+                        });
+                        if (match.length > 0 && !match.some(m => m.staffId === selectedStaffId)) {
+                          setSelectedStaffId(match[0].staffId);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                        isSelected 
+                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' 
+                          : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <span>{cat.label}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${isSelected ? 'bg-white/25 text-white' : 'bg-slate-200/80 text-slate-700'}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
               <div className="flex-1 max-w-xl">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Select Faculty Member to View Assigned Schedule</span>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Select Faculty Member ({filteredStaffList.length} Available)
                 </label>
                 <select
                   value={selectedStaffId}
@@ -867,11 +1011,12 @@ export default function TimetableManagement({ user }) {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
                 >
                   <option value="">-- Choose Faculty Member --</option>
-                  {staffList.map(s => {
+                  {filteredStaffList.map(s => {
                     const count = getStaffAssignedCount(s.staffId);
+                    const deptName = s.department || s.dept || s.departmentName || (s.role === 'Office Staff' ? 'Office' : 'General');
                     return (
                       <option key={s.staffId} value={s.staffId}>
-                        {s.name} ({s.staffId}) — {s.department || 'General'} {count > 0 ? `• [${count} Periods Assigned]` : ''}
+                        [{deptName}] {s.name} ({s.staffId}) {count > 0 ? `• [${count} Periods Assigned]` : ''}
                       </option>
                     );
                   })}
@@ -889,7 +1034,7 @@ export default function TimetableManagement({ user }) {
                       {currentStaff.name}
                     </h3>
                     <p className="text-[11px] text-indigo-700 font-semibold">
-                      ID: <span className="font-mono font-bold">{currentStaff.staffId}</span> • {currentStaff.department}
+                      ID: <span className="font-mono font-bold">{currentStaff.staffId}</span> • {currentStaff.department || currentStaff.dept || currentStaff.departmentName || 'General'}
                     </p>
                     <p className="text-[10px] text-slate-500 font-medium">
                       {currentStaff.designation || 'Faculty'}
@@ -1006,75 +1151,54 @@ export default function TimetableManagement({ user }) {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider text-center">
                     <th className="py-3 px-3 text-left w-24 bg-slate-100/70 border-r border-slate-200">DAY</th>
-                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                    <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P1</span>
                         <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(1, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                    <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P2</span>
                         <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(2, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                    <th className="py-3 px-1 w-12 bg-amber-50/60 text-amber-800 border-x border-amber-100 text-[9px] group hover:bg-amber-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
+                      <Coffee className="w-3 h-3 mx-auto mb-0.5 text-amber-600" />
+                      <span>BREAK</span>
+                      <span className="block text-[8px] text-amber-700 font-mono font-normal">{breakTimings.tea.split('(')[0].trim()}</span>
+                    </th>
+                    <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P3</span>
                         <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(3, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-1 w-10 bg-amber-50/60 text-amber-800 border-x border-amber-100 text-[9px] group hover:bg-amber-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
-                      <Coffee className="w-3 h-3 mx-auto mb-0.5 text-amber-600" />
-                      <span>TEA</span>
-                      <span className="block text-[8px] text-amber-700 font-mono font-normal">{breakTimings.tea.split('(')[0].trim()}</span>
+                    <th className="py-3 px-1 w-12 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[9px] group hover:bg-emerald-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
+                      <Utensils className="w-3 h-3 mx-auto mb-0.5 text-emerald-600" />
+                      <span>LUNCH</span>
+                      <span className="block text-[8px] text-emerald-700 font-mono font-normal">{breakTimings.lunch.split('(')[0].trim()}</span>
                     </th>
-                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                    <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P4</span>
                         <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(4, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                    <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P5</span>
                         <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(5, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-1 w-10 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[9px] group hover:bg-emerald-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
-                      <Utensils className="w-3 h-3 mx-auto mb-0.5 text-emerald-600" />
-                      <span>LUNCH</span>
-                      <span className="block text-[8px] text-emerald-700 font-mono font-normal">{breakTimings.lunch.split('(')[0].trim()}</span>
-                    </th>
-                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>P6</span>
-                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(6, 'faculty')}</span>
-                    </th>
-                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>P7</span>
-                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(7, 'faculty')}</span>
-                    </th>
-                    <th className="py-3 px-2 w-32 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>P8</span>
-                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(8, 'faculty')}</span>
-                    </th>
                     <th className="py-3 px-2 w-28 bg-slate-100/80 border-l border-slate-200 text-slate-700">
                       <span>Daily Hours</span>
-                      <span className="block text-[8.5px] text-slate-500 font-normal">Taken</span>
+                      <span className="block text-[8.5px] text-slate-500 font-normal">Taken (Max 5)</span>
                     </th>
                   </tr>
                 </thead>
@@ -1096,14 +1220,20 @@ export default function TimetableManagement({ user }) {
                         <td className="p-1.5 align-top">
                           <SlotCell slot={dayData['2']} onEdit={() => handleOpenEditSlot(day, 2, dayData['2'])} />
                         </td>
+
+                        {/* Morning Break */}
+                        <td className="p-1 bg-amber-50/30 border-x border-amber-100 text-center text-[9px] font-bold text-amber-700">
+                          15m
+                        </td>
+
                         {/* P3 */}
                         <td className="p-1.5 align-top">
                           <SlotCell slot={dayData['3']} onEdit={() => handleOpenEditSlot(day, 3, dayData['3'])} />
                         </td>
 
-                        {/* Tea Break */}
-                        <td className="p-1 bg-amber-50/30 border-x border-amber-100 text-center text-[9px] font-bold text-amber-700">
-                          15m
+                        {/* Lunch Break */}
+                        <td className="p-1 bg-emerald-50/30 border-x border-emerald-100 text-center text-[9px] font-bold text-emerald-700">
+                          45m
                         </td>
 
                         {/* P4 */}
@@ -1113,24 +1243,6 @@ export default function TimetableManagement({ user }) {
                         {/* P5 */}
                         <td className="p-1.5 align-top">
                           <SlotCell slot={dayData['5']} onEdit={() => handleOpenEditSlot(day, 5, dayData['5'])} />
-                        </td>
-
-                        {/* Lunch Break */}
-                        <td className="p-1 bg-emerald-50/30 border-x border-emerald-100 text-center text-[9px] font-bold text-emerald-700">
-                          50m
-                        </td>
-
-                        {/* P6 */}
-                        <td className="p-1.5 align-top">
-                          <SlotCell slot={dayData['6']} onEdit={() => handleOpenEditSlot(day, 6, dayData['6'])} />
-                        </td>
-                        {/* P7 */}
-                        <td className="p-1.5 align-top">
-                          <SlotCell slot={dayData['7']} onEdit={() => handleOpenEditSlot(day, 7, dayData['7'])} />
-                        </td>
-                        {/* P8 */}
-                        <td className="p-1.5 align-top">
-                          <SlotCell slot={dayData['8']} onEdit={() => handleOpenEditSlot(day, 8, dayData['8'])} />
                         </td>
 
                         {/* Daily Hours Taken */}
@@ -1150,7 +1262,7 @@ export default function TimetableManagement({ user }) {
                 <tfoot>
                   <tr className="border-t border-slate-200 bg-slate-50/80 text-xs font-bold text-slate-700">
                     <td className="p-3 text-left">Weekly Total</td>
-                    <td colSpan={10} className="p-3 text-right text-slate-500 font-medium">
+                    <td colSpan={7} className="p-3 text-right text-slate-500 font-medium">
                       Total Assigned Teaching Hours:
                     </td>
                     <td className="p-3 text-center border-l border-slate-200 text-indigo-700 font-black bg-indigo-50/50">
@@ -1281,9 +1393,42 @@ export default function TimetableManagement({ user }) {
             </div>
 
             <div className="flex items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
-              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200">
-                Venue: LH-101 (Smart Class)
-              </span>
+              <div className="flex items-center gap-1.5 bg-indigo-50/90 px-3 py-1.5 rounded-xl border border-indigo-200 shadow-xs">
+                <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider">
+                  Venue:
+                </span>
+                <select
+                  value={selectedVenue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '__add_new__') {
+                      const newVenue = window.prompt('Enter new classroom / lab venue name (e.g. LH-205, Smart Lab 3):');
+                      if (newVenue && newVenue.trim()) {
+                        const trimmed = newVenue.trim();
+                        try {
+                          const saved = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
+                          if (!saved.includes(trimmed)) {
+                            saved.push(trimmed);
+                            localStorage.setItem('vcas_custom_venues', JSON.stringify(saved));
+                          }
+                        } catch (err) {}
+                        setAvailableRooms(prev => Array.from(new Set([...prev, trimmed])));
+                        setSelectedVenue(trimmed);
+                        showToast(`✓ Venue "${trimmed}" added!`);
+                      }
+                    } else {
+                      setSelectedVenue(val);
+                    }
+                  }}
+                  className="bg-transparent text-xs font-bold text-indigo-800 focus:outline-none cursor-pointer max-w-[200px]"
+                >
+                  {allVenues.map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                  <option value="__add_new__">+ Add New Venue...</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1339,13 +1484,6 @@ export default function TimetableManagement({ user }) {
                       </div>
                       <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(5, 'class')}</span>
                     </th>
-                    <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>P6</span>
-                        <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                      <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(6, 'class')}</span>
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs">
@@ -1373,7 +1511,7 @@ export default function TimetableManagement({ user }) {
                         </td>
 
                         <td className="p-1 bg-emerald-50/30 border-x border-emerald-100 text-center text-[10px] font-bold text-emerald-700">
-                          1h
+                          45m
                         </td>
 
                         <td className="p-2 align-top">
@@ -1381,9 +1519,6 @@ export default function TimetableManagement({ user }) {
                         </td>
                         <td className="p-2 align-top">
                           <SlotCell slot={daySchedule[5]} onEdit={() => handleOpenEditSlot(day, 5, daySchedule[5])} />
-                        </td>
-                        <td className="p-2 align-top">
-                          <SlotCell slot={daySchedule[6]} onEdit={() => handleOpenEditSlot(day, 6, daySchedule[6])} />
                         </td>
                       </tr>
                     );
@@ -1460,7 +1595,7 @@ export default function TimetableManagement({ user }) {
                     onChange={(e) => setSlotForm({ ...slotForm, period: Number(e.target.value) })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 cursor-pointer"
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
+                    {[1, 2, 3, 4, 5].map(p => (
                       <option key={p} value={p}>Period {p} {getPeriodTime(p) ? `(${getPeriodTime(p)})` : ''}</option>
                     ))}
                   </select>
@@ -1535,7 +1670,14 @@ export default function TimetableManagement({ user }) {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Slot Type</label>
                   <select
                     value={slotForm.type}
-                    onChange={(e) => setSlotForm({ ...slotForm, type: e.target.value })}
+                    onChange={(e) => {
+                      const t = e.target.value;
+                      setSlotForm(prev => ({
+                        ...prev,
+                        type: t,
+                        isContinuousLab: t === 'lab' ? true : prev.isContinuousLab
+                      }));
+                    }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                   >
                     <option value="theory">Theory Lecture</option>
@@ -1548,6 +1690,46 @@ export default function TimetableManagement({ user }) {
                   </select>
                 </div>
               </div>
+
+              {/* CONTINUOUS LAB HOURS CONFIGURATION */}
+              {slotForm.type === 'lab' && (
+                <div className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-black text-emerald-950">
+                      <input
+                        type="checkbox"
+                        checked={slotForm.isContinuousLab}
+                        onChange={(e) => setSlotForm({ ...slotForm, isContinuousLab: e.target.checked })}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span>Continuous Lab Hours Block</span>
+                    </label>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 border border-emerald-300">
+                      Continuous Lab Block
+                    </span>
+                  </div>
+
+                  {slotForm.isContinuousLab && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 items-center">
+                      <div>
+                        <label className="block text-[11px] font-bold text-emerald-800 mb-0.5">Continuous Hours Count</label>
+                        <select
+                          value={slotForm.continuousHours}
+                          onChange={(e) => setSlotForm({ ...slotForm, continuousHours: Number(e.target.value) })}
+                          className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-1.5 text-xs font-black text-emerald-950 focus:outline-none focus:border-emerald-600"
+                        >
+                          <option value={2}>2 Continuous Hours (2 Periods)</option>
+                          <option value={3}>3 Continuous Hours (3 Periods)</option>
+                          <option value={4}>4 Continuous Hours (4 Periods)</option>
+                        </select>
+                      </div>
+                      <div className="text-[11px] font-bold text-emerald-900 bg-white/80 p-2 rounded-xl border border-emerald-200">
+                        ⚡ Consecutively allocates Period {slotForm.period} to Period {Math.min(5, Number(slotForm.period) + Number(slotForm.continuousHours) - 1)} without breaks.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* CLASSROOM OR LAB VENUE DROPDOWN */}
               <div>
@@ -1606,9 +1788,10 @@ export default function TimetableManagement({ user }) {
                   <option value="">-- Select Faculty / Staff Member --</option>
                   {staffList.map(s => {
                     const label = `${s.name} (${s.staffId})`;
+                    const deptName = s.department || s.dept || s.departmentName || (s.role === 'Office Staff' ? 'Office' : 'General');
                     return (
                       <option key={s.staffId || s._id} value={label}>
-                        {s.name} — {s.staffId} {s.department ? `• ${s.department}` : ''}
+                        [{deptName}] {s.name} — {s.staffId}
                       </option>
                     );
                   })}
@@ -2009,7 +2192,7 @@ export default function TimetableManagement({ user }) {
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                Faculty Periods (P1 – P8)
+                Faculty Periods (P1 – P5)
               </button>
               <button
                 type="button"
@@ -2020,7 +2203,7 @@ export default function TimetableManagement({ user }) {
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                Class Periods (P1 – P6)
+                Class Periods (P1 – P5)
               </button>
               <button
                 type="button"
@@ -2040,7 +2223,7 @@ export default function TimetableManagement({ user }) {
               {activeTimingTab === 'faculty' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-700">8-Period Matrix Timings</span>
+                    <span className="text-xs font-extrabold text-slate-700">5-Period Faculty Timetable Timings</span>
                     <span className="text-[11px] text-indigo-600 font-semibold">Reflected across faculty schedule</span>
                   </div>
 
@@ -2073,7 +2256,7 @@ export default function TimetableManagement({ user }) {
               {activeTimingTab === 'class' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-700">6-Period Class Schedule Timings</span>
+                    <span className="text-xs font-extrabold text-slate-700">5-Period Class Schedule Timings</span>
                     <span className="text-[11px] text-indigo-600 font-semibold">Reflected across department matrix</span>
                   </div>
 

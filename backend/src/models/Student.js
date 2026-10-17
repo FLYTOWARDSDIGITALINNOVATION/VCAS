@@ -29,6 +29,13 @@ const studentSchema = new mongoose.Schema({
     uppercase: true,
     trim: true
   },
+  umisNumber: {
+    type: String,
+    default: '',
+    uppercase: true,
+    trim: true,
+    sparse: true
+  },
   name: {
     type: String,
     required: [true, 'Student name is required'],

@@ -1,6 +1,11 @@
 const Course = require('../models/Course');
 const Subject = require('../models/Subject');
 const Department = require('../models/Department');
+const Class = require('../models/Class');
+const Student = require('../models/Student');
+const HallTicket = require('../models/HallTicket');
+const { Exam } = require('../models/Exam');
+const { autoGenerateTimetableSchedule } = require('./timetableController');
 
 // ==========================================
 // COURSE / PROGRAM CONTROLLERS
@@ -124,8 +129,8 @@ exports.getSubjects = async (req, res) => {
   try {
     let subjects = await Subject.find().sort({ department: 1, year: 1, sem: 1, code: 1 });
 
-    // Filter out dummy/test subjects
-    subjects = subjects.filter(s => s.code && !['SF76', 'CS401', 'CS402'].includes(s.code.toUpperCase()));
+    // Filter out dummy/deleted subjects
+    subjects = subjects.filter(s => s.code && !['SF76', 'CS401', 'CS402', 'CS2001', 'CS2005'].includes(s.code.toUpperCase()));
 
     res.status(200).json({
       success: true,
@@ -137,9 +142,125 @@ exports.getSubjects = async (req, res) => {
   }
 };
 
+// Helper: Automatically create Exam Schedule and Hall Ticket allocations when subject hours are configured
+const autoGenerateExamAndHallTickets = async (subjectDoc) => {
+  try {
+    const { code, name, department, year, sem, type, theoryHours, labHours } = subjectDoc;
+    const cleanCode = (code || '').toUpperCase().trim();
+    const isLab = (type && type.toLowerCase().includes('lab')) || (Number(labHours) > 0);
+
+    // 1. Automatically register into Examination Schedule
+    let exam = await Exam.findOne({ code: cleanCode });
+    if (!exam) {
+      exam = await Exam.create({
+        code: cleanCode,
+        name: name,
+        department: department,
+        year: Number(year) || 1,
+        sem: sem || 'Sem 1',
+        date: '2026-05-15',
+        session: isLab ? 'Afternoon (AN)' : 'Forenoon (FN)',
+        hall: isLab ? 'Computer Lab 1' : 'Hall 101 (Main Block)',
+        type: isLab ? 'End Semester Practical' : 'End Semester Theory',
+        qpCode: `QP-${cleanCode}-2026`
+      });
+    }
+
+    // 2. Automatically sync to Class collection
+    let cls = await Class.findOne({ code: cleanCode });
+    if (!cls) {
+      cls = await Class.create({
+        code: cleanCode,
+        name: name,
+        dept: department,
+        semester: Number(String(sem).replace(/\D/g, '')) || 1,
+        year: Number(year) || 1,
+        section: 'A',
+        credits: Number(subjectDoc.credits) || 3,
+        staffId: subjectDoc.faculty || 'FAC001',
+        staffName: subjectDoc.faculty || 'Faculty In-Charge',
+        theoryHours: Number(theoryHours) || 3,
+        labHours: Number(labHours) || 0,
+        isContinuousLab: true
+      });
+    }
+
+    // 3. Automatically sync into HallTicket collection
+    const semesterNum = Number(String(sem).replace(/\D/g, '')) || 1;
+    const subjectEntry = {
+      code: cleanCode,
+      name: name,
+      date: exam.date || '2026-05-15',
+      session: exam.session || (isLab ? 'Afternoon (AN)' : 'Forenoon (FN)'),
+      time: isLab ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'
+    };
+
+    const deptRegex = new RegExp(department.trim(), 'i');
+    const students = await Student.find({
+      $or: [
+        { department: deptRegex },
+        { course: deptRegex }
+      ]
+    }).lean();
+
+    const studentRoster = students.map((st, sIdx) => ({
+      rollNo: st.rollNo || st.studentId || `STU${sIdx + 1}`,
+      name: st.name || st.fullName || 'Student',
+      dept: st.department || department,
+      semester: semesterNum,
+      section: 'A',
+      hallNo: exam.hall || 'Hall 101',
+      seatNo: `S-${String(sIdx + 1).padStart(2, '0')}`,
+      eligible: true,
+      remarks: 'Auto-Generated upon Class Hours Setup',
+      subjects: [subjectEntry]
+    }));
+
+    const existingHT = await HallTicket.findOne({
+      department: department.trim(),
+      semester: semesterNum
+    });
+
+    if (existingHT) {
+      const existingCommon = existingHT.commonSubjects || [];
+      if (!existingCommon.some(s => (s.code || '').toUpperCase() === cleanCode)) {
+        existingHT.commonSubjects.push(subjectEntry);
+      }
+      (existingHT.students || []).forEach(st => {
+        if (!st.subjects) st.subjects = [];
+        if (!st.subjects.some(s => (s.code || '').toUpperCase() === cleanCode)) {
+          st.subjects.push(subjectEntry);
+        }
+      });
+      studentRoster.forEach(newSt => {
+        if (!existingHT.students.some(s => s.rollNo === newSt.rollNo)) {
+          existingHT.students.push(newSt);
+        }
+      });
+      await existingHT.save();
+    } else {
+      await HallTicket.create({
+        examName: 'Semester End Examination',
+        examType: 'Semester End Examination',
+        academicYear: '2025-2026',
+        department: department.trim(),
+        semester: semesterNum,
+        section: 'A',
+        halls: [{ hallNo: exam.hall || 'Hall 101', capacity: 60, allocatedCount: studentRoster.length }],
+        allocatedByStaffId: 'ADMIN',
+        allocatedByStaffName: 'Super Administrator',
+        commonSubjects: [subjectEntry],
+        students: studentRoster
+      });
+    }
+  } catch (htErr) {
+    console.error('Error auto-generating exam and hall tickets:', htErr);
+  }
+};
+
 exports.createSubject = async (req, res) => {
   try {
-    const { code, name, department, year, sem, credits, type, faculty, ltp, hours, prerequisite, textbooks, studentsEnrolled, units, evaluation } = req.body;
+    const { code, name, department, year, sem, credits, type, faculty, ltp, hours, theoryHours, labHours, prerequisite, textbooks, studentsEnrolled, units, evaluation } = req.body;
     if (!code || !name || !department) {
       return res.status(400).json({ success: false, message: 'Code, name, and department are required.' });
     }
@@ -150,6 +271,10 @@ exports.createSubject = async (req, res) => {
       return res.status(400).json({ success: false, message: `Subject with code "${cleanCode}" already exists.` });
     }
 
+    const tHours = Number(theoryHours) >= 0 ? Number(theoryHours) : 3;
+    const lHours = Number(labHours) >= 0 ? Number(labHours) : 0;
+    const computedHours = hours || (lHours > 0 ? `${tHours}h Theory + ${lHours}h Continuous Lab` : `${tHours} hrs/wk`);
+
     const subject = await Subject.create({
       code: cleanCode,
       name: name.trim(),
@@ -157,10 +282,13 @@ exports.createSubject = async (req, res) => {
       year: Number(year) || 1,
       sem: sem || 'Sem 1',
       credits: Number(credits) || 3,
-      type: type || 'Core Theory',
+      type: type || (lHours > 0 ? 'Practical / Lab' : 'Core Theory'),
       faculty: faculty ? faculty.trim() : '',
-      ltp: ltp || '3-0-0',
-      hours: hours || '3 hrs/wk',
+      ltp: ltp || (lHours > 0 ? `${tHours}-0-${lHours}` : `${tHours}-0-0`),
+      hours: computedHours,
+      theoryHours: tHours,
+      labHours: lHours,
+      isContinuousLab: true,
       prerequisite: prerequisite || 'None',
       textbooks: textbooks || '',
       studentsEnrolled: Number(studentsEnrolled) || 0,
@@ -174,9 +302,26 @@ exports.createSubject = async (req, res) => {
       evaluation: evaluation || { internal: 40, external: 60 }
     });
 
+    // Automatically schedule weekly timetable (with continuous lab hours)
+    try {
+      await autoGenerateTimetableSchedule({
+        code: subject.code,
+        name: subject.name,
+        dept: subject.department,
+        year: subject.year,
+        sem: subject.sem,
+        theoryHours: subject.theoryHours,
+        labHours: subject.labHours,
+        isContinuousLab: true,
+        staffName: subject.faculty
+      });
+    } catch (ttErr) {
+      console.error('Auto timetable generation failed in createSubject:', ttErr.message);
+    }
+
     res.status(201).json({
       success: true,
-      message: `Subject "${subject.name}" added to catalog.`,
+      message: `Class & Subject "${subject.name}" added to catalog with automatic Timetable generation.`,
       data: subject
     });
   } catch (err) {
@@ -204,6 +349,13 @@ exports.updateSubject = async (req, res) => {
     if (req.body.faculty !== undefined) subject.faculty = req.body.faculty.trim();
     if (req.body.ltp) subject.ltp = req.body.ltp.trim();
     if (req.body.hours) subject.hours = req.body.hours.trim();
+    if (req.body.theoryHours !== undefined) subject.theoryHours = Number(req.body.theoryHours);
+    if (req.body.labHours !== undefined) subject.labHours = Number(req.body.labHours);
+    if (req.body.theoryHours !== undefined || req.body.labHours !== undefined) {
+      const th = Number(subject.theoryHours) || 0;
+      const lh = Number(subject.labHours) || 0;
+      subject.hours = req.body.hours || (lh > 0 ? `${th}h Theory + ${lh}h Continuous Lab` : `${th} hrs/wk`);
+    }
     if (req.body.prerequisite !== undefined) subject.prerequisite = req.body.prerequisite.trim();
     if (req.body.textbooks !== undefined) subject.textbooks = req.body.textbooks.trim();
     if (req.body.studentsEnrolled !== undefined) subject.studentsEnrolled = Number(req.body.studentsEnrolled);
@@ -212,9 +364,26 @@ exports.updateSubject = async (req, res) => {
 
     await subject.save();
 
+    // Automatically update weekly timetable schedule
+    try {
+      await autoGenerateTimetableSchedule({
+        code: subject.code,
+        name: subject.name,
+        dept: subject.department,
+        year: subject.year,
+        sem: subject.sem,
+        theoryHours: subject.theoryHours,
+        labHours: subject.labHours,
+        isContinuousLab: true,
+        staffName: subject.faculty
+      });
+    } catch (ttErr) {
+      console.error('Auto timetable generation failed in updateSubject:', ttErr.message);
+    }
+
     res.status(200).json({
       success: true,
-      message: `Subject "${subject.name}" updated successfully.`,
+      message: `Subject "${subject.name}" updated successfully with automatic Timetable synchronization.`,
       data: subject
     });
   } catch (err) {
@@ -258,3 +427,5 @@ exports.deleteSubject = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+exports.autoGenerateExamAndHallTickets = autoGenerateExamAndHallTickets;

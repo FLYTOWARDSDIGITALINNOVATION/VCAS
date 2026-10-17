@@ -46,7 +46,7 @@ export const UG_FEE_STRUCTURE = [
     deptNames: [
       'B.Sc Computer Science (CS)', 
       'B.Sc Artificial Intelligence (AI)', 
-      'B.Sc Cyber Forensic & Security (CFS)'
+      'B.Sc Criminology and Forensic Science (CFS)'
     ],
     registrationFee: 8000,
     sem1Fee: 10000,
@@ -732,7 +732,7 @@ export default function FeeStructureView({ user }) {
                 <option value="BBA">BBA (Management)</option>
                 <option value="CS">B.Sc Computer Science (CS)</option>
                 <option value="AI">B.Sc Artificial Intelligence (AI)</option>
-                <option value="CFS">B.Sc Cyber Forensic & Security (CFS)</option>
+                <option value="CFS">B.Sc Criminology and Forensic Science (CFS)</option>
               </select>
             </div>
 

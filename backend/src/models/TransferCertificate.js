@@ -16,6 +16,12 @@ const transferCertificateSchema = new mongoose.Schema({
     trim: true,
     index: true
   },
+  umisNumber: {
+    type: String,
+    default: '',
+    uppercase: true,
+    trim: true
+  },
   studentName: {
     type: String,
     required: [true, 'Student Name is required'],

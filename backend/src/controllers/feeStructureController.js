@@ -20,7 +20,7 @@ const DEFAULT_CLUSTERS = [
     deptNames: [
       'B.Sc Computer Science (CS)', 
       'B.Sc Artificial Intelligence (AI)', 
-      'B.Sc Cyber Forensic & Security (CFS)'
+      'B.Sc Criminology and Forensic Science (CFS)'
     ],
     registrationFee: 8000,
     sem1Fee: 10000,

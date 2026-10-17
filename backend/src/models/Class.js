@@ -76,6 +76,18 @@ const classSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  theoryHours: {
+    type: Number,
+    default: 3
+  },
+  labHours: {
+    type: Number,
+    default: 0
+  },
+  isContinuousLab: {
+    type: Boolean,
+    default: true
+  },
   students: [studentSchema]
 }, {
   timestamps: true,
