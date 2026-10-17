@@ -486,12 +486,23 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
               <label className="block font-bold text-slate-800 mb-1">Role Category</label>
               <select
                 value={signup.staffRole}
-                onChange={(e) => setSignup({ ...signup, staffRole: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSignup(prev => ({
+                    ...prev,
+                    staffRole: val,
+                    department: ['Tamil', 'English', 'Physical Education', 'Office'].includes(val) ? val : prev.department
+                  }));
+                }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:outline-none"
               >
                 <option value="Staff">Teaching Faculty</option>
                 <option value="Accountant">Accountant</option>
                 <option value="Office Staff">Office Staff</option>
+                <option value="Tamil">Tamil</option>
+                <option value="English">English</option>
+                <option value="Physical Education">Physical Education</option>
+                <option value="Office">Office</option>
               </select>
             </div>
           </div>

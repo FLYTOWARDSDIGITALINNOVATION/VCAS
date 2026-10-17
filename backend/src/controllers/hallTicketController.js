@@ -112,7 +112,7 @@ exports.getHallTicketMeta = async (req, res) => {
         if (c.semester) semesters.add(Number(c.semester));
         if (c.section && c.section.trim()) sections.add(c.section.trim());
       });
-    } catch (_) {}
+    } catch (_) { }
 
     res.status(200).json({
       success: true,
@@ -230,7 +230,7 @@ exports.getEligibleStudents = async (req, res) => {
           }
         });
       });
-    } catch (_) {}
+    } catch (_) { }
 
     try {
       const savedExams = await Exam.find(deptRegex ? { department: deptRegex } : {}).lean();
@@ -245,7 +245,7 @@ exports.getEligibleStudents = async (req, res) => {
           });
         }
       });
-    } catch (_) {}
+    } catch (_) { }
 
     const subjectsMap = new Map();
     allDeptClasses.forEach(cls => {

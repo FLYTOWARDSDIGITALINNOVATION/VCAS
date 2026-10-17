@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE, BACKEND_URL } from '../apiConfig';
-import { 
-  ArrowLeft, 
-  IdCard, 
-  Users, 
-  CreditCard, 
-  GraduationCap, 
-  FileText, 
-  ShieldCheck, 
-  CheckCircle2, 
-  Printer, 
-  BookOpen, 
-  Save, 
-  UserPlus, 
-  Key, 
-  Loader2 
+import {
+  ArrowLeft,
+  IdCard,
+  Users,
+  CreditCard,
+  GraduationCap,
+  FileText,
+  ShieldCheck,
+  CheckCircle2,
+  Printer,
+  BookOpen,
+  Save,
+  UserPlus,
+  Key,
+  Loader2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
@@ -36,7 +36,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
           setDepartmentsList(data.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     fetch(`${BACKEND_URL}/api/courses`)
       .then(res => res.json())
@@ -45,7 +45,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
           setCoursesList(data.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // All initial fields start completely untyped / blank
@@ -393,7 +393,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto font-sans animate-fadeIn">
-      
+
       {/* Top Back Navigation Bar */}
       <div className="flex items-center justify-between">
         <button
@@ -410,7 +410,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
       {/* ADD NEW STUDENT FORM (EXACT 5-SHEET MENTOR DIARY & PORTFOLIO)      */}
       {/* ───────────────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-7 shadow-xs space-y-6 animate-fadeIn">
-        
+
         <div className="border-b border-slate-200 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -439,7 +439,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
         </div>
 
         <form onSubmit={handleSubmitNewStudent} className="space-y-6 text-xs">
-          
+
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* SHEET 1: COVER / CORE IDENTIFICATION & STATUTORY DETAILS         */}
           {/* ═══════════════════════════════════════════════════════════════ */}
@@ -665,15 +665,14 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                     <button
                       type="button"
                       key={comm}
-                      onClick={() => setFormData(prev => ({ 
-                        ...prev, 
-                        community: prev.community === comm ? '' : comm 
+                      onClick={() => setFormData(prev => ({
+                        ...prev,
+                        community: prev.community === comm ? '' : comm
                       }))}
-                      className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer border ${
-                        isSelected
+                      className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer border ${isSelected
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       {comm} {isSelected ? '✓' : ''}
                     </button>

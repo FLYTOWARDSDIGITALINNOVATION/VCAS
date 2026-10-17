@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import AddStudentWizard from './AddStudentWizard';
 import StudentProfileView from './StudentProfileView';
-import { 
-  Search, 
-  Filter, 
-  Download, 
-  Plus, 
-  Eye, 
-  Edit, 
-  Trash2, 
-  ChevronDown, 
-  Check, 
+import {
+  Search,
+  Filter,
+  Download,
+  Plus,
+  Eye,
+  Edit,
+  Trash2,
+  ChevronDown,
+  Check,
   X,
   UserPlus,
   ArrowUpDown,
@@ -101,6 +101,8 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
+  const [selectedBatch, setSelectedBatch] = useState('All Batches');
+  const [groupByBatch, setGroupByBatch] = useState(false);
   const [selectedFeeStatus, setSelectedFeeStatus] = useState('All Statuses');
   const [selectedRows, setSelectedRows] = useState([]);
   const [showAddWizard, setShowAddWizard] = useState(false);
@@ -117,24 +119,25 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (e) {}
+    } catch (e) { }
     return [];
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const [departmentsList, setDepartmentsList] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
       if (Array.isArray(cached) && cached.length > 0) return cached;
-    } catch (_) {}
+    } catch (_) { }
     return getKnownDepartments().map(name => ({ name, code: name.substring(0, 3).toUpperCase() }));
   });
   const [subjectsList, setSubjectsList] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
       if (Array.isArray(cached) && cached.length > 0) return cached;
-    } catch (_) {}
+    } catch (_) { }
     return [{ code: 'CS101', name: 'Tamil', department: 'Computer Science' }];
   });
   const [classesList, setClassesList] = useState([]);
@@ -149,7 +152,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
           setDepartmentsList(data.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // 2. Fetch original real subjects
     fetch(`${API_BASE}/api/subjects`)
@@ -159,7 +162,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
           setSubjectsList(data.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // 3. Fetch real classes to enrich subject allocations
     fetch(`${API_BASE}/api/classes`)
@@ -187,7 +190,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
           });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Toast notification helper
@@ -210,7 +213,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
         setStudents(normalized);
         try {
           localStorage.setItem('vcas_students_cache', JSON.stringify(normalized));
-        } catch (e) {}
+        } catch (e) { }
       } else {
         console.error('Failed to fetch students:', result.message);
         setErrorMessage(result.message || 'Failed to fetch students from server');
@@ -226,7 +229,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
             setStudents(parsed);
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     } finally {
       setIsLoading(false);
     }
@@ -293,18 +296,18 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       });
 
       // Match against class enrolled students list
-      const matchedClass = classesList.find(c => 
-        (c.code || '').toLowerCase() === targetSub || 
+      const matchedClass = classesList.find(c =>
+        (c.code || '').toLowerCase() === targetSub ||
         (c.name || '').toLowerCase() === targetSub
       );
-      const inClass = matchedClass && Array.isArray(matchedClass.students) && matchedClass.students.some(st => 
+      const inClass = matchedClass && Array.isArray(matchedClass.students) && matchedClass.students.some(st =>
         (st.rollNo && st.rollNo.toUpperCase() === (student.rollNo || '').toUpperCase()) ||
         (st.regNo && st.regNo.toUpperCase() === (student.regNo || '').toUpperCase())
       );
 
       // Match against department or course association
-      const matchedSubDoc = subjectsList.find(s => 
-        (s.code || '').toLowerCase() === targetSub || 
+      const matchedSubDoc = subjectsList.find(s =>
+        (s.code || '').toLowerCase() === targetSub ||
         (s.name || '').toLowerCase() === targetSub
       );
       const matchesDeptOfSub = matchedSubDoc?.department && (
@@ -371,7 +374,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   };
 
   const getFeeBadgeClass = (feeStatus) => {
-    switch(feeStatus) {
+    switch (feeStatus) {
       case 'Paid': return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
       case 'Pending': return 'bg-amber-100 text-amber-700 border border-amber-200';
       case 'Partial': return 'bg-blue-100 text-blue-700 border border-blue-200';
@@ -620,7 +623,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
     { id: 'pan', label: 'PAN Card Number', group: 'Statutory / Identity', getVal: s => s.pan || '' },
     { id: 'emisNumber', label: 'EMIS Number', group: 'Statutory / Identity', getVal: s => s.emisNumber || '' },
     { id: 'drivingLicense', label: 'Driving License', group: 'Statutory / Identity', getVal: s => s.drivingLicense || '' },
-    
+
     { id: 'regNo', label: 'Register Number (Reg No)', group: 'Basic Profile', getVal: s => s.regNo || s.id || '' },
     { id: 'rollNo', label: 'Roll Number', group: 'Basic Profile', getVal: s => s.rollNo || '' },
     { id: 'name', label: 'Student Full Name', group: 'Basic Profile', getVal: s => s.name || s.fullName || '' },
@@ -765,13 +768,13 @@ Unauthorized reproduction or distribution is strictly prohibited.
           });
           try {
             localStorage.setItem('vcas_students_cache', JSON.stringify(next));
-          } catch (e) {}
+          } catch (e) { }
           return next;
         });
 
         try {
           window.dispatchEvent(new Event('vcas_students_updated'));
-        } catch (_) {}
+        } catch (_) { }
 
         if (selectedStudentProfile) {
           setSelectedStudentProfile(updated);
@@ -803,12 +806,12 @@ Unauthorized reproduction or distribution is strictly prohibited.
           const next = prev.filter(s => s.id !== deleteModalStudent.id && s._id !== deleteModalStudent._id);
           try {
             localStorage.setItem('vcas_students_cache', JSON.stringify(next));
-          } catch (e) {}
+          } catch (e) { }
           return next;
         });
         try {
           window.dispatchEvent(new Event('vcas_students_updated'));
-        } catch (_) {}
+        } catch (_) { }
         showToast(`Student "${deleteModalStudent.name}" deleted successfully.`);
         setDeleteModalStudent(null);
       } else {
@@ -830,12 +833,12 @@ Unauthorized reproduction or distribution is strictly prohibited.
         const next = [created, ...prev.filter(s => s.regNo !== created.regNo && s._id !== created._id)];
         try {
           localStorage.setItem('vcas_students_cache', JSON.stringify(next));
-        } catch (e) {}
+        } catch (e) { }
         return next;
       });
       try {
         window.dispatchEvent(new Event('vcas_students_updated'));
-      } catch (_) {}
+      } catch (_) { }
       setShowAddWizard(false);
       showToast(`Student "${created.name}" registered successfully!`);
       fetchStudents();
@@ -891,12 +894,12 @@ Unauthorized reproduction or distribution is strictly prohibited.
           const next = [created, ...prev];
           try {
             localStorage.setItem('vcas_students_cache', JSON.stringify(next));
-          } catch (e) {}
+          } catch (e) { }
           return next;
         });
         try {
           window.dispatchEvent(new Event('vcas_students_updated'));
-        } catch (_) {}
+        } catch (_) { }
         setShowAddWizard(false);
         showToast(`Student "${created.name}" registered successfully!`);
       } else {
@@ -912,7 +915,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
   if (selectedStudentProfile) {
     return (
-      <StudentProfileView 
+      <StudentProfileView
         student={selectedStudentProfile}
         onBack={() => setSelectedStudentProfile(null)}
         user={user}
@@ -921,7 +924,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         onPrintCredentials={handlePrintStudentCredentials}
         onEdit={(stu) => {
           setSelectedStudentProfile(null);
-          setEditingStudent({ 
+          setEditingStudent({
             ...stu,
             _originalId: stu._id || stu.studentId || stu.id,
             _originalStudentId: stu.studentId || stu.id,
@@ -937,7 +940,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
   if (showAddWizard) {
     return (
-      <AddStudentWizard 
+      <AddStudentWizard
         user={user}
         onBack={() => setShowAddWizard(false)}
         onComplete={handleCompleteWizard}
@@ -948,7 +951,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
   return (
     <div className="space-y-6">
-      
+
       {/* HEADER ROW */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -969,7 +972,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         <div className="flex items-center gap-3">
           {isSuperAdmin && (
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => handleQuickExport('aadhaar_only')}
                 className="hidden lg:inline-flex px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-xs border border-emerald-200 shadow-xs items-center gap-1.5 transition-all cursor-pointer"
                 title="Download Aadhaar numbers with student identification"
@@ -977,7 +980,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 <Download className="w-3.5 h-3.5 text-emerald-600" />
                 <span>⚡ Aadhaar Only</span>
               </button>
-              <button 
+              <button
                 onClick={() => setShowExportModal(true)}
                 className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-500/20 flex items-center gap-2 transition-all cursor-pointer"
                 title="Download specific individual fields or configure custom export"
@@ -987,7 +990,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
               </button>
             </div>
           )}
-          <button 
+          <button
             onClick={() => setShowAddWizard(true)}
             className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
           >
@@ -1004,8 +1007,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
             <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
             <span>{errorMessage}</span>
           </div>
-          <button 
-            onClick={fetchStudents} 
+          <button
+            onClick={fetchStudents}
             className="px-3 py-1 bg-white border border-rose-200 rounded-lg font-bold text-rose-700 hover:bg-rose-100 cursor-pointer transition-all"
           >
             Retry Connection
@@ -1016,12 +1019,12 @@ Unauthorized reproduction or distribution is strictly prohibited.
       {/* FILTER & SEARCH BAR CONTAINER */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          
+
           {/* Search Input - Prominent and Spacious */}
           <div className="relative flex-1 min-w-[280px] sm:min-w-[340px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by student name, roll no, register number, department..."
@@ -1057,7 +1060,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
             </select>
 
             {/* Subjects Filter (Replaces Courses with Real Subjects from DB) */}
-            <select 
+            <select
               value={selectedSubject}
               onChange={(e) => setSelectedSubject(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10 min-w-[140px]"
@@ -1092,7 +1095,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
             {/* Fee Statuses Filter (Accountant & Office Staff Only) */}
             {canViewFees && (
-              <select 
+              <select
                 value={selectedFeeStatus}
                 onChange={(e) => setSelectedFeeStatus(e.target.value)}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10"
@@ -1113,7 +1116,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[900px]">
-            
+
             {/* Table Header */}
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 whitespace-nowrap">
@@ -1212,11 +1215,10 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
                       {/* Status Badge */}
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          student.status === 'Active' 
-                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
+                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${student.status === 'Active'
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                             : 'bg-slate-100 text-slate-500 border border-slate-200'
-                        }`}>
+                          }`}>
                           {student.status || 'Active'}
                         </span>
                       </td>
@@ -1243,7 +1245,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                         <div className="flex items-center justify-end gap-1">
                           {isSuperAdmin && (
                             <>
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDownloadStudentCredentials(student);
@@ -1253,7 +1255,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                               >
                                 <Download className="w-4 h-4" />
                               </button>
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handlePrintStudentCredentials(student);
@@ -1265,17 +1267,17 @@ Unauthorized reproduction or distribution is strictly prohibited.
                               </button>
                             </>
                           )}
-                          <button 
+                          <button
                             onClick={() => setSelectedStudentProfile(student)}
                             title="View Full Profile"
                             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingStudent({ 
+                              setEditingStudent({
                                 ...student,
                                 _originalId: student._id || student.studentId || student.id,
                                 _originalStudentId: student.studentId || student.id,
@@ -1290,7 +1292,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                           >
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button 
+                          <button
                             onClick={() => setDeleteModalStudent(student)}
                             title="Delete Student"
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
@@ -1311,16 +1313,15 @@ Unauthorized reproduction or distribution is strictly prohibited.
         {/* Table Footer / Pagination */}
         <div className="px-6 py-3.5 bg-slate-50/50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <span className="font-medium">Showing {filteredStudents.length} of {students.length} students</span>
-          
+
           <div className="flex items-center gap-1.5">
             {['1', '2', '3', '...', '12'].map((page, i) => (
-              <button 
+              <button
                 key={i}
-                className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
-                  page === '1' 
-                    ? 'bg-blue-600 text-white shadow-xs' 
+                className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${page === '1'
+                    ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-600 hover:bg-slate-200/70'
-                }`}
+                  }`}
               >
                 {page}
               </button>
@@ -1339,7 +1340,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 <h3 className="text-lg font-bold text-slate-900">Edit Student Profile</h3>
                 <p className="text-xs text-slate-400 font-mono">Editing Record: {String(editingStudent.id || editingStudent.studentId || '')}</p>
               </div>
-              <button 
+              <button
                 type="button"
                 onClick={() => setEditingStudent(null)}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100"
@@ -1349,17 +1350,17 @@ Unauthorized reproduction or distribution is strictly prohibited.
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
-              
+
               {/* Reg No, Roll No & Year */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
                 <div>
                   <label className="block font-black text-blue-900 mb-1">Register Number (Reg No) *</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
                     value={editingStudent.regNo || editingStudent.registerNo || editingStudent.studentId || editingStudent.id || ''}
-                    onChange={(e) => setEditingStudent({ 
-                      ...editingStudent, 
+                    onChange={(e) => setEditingStudent({
+                      ...editingStudent,
                       regNo: e.target.value.toUpperCase(),
                       loginId: e.target.value.toUpperCase(),
                       studentId: e.target.value.toUpperCase(),
@@ -1370,8 +1371,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Roll Number</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.rollNo || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, rollNo: e.target.value.toUpperCase() })}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:border-blue-500 focus:outline-none"
@@ -1379,7 +1380,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Year *</label>
-                  <select 
+                  <select
                     value={editingStudent.year || '1st Year'}
                     onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none"
@@ -1395,8 +1396,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
               {/* Student Name */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Student Name *</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   value={editingStudent.name || editingStudent.fullName || ''}
                   onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value.toUpperCase() })}
@@ -1408,7 +1409,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Gender *</label>
-                  <select 
+                  <select
                     value={editingStudent.gender || 'Male'}
                     onChange={(e) => setEditingStudent({ ...editingStudent, gender: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white focus:outline-none"
@@ -1420,8 +1421,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-black text-emerald-800 mb-1">Date of Birth (Password) *</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     value={editingStudent.dob || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, dob: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-emerald-50/50 border border-emerald-300 rounded-xl text-emerald-950 font-bold focus:bg-white focus:outline-none"
@@ -1433,8 +1434,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Father's Name</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.fatherName || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, fatherName: e.target.value.toUpperCase() })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
@@ -1442,11 +1443,11 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Course Admitted *</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.courseAdmitted || editingStudent.course || ''}
-                    onChange={(e) => setEditingStudent({ 
-                      ...editingStudent, 
+                    onChange={(e) => setEditingStudent({
+                      ...editingStudent,
                       courseAdmitted: e.target.value.toUpperCase(),
                       course: e.target.value.toUpperCase(),
                       department: e.target.value.toUpperCase()
@@ -1460,8 +1461,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Nationality</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.nationality || 'INDIAN'}
                     onChange={(e) => setEditingStudent({ ...editingStudent, nationality: e.target.value.toUpperCase() })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
@@ -1469,8 +1470,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Religion</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.religion || 'HINDU'}
                     onChange={(e) => setEditingStudent({ ...editingStudent, religion: e.target.value.toUpperCase() })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
@@ -1478,8 +1479,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Caste / Community</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.caste || editingStudent.casteCommunity || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, caste: e.target.value.toUpperCase(), casteCommunity: e.target.value.toUpperCase() })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
@@ -1491,8 +1492,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Aadhaar</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.aadhaar || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, aadhaar: e.target.value })}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none"
@@ -1500,8 +1501,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">PAN Card</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.pan || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, pan: e.target.value.toUpperCase() })}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none uppercase"
@@ -1509,8 +1510,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">EMIS Number</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.emisNumber || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, emisNumber: e.target.value })}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none"
@@ -1518,8 +1519,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Driving License</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.drivingLicense || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, drivingLicense: e.target.value.toUpperCase() })}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none uppercase"
@@ -1531,8 +1532,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-emerald-50/40 p-3 rounded-2xl border border-emerald-100">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Bank Name</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.bankName || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, bankName: e.target.value })}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 text-xs focus:outline-none"
@@ -1540,8 +1541,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Account No</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.bankAccountNo || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, bankAccountNo: e.target.value })}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none"
@@ -1549,8 +1550,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">IFSC Code</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.ifscCode || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, ifscCode: e.target.value.toUpperCase() })}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-mono text-xs focus:outline-none uppercase"
@@ -1558,8 +1559,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Branch</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.bankBranch || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, bankBranch: e.target.value })}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 text-xs focus:outline-none"
@@ -1571,8 +1572,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">10th Marks / Board</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.tenthMarks || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, tenthMarks: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:outline-none"
@@ -1580,8 +1581,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">12th Marks / Board</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.twelfthMarks || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, twelfthMarks: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:outline-none"
@@ -1589,8 +1590,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Donation (₹)</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingStudent.donation || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, donation: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:outline-none"
@@ -1602,8 +1603,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Date of Admission</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     value={editingStudent.dateOfAdmission || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, dateOfAdmission: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:outline-none"
@@ -1611,7 +1612,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Account Status</label>
-                  <select 
+                  <select
                     value={editingStudent.status || 'Active'}
                     onChange={(e) => setEditingStudent({ ...editingStudent, status: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
@@ -1840,7 +1841,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         <ModalPortal>
           <div className="fixed inset-0 z-[9999] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
             <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden my-auto">
-              
+
               {/* Header */}
               <div className="p-5 sm:p-6 bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
@@ -1854,7 +1855,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                     </p>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => setShowExportModal(false)}
                   className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
                 >
@@ -2014,11 +2015,10 @@ Unauthorized reproduction or distribution is strictly prohibited.
                               return (
                                 <label
                                   key={field.id}
-                                  className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-all ${
-                                    isChecked
+                                  className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-all ${isChecked
                                       ? 'bg-purple-50 border-purple-300 text-purple-900 font-bold shadow-2xs'
                                       : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                                  }`}
+                                    }`}
                                 >
                                   <input
                                     type="checkbox"

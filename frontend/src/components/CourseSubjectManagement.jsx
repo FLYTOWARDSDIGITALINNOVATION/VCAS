@@ -1236,9 +1236,9 @@ export default function CourseSubjectManagement({ user }) {
                         <td className="py-4 px-4 text-xs font-medium text-slate-700">
                           <div className="flex items-center gap-2">
                             <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-[10px]">
-                              {subj.faculty.charAt(subj.faculty.indexOf('.') > -1 ? subj.faculty.indexOf('.') + 2 : 0) || 'F'}
+                              {subj.faculty ? (subj.faculty.charAt(subj.faculty.indexOf('.') > -1 ? subj.faculty.indexOf('.') + 2 : 0) || 'F') : 'F'}
                             </div>
-                            <span>{subj.faculty}</span>
+                            <span>{subj.faculty || 'Unassigned'}</span>
                           </div>
                         </td>
 

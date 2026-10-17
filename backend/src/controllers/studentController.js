@@ -253,7 +253,7 @@ exports.updateStudent = async (req, res) => {
     if (id && id.match(/^[0-9a-fA-F]{24}$/)) {
       student = await Student.findById(id);
     }
-    
+
     if (!student) {
       const trimmedId = (id || '').trim();
       student = await Student.findOne({
@@ -416,9 +416,9 @@ exports.updateStudent = async (req, res) => {
   } catch (error) {
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0] || 'field';
-      return res.status(400).json({ 
-        success: false, 
-        message: `A student with this ${field === 'studentId' ? 'Student ID' : field === 'admNo' ? 'Admission No.' : field === 'regNo' ? 'Reg No' : field} already exists.` 
+      return res.status(400).json({
+        success: false,
+        message: `A student with this ${field === 'studentId' ? 'Student ID' : field === 'admNo' ? 'Admission No.' : field === 'regNo' ? 'Reg No' : field} already exists.`
       });
     }
     res.status(500).json({ success: false, message: error.message || 'Server error while updating student.' });
