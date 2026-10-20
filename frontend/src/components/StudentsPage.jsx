@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import AddStudentWizard from './AddStudentWizard';
 import StudentProfileView from './StudentProfileView';
@@ -21,7 +21,8 @@ import {
   Printer,
   Loader2,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  Layers
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
@@ -60,7 +61,7 @@ function normalizeStudent(s) {
     city: s.city || '',
     state: s.state || 'Tamil Nadu',
     pinCode: s.pinCode || '',
-    batch: s.batch || '2024–2027',
+    batch: (s.batch || (s.courseDurationFrom && s.courseDurationTo ? `${s.courseDurationFrom}-${s.courseDurationTo}` : '2022-2026')).replace('–', '-').trim(),
     section: s.section || 'A',
     cgpa: s.cgpa || '8.0',
     rank: s.rank || '',
@@ -101,8 +102,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
-  const [selectedBatch, setSelectedBatch] = useState('All Batches');
-  const [groupByBatch, setGroupByBatch] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState('');
   const [selectedFeeStatus, setSelectedFeeStatus] = useState('All Statuses');
   const [selectedRows, setSelectedRows] = useState([]);
   const [showAddWizard, setShowAddWizard] = useState(false);
@@ -266,7 +266,17 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     status: 'Active'
   });
 
-  // Filter students based on search and dropdowns
+  // Compute unique batches present in the students collection (only added batches)
+  const uniqueBatches = useMemo(() => {
+    const bSet = new Set();
+    students.forEach(s => {
+      const b = (s.batch || '').replace('–', '-').trim();
+      if (b) bSet.add(b);
+    });
+    return Array.from(bSet).sort().reverse();
+  }, [students]);
+
+  // Filter students based on search, department, batch and dropdowns
   const filteredStudents = students.filter(student => {
     const term = (searchTerm || '').toLowerCase().trim();
     const matchesSearch = !term || (
@@ -284,6 +294,11 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
     const matchesDept = selectedDept === 'All Departments' || student.department === selectedDept;
     const matchesFee = !canViewFees || selectedFeeStatus === 'All Statuses' || student.feeStatus === selectedFeeStatus;
+
+    const sBatch = (student.batch || '').replace('–', '-').trim().toLowerCase();
+    const selBatch = (selectedBatch || '').replace('–', '-').trim().toLowerCase();
+    const isAllBatches = !selBatch || selBatch === 'all' || selBatch === 'all batches';
+    const matchesBatch = isAllBatches || sBatch === selBatch || sBatch.includes(selBatch);
 
     let matchesSubject = true;
     if (selectedSubject && selectedSubject !== 'All Subjects') {
@@ -318,8 +333,10 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       matchesSubject = hasEnrolledSub || inClass || matchesDeptOfSub;
     }
 
-    return matchesSearch && matchesDept && matchesFee && matchesSubject;
+    return matchesSearch && matchesDept && matchesFee && matchesSubject && matchesBatch;
   });
+
+
 
   // Selection handlers
   const handleSelectAll = (e) => {
@@ -633,6 +650,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
     { id: 'course', label: 'Course Admitted', group: 'Academic Details', getVal: s => s.course || s.courseAdmitted || s.department || '' },
     { id: 'department', label: 'Department', group: 'Academic Details', getVal: s => s.department || '' },
+    { id: 'batch', label: 'Batch (e.g. 2022-2026)', group: 'Academic Details', getVal: s => s.batch || '2022-2026' },
     { id: 'year', label: 'Academic Year', group: 'Academic Details', getVal: s => s.year || '1st Year' },
     { id: 'sem', label: 'Semester', group: 'Academic Details', getVal: s => s.sem || s.semester || '1st Sem' },
     { id: 'dateOfAdmission', label: 'Date of Admission', group: 'Academic Details', getVal: s => s.dateOfAdmission || '' },
@@ -712,6 +730,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         regNo: (editingStudent.regNo || editingStudent.registerNo || editingStudent.studentId || editingStudent.id || '').trim().toUpperCase(),
         rollNo: (editingStudent.rollNo || '').trim().toUpperCase(),
         year: editingStudent.year || '1st Year',
+        batch: (editingStudent.batch || '2022-2026').replace('–', '-').trim(),
         loginId: (editingStudent.loginId || editingStudent.regNo || editingStudent.studentId || '').trim().toUpperCase(),
         password: editingStudent.dob,
         studentId: editingStudent.regNo || editingStudent.studentId || editingStudent.id,
@@ -1016,6 +1035,50 @@ Unauthorized reproduction or distribution is strictly prohibited.
         </div>
       )}
 
+      {/* COHORT & BATCH NAVIGATION TABS BAR */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
+          <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5 mr-1 shrink-0">
+            <Layers className="w-4 h-4 text-purple-600" />
+            <span>Batches:</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedBatch('')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
+              !selectedBatch.trim() || selectedBatch.toLowerCase() === 'all' || selectedBatch.toLowerCase() === 'all batches'
+                ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/30'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+            }`}
+          >
+            All Batches ({students.length})
+          </button>
+          {uniqueBatches.map(b => {
+            const count = students.filter(s => (s.batch || '2022-2026').replace('–', '-').trim().toLowerCase() === b.toLowerCase()).length;
+            const isSelected = selectedBatch.replace('–', '-').trim().toLowerCase() === b.toLowerCase();
+            return (
+              <button
+                key={b}
+                type="button"
+                onClick={() => setSelectedBatch(b)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer shrink-0 ${
+                  isSelected
+                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/30'
+                    : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200/70'
+                }`}
+              >
+                <span>Batch {b}</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  isSelected ? 'bg-purple-800 text-white' : 'bg-purple-200 text-purple-900'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* FILTER & SEARCH BAR CONTAINER */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
@@ -1043,6 +1106,33 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
           {/* Filters Group */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Batch Filter Input (Type Mode) */}
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                list="batch-filter-datalist"
+                value={selectedBatch}
+                onChange={(e) => setSelectedBatch(e.target.value)}
+                placeholder="Type Batch (e.g. 2022-2026)..."
+                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-purple-50/70 border border-purple-200 rounded-xl text-xs font-bold text-purple-950 placeholder:text-purple-400 placeholder:font-normal focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition-all h-10 min-w-[190px]"
+              />
+              <datalist id="batch-filter-datalist">
+                {uniqueBatches.map(b => (
+                  <option key={b} value={b}>Batch {b}</option>
+                ))}
+              </datalist>
+              {selectedBatch && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedBatch('')}
+                  className="absolute right-2.5 text-purple-400 hover:text-purple-700 p-0.5 rounded-md transition-colors cursor-pointer"
+                  title="Clear batch filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
             {/* Department Dropdown Filter */}
             <select
               value={selectedDept}
@@ -1112,224 +1202,267 @@ Unauthorized reproduction or distribution is strictly prohibited.
         </div>
       </div>
 
-      {/* STUDENTS TABLE CARD */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[900px]">
-
-            {/* Table Header */}
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                <th className="py-3.5 px-5 text-left">STUDENT / REG NO</th>
-                <th className="py-3.5 px-3 text-center">YEAR</th>
-                <th className="py-3.5 px-3 text-center">GENDER</th>
-                <th className="py-3.5 px-3 text-center">DOB</th>
-                <th className="py-3.5 px-4 text-left">FATHER'S NAME</th>
-                <th className="py-3.5 px-3 text-center">ROLL NO</th>
-                <th className="py-3.5 px-3 text-center">ADM DATE</th>
-                <th className="py-3.5 px-4 text-left">COURSE ADMITTED</th>
-                <th className="py-3.5 px-3 text-center">STATUS</th>
-                {isSuperAdmin && <th className="py-3.5 px-4 text-center">STUDENT SLIP</th>}
-                <th className="py-3.5 px-5 text-right">ACTIONS</th>
-              </tr>
-            </thead>
-
-            {/* Table Body */}
-            <tbody className="divide-y divide-slate-100 text-xs font-medium">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={isSuperAdmin ? "11" : "10"} className="py-16 text-center text-slate-400">
-                    <div className="flex flex-col items-center justify-center gap-2.5">
-                      <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                      <span className="text-xs font-semibold text-slate-600">Loading student records...</span>
+      {/* BATCH-WISE SEPARATE DISPLAY / UNIFIED TABLE */}
+      {(() => {
+        // Row renderer helper
+        const renderStudentRow = (student, idx) => {
+          return (
+            <tr key={student._id || student.id || student.rollNo || idx} className="hover:bg-slate-50/80 transition-colors">
+              {/* Name & Reg No */}
+              <td className="py-3.5 px-5 cursor-pointer whitespace-nowrap" onClick={() => setSelectedStudentProfile(student)}>
+                <div className="flex items-center gap-2.5 group">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                    {(student.name || 'S').charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-extrabold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors uppercase">
+                      {student.name || student.fullName}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] text-blue-700 font-mono font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                        Reg No: {student.regNo || student.id}
+                      </span>
                     </div>
-                  </td>
-                </tr>
-              ) : filteredStudents.length === 0 ? (
-                <tr>
-                  <td colSpan={isSuperAdmin ? "11" : "10"} className="py-12 text-center text-slate-400 font-normal">
-                    No students match your filter criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredStudents.map((student, idx) => {
-                  return (
-                    <tr key={student._id || student.id || student.rollNo || idx} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Name & Reg No */}
-                      <td className="py-3.5 px-5 cursor-pointer whitespace-nowrap" onClick={() => setSelectedStudentProfile(student)}>
-                        <div className="flex items-center gap-2.5 group">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
-                            {(student.name || 'S').charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-extrabold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors uppercase">
-                              {student.name || student.fullName}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[10px] text-blue-700 font-mono font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                                Reg No: {student.regNo || student.id}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
+                  </div>
+                </div>
+              </td>
 
-                      {/* Year */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-[10px] border border-amber-200">
-                          {student.year || '1st Year'}
-                        </span>
-                      </td>
+              {/* Batch */}
+              <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 font-bold text-xs border border-purple-200 font-mono">
+                  {student.batch || '2022-2026'}
+                </span>
+              </td>
 
-                      {/* Gender */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px]">
-                          {student.gender || 'MALE'}
-                        </span>
-                      </td>
+              {/* Year */}
+              <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-[10px] border border-amber-200">
+                  {student.year || '1st Year'}
+                </span>
+              </td>
 
-                      {/* Date of Birth */}
-                      <td className="py-3.5 px-3 text-center font-medium text-slate-700 whitespace-nowrap">
-                        {student.dob || '—'}
-                      </td>
+              {/* Gender */}
+              <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px]">
+                  {student.gender || 'MALE'}
+                </span>
+              </td>
 
-                      {/* Father's Name */}
-                      <td className="py-3.5 px-4 font-semibold text-slate-800 uppercase whitespace-nowrap">
-                        {student.fatherName || '—'}
-                      </td>
+              {/* Date of Birth */}
+              <td className="py-3.5 px-3 text-center font-medium text-slate-700 whitespace-nowrap">
+                {student.dob || '—'}
+              </td>
 
-                      {/* Roll Number */}
-                      <td className="py-3.5 px-3 text-center text-slate-700 font-mono font-bold whitespace-nowrap">
-                        {student.rollNo || '—'}
-                      </td>
+              {/* Father's Name */}
+              <td className="py-3.5 px-4 font-semibold text-slate-800 uppercase whitespace-nowrap">
+                {student.fatherName || '—'}
+              </td>
 
-                      {/* Date of Admission */}
-                      <td className="py-3.5 px-3 text-center font-medium text-slate-700 whitespace-nowrap">
-                        {student.dateOfAdmission || '—'}
-                      </td>
+              {/* Roll Number */}
+              <td className="py-3.5 px-3 text-center text-slate-700 font-mono font-bold whitespace-nowrap">
+                {student.rollNo || '—'}
+              </td>
 
-                      {/* Course in Which Admitted */}
-                      <td className="py-3.5 px-4 font-bold text-blue-700 whitespace-nowrap">
-                        {student.courseAdmitted || student.course || student.department || '—'}
-                      </td>
+              {/* Date of Admission */}
+              <td className="py-3.5 px-3 text-center font-medium text-slate-700 whitespace-nowrap">
+                {student.dateOfAdmission || '—'}
+              </td>
 
-                      {/* Status Badge */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${student.status === 'Active'
-                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                            : 'bg-slate-100 text-slate-500 border border-slate-200'
-                          }`}>
-                          {student.status || 'Active'}
-                        </span>
-                      </td>
+              {/* Course in Which Admitted */}
+              <td className="py-3.5 px-4 font-bold text-blue-700 whitespace-nowrap">
+                {student.courseAdmitted || student.course || student.department || '—'}
+              </td>
 
-                      {/* Student Slip (Super Admin only) */}
-                      {isSuperAdmin && (
-                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCredentialModalStudent(student);
-                            }}
-                            title="Download & View Official Student Slip"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all shadow-2xs cursor-pointer"
-                          >
-                            <Key className="w-3.5 h-3.5 text-purple-600" />
-                            <span>Student Slip</span>
-                          </button>
-                        </td>
-                      )}
+              {/* Status Badge */}
+              <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  student.status === 'Active'
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                }`}>
+                  {student.status || 'Active'}
+                </span>
+              </td>
 
-                      {/* Action Buttons */}
-                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {isSuperAdmin && (
-                            <>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDownloadStudentCredentials(student);
-                                }}
-                                title="Download Student Credentials & Data"
-                                className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePrintStudentCredentials(student);
-                                }}
-                                title="Print Student Credentials Slip"
-                                className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all"
-                              >
-                                <Printer className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => setSelectedStudentProfile(student)}
-                            title="View Full Profile"
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingStudent({
-                                ...student,
-                                _originalId: student._id || student.studentId || student.id,
-                                _originalStudentId: student.studentId || student.id,
-                                id: student.studentId || student.id,
-                                studentId: student.studentId || student.id,
-                                admNo: student.admNo || student.admissionNo || '',
-                                sem: student.sem || student.semester || '1st Sem'
-                              });
-                            }}
-                            title="Edit Student"
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteModalStudent(student)}
-                            title="Delete Student"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-
-                    </tr>
-                  );
-                })
+              {/* Student Slip (Super Admin only) */}
+              {isSuperAdmin && (
+                <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCredentialModalStudent(student);
+                    }}
+                    title="Download & View Official Student Slip"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all shadow-2xs cursor-pointer"
+                  >
+                    <Key className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Student Slip</span>
+                  </button>
+                </td>
               )}
-            </tbody>
-          </table>
-        </div>
 
-        {/* Table Footer / Pagination */}
-        <div className="px-6 py-3.5 bg-slate-50/50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <span className="font-medium">Showing {filteredStudents.length} of {students.length} students</span>
+              {/* Action Buttons */}
+              <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                <div className="flex items-center justify-end gap-1">
+                  {isSuperAdmin && (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadStudentCredentials(student);
+                        }}
+                        title="Download Student Credentials & Data"
+                        className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePrintStudentCredentials(student);
+                        }}
+                        title="Print Student Credentials Slip"
+                        className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setSelectedStudentProfile(student)}
+                    title="View Full Profile"
+                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingStudent({
+                        ...student,
+                        _originalId: student._id || student.studentId || student.id,
+                        _originalStudentId: student.studentId || student.id,
+                        id: student.studentId || student.id,
+                        studentId: student.studentId || student.id,
+                        admNo: student.admNo || student.admissionNo || '',
+                        sem: student.sem || student.semester || '1st Sem'
+                      });
+                    }}
+                    title="Edit Student"
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteModalStudent(student)}
+                    title="Delete Student"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          );
+        };
 
-          <div className="flex items-center gap-1.5">
-            {['1', '2', '3', '...', '12'].map((page, i) => (
-              <button
-                key={i}
-                className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${page === '1'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-200/70'
-                  }`}
-              >
-                {page}
-              </button>
-            ))}
-          </div>
-        </div>
+        // Table renderer helper
+        const renderTableCard = (studentList, batchTitle = null) => {
+          return (
+            <div key={batchTitle || 'unified-table'} className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+              {batchTitle && (
+                <div className="bg-gradient-to-r from-purple-50/90 to-slate-50 border-b border-purple-100 px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+                    <span className="text-xs font-black uppercase text-purple-950 tracking-wider">
+                      BATCH: {batchTitle}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-extrabold border border-purple-200">
+                      {studentList.length} {studentList.length === 1 ? 'Student' : 'Students'} Enrolled
+                    </span>
+                  </div>
+                  {(!selectedBatch.trim() || selectedBatch.toLowerCase() === 'all' || selectedBatch.toLowerCase() === 'all batches') && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBatch(batchTitle)}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                    >
+                      Filter Only Batch {batchTitle} →
+                    </button>
+                  )}
+                </div>
+              )}
 
-      </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[950px]">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                      <th className="py-3.5 px-5 text-left">STUDENT / REG NO</th>
+                      <th className="py-3.5 px-3 text-center">BATCH</th>
+                      <th className="py-3.5 px-3 text-center">YEAR</th>
+                      <th className="py-3.5 px-3 text-center">GENDER</th>
+                      <th className="py-3.5 px-3 text-center">DOB</th>
+                      <th className="py-3.5 px-4 text-left">FATHER'S NAME</th>
+                      <th className="py-3.5 px-3 text-center">ROLL NO</th>
+                      <th className="py-3.5 px-3 text-center">ADM DATE</th>
+                      <th className="py-3.5 px-4 text-left">COURSE ADMITTED</th>
+                      <th className="py-3.5 px-3 text-center">STATUS</th>
+                      {isSuperAdmin && <th className="py-3.5 px-4 text-center">STUDENT SLIP</th>}
+                      <th className="py-3.5 px-5 text-right">ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs font-medium">
+                    {studentList.length === 0 ? (
+                      <tr>
+                        <td colSpan={isSuperAdmin ? "12" : "11"} className="py-10 text-center text-slate-400 font-normal">
+                          No students found in this batch.
+                        </td>
+                      </tr>
+                    ) : (
+                      studentList.map(renderStudentRow)
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Card Footer */}
+              <div className="px-6 py-3 bg-slate-50/50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                <span className="font-medium">
+                  {batchTitle ? `Showing ${studentList.length} students in Batch ${batchTitle}` : `Showing ${studentList.length} of ${students.length} students`}
+                </span>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  VCAS Cohort Management
+                </span>
+              </div>
+            </div>
+          );
+        };
+
+        if (isLoading) {
+          return (
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-16 text-center">
+              <div className="flex flex-col items-center justify-center gap-2.5">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                <span className="text-xs font-semibold text-slate-600">Loading student records...</span>
+              </div>
+            </div>
+          );
+        }
+
+        if (filteredStudents.length === 0) {
+          return (
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-12 text-center text-slate-400 font-normal">
+              No students match your filter criteria.
+            </div>
+          );
+        }
+
+        const isAllBatchesView = !selectedBatch.trim() || selectedBatch.toLowerCase() === 'all' || selectedBatch.toLowerCase() === 'all batches';
+        return renderTableCard(
+          filteredStudents,
+          !isAllBatchesView ? selectedBatch : null
+        );
+      })()}
 
       {/* EDIT STUDENT MODAL (ALL FIELDS EDITABLE) */}
       {editingStudent && (
@@ -1351,8 +1484,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
 
-              {/* Reg No, Roll No & Year */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
+              {/* Reg No, Roll No, Year & Batch */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
                 <div>
                   <label className="block font-black text-blue-900 mb-1">Register Number (Reg No) *</label>
                   <input
@@ -1390,6 +1523,26 @@ Unauthorized reproduction or distribution is strictly prohibited.
                     <option value="3rd Year">3rd Year</option>
                     <option value="4th Year">4th Year</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Batch (e.g. 2022-2026) *</label>
+                  <input
+                    type="text"
+                    list="edit-batch-suggestions"
+                    value={editingStudent.batch || '2022-2026'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, batch: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none"
+                    placeholder="2022-2026"
+                  />
+                  <datalist id="edit-batch-suggestions">
+                    {uniqueBatches.map(b => (
+                      <option key={b} value={b} />
+                    ))}
+                    <option value="2022-2026" />
+                    <option value="2023-2027" />
+                    <option value="2024-2028" />
+                    <option value="2025-2029" />
+                  </datalist>
                 </div>
               </div>
 

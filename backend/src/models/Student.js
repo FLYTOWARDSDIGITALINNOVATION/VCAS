@@ -137,7 +137,7 @@ const studentSchema = new mongoose.Schema({
   },
   batch: {
     type: String,
-    default: '2024-2027'
+    default: '2022-2026'
   },
   academicYear: {
     type: String,

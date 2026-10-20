@@ -211,6 +211,7 @@ exports.createStudent = async (req, res) => {
       rollNo: (body.rollNo || '').trim().toUpperCase(),
       umisNumber: (body.umisNumber || body.umis || '').trim().toUpperCase(),
       year: body.year || '1st Year',
+      batch: (body.batch || '2022-2026').replace('–', '-').trim(),
       loginId: (body.loginId || finalRegNo).trim().toUpperCase(),
       name: studentName.trim(),
       sem: body.sem || body.semester || '1st Sem',
@@ -394,7 +395,7 @@ exports.updateStudent = async (req, res) => {
     if (updates.state) student.state = updates.state;
     if (updates.pinCode) student.pinCode = updates.pinCode;
     if (updates.country) student.country = updates.country;
-    if (updates.batch) student.batch = updates.batch;
+    if (updates.batch) student.batch = String(updates.batch).replace('–', '-').trim();
     if (updates.academicYear) student.academicYear = updates.academicYear;
     if (updates.section) student.section = updates.section;
     if (updates.cgpa) student.cgpa = updates.cgpa;

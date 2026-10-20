@@ -81,37 +81,19 @@ export default function CourseSubjectManagement({ user }) {
       const cached = localStorage.getItem('vcas_subjects_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+            .filter(s => s && s.code !== 'CS101' && s._id !== '6ad345945892adbcf3013478')
+            .map(s => {
+              if (Array.isArray(s.units) && s.units.some(u => u && u.title && u.title.includes('Foundational Principles'))) {
+                return { ...s, units: [] };
+              }
+              return s;
+            });
+        }
       }
     } catch (_) {}
-    return [
-      {
-        _id: '6ad345945892adbcf3013478',
-        code: 'CS101',
-        name: 'Tamil',
-        department: 'Computer Science',
-        year: 1,
-        sem: 'Sem 1',
-        credits: 2,
-        type: 'Theory',
-        faculty: 'Latha V',
-        ltp: '3-0-0',
-        hours: '3 hrs/wk',
-        theoryHours: 3,
-        labHours: 0,
-        isContinuousLab: true,
-        prerequisite: 'None',
-        textbooks: '',
-        studentsEnrolled: 60,
-        units: [
-          { unit: 'Unit 1', title: 'Foundational Principles & Core Concepts', hours: 9 },
-          { unit: 'Unit 2', title: 'Theoretical Framework & Analytical Methods', hours: 9 },
-          { unit: 'Unit 3', title: 'Applied Methodology & System Implementation', hours: 9 },
-          { unit: 'Unit 4', title: 'Real-world Architecture & Case Studies', hours: 9 },
-          { unit: 'Unit 5', title: 'Emerging Paradigms & Industry Standards', hours: 9 }
-        ]
-      }
-    ];
+    return [];
   });
 
   const [facultyList, setFacultyList] = useState([]);
@@ -149,7 +131,14 @@ export default function CourseSubjectManagement({ user }) {
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const sData = await resSubjects.value.json();
         if (sData.success && Array.isArray(sData.data)) {
-          const clean = sData.data.filter(s => Boolean(s.code));
+          const clean = sData.data
+            .filter(s => Boolean(s.code) && s.code !== 'CS101')
+            .map(s => {
+              if (Array.isArray(s.units) && s.units.some(u => u && u.title && u.title.includes('Foundational Principles'))) {
+                return { ...s, units: [] };
+              }
+              return s;
+            });
           setSubjectsList(clean);
           try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean)); } catch (_) {}
         }
@@ -614,13 +603,7 @@ export default function CourseSubjectManagement({ user }) {
         isContinuousLab: true,
         type: lHours > 0 && (subjectForm.type === 'Core Theory' || subjectForm.type === 'Theory') ? 'Practical / Lab' : (subjectForm.type || 'Theory'),
         studentsEnrolled: Number(subjectForm.studentsEnrolled) || 0,
-        units: [
-          { unit: 'Unit 1', title: 'Foundational Principles & Core Concepts', hours: 9 },
-          { unit: 'Unit 2', title: 'Theoretical Framework & Analytical Methods', hours: 9 },
-          { unit: 'Unit 3', title: 'Applied Methodology & System Implementation', hours: 9 },
-          { unit: 'Unit 4', title: 'Real-world Architecture & Case Studies', hours: 9 },
-          { unit: 'Unit 5', title: 'Emerging Paradigms & Industry Standards', hours: 9 }
-        ],
+        units: Array.isArray(subjectForm.units) ? subjectForm.units : [],
         evaluation: { internal: 40, external: 60 }
       };
       setSubjectsList(prev => {
@@ -1822,24 +1805,26 @@ export default function CourseSubjectManagement({ user }) {
             </div>
 
             {/* Units & Syllabus Breakdown */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <Layers className="w-4 h-4 text-blue-600" /> Syllabus Modules & Units
-              </h4>
-              <div className="space-y-2.5">
-                {viewingSubject.units && viewingSubject.units.map((unit, idx) => (
-                  <div key={idx} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-100 text-xs flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-blue-600 mr-2">{unit.unit}:</span>
-                      <span className="font-bold text-slate-900">{unit.title}</span>
+            {viewingSubject.units && viewingSubject.units.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-blue-600" /> Syllabus Modules & Units
+                </h4>
+                <div className="space-y-2.5">
+                  {viewingSubject.units.map((unit, idx) => (
+                    <div key={idx} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-100 text-xs flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-blue-600 mr-2">{unit.unit}:</span>
+                        <span className="font-bold text-slate-900">{unit.title}</span>
+                      </div>
+                      {unit.hours && (
+                        <span className="text-[11px] font-semibold text-slate-400 shrink-0 ml-2">{unit.hours} Hours</span>
+                      )}
                     </div>
-                    {unit.hours && (
-                      <span className="text-[11px] font-semibold text-slate-400 shrink-0 ml-2">{unit.hours} Hours</span>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
 
             {/* Textbooks & References */}

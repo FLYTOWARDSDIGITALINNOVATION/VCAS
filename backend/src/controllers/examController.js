@@ -6,7 +6,7 @@ const HallTicket = require('../models/HallTicket');
 // @route   GET /api/exams
 exports.getAllExams = async (req, res) => {
   try {
-    const { department, session, type, search } = req.query;
+    const { department, session, type, search, sem } = req.query;
     const filter = {};
 
     if (department && department !== 'All Departments') {
@@ -17,6 +17,9 @@ exports.getAllExams = async (req, res) => {
     }
     if (type && type !== 'ALL') {
       filter.type = type;
+    }
+    if (sem && sem !== 'ALL') {
+      filter.sem = { $regex: sem.replace(/\s+/g, ''), $options: 'i' };
     }
     if (search) {
       filter.$or = [

@@ -289,13 +289,7 @@ exports.createSubject = async (req, res) => {
       prerequisite: prerequisite || 'None',
       textbooks: textbooks || '',
       studentsEnrolled: Number(studentsEnrolled) || 0,
-      units: Array.isArray(units) && units.length > 0 ? units : [
-        { unit: 'Unit 1', title: 'Foundational Principles & Core Concepts', hours: 9 },
-        { unit: 'Unit 2', title: 'Theoretical Framework & Analytical Methods', hours: 9 },
-        { unit: 'Unit 3', title: 'Applied Methodology & System Implementation', hours: 9 },
-        { unit: 'Unit 4', title: 'Real-world Architecture & Case Studies', hours: 9 },
-        { unit: 'Unit 5', title: 'Emerging Paradigms & Industry Standards', hours: 9 }
-      ],
+      units: Array.isArray(units) ? units : [],
       evaluation: evaluation || { internal: 40, external: 60 }
     });
 

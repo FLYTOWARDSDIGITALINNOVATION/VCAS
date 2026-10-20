@@ -60,6 +60,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
     dob: '',
     course: '',
     department: '',
+    batch: '',
     courseDurationFrom: '',
     courseDurationTo: '',
     dateOfAdmission: '',
@@ -199,6 +200,10 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
         updated.loginId = (value || '').toUpperCase();
       } else if (name === 'regNo' && !prev.rollNo) {
         updated.loginId = (value || '').toUpperCase();
+      } else if (name === 'courseDurationFrom' && prev.courseDurationTo && !prev.batch) {
+        updated.batch = `${value}-${prev.courseDurationTo}`;
+      } else if (name === 'courseDurationTo' && prev.courseDurationFrom && !prev.batch) {
+        updated.batch = `${prev.courseDurationFrom}-${value}`;
       }
       return updated;
     });
@@ -214,8 +219,10 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
     try {
       const cleanRollNo = (formData.rollNo || '').trim().toUpperCase();
       const cleanRegNo = (formData.regNo || '').trim().toUpperCase();
+      const effectiveBatch = (formData.batch || (formData.courseDurationFrom && formData.courseDurationTo ? `${formData.courseDurationFrom}-${formData.courseDurationTo}` : '2022-2026')).trim();
       const payload = {
         ...formData,
+        batch: effectiveBatch,
         regNo: cleanRegNo,
         rollNo: cleanRollNo,
         loginId: cleanRollNo || cleanRegNo,
@@ -567,6 +574,27 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                     className="w-full bg-white border border-slate-300 rounded-xl px-2 py-2 text-center font-bold focus:outline-none"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Batch (e.g. 2022-2026) *
+                </label>
+                <input
+                  type="text"
+                  name="batch"
+                  list="batch-suggestions"
+                  placeholder="e.g. 2022-2026"
+                  value={formData.batch}
+                  onChange={handleChange}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-rose-500"
+                />
+                <datalist id="batch-suggestions">
+                  <option value="2022-2026" />
+                  <option value="2023-2027" />
+                  <option value="2024-2028" />
+                  <option value="2025-2029" />
+                  <option value="2021-2025" />
+                </datalist>
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Year of Study &amp; Sem</label>

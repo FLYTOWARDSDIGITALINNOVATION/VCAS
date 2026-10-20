@@ -44,7 +44,7 @@ export default function StaffNotices({ staffUser = {} }) {
       setLoading(true);
       const url = selectedTag && selectedTag !== 'ALL'
         ? `${API_BASE}/notices?tag=${encodeURIComponent(selectedTag)}`
-        : '${API_BASE}/notices';
+        : `${API_BASE}/notices`;
 
       const res = await fetch(url);
       const data = await res.json();

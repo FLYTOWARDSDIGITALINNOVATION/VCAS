@@ -285,6 +285,9 @@ export default function StudentProfileView({
                     {studentData.sem}
                   </span>
                 )}
+                <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 font-mono font-bold">
+                  Batch: {student?.batch || studentData.batch || '2022-2026'}
+                </span>
                 <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200">
                   {studentData.status}
                 </span>
