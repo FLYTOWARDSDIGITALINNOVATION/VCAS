@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import AddStudentWizard from './AddStudentWizard';
 import StudentProfileView from './StudentProfileView';
+import ExcelStudentUploadModal from './ExcelStudentUploadModal';
 import {
   Search,
   Filter,
@@ -22,7 +23,8 @@ import {
   Loader2,
   RefreshCw,
   CheckCircle2,
-  Layers
+  Layers,
+  FileSpreadsheet
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
@@ -106,6 +108,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   const [showAddWizard, setShowAddWizard] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedExportFields, setSelectedExportFields] = useState(['regNo', 'rollNo', 'name', 'aadhaar']);
+  const [showExcelUploadModal, setShowExcelUploadModal] = useState(false);
   const [selectedStudentProfile, setSelectedStudentProfile] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
   const [deleteModalStudent, setDeleteModalStudent] = useState(null);
@@ -1025,6 +1028,14 @@ Unauthorized reproduction or distribution is strictly prohibited.
               </button>
             </div>
           )}
+          <button
+            onClick={() => setShowExcelUploadModal(true)}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-500/20 flex items-center gap-2 transition-all cursor-pointer"
+            title="Directly upload Excel spreadsheet (.xlsx, .xls, .csv) with student records"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-white" />
+            <span>Upload Excel</span>
+          </button>
           <button
             onClick={() => setShowAddWizard(true)}
             className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
@@ -2239,6 +2250,25 @@ Unauthorized reproduction or distribution is strictly prohibited.
           </div>
         </ModalPortal>
       )}
+
+      {/* BULK EXCEL UPLOAD MODAL FOR SUPER ADMIN */}
+      <ExcelStudentUploadModal
+        isOpen={showExcelUploadModal}
+        onClose={() => setShowExcelUploadModal(false)}
+        onSuccess={async () => {
+          try {
+            localStorage.removeItem('vcas_students_cache');
+          } catch (_) {}
+          setSelectedDept('All Departments');
+          setSelectedBatch('');
+          setSelectedSubject('All Subjects');
+          setSelectedFeeStatus('All Statuses');
+          setSearchTerm('');
+          await fetchStudents();
+          showToast('Student database successfully refreshed from Excel file!');
+        }}
+        departments={departmentsList}
+      />
 
       {/* FLOATING SUCCESS TOAST NOTIFICATION */}
       {toastMessage && (

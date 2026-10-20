@@ -21,10 +21,12 @@ import {
   Trash2,
   Camera,
   File,
-  ExternalLink
+  ExternalLink,
+  FileSpreadsheet
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
+import ExcelStudentUploadModal from './ExcelStudentUploadModal';
 
 const COMMUNITY_OPTIONS = ['OC', 'BC', 'BC(M)', 'MBC', 'DNC', 'SC', 'ST', 'SCA'];
 
@@ -33,6 +35,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
   const [coursesList, setCoursesList] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCreatedModal, setShowCreatedModal] = useState(null);
+  const [showExcelUpload, setShowExcelUpload] = useState(false);
 
   // Fetch real departments and courses added in the database
   useEffect(() => {
@@ -572,7 +575,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
     <div className="space-y-6 w-full max-w-7xl mx-auto font-sans animate-fadeIn">
 
       {/* Top Back Navigation Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <button
           type="button"
           onClick={onBack}
@@ -580,6 +583,15 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
         >
           <ArrowLeft className="w-4 h-4 text-slate-500" />
           <span>Back to Students Directory</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowExcelUpload(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer shadow-xs"
+        >
+          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+          <span>Bulk Upload via Excel (.xlsx)</span>
         </button>
       </div>
 
@@ -2575,6 +2587,18 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
           </div>
         </ModalPortal>
       )}
+
+      {/* Bulk Excel Upload Modal */}
+      <ExcelStudentUploadModal
+        isOpen={showExcelUpload}
+        onClose={() => setShowExcelUpload(false)}
+        onSuccess={() => {
+          setShowExcelUpload(false);
+          if (onComplete) onComplete();
+          else if (onBack) onBack();
+        }}
+        departments={departmentsList}
+      />
 
     </div>
   );

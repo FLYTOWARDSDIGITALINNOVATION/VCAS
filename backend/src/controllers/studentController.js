@@ -1,5 +1,6 @@
 const Student = require('../models/Student');
 const Attendance = require('../models/Attendance');
+const xlsx = require('xlsx');
 
 // @desc   Get all students
 // @route  GET /api/students
@@ -529,3 +530,404 @@ exports.getStudentCredentials = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// Helper: Format Excel dates properly (handles serial numbers, strings, and Date objects)
+function formatExcelDate(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof val === 'number') {
+    try {
+      const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+      if (!isNaN(date.getTime())) {
+        const y = date.getUTCFullYear();
+        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(date.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+    } catch (_) {}
+  }
+  return String(val).trim();
+}
+
+// Helper: Normalize Excel / CSV row data with ultra-flexible column names
+function normalizeStudentRow(rawRow) {
+  if (!rawRow || typeof rawRow !== 'object') return null;
+  const norm = {};
+  for (const [key, val] of Object.entries(rawRow)) {
+    if (val === undefined || val === null) continue;
+    const cleanKey = key.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+    norm[cleanKey] = val;
+  }
+
+  const getVal = (...keys) => {
+    for (const k of keys) {
+      const clean = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (norm[clean] !== undefined && norm[clean] !== null && String(norm[clean]).trim() !== '') {
+        return norm[clean];
+      }
+    }
+    // Partial substring fallback search on keys
+    for (const k of keys) {
+      const clean = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      for (const [actualKey, actualVal] of Object.entries(norm)) {
+        if (actualKey.includes(clean) && actualVal !== undefined && actualVal !== null && String(actualVal).trim() !== '') {
+          return actualVal;
+        }
+      }
+    }
+    return '';
+  };
+
+  // Ultra-wide student name recognition
+  let name = String(getVal(
+    'name', 'studentname', 'fullname', 'nameofstudent', 'nameofthestudent',
+    'student', 'candidatename', 'nameofcandidate', 'pupilname', 'personname'
+  )).trim();
+
+  // If still empty, check if any column header has "name" in it
+  if (!name) {
+    for (const [k, v] of Object.entries(norm)) {
+      if (k.includes('name') && !k.includes('father') && !k.includes('mother') && !k.includes('parent') && !k.includes('bank') && !k.includes('college')) {
+        if (v && String(v).trim()) {
+          name = String(v).trim();
+          break;
+        }
+      }
+    }
+  }
+
+  // Skip title banners or empty rows
+  if (!name || name.toLowerCase().includes('college') || name.toLowerCase().includes('university') || name.toLowerCase().includes('department of')) {
+    return null;
+  }
+
+  const regNo = String(getVal('regno', 'registerno', 'registernumber', 'registrationno', 'studentid', 'id', 'regn', 'register')).trim().toUpperCase();
+  const rollNo = String(getVal('rollno', 'rollnumber', 'roll', 'classrollno', 'rno')).trim().toUpperCase();
+  const admNo = String(getVal('admno', 'admissionno', 'admissionnumber', 'admn', 'admission')).trim().toUpperCase();
+  const umisNumber = String(getVal('umisnumber', 'umis', 'emis', 'emisnumber')).trim().toUpperCase();
+  const department = String(getVal('department', 'dept', 'branch', 'major') || 'General').trim();
+  const course = String(getVal('course', 'degree', 'programme', 'prog') || 'Undergraduate').trim();
+  const courseAdmitted = String(getVal('courseadmitted', 'admittedcourse') || course).trim();
+  const sem = String(getVal('sem', 'semester', 'currentsem') || '1st Sem').trim();
+  const year = String(getVal('year', 'classyear', 'academicsem') || '1st Year').trim();
+  const batch = String(getVal('batch', 'batchyear') || '2022-2026').replace('–', '-').trim();
+  const academicYear = String(getVal('academicyear', 'session') || '2025-2026').replace('–', '-').trim();
+  const section = String(getVal('section', 'sec') || 'A').trim();
+  const gender = String(getVal('gender', 'sex') || 'Male').trim();
+  const dobRaw = getVal('dob', 'dateofbirth', 'birthdate', 'birth');
+  const dob = formatExcelDate(dobRaw);
+  const bloodGroup = String(getVal('bloodgroup', 'blood', 'bg') || 'O+').trim();
+  const phone = String(getVal('phone', 'mobile', 'mobileno', 'phonenumber', 'contact', 'contactno', 'cell')).trim();
+  const email = String(getVal('email', 'emailid', 'mail')).trim().toLowerCase();
+  const fatherName = String(getVal('fathername', 'fathersname', 'father')).trim();
+  const motherName = String(getVal('mothername', 'mothersname', 'mother')).trim();
+  const fatherMobile = String(getVal('fathermobile', 'fatherphone', 'parentphone', 'parentmobile', 'parentsphone')).trim();
+  const motherMobile = String(getVal('mothermobile', 'motherphone')).trim();
+  const parentOccupation = String(getVal('parentoccupation', 'fatheroccupation')).trim();
+  const parentEmail = String(getVal('parentemail')).trim();
+  const address = String(getVal('address', 'permanentaddress', 'commaddress', 'street')).trim();
+  const city = String(getVal('city', 'town', 'native')).trim();
+  const state = String(getVal('state') || 'Tamil Nadu').trim();
+  const pinCode = String(getVal('pincode', 'pin', 'postalcode', 'zip')).trim();
+  const caste = String(getVal('caste')).trim();
+  const community = String(getVal('community', 'castecommunity') || 'BC').trim();
+  const religion = String(getVal('religion') || 'Hindu').trim();
+  const nationality = String(getVal('nationality') || 'Indian').trim();
+  const tenthMarks = String(getVal('tenthmarks', '10thmarks', 'sslcmarks', '10th')).trim();
+  const tenthPercentage = String(getVal('tenthpercentage', '10thpercentage', '10thpercent')).trim();
+  const twelfthMarks = String(getVal('twelfthmarks', '12thmarks', 'hscmarks', '12th')).trim();
+  const twelfthPercentage = String(getVal('twelfthpercentage', '12thpercentage', '12thpercent')).trim();
+  const cgpa = String(getVal('cgpa', 'gpa') || '8.0').trim();
+  const rawAtt = getVal('attendance', 'attendancepercent');
+  const attendance = rawAtt !== '' && !isNaN(Number(rawAtt)) ? Number(rawAtt) : 85;
+  const feeStatus = String(getVal('feestatus', 'feesstatus') || 'Pending').trim();
+  const status = String(getVal('status') || 'Active').trim();
+  const aadhaar = String(getVal('aadhaar', 'aadhaarno', 'aadhar', 'aadharno', 'uid')).trim();
+  const pan = String(getVal('pan', 'panno')).trim().toUpperCase();
+
+  return {
+    name,
+    regNo,
+    rollNo,
+    admNo,
+    umisNumber,
+    department,
+    course,
+    courseAdmitted,
+    sem,
+    year,
+    batch,
+    academicYear,
+    section,
+    gender,
+    dob,
+    bloodGroup,
+    phone,
+    email,
+    fatherName,
+    motherName,
+    fatherMobile,
+    motherMobile,
+    parentOccupation,
+    parentEmail,
+    address,
+    city,
+    state,
+    pinCode,
+    caste,
+    community,
+    casteCommunity: community,
+    religion,
+    nationality,
+    nationalityReligion: `${nationality} & ${religion}`,
+    tenthMarks,
+    tenthPercentage,
+    twelfthMarks,
+    twelfthPercentage,
+    cgpa,
+    attendance,
+    feeStatus,
+    status,
+    aadhaar,
+    pan
+  };
+}
+
+// Helper: Smart Excel sheet parser that finds the header row automatically
+function extractRowsFromWorksheet(worksheet) {
+  // Try raw 2D array first to find the real header row
+  const rawMatrix = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  if (!rawMatrix || rawMatrix.length === 0) return [];
+
+  let headerRowIndex = 0;
+  for (let r = 0; r < Math.min(rawMatrix.length, 12); r++) {
+    const row = rawMatrix[r];
+    if (Array.isArray(row)) {
+      const rowStr = row.map(c => String(c).toLowerCase().replace(/[^a-z0-9]/g, '')).join(' ');
+      if (
+        (rowStr.includes('name') && (rowStr.includes('reg') || rowStr.includes('roll') || rowStr.includes('adm') || rowStr.includes('dept') || rowStr.includes('gender'))) ||
+        (rowStr.includes('student') && (rowStr.includes('roll') || rowStr.includes('reg')))
+      ) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+  }
+
+  // Parse using detected header row
+  const rows = xlsx.utils.sheet_to_json(worksheet, {
+    range: headerRowIndex,
+    defval: ''
+  });
+
+  return rows;
+}
+
+// Helper: Process array of student rows (from Excel or JSON)
+async function processStudentsBatch(rawRows) {
+  let createdCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+  const errors = [];
+  const processedRecords = [];
+
+  let currentCount = await Student.countDocuments();
+
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    const rowNum = i + 1;
+
+    try {
+      const normalized = normalizeStudentRow(row);
+      if (!normalized || !normalized.name) {
+        skippedCount++;
+        continue;
+      }
+
+      // Check existing student by regNo or admNo or rollNo+department
+      let existingStudent = null;
+      if (normalized.regNo) {
+        existingStudent = await Student.findOne({
+          $or: [
+            { regNo: normalized.regNo },
+            { studentId: normalized.regNo }
+          ]
+        });
+      }
+      if (!existingStudent && normalized.admNo) {
+        existingStudent = await Student.findOne({ admNo: normalized.admNo });
+      }
+      if (!existingStudent && normalized.rollNo && normalized.department && normalized.department !== 'General') {
+        existingStudent = await Student.findOne({
+          rollNo: normalized.rollNo,
+          department: normalized.department
+        });
+      }
+
+      if (existingStudent) {
+        // Update existing student record with non-empty incoming values
+        for (const [k, v] of Object.entries(normalized)) {
+          if (v !== '' && v !== undefined && v !== null) {
+            existingStudent[k] = v;
+          }
+        }
+        if (normalized.dob) {
+          existingStudent.password = normalized.dob;
+        }
+        await existingStudent.save();
+        updatedCount++;
+        processedRecords.push({
+          row: rowNum,
+          name: existingStudent.name,
+          regNo: existingStudent.regNo,
+          action: 'updated'
+        });
+        continue;
+      }
+
+      // Determine regNo
+      let finalRegNo = normalized.regNo;
+      if (!finalRegNo || finalRegNo.toLowerCase().includes('auto')) {
+        currentCount++;
+        let candidate = `REG2026${String(currentCount).padStart(3, '0')}`;
+        while (await Student.findOne({ $or: [{ regNo: candidate }, { studentId: candidate }] })) {
+          currentCount++;
+          candidate = `REG2026${String(currentCount).padStart(3, '0')}`;
+        }
+        finalRegNo = candidate;
+      }
+
+      // Determine admNo
+      let finalAdmNo = normalized.admNo;
+      if (!finalAdmNo) {
+        let candidate = `ADM2026${String(currentCount).padStart(3, '0')}`;
+        while (await Student.findOne({ admNo: candidate })) {
+          currentCount++;
+          candidate = `ADM2026${String(currentCount).padStart(3, '0')}`;
+        }
+        finalAdmNo = candidate;
+      }
+
+      const finalStudentId = finalRegNo;
+      const finalPassword = normalized.dob ? normalized.dob : `${finalRegNo.toLowerCase()}@2026`;
+
+      const newStudent = new Student({
+        ...normalized,
+        studentId: finalStudentId,
+        regNo: finalRegNo,
+        admNo: finalAdmNo,
+        loginId: finalRegNo,
+        password: finalPassword
+      });
+
+      const saved = await newStudent.save();
+      createdCount++;
+      processedRecords.push({
+        row: rowNum,
+        name: saved.name,
+        regNo: saved.regNo,
+        action: 'created'
+      });
+    } catch (rowErr) {
+      console.error(`Error saving student row #${rowNum}:`, rowErr.message);
+      errors.push({
+        row: rowNum,
+        error: rowErr.message || 'Failed to save student record'
+      });
+    }
+  }
+
+  return {
+    totalRows: rawRows.length,
+    createdCount,
+    updatedCount,
+    skippedCount,
+    errorsCount: errors.length,
+    errors,
+    processedRecords
+  };
+}
+
+// @desc   Bulk import students from JSON array
+// @route  POST /api/students/bulk
+exports.bulkImportStudents = async (req, res) => {
+  try {
+    const { students } = req.body;
+    if (!Array.isArray(students) || students.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No student records provided. Please provide an array of students.'
+      });
+    }
+
+    const result = await processStudentsBatch(students);
+    res.status(200).json({
+      success: true,
+      message: `Processed ${result.totalRows} student rows (${result.createdCount} added, ${result.updatedCount} updated, ${result.errorsCount} errors).`,
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc   Upload and parse Excel file for student bulk import
+// @route  POST /api/students/upload-excel
+exports.uploadExcelStudents = async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Excel file is required. Please upload a .xlsx, .xls, or .csv file.'
+      });
+    }
+
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer', cellDates: true });
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'The uploaded Excel file contains no sheets.'
+      });
+    }
+
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    const rawRows = extractRowsFromWorksheet(worksheet);
+
+    if (!rawRows || rawRows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No data rows found in the uploaded Excel file.'
+      });
+    }
+
+    // Apply optional department/batch from req.body if supplied
+    const finalRows = rawRows.map(r => {
+      const obj = { ...r };
+      if (req.body.department) {
+        obj.department = req.body.department;
+        obj.Department = req.body.department;
+      }
+      if (req.body.batch) {
+        obj.batch = req.body.batch;
+        obj.Batch = req.body.batch;
+      }
+      return obj;
+    });
+
+    const result = await processStudentsBatch(finalRows);
+    res.status(200).json({
+      success: true,
+      message: `Excel processed: ${result.createdCount} students created, ${result.updatedCount} updated, ${result.errorsCount} errors.`,
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
