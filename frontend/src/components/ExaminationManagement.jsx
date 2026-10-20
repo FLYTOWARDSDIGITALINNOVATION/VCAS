@@ -327,27 +327,36 @@ export default function ExaminationManagement({ user }) {
 
       // First add from registered students (st.attendance is dynamically calculated from attendance sessions)
       studentsData.forEach((st, idx) => {
-        const roll = (st.rollNo || '').trim().toUpperCase();
+        const roll = (st.rollNo || st.regNo || st.admissionNo || st.admNo || st.studentId || (st._id ? String(st._id).slice(-6) : '') || `STU${idx + 1}`).trim().toUpperCase();
         if (!roll) return;
         const attNum = typeof st.attendance === 'number' ? st.attendance : parseFloat(st.attendance) || 0;
-        const isFeeCleared = st.feeCleared !== false && st.feeStatus !== 'Overdue';
-        const isEligible = attNum >= 75;
-        const statusStr = isEligible
-          ? 'Eligible'
-          : 'Blocked (Shortage <75%)';
+        
+        // Fee check: must be explicitly Paid or marked feeCleared
+        const rawFeeStatus = (st.feeStatus || 'Pending').trim();
+        const isFeeCleared = rawFeeStatus.toLowerCase() === 'paid' || st.feeCleared === true;
+        const hasAttendance = attNum >= 75;
+        const isEligible = hasAttendance && isFeeCleared;
+        
+        let statusStr = 'Eligible';
+        if (!isFeeCleared && !hasAttendance) {
+          statusStr = 'Ineligible (Fee & Attendance Shortage)';
+        } else if (!isFeeCleared) {
+          statusStr = 'Ineligible (Fee Pending)';
+        } else if (!hasAttendance) {
+          statusStr = 'Blocked (Shortage <75%)';
+        }
 
-        const rawDept = (st.department || '').trim();
-        const effectiveDept = (!rawDept || rawDept.toLowerCase() === 'general')
-          ? (adminHtDept || realAddedDepts[0] || 'Computer Science')
-          : rawDept;
+        const rawDept = (st.department || 'General').trim();
+        const effectiveDept = rawDept; // Keep the student's actual department from their profile!
 
         studentMap.set(roll, {
           id: st._id || st.id || idx + 1,
-          rollNo: roll,
-          regNo: st.admissionNo || st.admNo || st.studentId || roll,
+          rollNo: st.rollNo || roll,
+          regNo: st.regNo || st.admissionNo || st.admNo || st.studentId || roll,
           name: st.name || st.fullName || 'Student',
           department: effectiveDept,
-          originalDepartment: rawDept || 'General',
+          originalDepartment: rawDept,
+          feeStatus: rawFeeStatus,
           year: (st.year && st.year <= 3) ? st.year : (st.sem?.includes('1') || st.sem?.includes('2') ? 1 : (st.sem?.includes('3') || st.sem?.includes('4') ? 2 : 3)),
           sem: st.sem || st.semester || 'Sem 1',
           attendance: attNum,
@@ -408,8 +417,11 @@ export default function ExaminationManagement({ user }) {
             const total = ciaTot + ese;
             const grade = total >= 90 ? 'O' : total >= 80 ? 'A+' : total >= 70 ? 'A' : total >= 60 ? 'B+' : total >= 50 ? 'B' : 'U';
             const gradePoint = total >= 90 ? 10 : total >= 80 ? 9 : total >= 70 ? 8 : total >= 60 ? 7 : total >= 50 ? 6 : 0;
-            const isEligible = existing.attendance >= 75;
-            const statusStr = isEligible ? 'Eligible' : 'Blocked (Shortage <75%)';
+            const isFeeCleared = existing.feeCleared;
+            const isEligible = existing.attendance >= 75 && isFeeCleared;
+            const statusStr = isEligible
+              ? 'Eligible'
+              : (!isFeeCleared ? 'Ineligible (Fee Pending)' : 'Blocked (Shortage <75%)');
 
             studentMap.set(roll, {
               ...existing,
@@ -470,8 +482,8 @@ export default function ExaminationManagement({ user }) {
                 seatNo: st.seatNo || existing.seatNo || 'A1',
                 deskNo: st.deskNo || existing.deskNo || '',
                 subjects: studentSubs,
-                eligible: isElig,
-                status: isElig ? 'Eligible' : 'Blocked (Shortage <75%)',
+                eligible: existing.eligible !== undefined ? existing.eligible : (existing.attendance >= 75 && existing.feeCleared),
+                status: existing.status || ((existing.attendance >= 75 && existing.feeCleared) ? 'Eligible' : (!existing.feeCleared ? 'Ineligible (Fee Pending)' : 'Blocked (Shortage <75%)')),
                 examTitle: alloc.examName || existing.examTitle,
                 academicYear: alloc.academicYear || existing.academicYear
               });
@@ -723,6 +735,7 @@ export default function ExaminationManagement({ user }) {
 
   // Admin Hall Ticket Allocation & Subject Setup State
   const [adminHtDept, setAdminHtDept] = useState(() => availableDepartments[0] || 'Computer Science');
+  const [adminHtFilterDept, setAdminHtFilterDept] = useState('All Departments');
   const [adminHtSem, setAdminHtSem] = useState(1);
   const [adminHtExamTitle, setAdminHtExamTitle] = useState('Semester End Theory Examinations - 2026');
   const [adminHtNewCode, setAdminHtNewCode] = useState('');
@@ -976,10 +989,12 @@ export default function ExaminationManagement({ user }) {
     return Array.from(set);
   }, [hallsList, availableVenues]);
 
-  // Filtered Students specifically for the Hall Tickets Tab (Target Department: adminHtDept)
+  // Filtered Students specifically for the Hall Tickets Tab (Default: All Departments)
   const hallTicketStudents = useMemo(() => {
-    const target = (adminHtDept || '').trim().toLowerCase();
-    const list = studentMarksList.filter(s => {
+    const target = (adminHtFilterDept || 'All Departments').trim().toLowerCase();
+    const isAll = !target || target === 'all' || target === 'all departments';
+
+    return studentMarksList.filter(s => {
       const q = (searchQuery || '').toLowerCase().trim();
       const matchesSearch = !q || (
         String(s.name || '').toLowerCase().includes(q) ||
@@ -988,19 +1003,20 @@ export default function ExaminationManagement({ user }) {
         String(s.department || '').toLowerCase().includes(q)
       );
 
+      if (isAll) return matchesSearch;
+
       const sDept = (s.department || '').toLowerCase().trim();
       const origDept = (s.originalDepartment || '').toLowerCase().trim();
-      const matchesDept = !target || target === 'all' || target === 'all departments' ||
+      const matchesDept =
         sDept === target ||
         sDept.includes(target) ||
         target.includes(sDept) ||
-        origDept === 'general' ||
-        sDept === 'general';
+        (target.includes('computer') && (sDept.includes('cs') || sDept.includes('computer'))) ||
+        (target.includes('cs') && sDept.includes('cs'));
 
       return matchesSearch && matchesDept;
     });
-    return list.length > 0 ? list : studentMarksList;
-  }, [studentMarksList, searchQuery, adminHtDept]);
+  }, [studentMarksList, searchQuery, adminHtFilterDept]);
 
   const handleStudentHallChange = (rollNo, chosenHall) => {
     const existingStudent = studentMarksList.find(st => (st.rollNo || '').toUpperCase() === (rollNo || '').toUpperCase());
@@ -1011,9 +1027,7 @@ export default function ExaminationManagement({ user }) {
         return {
           ...st,
           hallNo: chosenHall,
-          seatNo: st.seatNo || `A${i + 1}`,
-          eligible: true,
-          status: 'Eligible'
+          seatNo: st.seatNo || `A${i + 1}`
         };
       }
       return st;
@@ -1074,9 +1088,7 @@ export default function ExaminationManagement({ user }) {
         return {
           ...st,
           hallNo: chosenHall,
-          seatNo: `A${i + 1}`,
-          eligible: true,
-          status: 'Eligible'
+          seatNo: `A${i + 1}`
         };
       }
       return st;
@@ -2495,6 +2507,8 @@ export default function ExaminationManagement({ user }) {
                   }}
                   className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none cursor-pointer"
                 >
+                  <option value="All Departments">All Departments (Show All Students)</option>
+                  <option value="General">General</option>
                   {availableDepartments.map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
@@ -2774,14 +2788,31 @@ export default function ExaminationManagement({ user }) {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div>
-              <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                <span>Hall Ticket Issuance &amp; Examination Hall Allocation</span>
-                <span className="text-xs font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">
-                  {hallTicketStudents.length} Students
-                </span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">Allocate exam halls from registered halls and verify attendance/fee eligibility</p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                  <span>Hall Ticket Issuance &amp; Examination Hall Allocation</span>
+                  <span className="text-xs font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">
+                    {hallTicketStudents.length} Students
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Allocate exam halls from registered halls and verify attendance/fee eligibility</p>
+              </div>
+
+              {/* Department View Filter */}
+              <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Filter Dept:</span>
+                <select
+                  value={adminHtFilterDept}
+                  onChange={(e) => setAdminHtFilterDept(e.target.value)}
+                  className="text-xs font-bold px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
+                >
+                  <option value="All Departments">All Departments ({studentMarksList.length} Total)</option>
+                  {Array.from(new Set(studentMarksList.map(s => s.department).filter(Boolean))).map(deptName => (
+                    <option key={deptName} value={deptName}>{deptName}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -2879,10 +2910,13 @@ export default function ExaminationManagement({ user }) {
                         <td className="py-4 px-4">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${s.status === 'Eligible'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                              : (s.status?.includes('Fee') ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200')
                             }`}>
                             {s.status}
                           </span>
+                          <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                            Fee Status: <strong className={s.feeStatus?.toLowerCase() === 'paid' ? 'text-emerald-600' : 'text-amber-600'}>{s.feeStatus || 'Pending'}</strong>
+                          </p>
                         </td>
 
                         {/* Exam Hall Allocation Dropdown & Seat No */}
