@@ -167,6 +167,26 @@ exports.updateSlot = async (req, res) => {
       targetSlots.forEach(s => {
         currentSchedule[day][String(s)] = { ...slotObj };
       });
+
+      // Check if room/hall is already occupied by someone else at this day and period
+      let roomConflictWarning = null;
+      if (slotObj.room) {
+        try {
+          const others = await Timetable.find({ staffId: { $ne: staffId.trim() } });
+          for (const other of others) {
+            const oSched = other.schedule instanceof Map ? Object.fromEntries(other.schedule) : (other.schedule || {});
+            const daySlots = oSched[day] || {};
+            for (const sNum of targetSlots) {
+              const occupied = daySlots[String(sNum)];
+              if (occupied && occupied.room && occupied.room.trim().toLowerCase() === slotObj.room.toLowerCase()) {
+                roomConflictWarning = `⚠️ Warning: Room/Hall "${slotObj.room}" is already allocated to ${other.staffName || other.staffId} on ${day} Period ${sNum}.`;
+                break;
+              }
+            }
+            if (roomConflictWarning) break;
+          }
+        } catch (_) {}
+      }
     } else {
       // Clear slot
       delete currentSchedule[day][String(slot)];
@@ -178,7 +198,8 @@ exports.updateSlot = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Slot ${slot} on ${day} updated successfully.`,
+      message: roomConflictWarning ? `Slot updated with warning: ${roomConflictWarning}` : `Slot ${slot} on ${day} updated successfully.`,
+      warning: roomConflictWarning,
       schedule: timetable.schedule
     });
   } catch (error) {

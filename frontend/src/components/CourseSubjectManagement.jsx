@@ -634,15 +634,30 @@ export default function CourseSubjectManagement({ user }) {
   const handleConfirmDeleteSubject = () => {
     if (deletingSubject) {
       const targetId = deletingSubject._id || deletingSubject.id || deletingSubject.code;
+      const codeToDelete = (deletingSubject.code || '').trim().toUpperCase();
       setSubjectsList(prev => {
-        const next = prev.filter(s => s.id !== deletingSubject.id && s._id !== deletingSubject._id && s.code !== deletingSubject.code);
+        const next = prev.filter(s => s.id !== deletingSubject.id && s._id !== deletingSubject._id && (s.code || '').toUpperCase() !== codeToDelete);
         try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(next)); } catch (_) {}
         return next;
       });
+      // Purge from custom timing caches
+      try {
+        const timings = JSON.parse(localStorage.getItem('vcas_staff_custom_subjects_timing') || '{}');
+        if (timings[codeToDelete]) {
+          delete timings[codeToDelete];
+          localStorage.setItem('vcas_staff_custom_subjects_timing', JSON.stringify(timings));
+        }
+      } catch (_) {}
+
+      // Dispatch event so other components immediately know a subject was removed
+      try {
+        window.dispatchEvent(new CustomEvent('vcas_subject_removed', { detail: { code: codeToDelete, id: targetId } }));
+      } catch (_) {}
+
       if (viewingSubject && (viewingSubject.id === deletingSubject.id || viewingSubject._id === deletingSubject._id)) {
         setViewingSubject(null);
       }
-      showToast(`Subject ${deletingSubject.code} removed.`);
+      showToast(`Subject ${deletingSubject.code} removed from catalog and all exam schedules.`);
 
       // Sync with MongoDB backend
       fetch(`${API_BASE}/subjects/${targetId}`, {

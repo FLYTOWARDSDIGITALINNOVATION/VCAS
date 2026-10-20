@@ -254,9 +254,17 @@ export default function StudentProfileView({
           
           {/* Avatar & Student Name Header */}
           <div className="flex items-start md:items-center gap-5">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-blue-100 to-indigo-100 text-blue-600 font-extrabold text-3xl flex items-center justify-center border border-blue-200 shadow-sm shrink-0 uppercase">
-              {studentData.name.charAt(0)}
-            </div>
+            {student?.photo || studentData?.photo ? (
+              <img
+                src={student?.photo || studentData?.photo}
+                alt={studentData.name}
+                className="w-20 h-20 rounded-2xl object-cover border-2 border-indigo-200 shadow-sm shrink-0"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-blue-100 to-indigo-100 text-blue-600 font-extrabold text-3xl flex items-center justify-center border border-blue-200 shadow-sm shrink-0 uppercase">
+                {studentData.name.charAt(0)}
+              </div>
+            )}
             
             <div className="space-y-2">
               <div className="flex items-center gap-3">
@@ -606,6 +614,56 @@ export default function StudentProfileView({
               <span className="font-bold text-slate-800">{studentData.country}</span>
             </div>
           </div>
+
+          {/* Super Admin Attached Statutory Documents */}
+          {isSuperAdmin && (
+            <div className="bg-white border-2 border-indigo-200 rounded-2xl p-6 shadow-sm space-y-4 md:col-span-2">
+              <h3 className="font-extrabold text-sm text-indigo-950 border-b border-indigo-100 pb-3 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                  <span>Statutory Identity &amp; Uploaded Documents (Super Admin)</span>
+                </span>
+                <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-200">
+                  Authorized Verification
+                </span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                {[
+                  { label: 'Aadhar Card', no: student?.aadhaar, doc: student?.docAadhaar },
+                  { label: 'PAN Card', no: student?.pan, doc: student?.docPan },
+                  { label: 'Income Certificate', no: student?.incomeCertNo, doc: student?.docIncomeCert },
+                  { label: 'Driving Licence', no: student?.drivingLicense, doc: student?.docDrivingLicense },
+                  { label: '10th Mark Sheet', no: student?.tenthMarks, doc: student?.doc10th },
+                  { label: '12th Mark Sheet', no: student?.twelfthMarks, doc: student?.doc12th },
+                ].map((item, i) => (
+                  <div key={i} className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 flex flex-col justify-between">
+                    <div>
+                      <span className="text-slate-500 font-bold block mb-0.5">{item.label}</span>
+                      <span className="font-mono font-bold text-slate-800 text-xs block truncate">
+                        {item.no || '—'}
+                      </span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-indigo-100/60 flex items-center justify-between">
+                      <span className={`text-[10px] font-bold ${item.doc ? 'text-emerald-700' : 'text-slate-400'}`}>
+                        {item.doc ? '✓ Document Attached' : 'Not Attached'}
+                      </span>
+                      {item.doc && (
+                        <a
+                          href={item.doc}
+                          download={`${item.label.replace(/\s+/g, '_')}_document`}
+                          className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View / Download
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
         </div>
       )}

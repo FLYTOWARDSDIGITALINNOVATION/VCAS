@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BACKEND_URL, getKnownDepartments } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import {
   Search,
   Plus,
@@ -37,8 +37,6 @@ import {
 } from 'lucide-react';
 import StaffDetailView from './StaffDetailView';
 import ModalPortal from './ModalPortal';
-
-const API_BASE = BACKEND_URL;
 
 const NET_SET_STATUS_OPTIONS = [
   'Qualified UGC-NET',

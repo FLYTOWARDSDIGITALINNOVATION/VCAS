@@ -65,6 +65,14 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Automatically normalize double '/api/api/' calls from any frontend clients
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/api/')) {
+    req.url = req.url.replace('/api/api/', '/api/');
+  }
+  next();
+});
+
 // Health Check
 app.get('/api/health', (req, res) => {
   const connected = mongoose.connection.readyState === 1;
@@ -79,26 +87,26 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Routes
-app.use('/api/auth',            authRoutes);
-app.use('/api/staff',           staffRoutes);
-app.use('/api/classes',         classRoutes);
-app.use('/api/attendance',      attendanceRoutes);
-app.use('/api/timetable',       timetableRoutes);
-app.use('/api/internal-marks',  internalMarksRoutes);
-app.use('/api/assignments',     assignmentRoutes);
-app.use('/api/notices',         noticeRoutes);
-app.use('/api/leave',           leaveRoutes);
-app.use('/api/question-papers', questionPaperRoutes);
-app.use('/api/hall-tickets',    hallTicketRoutes);
-app.use('/api/students',        studentRoutes);
-app.use('/api/departments',     departmentRoutes);
-app.use('/api/courses',         courseRoutes);
-app.use('/api/subjects',        subjectRoutes);
-app.use('/api/settings',        settingsRoutes);
-app.use('/api/exams',           examRoutes);
-app.use('/api/fee-structure',   feeStructureRoutes);
-app.use('/api/tc',              tcRoutes);
+// API Routes (supports both /api/* and /*)
+app.use(['/api/auth', '/auth'],                        authRoutes);
+app.use(['/api/staff', '/staff'],                      staffRoutes);
+app.use(['/api/classes', '/classes'],                  classRoutes);
+app.use(['/api/attendance', '/attendance'],            attendanceRoutes);
+app.use(['/api/timetable', '/timetable'],              timetableRoutes);
+app.use(['/api/internal-marks', '/internal-marks'],    internalMarksRoutes);
+app.use(['/api/assignments', '/assignments'],          assignmentRoutes);
+app.use(['/api/notices', '/notices'],                  noticeRoutes);
+app.use(['/api/leave', '/leave'],                      leaveRoutes);
+app.use(['/api/question-papers', '/question-papers'],  questionPaperRoutes);
+app.use(['/api/hall-tickets', '/hall-tickets'],        hallTicketRoutes);
+app.use(['/api/students', '/students'],                studentRoutes);
+app.use(['/api/departments', '/departments'],          departmentRoutes);
+app.use(['/api/courses', '/courses'],                  courseRoutes);
+app.use(['/api/subjects', '/subjects'],                subjectRoutes);
+app.use(['/api/settings', '/settings'],                settingsRoutes);
+app.use(['/api/exams', '/exams'],                      examRoutes);
+app.use(['/api/fee-structure', '/fee-structure'],      feeStructureRoutes);
+app.use(['/api/tc', '/tc'],                            tcRoutes);
 
 // 404
 app.use((req, res) => {

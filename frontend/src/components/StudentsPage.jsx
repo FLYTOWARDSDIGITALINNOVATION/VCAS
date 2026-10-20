@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BACKEND_URL, getKnownDepartments } from '../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import AddStudentWizard from './AddStudentWizard';
 import StudentProfileView from './StudentProfileView';
 import {
@@ -26,8 +26,6 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
-
-const API_BASE = BACKEND_URL;
 
 function normalizeStudent(s) {
   if (!s) return null;
@@ -136,16 +134,30 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   const [subjectsList, setSubjectsList] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
-      if (Array.isArray(cached) && cached.length > 0) return cached;
+      if (Array.isArray(cached) && cached.length > 0) {
+        return cached.filter(s => (s.code || '').toUpperCase().trim() !== 'CS101');
+      }
     } catch (_) { }
-    return [{ code: 'CS101', name: 'Tamil', department: 'Computer Science' }];
+    return [];
   });
   const [classesList, setClassesList] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState('All Subjects');
 
   useEffect(() => {
+    // Listen for subject removals across the app
+    const onSubjectRemoved = (ev) => {
+      const removedCode = (ev?.detail?.code || '').toUpperCase().trim();
+      if (removedCode) {
+        setSubjectsList(prev => prev.filter(s => (s.code || '').toUpperCase().trim() !== removedCode));
+        if (selectedSubject.toUpperCase().includes(removedCode)) {
+          setSelectedSubject('All Subjects');
+        }
+      }
+    };
+    window.addEventListener('vcas_subject_removed', onSubjectRemoved);
+
     // 1. Fetch real departments
-    fetch(`${API_BASE}/api/departments`)
+    fetch(`${API_BASE}/departments`)
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.data)) {
@@ -155,29 +167,29 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       .catch(() => { });
 
     // 2. Fetch original real subjects
-    fetch(`${API_BASE}/api/subjects`)
+    fetch(`${API_BASE}/subjects`)
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.data)) {
-          setSubjectsList(data.data);
+          const valid = data.data.filter(s => (s.code || '').toUpperCase().trim() !== 'CS101');
+          setSubjectsList(valid);
         }
       })
       .catch(() => { });
 
     // 3. Fetch real classes to enrich subject allocations
-    fetch(`${API_BASE}/api/classes`)
+    fetch(`${API_BASE}/classes`)
       .then(res => res.json())
       .then(data => {
         const cls = data.classes || (Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []));
         if (Array.isArray(cls)) {
           setClassesList(cls);
-          // Merge unique classes into subjectsList if not already present
           setSubjectsList(prev => {
             const seenCodes = new Set(prev.map(s => (s.code || '').toUpperCase()));
             const newSubs = [...prev];
             cls.forEach(c => {
-              const code = (c.code || c.classCode || '').toUpperCase();
-              if (code && !seenCodes.has(code)) {
+              const code = (c.code || c.classCode || '').toUpperCase().trim();
+              if (code && code !== 'CS101' && !seenCodes.has(code)) {
                 seenCodes.add(code);
                 newSubs.push({
                   code,
@@ -191,6 +203,10 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
         }
       })
       .catch(() => { });
+
+    return () => {
+      window.removeEventListener('vcas_subject_removed', onSubjectRemoved);
+    };
   }, []);
 
   // Toast notification helper
@@ -206,7 +222,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     setIsLoading(true);
     setErrorMessage('');
     try {
-      const res = await fetch(`${API_BASE}/api/students`);
+      const res = await fetch(`${API_BASE}/students`);
       const result = await res.json();
       if (res.ok && result.success) {
         const normalized = (result.data || []).map(normalizeStudent);
@@ -359,7 +375,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     e.preventDefault();
     setIsSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/students`, {
+      const res = await fetch(`${API_BASE}/students`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newStudent)
@@ -762,7 +778,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         attendance: Number(editingStudent.attendance || 100)
       };
 
-      const res = await fetch(`${API_BASE}/api/students/${targetId}`, {
+      const res = await fetch(`${API_BASE}/students/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -816,7 +832,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
     setIsSaving(true);
     try {
       const targetId = deleteModalStudent._id || deleteModalStudent.studentId || deleteModalStudent.id;
-      const res = await fetch(`${API_BASE}/api/students/${targetId}`, {
+      const res = await fetch(`${API_BASE}/students/${targetId}`, {
         method: 'DELETE'
       });
       const result = await res.json();
@@ -901,7 +917,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         feeStatus: newStudentData.feeStatus || 'Pending'
       };
 
-      const res = await fetch(`${API_BASE}/api/students`, {
+      const res = await fetch(`${API_BASE}/students`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1156,20 +1172,13 @@ Unauthorized reproduction or distribution is strictly prohibited.
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10 min-w-[140px]"
             >
               <option value="All Subjects">All Subjects</option>
-              {subjectsList.length > 0 ? (
-                subjectsList.map(sub => (
+              {subjectsList
+                .filter(sub => (sub.code || '').toUpperCase().trim() !== 'CS101')
+                .map(sub => (
                   <option key={sub._id || sub.code} value={sub.code || sub.name}>
                     {sub.code ? `${sub.code} - ${sub.name}` : sub.name}
                   </option>
-                ))
-              ) : (
-                <>
-                  <option value="BCS101">BCS101 - Core Programming</option>
-                  <option value="CS2001">CS2001 - Data Structures</option>
-                  <option value="CS2002">CS2002 - Database Systems</option>
-                  <option value="CS2005">CS2005 - Web Technology</option>
-                </>
-              )}
+                ))}
             </select>
 
             {/* Semesters Filter */}

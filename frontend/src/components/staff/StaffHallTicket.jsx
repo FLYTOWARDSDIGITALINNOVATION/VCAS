@@ -187,6 +187,26 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     }
   });
 
+  // Listen for subject removals across the entire system
+  useEffect(() => {
+    const handleSubjectRemoved = (e) => {
+      const code = e?.detail?.code;
+      if (code) {
+        const clean = code.toUpperCase();
+        setDeletedSubjectCodes(prev => {
+          const next = new Set(prev);
+          next.add(clean);
+          try { localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next))); } catch {}
+          return next;
+        });
+        setCatalogSubjects(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
+        setSubjectsSchedule(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
+      }
+    };
+    window.addEventListener('vcas_subject_removed', handleSubjectRemoved);
+    return () => window.removeEventListener('vcas_subject_removed', handleSubjectRemoved);
+  }, []);
+
   // Enrolled students loaded for allocation
   const [studentsToAllocate, setStudentsToAllocate] = useState([]);
   const [fetchingStudents, setFetchingStudents] = useState(false);
@@ -400,7 +420,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       }
 
       if (data.success && Array.isArray(data.subjects) && data.subjects.length > 0) {
-        setCatalogSubjects(data.subjects);
+        const cleanCatalog = data.subjects.filter(s => !deletedSubjectCodes.has((s.code || '').toUpperCase()));
+        setCatalogSubjects(cleanCatalog);
         const cachedTimings = getSavedCustomTimings();
 
         setSubjectsSchedule(prev => {
@@ -408,7 +429,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
           const merged = [];
 
           // Filter out subjects that staff explicitly removed
-          const validSubs = data.subjects.filter(s => !deletedSubjectCodes.has(s.code.toUpperCase()));
+          const validSubs = cleanCatalog;
 
           validSubs.forEach((dbSub, idx) => {
             const code = dbSub.code.toUpperCase();
@@ -736,10 +757,10 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   }, [studentsToAllocate, selectedAllocationSubject]);
 
   // Assign a hall to all displayed students in the matrix
-  const handleAssignHallToAll = (hallName) => {
+  const handleAssignHallToAll = async (hallName) => {
     if (!hallName) return;
     const targetRolls = new Set(displayedStudents.map(s => s.rollNo.toUpperCase()));
-    setStudentsToAllocate(prev => prev.map(st => {
+    const updatedStudents = studentsToAllocate.map(st => {
       if (targetRolls.has(st.rollNo.toUpperCase())) {
         const subs = (st.subjects && st.subjects.length > 0) ? st.subjects.map(sub => {
           const matched = subjectsSchedule.find(s => s.code.toUpperCase() === (sub.code || '').toUpperCase());
@@ -764,9 +785,48 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         };
       }
       return st;
-    }));
+    });
+
+    setStudentsToAllocate(updatedStudents);
     setStatusMessage({ type: 'success', text: `Assigned "${hallName}" and exam schedule to ${displayedStudents.length} candidate(s)!` });
     setTimeout(() => setStatusMessage(null), 3500);
+
+    // Auto-persist immediately to MongoDB
+    try {
+      const payload = {
+        examName: (formExamName || currentAllocation?.examName || 'Semester End Examination 2026').trim(),
+        examType: formExamType || 'Semester End Examination',
+        academicYear: (formAcademicYear || '2025-2026').trim(),
+        department: formDept || currentAllocation?.department || 'Computer Science',
+        semester: Number(formSemester || currentAllocation?.semester || 1),
+        section: formSection || 'All',
+        halls: hallsList.length > 0 ? hallsList : [{ hallNo: hallName, capacity: 30 }],
+        allocatedByStaffId: staffUser?.staffId || 'STAFF',
+        allocatedByStaffName: staffUser?.name || 'Faculty In-Charge',
+        commonSubjects: subjectsSchedule,
+        students: updatedStudents.map((st, i) => ({
+          rollNo: st.rollNo,
+          name: st.name,
+          dept: st.dept || formDept,
+          semester: Number(st.semester || formSemester || 1),
+          section: st.section || 'A',
+          hallNo: st.hallNo || hallName,
+          seatNo: st.seatNo || `SEAT-${i + 1}`,
+          eligible: true,
+          remarks: 'Eligible for Examination',
+          subjects: st.subjects && st.subjects.length > 0 ? st.subjects : subjectsSchedule
+        }))
+      };
+
+      await fetch(`${API_BASE}/hall-tickets/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      fetchAllocations();
+    } catch (e) {
+      console.warn('Auto-save hall allocation to backend failed:', e);
+    }
   };
 
   // All selectable halls (never removes any hall once assigned to a student)
@@ -1451,6 +1511,40 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     setStudentsToAllocate(allocated);
     setStatusMessage({ type: 'success', text: `Auto-allocated ${allocated.length} student(s) across halls with full exam schedules!` });
     setTimeout(() => setStatusMessage(null), 4000);
+
+    // Auto-persist to MongoDB
+    try {
+      const payload = {
+        examName: (formExamName || currentAllocation?.examName || 'Semester End Examination 2026').trim(),
+        examType: formExamType || 'Semester End Examination',
+        academicYear: (formAcademicYear || '2025-2026').trim(),
+        department: formDept || currentAllocation?.department || 'Computer Science',
+        semester: Number(formSemester || currentAllocation?.semester || 1),
+        section: formSection || 'All',
+        halls: hallsList,
+        allocatedByStaffId: staffUser?.staffId || 'STAFF',
+        allocatedByStaffName: staffUser?.name || 'Faculty In-Charge',
+        commonSubjects: subjectsSchedule,
+        students: allocated.map((st, i) => ({
+          rollNo: st.rollNo,
+          name: st.name,
+          dept: st.dept || formDept,
+          semester: Number(st.semester || formSemester || 1),
+          section: st.section || 'A',
+          hallNo: st.hallNo,
+          seatNo: st.seatNo || `SEAT-${i + 1}`,
+          eligible: true,
+          remarks: 'Eligible for Examination',
+          subjects: st.subjects && st.subjects.length > 0 ? st.subjects : subjectsSchedule
+        }))
+      };
+
+      fetch(`${API_BASE}/hall-tickets/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(() => fetchAllocations()).catch(() => {});
+    } catch (_) {}
   };
 
   // Toggle a specific subject for an individual student
@@ -1505,36 +1599,82 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
 
   // Update single student field inline by matching roll number
   const handleStudentFieldChange = (rollNo, field, value) => {
-    setStudentsToAllocate(prev => prev.map(st => {
-      if (st.rollNo.toUpperCase() === rollNo.toUpperCase()) {
-        const updated = { ...st, [field]: value };
-        // If allocating hall or seat and student has no subjects yet, automatically attach all scheduled subjects!
-        if ((field === 'hallNo' || field === 'seatNo') && value && value !== 'TBA') {
-          if (!updated.subjects || updated.subjects.length === 0) {
-            updated.subjects = subjectsSchedule.map(s => ({
-              code: s.code.toUpperCase(),
-              name: s.name,
-              date: (s.date && s.date !== 'TBA') ? s.date : '',
-              session: s.session || 'Forenoon (FN)',
-              time: s.time || '09:30 AM - 12:30 PM'
-            })).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
-          } else {
-            updated.subjects = updated.subjects.map(sub => {
-              const matched = subjectsSchedule.find(s => s.code.toUpperCase() === (sub.code || '').toUpperCase());
-              return {
-                code: sub.code.toUpperCase(),
-                name: sub.name || matched?.name || sub.code,
-                date: (matched?.date && matched.date !== 'TBA') ? matched.date : (sub.date && sub.date !== 'TBA' ? sub.date : ''),
-                session: matched?.session || sub.session || 'Forenoon (FN)',
-                time: matched?.time || sub.time || '09:30 AM - 12:30 PM'
-              };
-            }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
+    let updatedStudentList = [];
+    setStudentsToAllocate(prev => {
+      updatedStudentList = prev.map((st, i) => {
+        if (st.rollNo.toUpperCase() === rollNo.toUpperCase()) {
+          const updated = { ...st, [field]: value };
+          // If allocating hall and seat is empty, auto-assign seat number
+          if (field === 'hallNo' && value && value !== 'TBA' && value !== 'Unassigned') {
+            if (!updated.seatNo || updated.seatNo === '—') {
+              updated.seatNo = `SEAT-${i + 1 < 10 ? '0' + (i + 1) : i + 1}`;
+            }
           }
+          // If allocating hall or seat and student has no subjects yet, automatically attach all scheduled subjects!
+          if ((field === 'hallNo' || field === 'seatNo') && value && value !== 'TBA') {
+            if (!updated.subjects || updated.subjects.length === 0) {
+              updated.subjects = subjectsSchedule.map(s => ({
+                code: s.code.toUpperCase(),
+                name: s.name,
+                date: (s.date && s.date !== 'TBA') ? s.date : '',
+                session: s.session || 'Forenoon (FN)',
+                time: s.time || '09:30 AM - 12:30 PM'
+              })).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
+            } else {
+              updated.subjects = updated.subjects.map(sub => {
+                const matched = subjectsSchedule.find(s => s.code.toUpperCase() === (sub.code || '').toUpperCase());
+                return {
+                  code: sub.code.toUpperCase(),
+                  name: sub.name || matched?.name || sub.code,
+                  date: (matched?.date && matched.date !== 'TBA') ? matched.date : (sub.date && sub.date !== 'TBA' ? sub.date : ''),
+                  session: matched?.session || sub.session || 'Forenoon (FN)',
+                  time: matched?.time || sub.time || '09:30 AM - 12:30 PM'
+                };
+              }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
+            }
+          }
+          return updated;
         }
-        return updated;
-      }
-      return st;
-    }));
+        return st;
+      });
+      return updatedStudentList;
+    });
+
+    // Auto-persist immediately to MongoDB when hall or seat changes
+    if (field === 'hallNo' || field === 'seatNo') {
+      try {
+        const payload = {
+          examName: (formExamName || currentAllocation?.examName || 'Semester End Examination 2026').trim(),
+          examType: formExamType || 'Semester End Examination',
+          academicYear: (formAcademicYear || '2025-2026').trim(),
+          department: formDept || currentAllocation?.department || 'Computer Science',
+          semester: Number(formSemester || currentAllocation?.semester || 1),
+          section: formSection || 'All',
+          halls: hallsList.length > 0 ? hallsList : [{ hallNo: value, capacity: 30 }],
+          allocatedByStaffId: staffUser?.staffId || 'STAFF',
+          allocatedByStaffName: staffUser?.name || 'Faculty In-Charge',
+          commonSubjects: subjectsSchedule,
+          students: updatedStudentList.map((st, i) => ({
+            rollNo: st.rollNo,
+            name: st.name,
+            dept: st.dept || formDept,
+            semester: Number(st.semester || formSemester || 1),
+            section: st.section || 'A',
+            hallNo: st.hallNo || (st.rollNo.toUpperCase() === rollNo.toUpperCase() && field === 'hallNo' ? value : ''),
+            seatNo: st.seatNo || (st.rollNo.toUpperCase() === rollNo.toUpperCase() && field === 'seatNo' ? value : `SEAT-${i + 1 < 10 ? '0' + (i + 1) : i + 1}`),
+            eligible: true,
+            remarks: 'Eligible for Examination',
+            subjects: st.subjects && st.subjects.length > 0 ? st.subjects : subjectsSchedule
+          }))
+        };
+
+        fetch(`${API_BASE}/hall-tickets/allocate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).catch(() => {});
+      } catch (_) {}
+    }
   };
 
   // Save the complete Allocation to backend
@@ -3226,7 +3366,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                             />
                           </td>
                           <td className="px-4 py-2.5">
-                            {st.hallNo && st.seatNo && st.subjects?.length > 0 ? (
+                            {st.hallNo && st.hallNo !== 'TBA' && st.hallNo !== 'Unassigned' ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 Allocated

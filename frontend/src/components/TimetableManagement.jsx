@@ -23,7 +23,8 @@ import {
   GraduationCap,
   Sparkles,
   UserCheck,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
@@ -522,6 +523,104 @@ export default function TimetableManagement({ user }) {
     setIsEditSlotOpen(true);
   };
 
+  // Real-time conflict checks for the Slot Modal in TimetableManagement
+  const slotConflictInfo = useMemo(() => {
+    if (!isEditSlotOpen) return null;
+    const targetPeriod = Number(slotForm.period);
+    const targetDay = slotForm.day;
+    const targetRoom = (slotForm.room || '').trim().toLowerCase();
+    const targetFaculty = (slotForm.faculty || '').trim();
+    const targetStaffId = viewMode === 'faculty' 
+      ? selectedStaffId 
+      : (staffList.find(s => `${s.name} (${s.staffId})` === slotForm.faculty)?.staffId || slotForm.faculty);
+
+    let periodClash = null;
+    let roomClash = null;
+    let classPeriodClash = null;
+    let facultyReallocationNotice = null;
+
+    // 1. Check if period is already assigned in class view
+    if (viewMode === 'class') {
+      const existingSlot = activeClassSchedule[targetDay]?.[targetPeriod];
+      if (existingSlot && existingSlot.code) {
+        const isEditingSame = editingInitialSlot && (editingInitialSlot.code === existingSlot.code);
+        if (!isEditingSame) {
+          classPeriodClash = {
+            subject: `${existingSlot.code} (${existingSlot.name})`,
+            faculty: existingSlot.faculty || 'Faculty Member',
+            room: existingSlot.room || 'Classroom'
+          };
+        }
+      }
+    }
+
+    // 2. Check if this faculty already has this period allocated
+    if (targetStaffId) {
+      if (viewMode === 'faculty') {
+        const currentAssigned = facultySchedule[targetDay]?.[String(targetPeriod)];
+        if (currentAssigned && currentAssigned.code && (!editingInitialSlot || editingInitialSlot.code !== currentAssigned.code)) {
+          facultyReallocationNotice = {
+            facultyName: currentStaff?.name || selectedStaffId,
+            code: currentAssigned.code,
+            name: currentAssigned.name,
+            room: currentAssigned.room
+          };
+        }
+      }
+
+      const clash = allTimetables.find(t => {
+        const matchesStaff = (t.staffId === targetStaffId) || (targetFaculty && targetFaculty.includes(t.staffId));
+        if (!matchesStaff) return false;
+
+        const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+        const daySched = sched[targetDay] || {};
+        const existing = daySched[String(targetPeriod)];
+        if (!existing || !existing.code) return false;
+
+        if (viewMode === 'faculty' && t.staffId === selectedStaffId) {
+          return false;
+        }
+        return true;
+      });
+
+      if (clash) {
+        const sched = clash.schedule instanceof Map ? Object.fromEntries(clash.schedule) : (clash.schedule || {});
+        const existing = sched[targetDay]?.[String(targetPeriod)];
+        const staffObj = staffList.find(s => s.staffId === clash.staffId);
+        periodClash = {
+          facultyName: staffObj?.name || clash.staffName || targetFaculty || clash.staffId,
+          code: existing?.code,
+          name: existing?.name,
+          room: existing?.room
+        };
+      }
+    }
+
+    // 3. Check if room/hall is already occupied by someone else at this period & day
+    if (targetRoom) {
+      const clash = allTimetables.find(t => {
+        if (viewMode === 'faculty' && t.staffId === selectedStaffId) return false;
+        const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+        const existing = sched[targetDay]?.[String(targetPeriod)];
+        return existing && existing.room && existing.room.trim().toLowerCase() === targetRoom;
+      });
+
+      if (clash) {
+        const sched = clash.schedule instanceof Map ? Object.fromEntries(clash.schedule) : (clash.schedule || {});
+        const existing = sched[targetDay]?.[String(targetPeriod)];
+        const staffObj = staffList.find(s => s.staffId === clash.staffId);
+        roomClash = {
+          room: slotForm.room,
+          facultyName: staffObj?.name || clash.staffName || clash.staffId,
+          code: existing?.code,
+          name: existing?.name
+        };
+      }
+    }
+
+    return { periodClash, roomClash, classPeriodClash, facultyReallocationNotice };
+  }, [isEditSlotOpen, slotForm, viewMode, selectedStaffId, staffList, allTimetables, activeClassSchedule, facultySchedule, currentStaff, editingInitialSlot]);
+
   // Save Slot Edit
   const handleSaveSlot = async (e) => {
     e.preventDefault();
@@ -536,70 +635,27 @@ export default function TimetableManagement({ user }) {
       : (staffList.find(s => `${s.name} (${s.staffId})` === slotForm.faculty)?.staffId || slotForm.faculty);
 
     // ── 1. CHECK IF PERIOD IS ALREADY ASSIGNED IN THIS CLASS (Class View) ──
-    if (viewMode === 'class') {
-      const existingSlot = activeClassSchedule[slotForm.day]?.[slotForm.period];
-      if (existingSlot && existingSlot.code) {
-        // If it was already assigned and we are not editing that same slot
-        const isEditingSame = editingInitialSlot && (editingInitialSlot.code === existingSlot.code);
-        if (!isEditingSame) {
-          const assignedTo = existingSlot.faculty || 'another faculty member';
-          const msg = `⚠️ Period Conflict: Period ${slotForm.period} on ${slotForm.day} is already assigned to ${assignedTo}!`;
-          showToast(msg);
-          alert(`⚠️ Period Already Assigned:\n\nPeriod ${slotForm.period} on ${slotForm.day} is already assigned to ${assignedTo} for ${existingSlot.code} (${existingSlot.name}).\n\nPlease clear the existing period first or select another time slot.`);
-          return;
-        }
-      }
+    if (viewMode === 'class' && slotConflictInfo?.classPeriodClash) {
+      const proceed = window.confirm(`⚠️ Period Conflict Warning:\n\nPeriod ${slotForm.period} on ${slotForm.day} is already assigned to ${slotConflictInfo.classPeriodClash.faculty} for ${slotConflictInfo.classPeriodClash.subject}.\n\nDo you want to re-allocate this period?`);
+      if (!proceed) return;
     }
 
-    // ── 2. CHECK IF THIS FACULTY IS ALREADY ASSIGNED TO ANOTHER CLASS AT THIS SAME PERIOD ──
-    if (targetStaffId) {
-      const facultyClash = allTimetables.find(t => {
-        const matchesStaff = (t.staffId === targetStaffId) || (slotForm.faculty && slotForm.faculty.includes(t.staffId));
-        if (!matchesStaff) return false;
-
-        const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
-        const daySched = sched[slotForm.day] || {};
-        const existing = daySched[String(slotForm.period)];
-        if (!existing || !existing.code) return false;
-
-        if (viewMode === 'faculty' && editingInitialSlot && editingInitialSlot.code === existing.code) {
-          return false;
-        }
-        return true;
-      });
-
-      if (facultyClash) {
-        const sched = facultyClash.schedule instanceof Map ? Object.fromEntries(facultyClash.schedule) : (facultyClash.schedule || {});
-        const existing = sched[slotForm.day]?.[String(slotForm.period)];
-        const staffObj = staffList.find(s => s.staffId === facultyClash.staffId);
-        const staffName = staffObj?.name || facultyClash.staffName || facultyClash.staffId;
-        const msg = `⚠️ Conflict: ${staffName} is already assigned on ${slotForm.day} Period ${slotForm.period}!`;
-        showToast(msg);
-        alert(`⚠️ Period Already Assigned:\n\n${staffName} is already assigned to Period ${slotForm.period} on ${slotForm.day} for ${existing?.code || 'another subject'} (${existing?.name || ''}) in ${existing?.room || 'Room'}.\n\nThis faculty member cannot be assigned to two classes at the same time.`);
-        return;
-      }
+    // ── 2. CHECK IF THIS FACULTY ALREADY HAS THIS PERIOD ALLOCATED ──
+    if (slotConflictInfo?.facultyReallocationNotice) {
+      const proceed = window.confirm(`⚠️ Period Re-allocation Warning:\n\n${slotConflictInfo.facultyReallocationNotice.facultyName} already has Period ${slotForm.period} on ${slotForm.day} allocated to ${slotConflictInfo.facultyReallocationNotice.code} (${slotConflictInfo.facultyReallocationNotice.name}).\n\nDo you want to re-allocate this period to ${slotForm.code}?`);
+      if (!proceed) return;
     }
 
-    // ── 3. CHECK IF THE ROOM/VENUE IS ALREADY OCCUPIED BY SOMEONE ELSE AT THIS PERIOD ──
-    if (slotForm.room) {
-      const targetRoom = slotForm.room.trim().toLowerCase();
-      const roomClash = allTimetables.find(t => {
-        if (viewMode === 'faculty' && t.staffId === selectedStaffId) return false;
-        const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
-        const existing = sched[slotForm.day]?.[String(slotForm.period)];
-        return existing && existing.room && existing.room.trim().toLowerCase() === targetRoom;
-      });
+    // ── 3. CHECK IF THIS FACULTY IS ALREADY ASSIGNED TO ANOTHER CLASS AT THIS SAME PERIOD ──
+    if (slotConflictInfo?.periodClash) {
+      const proceed = window.confirm(`⚠️ Period Already Assigned Warning:\n\n${slotConflictInfo.periodClash.facultyName} is already assigned to Period ${slotForm.period} on ${slotForm.day} for ${slotConflictInfo.periodClash.code} (${slotConflictInfo.periodClash.name}) in ${slotConflictInfo.periodClash.room || 'Room'}.\n\nDo you want to proceed with this allocation?`);
+      if (!proceed) return;
+    }
 
-      if (roomClash) {
-        const sched = roomClash.schedule instanceof Map ? Object.fromEntries(roomClash.schedule) : (roomClash.schedule || {});
-        const existing = sched[slotForm.day]?.[String(slotForm.period)];
-        const staffObj = staffList.find(s => s.staffId === roomClash.staffId);
-        const staffName = staffObj?.name || roomClash.staffName || roomClash.staffId;
-        const msg = `⚠️ Venue Conflict: Venue "${slotForm.room}" is already booked on ${slotForm.day} Period ${slotForm.period} by ${staffName}!`;
-        showToast(msg);
-        alert(`⚠️ Room Already Assigned:\n\nVenue "${slotForm.room}" is already occupied on ${slotForm.day} Period ${slotForm.period} by ${staffName} for ${existing?.code || ''}.\n\nPlease select another room.`);
-        return;
-      }
+    // ── 4. CHECK IF THE ROOM/VENUE IS ALREADY OCCUPIED BY SOMEONE ELSE AT THIS PERIOD ──
+    if (slotConflictInfo?.roomClash) {
+      const proceed = window.confirm(`⚠️ Room/Hall Already Occupied Warning:\n\nVenue "${slotForm.room}" is already allocated on ${slotForm.day} Period ${slotForm.period} to ${slotConflictInfo.roomClash.facultyName} for ${slotConflictInfo.roomClash.code}.\n\nDo you want to proceed and allocate this room anyway?`);
+      if (!proceed) return;
     }
 
     const isContinuous = Boolean(slotForm.type === 'lab' && slotForm.isContinuousLab);
@@ -1785,6 +1841,55 @@ export default function TimetableManagement({ user }) {
                   className="w-full mt-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
                 />
               </div>
+
+              {/* Conflict Warnings */}
+              {slotConflictInfo?.periodClash && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Period Already Allocated to Faculty!</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      <strong>{slotConflictInfo.periodClash.facultyName}</strong> is already assigned to Period {slotForm.period} on {slotForm.day} for {slotConflictInfo.periodClash.code} ({slotConflictInfo.periodClash.name}) in {slotConflictInfo.periodClash.room || 'Room'}.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {slotConflictInfo?.facultyReallocationNotice && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Period Already Allocated!</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      <strong>{slotConflictInfo.facultyReallocationNotice.facultyName}</strong> already has Period {slotForm.period} on {slotForm.day} allocated to {slotConflictInfo.facultyReallocationNotice.code} ({slotConflictInfo.facultyReallocationNotice.name}). Saving will overwrite and re-allocate this period.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {slotConflictInfo?.roomClash && (
+                <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2.5 text-rose-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Hall / Room Already Occupied!</strong>
+                    <p className="mt-0.5 text-rose-800">
+                      Venue "<strong>{slotForm.room}</strong>" is already allocated on {slotForm.day} Period {slotForm.period} to <strong>{slotConflictInfo.roomClash.facultyName}</strong> for {slotConflictInfo.roomClash.code}.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {slotConflictInfo?.classPeriodClash && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Class Period Already Assigned!</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      Period {slotForm.period} on {slotForm.day} is already assigned to <strong>{slotConflictInfo.classPeriodClash.faculty}</strong> for {slotConflictInfo.classPeriodClash.subject}.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
                 <button

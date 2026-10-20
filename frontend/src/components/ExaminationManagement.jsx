@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import {
@@ -71,7 +71,7 @@ export default function ExaminationManagement({ user }) {
         })).filter(s => Boolean(s.code));
       }
     } catch (_) { }
-    return [{ code: 'CS101', name: 'Tamil', department: 'Computer Science' }];
+    return [];
   });
   const [availableDepartments, setAvailableDepartments] = useState(() => {
     try {
@@ -275,44 +275,52 @@ export default function ExaminationManagement({ user }) {
         }
       }
 
-      // e) Existing Scheduled Exams (/api/exams)
-      realExams.forEach(ex => {
-        const code = (ex.code || '').toUpperCase().trim();
-        if (code && !subsMap.has(code)) {
-          subsMap.set(code, {
-            code,
-            name: ex.name || code,
-            department: ex.department || '',
-            semester: ex.sem || ex.semester || ''
-          });
-        }
-      });
-
-      // f) Client-side cached subjects
-      try {
-        const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
-        if (Array.isArray(cached)) {
-          cached.forEach(s => {
-            const code = (s.code || '').toUpperCase().trim();
-            if (code && !subsMap.has(code)) {
-              subsMap.set(code, {
-                code,
-                name: s.name || s.title || code,
-                department: s.department || '',
-                semester: s.semester || s.sem || ''
-              });
-            }
-          });
-        }
-      } catch (_) { }
-
       const allSubs = Array.from(subsMap.values());
       setAvailableSubjects(allSubs);
       try {
-        if (allSubs.length > 0) {
-          localStorage.setItem('vcas_subjects_cache', JSON.stringify(allSubs));
-        }
+        localStorage.setItem('vcas_subjects_cache', JSON.stringify(allSubs));
       } catch (_) { }
+
+      // Synchronize Admin Hall Ticket Scheduled subjects strictly from real active records
+      const activeScheduleList = [];
+      const seenScheduleCodes = new Set();
+      hallTicketAllocations.forEach(alloc => {
+        (alloc.commonSubjects || []).forEach(sub => {
+          const code = (sub.code || '').toUpperCase().trim();
+          if (code && subsMap.has(code) && !seenScheduleCodes.has(code)) {
+            seenScheduleCodes.add(code);
+            activeScheduleList.push({
+              code,
+              name: sub.name || (subsMap.get(code)?.name) || code,
+              department: alloc.department || (subsMap.get(code)?.department) || '',
+              date: sub.date || '2026-05-15',
+              session: sub.session || 'Forenoon (FN)',
+              time: sub.time || '09:30 AM - 12:30 PM'
+            });
+          }
+        });
+      });
+      realExams.forEach(ex => {
+        const code = (ex.code || '').toUpperCase().trim();
+        if (code && subsMap.has(code) && !seenScheduleCodes.has(code)) {
+          seenScheduleCodes.add(code);
+          activeScheduleList.push({
+            code,
+            name: ex.name || (subsMap.get(code)?.name) || code,
+            department: ex.department || (subsMap.get(code)?.department) || '',
+            date: ex.date || '2026-05-15',
+            session: ex.session || 'Forenoon (FN)',
+            time: ex.time || '09:30 AM - 12:30 PM'
+          });
+        }
+      });
+      if (activeScheduleList.length > 0) {
+        setAdminHtSchedule(activeScheduleList);
+        try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(activeScheduleList)); } catch (_) {}
+      } else {
+        setAdminHtSchedule(prev => prev.filter(s => subsMap.has((s.code || '').toUpperCase().trim())));
+      }
+
 
       // Build unified student examination and marks roster
       const studentMap = new Map();
@@ -322,19 +330,26 @@ export default function ExaminationManagement({ user }) {
         const roll = (st.rollNo || '').trim().toUpperCase();
         if (!roll) return;
         const attNum = typeof st.attendance === 'number' ? st.attendance : parseFloat(st.attendance) || 0;
+        const isFeeCleared = st.feeCleared !== false && st.feeStatus !== 'Overdue';
         const isEligible = attNum >= 75;
         const statusStr = isEligible
           ? 'Eligible'
           : 'Blocked (Shortage <75%)';
+
+        const rawDept = (st.department || '').trim();
+        const effectiveDept = (!rawDept || rawDept.toLowerCase() === 'general')
+          ? (adminHtDept || realAddedDepts[0] || 'Computer Science')
+          : rawDept;
 
         studentMap.set(roll, {
           id: st._id || st.id || idx + 1,
           rollNo: roll,
           regNo: st.admissionNo || st.admNo || st.studentId || roll,
           name: st.name || st.fullName || 'Student',
-          department: st.department || 'Computer Science',
+          department: effectiveDept,
+          originalDepartment: rawDept || 'General',
           year: (st.year && st.year <= 3) ? st.year : (st.sem?.includes('1') || st.sem?.includes('2') ? 1 : (st.sem?.includes('3') || st.sem?.includes('4') ? 2 : 3)),
-          sem: st.sem || st.semester || 'Sem 5',
+          sem: st.sem || st.semester || 'Sem 1',
           attendance: attNum,
           feeCleared: isFeeCleared,
           st1: 16,
@@ -393,12 +408,8 @@ export default function ExaminationManagement({ user }) {
             const total = ciaTot + ese;
             const grade = total >= 90 ? 'O' : total >= 80 ? 'A+' : total >= 70 ? 'A' : total >= 60 ? 'B+' : total >= 50 ? 'B' : 'U';
             const gradePoint = total >= 90 ? 10 : total >= 80 ? 9 : total >= 70 ? 8 : total >= 60 ? 7 : total >= 50 ? 6 : 0;
-            const isEligible = (existing.attendance >= 75) && existing.feeCleared;
-            const statusStr = isEligible
-              ? 'Eligible'
-              : existing.attendance < 75
-                ? 'Blocked (Shortage <75%)'
-                : 'Blocked (Fee Due)';
+            const isEligible = existing.attendance >= 75;
+            const statusStr = isEligible ? 'Eligible' : 'Blocked (Shortage <75%)';
 
             studentMap.set(roll, {
               ...existing,
@@ -446,7 +457,7 @@ export default function ExaminationManagement({ user }) {
             const roll = (st.rollNo || '').trim().toUpperCase();
             if (roll && studentMap.has(roll)) {
               const existing = studentMap.get(roll);
-              const isElig = (existing.attendance >= 75) && existing.feeCleared;
+              const isElig = existing.attendance >= 75 || st.eligible === true || (st.hallNo && st.hallNo !== 'Unassigned' && st.hallNo !== 'TBA');
               const studentSubs = (Array.isArray(st.subjects) && st.subjects.length > 0)
                 ? st.subjects
                 : commonSubs.length > 0
@@ -460,7 +471,7 @@ export default function ExaminationManagement({ user }) {
                 deskNo: st.deskNo || existing.deskNo || '',
                 subjects: studentSubs,
                 eligible: isElig,
-                status: isElig ? 'Eligible' : (existing.attendance < 75 ? 'Blocked (Shortage <75%)' : 'Blocked (Fee Due)'),
+                status: isElig ? 'Eligible' : 'Blocked (Shortage <75%)',
                 examTitle: alloc.examName || existing.examTitle,
                 academicYear: alloc.academicYear || existing.academicYear
               });
@@ -469,7 +480,7 @@ export default function ExaminationManagement({ user }) {
         }
       });
 
-      // If student subjects are still empty, map from staff allocation for their department
+      // If student subjects are still empty, map from staff allocation or active schedule
       studentMap.forEach((st) => {
         if (!st.subjects || st.subjects.length === 0) {
           const matchAlloc = hallTicketAllocations.find(a =>
@@ -484,6 +495,19 @@ export default function ExaminationManagement({ user }) {
               if (!st.hallNo || st.hallNo === 'Hall 101') {
                 st.hallNo = matchAlloc.halls?.[0]?.hallNo || 'Hall 101';
               }
+            }
+          }
+          if (!st.subjects || st.subjects.length === 0) {
+            if (activeScheduleList.length > 0) {
+              st.subjects = [...activeScheduleList];
+            } else if (allSubs.length > 0) {
+              st.subjects = allSubs.slice(0, 5).map(s => ({
+                code: s.code,
+                name: s.name,
+                date: '2026-10-20',
+                session: 'Forenoon (FN)',
+                time: '09:30 AM - 12:30 PM'
+              }));
             }
           }
         }
@@ -509,6 +533,9 @@ export default function ExaminationManagement({ user }) {
 
   // Modals State
   const [isAddScheduleOpen, setIsAddScheduleOpen] = useState(false);
+  const [isEditScheduleOpen, setIsEditScheduleOpen] = useState(false);
+  const [editingExamSchedule, setEditingExamSchedule] = useState(null);
+  const [isSubmittingEditSchedule, setIsSubmittingEditSchedule] = useState(false);
   const [viewingExamDetails, setViewingExamDetails] = useState(null);
   const [viewingHallTicketStudent, setViewingHallTicketStudent] = useState(null);
   const [viewingGradeCardStudent, setViewingGradeCardStudent] = useState(null);
@@ -517,7 +544,7 @@ export default function ExaminationManagement({ user }) {
 
   // Lock background scroll when any modal is open
   React.useEffect(() => {
-    const isAnyModalOpen = Boolean(isAddScheduleOpen || viewingExamDetails || viewingHallTicketStudent || viewingGradeCardStudent);
+    const isAnyModalOpen = Boolean(isAddScheduleOpen || isEditScheduleOpen || viewingExamDetails || viewingHallTicketStudent || viewingGradeCardStudent);
     const scrollContainer = document.getElementById('main-content-scroll-container');
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
@@ -530,7 +557,7 @@ export default function ExaminationManagement({ user }) {
       document.body.style.overflow = 'unset';
       if (scrollContainer) scrollContainer.style.overflow = 'auto';
     };
-  }, [isAddScheduleOpen, viewingExamDetails, viewingHallTicketStudent, viewingGradeCardStudent]);
+  }, [isAddScheduleOpen, isEditScheduleOpen, viewingExamDetails, viewingHallTicketStudent, viewingGradeCardStudent]);
 
   const [isSubmittingSchedule, setIsSubmittingSchedule] = useState(false);
 
@@ -577,6 +604,100 @@ export default function ExaminationManagement({ user }) {
     return list;
   }, [availableSubjects, scheduleForm.department, scheduleForm.sem]);
 
+  // Conflict detection for Add Exam Schedule (Hall and Invigilator allocation)
+  const addScheduleInvigilatorConflict = useMemo(() => {
+    const inv = (scheduleForm.invigilator === 'CUSTOM' ? scheduleForm.customInvigilator : scheduleForm.invigilator)?.trim();
+    if (!inv || inv === 'Assigned Faculty' || inv === 'Staff In-Charge') return null;
+    const targetDate = (scheduleForm.date || '').trim();
+    const targetSession = (scheduleForm.session || '').toLowerCase().trim();
+    if (!targetDate) return null;
+
+    return examsList.find(ex => {
+      const exDate = (ex.date || '').trim();
+      const exSession = (ex.session || '').toLowerCase().trim();
+      const exInv = (ex.invigilator || '').trim();
+      if (!exInv || exInv === 'Assigned Faculty' || exInv === 'Staff In-Charge') return false;
+      const isSameDate = exDate === targetDate;
+      const isSameSession = (targetSession.includes('an') && exSession.includes('an')) ||
+                            (targetSession.includes('fn') && exSession.includes('fn')) ||
+                            targetSession === exSession;
+      const isSamePerson = exInv.toLowerCase() === inv.toLowerCase() ||
+                           exInv.toLowerCase().includes(inv.toLowerCase()) ||
+                           inv.toLowerCase().includes(exInv.toLowerCase());
+      return isSameDate && isSameSession && isSamePerson;
+    });
+  }, [scheduleForm.invigilator, scheduleForm.customInvigilator, scheduleForm.date, scheduleForm.session, examsList]);
+
+  const addScheduleHallConflict = useMemo(() => {
+    const hall = ((scheduleForm.hall === 'CUSTOM' ? scheduleForm.customHall : scheduleForm.hall) || '').trim();
+    if (!hall) return null;
+    const targetDate = (scheduleForm.date || '').trim();
+    const targetSession = (scheduleForm.session || '').toLowerCase().trim();
+    if (!targetDate) return null;
+
+    return examsList.find(ex => {
+      const exDate = (ex.date || '').trim();
+      const exSession = (ex.session || '').toLowerCase().trim();
+      const exHall = (ex.hall || '').trim();
+      if (!exHall) return false;
+      const isSameDate = exDate === targetDate;
+      const isSameSession = (targetSession.includes('an') && exSession.includes('an')) ||
+                            (targetSession.includes('fn') && exSession.includes('fn')) ||
+                            targetSession === exSession;
+      const isSameHall = exHall.toLowerCase() === hall.toLowerCase();
+      return isSameDate && isSameSession && isSameHall;
+    });
+  }, [scheduleForm.hall, scheduleForm.customHall, scheduleForm.date, scheduleForm.session, examsList]);
+
+  // Conflict detection for Edit Exam Schedule (Hall and Invigilator allocation)
+  const editScheduleInvigilatorConflict = useMemo(() => {
+    if (!editingExamSchedule) return null;
+    const inv = (editingExamSchedule.invigilator === 'CUSTOM' ? editingExamSchedule.customInvigilator : editingExamSchedule.invigilator)?.trim();
+    if (!inv || inv === 'Assigned Faculty' || inv === 'Staff In-Charge') return null;
+    const targetDate = (editingExamSchedule.date || '').trim();
+    const targetSession = (editingExamSchedule.session || '').toLowerCase().trim();
+    if (!targetDate) return null;
+
+    return examsList.find(ex => {
+      if (ex._id === editingExamSchedule.id || ex.id === editingExamSchedule.id) return false;
+      const exDate = (ex.date || '').trim();
+      const exSession = (ex.session || '').toLowerCase().trim();
+      const exInv = (ex.invigilator || '').trim();
+      if (!exInv || exInv === 'Assigned Faculty' || exInv === 'Staff In-Charge') return false;
+      const isSameDate = exDate === targetDate;
+      const isSameSession = (targetSession.includes('an') && exSession.includes('an')) ||
+                            (targetSession.includes('fn') && exSession.includes('fn')) ||
+                            targetSession === exSession;
+      const isSamePerson = exInv.toLowerCase() === inv.toLowerCase() ||
+                           exInv.toLowerCase().includes(inv.toLowerCase()) ||
+                           inv.toLowerCase().includes(exInv.toLowerCase());
+      return isSameDate && isSameSession && isSamePerson;
+    });
+  }, [editingExamSchedule, examsList]);
+
+  const editScheduleHallConflict = useMemo(() => {
+    if (!editingExamSchedule) return null;
+    const hall = ((editingExamSchedule.hall === 'CUSTOM' ? editingExamSchedule.customHall : editingExamSchedule.hall) || '').trim();
+    if (!hall) return null;
+    const targetDate = (editingExamSchedule.date || '').trim();
+    const targetSession = (editingExamSchedule.session || '').toLowerCase().trim();
+    if (!targetDate) return null;
+
+    return examsList.find(ex => {
+      if (ex._id === editingExamSchedule.id || ex.id === editingExamSchedule.id) return false;
+      const exDate = (ex.date || '').trim();
+      const exSession = (ex.session || '').toLowerCase().trim();
+      const exHall = (ex.hall || '').trim();
+      if (!exHall) return false;
+      const isSameDate = exDate === targetDate;
+      const isSameSession = (targetSession.includes('an') && exSession.includes('an')) ||
+                            (targetSession.includes('fn') && exSession.includes('fn')) ||
+                            targetSession === exSession;
+      const isSameHall = exHall.toLowerCase() === hall.toLowerCase();
+      return isSameDate && isSameSession && isSameHall;
+    });
+  }, [editingExamSchedule, examsList]);
+
   const handleOpenAddSchedule = () => {
     fetchAllExaminationData();
     setScheduleForm({
@@ -615,11 +736,158 @@ export default function ExaminationManagement({ user }) {
       const cached = JSON.parse(localStorage.getItem('vcas_admin_ht_subjects_schedule') || '[]');
       if (Array.isArray(cached) && cached.length > 0) return cached;
     } catch (_) {}
-    return [
-      { code: 'CS101', name: 'Tamil', department: 'Computer Science', date: '2026-05-15', session: 'Forenoon (FN)', time: '09:30 AM - 12:30 PM' }
-    ];
+    return [];
   });
   const [isSavingHtAllocation, setIsSavingHtAllocation] = useState(false);
+
+  // Editing state for scheduled subjects
+  const [editingHtSubjectCode, setEditingHtSubjectCode] = useState(null);
+  const [editingHtSubjectForm, setEditingHtSubjectForm] = useState({
+    code: '',
+    name: '',
+    date: '',
+    session: 'Forenoon (FN)',
+    time: '09:30 AM - 12:30 PM'
+  });
+
+  // Listen for subject removals across other tabs/modules
+  useEffect(() => {
+    const handleSubjectRemoved = (e) => {
+      const code = e?.detail?.code;
+      if (code) {
+        const clean = code.toUpperCase();
+        setAvailableSubjects(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
+        setAdminHtSchedule(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
+        setExamsList(prev => prev.filter(ex => (ex.code || '').toUpperCase() !== clean));
+      }
+    };
+    window.addEventListener('vcas_subject_removed', handleSubjectRemoved);
+    return () => window.removeEventListener('vcas_subject_removed', handleSubjectRemoved);
+  }, []);
+
+  const handleStartEditAdminHtSubject = (sub) => {
+    setEditingHtSubjectCode(sub.code);
+    const sessionVal = sub.session?.includes('AN') || sub.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)';
+    setEditingHtSubjectForm({
+      code: sub.code,
+      name: sub.name || '',
+      date: sub.date || new Date().toISOString().split('T')[0],
+      session: sessionVal,
+      time: sub.time || (sessionVal.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM')
+    });
+  };
+
+  const handleSaveEditAdminHtSubject = async () => {
+    if (!editingHtSubjectForm.name.trim()) {
+      showToast('Subject name cannot be empty');
+      return;
+    }
+    const cleanDate = editingHtSubjectForm.date || new Date().toISOString().split('T')[0];
+    const cleanSession = editingHtSubjectForm.session || 'Forenoon (FN)';
+    const cleanTime = editingHtSubjectForm.time.trim() || (cleanSession.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM');
+
+    const updatedEntry = {
+      code: editingHtSubjectCode,
+      name: editingHtSubjectForm.name.trim(),
+      department: adminHtDept,
+      date: cleanDate,
+      session: cleanSession,
+      time: cleanTime
+    };
+
+    setAdminHtSchedule(prev => {
+      const updated = prev.map(s => ((s.code || '').toUpperCase() === editingHtSubjectCode.toUpperCase() ? updatedEntry : s));
+      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) {}
+      return updated;
+    });
+
+    setStudentMarksList(prev => prev.map(st => {
+      if (!Array.isArray(st.subjects)) return st;
+      return {
+        ...st,
+        subjects: st.subjects.map(s => (s.code || '').toUpperCase() === editingHtSubjectCode.toUpperCase() ? updatedEntry : s)
+      };
+    }));
+
+    // Save custom timing locally
+    try {
+      const currentTimings = JSON.parse(localStorage.getItem('vcas_staff_custom_subjects_timing') || '{}');
+      currentTimings[editingHtSubjectCode.toUpperCase()] = updatedEntry;
+      localStorage.setItem('vcas_staff_custom_subjects_timing', JSON.stringify(currentTimings));
+    } catch (_) {}
+
+    // Synchronize to backend so Staff side and student hall tickets immediately update
+    try {
+      await fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: editingHtSubjectCode,
+          name: updatedEntry.name,
+          date: cleanDate,
+          session: cleanSession,
+          time: cleanTime,
+          department: adminHtDept,
+          semester: Number(adminHtSem) || 1
+        })
+      });
+
+      await fetch(`${API_BASE}/exams`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: editingHtSubjectCode,
+          name: updatedEntry.name,
+          department: adminHtDept,
+          year: Math.ceil(Number(adminHtSem) / 2) || 1,
+          sem: `Sem ${adminHtSem}`,
+          date: cleanDate,
+          session: cleanSession,
+          time: cleanTime,
+          hall: 'Hall 101',
+          qpCode: `QP-${editingHtSubjectCode}-2026`,
+          status: 'Scheduled',
+          type: 'End Semester Theory'
+        })
+      });
+    } catch (e) {
+      console.warn('Could not sync subject edit to backend:', e);
+    }
+
+    setEditingHtSubjectCode(null);
+    showToast(`Subject ${editingHtSubjectCode} updated successfully.`);
+  };
+
+  const handleCancelEditAdminHtSubject = () => {
+    setEditingHtSubjectCode(null);
+  };
+
+  const handleDeleteAdminHtSubject = async (codeToRemove) => {
+    setAdminHtSchedule(prev => {
+      const updated = prev.filter(s => !((s.code || '').toUpperCase() === codeToRemove.toUpperCase() && (!s.department || (s.department || '').toLowerCase() === (adminHtDept || '').toLowerCase())));
+      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) {}
+      return updated;
+    });
+    setStudentMarksList(prev => prev.map(st => {
+      if (!Array.isArray(st.subjects)) return st;
+      return {
+        ...st,
+        subjects: st.subjects.filter(s => (s.code || '').toUpperCase() !== codeToRemove.toUpperCase())
+      };
+    }));
+    try {
+      await fetch(`${API_BASE}/hall-tickets/remove-subject-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: codeToRemove,
+          department: adminHtDept,
+          semester: Number(adminHtSem) || 1
+        })
+      });
+    } catch (_) {}
+    showToast(`Subject ${codeToRemove} removed from ${adminHtDept} schedule.`);
+  };
 
   // Available catalog subjects strictly filtered for the chosen department
   const adminHtCatalogSubjects = useMemo(() => {
@@ -678,30 +946,181 @@ export default function ExaminationManagement({ user }) {
     showToast(`Subject ${effectiveCode} added to Hall Ticket schedule for ${adminHtDept}!`);
   };
 
-  const handleDeleteAdminHtSubject = (codeToRemove) => {
-    setAdminHtSchedule(prev => {
-      const updated = prev.filter(s => !(s.code.toUpperCase() === codeToRemove.toUpperCase() && (!s.department || (s.department || '').toLowerCase() === (adminHtDept || '').toLowerCase())));
-      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) {}
-      return updated;
+  const [batchHallToAssign, setBatchHallToAssign] = useState('');
+
+  // All added halls available for allocation
+  const selectableHalls = useMemo(() => {
+    const set = new Set();
+    hallsList.forEach(h => {
+      const name = (h.hallName || h.hallNo || '').trim();
+      if (name) set.add(name);
     });
-    setStudentMarksList(prev => prev.map(st => {
-      if (!Array.isArray(st.subjects)) return st;
-      return {
-        ...st,
-        subjects: st.subjects.filter(s => (s.code || '').toUpperCase() !== codeToRemove.toUpperCase())
-      };
-    }));
-    showToast(`Subject ${codeToRemove} removed from ${adminHtDept} schedule.`);
+    availableVenues.forEach(v => {
+      if (v && typeof v === 'string' && v.trim()) set.add(v.trim());
+    });
+    try {
+      const local = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
+      if (Array.isArray(local)) {
+        local.forEach(h => {
+          const name = (h.hallName || h.hallNo || '').trim();
+          if (name) set.add(name);
+        });
+      }
+    } catch (_) {}
+    if (set.size === 0) {
+      set.add('Hall D1');
+      set.add('Hall D2');
+      set.add('Hall D3');
+      set.add('Hall 101');
+    }
+    return Array.from(set);
+  }, [hallsList, availableVenues]);
+
+  // Filtered Students specifically for the Hall Tickets Tab (Target Department: adminHtDept)
+  const hallTicketStudents = useMemo(() => {
+    const target = (adminHtDept || '').trim().toLowerCase();
+    const list = studentMarksList.filter(s => {
+      const q = (searchQuery || '').toLowerCase().trim();
+      const matchesSearch = !q || (
+        String(s.name || '').toLowerCase().includes(q) ||
+        String(s.rollNo || '').toLowerCase().includes(q) ||
+        String(s.regNo || s.registerNumber || '').toLowerCase().includes(q) ||
+        String(s.department || '').toLowerCase().includes(q)
+      );
+
+      const sDept = (s.department || '').toLowerCase().trim();
+      const origDept = (s.originalDepartment || '').toLowerCase().trim();
+      const matchesDept = !target || target === 'all' || target === 'all departments' ||
+        sDept === target ||
+        sDept.includes(target) ||
+        target.includes(sDept) ||
+        origDept === 'general' ||
+        sDept === 'general';
+
+      return matchesSearch && matchesDept;
+    });
+    return list.length > 0 ? list : studentMarksList;
+  }, [studentMarksList, searchQuery, adminHtDept]);
+
+  const handleStudentHallChange = (rollNo, chosenHall) => {
+    const existingStudent = studentMarksList.find(st => (st.rollNo || '').toUpperCase() === (rollNo || '').toUpperCase());
+    const wasAlreadyAllocated = existingStudent && existingStudent.hallNo && existingStudent.hallNo !== 'TBA' && existingStudent.hallNo !== 'Unassigned' && existingStudent.hallNo !== chosenHall;
+
+    const updated = studentMarksList.map((st, i) => {
+      if ((st.rollNo || '').toUpperCase() === (rollNo || '').toUpperCase()) {
+        return {
+          ...st,
+          hallNo: chosenHall,
+          seatNo: st.seatNo || `A${i + 1}`,
+          eligible: true,
+          status: 'Eligible'
+        };
+      }
+      return st;
+    });
+    setStudentMarksList(updated);
+
+    if (wasAlreadyAllocated) {
+      showToast(`⚠️ Re-allocation: Roll ${rollNo} was already allocated to "${existingStudent.hallNo}". Updated to "${chosenHall}".`);
+    } else {
+      showToast(`Allocated "${chosenHall}" for Roll ${rollNo}`);
+    }
+
+    // Persist immediately to MongoDB
+    try {
+      const targetDept = adminHtDept || 'Computer Science';
+      fetch(`${API_BASE}/hall-tickets/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          examName: adminHtExamTitle || 'Semester End Theory Examinations - 2026',
+          examType: 'Semester End Examination',
+          academicYear: '2025-2026',
+          department: targetDept,
+          semester: Number(adminHtSem) || 1,
+          section: 'All',
+          halls: selectableHalls.map(h => ({ hallNo: h, capacity: 30 })),
+          commonSubjects: currentDeptScheduledSubjects.length > 0 ? currentDeptScheduledSubjects : availableSubjects.slice(0, 5),
+          students: updated.map((st, i) => ({
+            rollNo: st.rollNo || `STU${i + 1}`,
+            name: st.name,
+            dept: st.department || targetDept,
+            semester: Number(adminHtSem) || 1,
+            section: 'A',
+            hallNo: st.hallNo || chosenHall,
+            seatNo: st.seatNo || `A${i + 1}`,
+            eligible: true,
+            remarks: 'Eligible for Examination',
+            subjects: (st.subjects && st.subjects.length > 0) ? st.subjects : currentDeptScheduledSubjects
+          }))
+        })
+      }).catch(e => console.warn('Auto-save student hall failed:', e));
+    } catch (_) {}
+  };
+
+  const handleBatchAssignHall = (chosenHall) => {
+    if (!chosenHall) {
+      showToast('Please select a hall from the dropdown first.');
+      return;
+    }
+    const alreadyAllocatedCount = hallTicketStudents.filter(s => s.hallNo && s.hallNo !== 'TBA' && s.hallNo !== 'Unassigned' && s.hallNo !== chosenHall).length;
+    if (alreadyAllocatedCount > 0) {
+      const proceed = window.confirm(`⚠️ Allocation Warning:\n\n${alreadyAllocatedCount} student(s) already have an exam hall allocated.\n\nAre you sure you want to re-allocate all ${hallTicketStudents.length} candidate(s) to "${chosenHall}"?`);
+      if (!proceed) return;
+    }
+    const updated = studentMarksList.map((st, i) => {
+      const isTarget = hallTicketStudents.some(hs => (hs.rollNo || '').toUpperCase() === (st.rollNo || '').toUpperCase());
+      if (isTarget) {
+        return {
+          ...st,
+          hallNo: chosenHall,
+          seatNo: `A${i + 1}`,
+          eligible: true,
+          status: 'Eligible'
+        };
+      }
+      return st;
+    });
+    setStudentMarksList(updated);
+    showToast(`Allocated "${chosenHall}" to all ${hallTicketStudents.length} candidates!`);
+
+    // Persist immediately to MongoDB
+    try {
+      const targetDept = adminHtDept || 'Computer Science';
+      fetch(`${API_BASE}/hall-tickets/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          examName: adminHtExamTitle || 'Semester End Theory Examinations - 2026',
+          examType: 'Semester End Examination',
+          academicYear: '2025-2026',
+          department: targetDept,
+          semester: Number(adminHtSem) || 1,
+          section: 'All',
+          halls: selectableHalls.map(h => ({ hallNo: h, capacity: 30 })),
+          commonSubjects: currentDeptScheduledSubjects.length > 0 ? currentDeptScheduledSubjects : availableSubjects.slice(0, 5),
+          students: updated.map((st, i) => ({
+            rollNo: st.rollNo || `STU${i + 1}`,
+            name: st.name,
+            dept: st.department || targetDept,
+            semester: Number(adminHtSem) || 1,
+            section: 'A',
+            hallNo: st.hallNo || chosenHall,
+            seatNo: st.seatNo || `A${i + 1}`,
+            eligible: true,
+            remarks: 'Eligible for Examination',
+            subjects: (st.subjects && st.subjects.length > 0) ? st.subjects : currentDeptScheduledSubjects
+          }))
+        })
+      }).catch(e => console.warn('Auto-save batch hall allocation failed:', e));
+    } catch (_) {}
   };
 
   const handleSaveAndPublishHtSchedule = async () => {
     try {
       setIsSavingHtAllocation(true);
       const targetDept = adminHtDept || 'Computer Science';
-      const targetStudents = studentMarksList.filter(s => 
-        s.department?.toLowerCase().includes(targetDept.toLowerCase()) || 
-        targetDept.toLowerCase().includes(s.department?.toLowerCase())
-      );
+      const targetStudents = hallTicketStudents;
 
       const payload = {
         examName: adminHtExamTitle || 'Semester End Theory Examinations - 2026',
@@ -710,18 +1129,19 @@ export default function ExaminationManagement({ user }) {
         department: targetDept,
         semester: Number(adminHtSem) || 1,
         section: 'All',
-        commonSubjects: currentDeptScheduledSubjects,
+        halls: selectableHalls.map(h => ({ hallNo: h, capacity: 30 })),
+        commonSubjects: currentDeptScheduledSubjects.length > 0 ? currentDeptScheduledSubjects : availableSubjects.slice(0, 5),
         students: targetStudents.map((st, i) => ({
           rollNo: st.rollNo || `STU${i + 1}`,
           name: st.name,
           dept: st.department || targetDept,
           semester: Number(adminHtSem) || 1,
           section: 'A',
-          hallNo: 'Exam Hall 101',
-          seatNo: `S-${String(i + 1).padStart(2, '0')}`,
-          eligible: st.attendance >= 75,
-          remarks: st.attendance >= 75 ? 'Eligible for Examination' : 'Attendance Shortage (<75%)',
-          subjects: currentDeptScheduledSubjects
+          hallNo: st.hallNo || batchHallToAssign || selectableHalls[0] || 'Hall 101',
+          seatNo: st.seatNo || `A${i + 1}`,
+          eligible: st.status === 'Eligible' || st.attendance >= 75,
+          remarks: (st.status === 'Eligible' || st.attendance >= 75) ? 'Eligible for Examination' : 'Attendance Shortage (<75%)',
+          subjects: (st.subjects && st.subjects.length > 0) ? st.subjects : currentDeptScheduledSubjects
         }))
       };
 
@@ -732,7 +1152,7 @@ export default function ExaminationManagement({ user }) {
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`Hall Ticket schedule published successfully for ${targetDept}!`);
+        showToast(`Hall Ticket allocations published successfully for ${targetDept}!`);
         fetchAllExaminationData();
       } else {
         showToast(data.message || 'Saved locally.');
@@ -817,7 +1237,14 @@ export default function ExaminationManagement({ user }) {
         String(s.department || '').toLowerCase().includes(q)
       );
 
-      const matchesDept = selectedDept === 'All Departments' || s.department === selectedDept;
+      const sDept = (s.department || '').toLowerCase().trim();
+      const selDept = (selectedDept || '').toLowerCase().trim();
+      const matchesDept = selectedDept === 'All Departments' ||
+        s.department === selectedDept ||
+        sDept === selDept ||
+        sDept === 'general' ||
+        selDept === 'general' ||
+        (s.originalDepartment || '').toLowerCase() === 'general';
       return matchesSearch && matchesDept;
     });
   }, [studentMarksList, searchQuery, selectedDept]);
@@ -857,10 +1284,11 @@ export default function ExaminationManagement({ user }) {
         year: Number(scheduleForm.year) || 1,
         sem: scheduleForm.sem || 'Sem 1',
         date: scheduleForm.date,
-        session: scheduleForm.session || 'FN (09:30 AM - 12:30 PM)',
-        hall: scheduleForm.hall.trim() || 'Hall 101',
+        session: scheduleForm.session || 'Forenoon (FN)',
+        time: scheduleForm.time || (scheduleForm.session?.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'),
+        hall: ((scheduleForm.hall === 'CUSTOM' ? scheduleForm.customHall : scheduleForm.hall) || '').trim() || 'Hall 101',
         qpCode: scheduleForm.qpCode.trim(),
-        invigilator: scheduleForm.invigilator.trim() || 'Assigned Faculty',
+        invigilator: ((scheduleForm.invigilator === 'CUSTOM' ? scheduleForm.customInvigilator : scheduleForm.invigilator) || '').trim() || 'Assigned Faculty',
         type: scheduleForm.type || 'End Semester Theory',
         totalStudents: 60,
         status: 'Scheduled',
@@ -868,6 +1296,22 @@ export default function ExaminationManagement({ user }) {
         ciaMax: 40,
         eseMax: 60
       };
+
+      if (addScheduleInvigilatorConflict) {
+        const proceed = window.confirm(`⚠️ Invigilator Conflict Warning:\n\nInvigilator "${payload.invigilator}" is already allocated to ${addScheduleInvigilatorConflict.code} in ${addScheduleInvigilatorConflict.hall} on ${payload.date} (${payload.session}).\n\nAre you sure you want to allocate them again?`);
+        if (!proceed) {
+          setIsSubmittingSchedule(false);
+          return;
+        }
+      }
+
+      if (addScheduleHallConflict) {
+        const proceed = window.confirm(`⚠️ Hall Conflict Warning:\n\nExam Hall "${payload.hall}" is already allocated to ${addScheduleHallConflict.code} (${addScheduleHallConflict.name}) on ${payload.date} (${payload.session}).\n\nAre you sure you want to allocate this hall again?`);
+        if (!proceed) {
+          setIsSubmittingSchedule(false);
+          return;
+        }
+      }
 
       const res = await fetch(`${API_BASE}/exams`, {
         method: 'POST',
@@ -891,6 +1335,37 @@ export default function ExaminationManagement({ user }) {
         setExamsList(prev => [tempExam, ...prev]);
         showToast('New Exam Schedule added to list!');
       }
+
+      // Sync with hall ticket schedules so Staff side sees it immediately
+      try {
+        await fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: finalCode,
+            name: finalName,
+            date: scheduleForm.date,
+            session: scheduleForm.session || 'Forenoon (FN)',
+            time: (scheduleForm.session?.includes('AN') || scheduleForm.session?.toLowerCase().includes('afternoon')) ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM',
+            department: scheduleForm.department.trim(),
+            semester: Number(String(scheduleForm.sem).replace(/\D/g, '')) || 1
+          })
+        });
+      } catch (_) {}
+
+      // Add to scheduled hall ticket subjects for this dept
+      const newSubjectEntry = {
+        code: finalCode,
+        name: finalName,
+        department: scheduleForm.department.trim(),
+        date: scheduleForm.date,
+        session: scheduleForm.session || 'Forenoon (FN)',
+        time: (scheduleForm.session?.includes('AN') || scheduleForm.session?.toLowerCase().includes('afternoon')) ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'
+      };
+      setAdminHtSchedule(prev => {
+        const filtered = prev.filter(s => s.code.toUpperCase() !== finalCode);
+        return [...filtered, newSubjectEntry];
+      });
       setAvailableSubjects(prev => {
         if (!prev.some(s => s.code === finalCode)) {
           return [{ code: finalCode, name: finalName, department: scheduleForm.department }, ...prev];
@@ -935,6 +1410,143 @@ export default function ExaminationManagement({ user }) {
     }
   };
 
+  // Open Edit Schedule Modal with populated details
+  const handleOpenEditSchedule = (exam, e) => {
+    if (e) e.stopPropagation();
+    fetchAllExaminationData();
+    setEditingExamSchedule({
+      id: exam._id || exam.id,
+      code: exam.code || '',
+      name: exam.name || '',
+      department: exam.department || 'Computer Science',
+      year: exam.year || 1,
+      sem: exam.sem || 'Sem 1',
+      date: exam.date || '',
+      session: exam.session || 'Forenoon (FN)',
+      time: exam.time || (exam.session?.includes('AN') || exam.session?.toLowerCase().includes('afternoon') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'),
+      hall: exam.hall || exam.venue || 'Hall 101',
+      qpCode: exam.qpCode || `QP-${exam.code}-2026`,
+      invigilator: exam.invigilator || '',
+      customInvigilator: '',
+      type: exam.type || 'End Semester Theory',
+      status: exam.status || 'Scheduled'
+    });
+    setIsEditScheduleOpen(true);
+  };
+
+  // Save Edited Exam Schedule to MongoDB Atlas and sync
+  const handleSaveEditSchedule = async (e) => {
+    if (e) e.preventDefault();
+    if (!editingExamSchedule) return;
+    setIsSubmittingEditSchedule(true);
+    try {
+      const invigilatorFinal = (editingExamSchedule.invigilator === 'CUSTOM'
+        ? editingExamSchedule.customInvigilator
+        : editingExamSchedule.invigilator) || 'Assigned Faculty';
+
+      const payload = {
+        code: editingExamSchedule.code.trim().toUpperCase(),
+        name: editingExamSchedule.name.trim(),
+        department: editingExamSchedule.department.trim(),
+        year: Number(editingExamSchedule.year) || 1,
+        sem: editingExamSchedule.sem || 'Sem 1',
+        date: editingExamSchedule.date,
+        session: editingExamSchedule.session || 'Forenoon (FN)',
+        time: editingExamSchedule.time || (editingExamSchedule.session?.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'),
+        hall: editingExamSchedule.hall?.trim() || 'Hall 101',
+        qpCode: editingExamSchedule.qpCode?.trim() || `QP-${editingExamSchedule.code}-2026`,
+        invigilator: invigilatorFinal,
+        type: editingExamSchedule.type || 'End Semester Theory',
+        status: editingExamSchedule.status || 'Scheduled'
+      };
+
+      if (editScheduleInvigilatorConflict) {
+        const proceed = window.confirm(`⚠️ Invigilator Conflict Warning:\n\nInvigilator "${payload.invigilator}" is already allocated to ${editScheduleInvigilatorConflict.code} in ${editScheduleInvigilatorConflict.hall} on ${payload.date} (${payload.session}).\n\nAre you sure you want to allocate them again?`);
+        if (!proceed) {
+          setIsSubmittingEditSchedule(false);
+          return;
+        }
+      }
+
+      if (editScheduleHallConflict) {
+        const proceed = window.confirm(`⚠️ Hall Conflict Warning:\n\nExam Hall "${payload.hall}" is already allocated to ${editScheduleHallConflict.code} on ${payload.date} (${payload.session}).\n\nAre you sure you want to allocate this hall again?`);
+        if (!proceed) {
+          setIsSubmittingEditSchedule(false);
+          return;
+        }
+      }
+
+      let updatedExam = { ...payload, _id: editingExamSchedule.id, id: editingExamSchedule.id };
+
+      // Call backend PUT or POST
+      if (editingExamSchedule.id && String(editingExamSchedule.id).length === 24) {
+        const res = await fetch(`${API_BASE}/exams/${editingExamSchedule.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await res.json();
+        if (d.success && d.exam) updatedExam = d.exam;
+      } else {
+        const res = await fetch(`${API_BASE}/exams`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await res.json();
+        if (d.success && d.exam) updatedExam = d.exam;
+      }
+
+      // Update state immediately
+      setExamsList(prev => prev.map(item =>
+        (item._id === editingExamSchedule.id || item.id === editingExamSchedule.id || item.code === payload.code)
+          ? { ...item, ...updatedExam }
+          : item
+      ));
+
+      // Update viewingExamDetails modal if open
+      if (viewingExamDetails && (viewingExamDetails._id === editingExamSchedule.id || viewingExamDetails.code === payload.code)) {
+        setViewingExamDetails(prev => ({ ...prev, ...updatedExam }));
+      }
+
+      // Sync custom timing locally and to backend
+      try {
+        const currentTimings = JSON.parse(localStorage.getItem('vcas_staff_custom_subjects_timing') || '{}');
+        currentTimings[payload.code] = {
+          date: payload.date,
+          session: payload.session,
+          time: payload.time,
+          name: payload.name
+        };
+        localStorage.setItem('vcas_staff_custom_subjects_timing', JSON.stringify(currentTimings));
+
+        fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: payload.code,
+            name: payload.name,
+            date: payload.date,
+            session: payload.session,
+            time: payload.time,
+            department: payload.department,
+            semester: Number(String(payload.sem).replace(/\D/g, '')) || 1
+          })
+        }).catch(() => {});
+      } catch (_) {}
+
+      showToast(`Exam schedule & timing for ${payload.code} updated successfully!`);
+      setIsEditScheduleOpen(false);
+      setEditingExamSchedule(null);
+    } catch (err) {
+      console.error('Failed to update exam schedule:', err);
+      showToast('Exam schedule updated locally.');
+      setIsEditScheduleOpen(false);
+    } finally {
+      setIsSubmittingEditSchedule(false);
+    }
+  };
+
   // ── Exam Hall Seating State & Handlers ──────────────────
   const [isAddHallOpen, setIsAddHallOpen] = useState(false);
   const [editingHallId, setEditingHallId] = useState(null);
@@ -961,6 +1573,28 @@ export default function ExaminationManagement({ user }) {
   const [customHallSubCode, setCustomHallSubCode] = useState('');
   const [customHallSubName, setCustomHallSubName] = useState('');
   const [hallAllocatedSubjects, setHallAllocatedSubjects] = useState([]);
+
+  // Conflict detection for Exam Hall Seating (Chief Invigilator duty and Hall Name allocation)
+  const hallInvigilatorConflict = useMemo(() => {
+    const inv = (hallForm.invigilator || '').trim();
+    if (!inv || inv === 'Faculty Assigned' || inv === 'Staff In-Charge') return null;
+    const target = inv.toLowerCase();
+    return hallsList.find(h => {
+      if (editingHallId && (h._id === editingHallId || h.id === editingHallId)) return false;
+      const existingInv = (h.invigilator || '').trim().toLowerCase();
+      return existingInv && (existingInv === target || existingInv.includes(target) || target.includes(existingInv));
+    });
+  }, [hallForm.invigilator, hallsList, editingHallId]);
+
+  const hallNameConflict = useMemo(() => {
+    const name = (hallForm.hallName || '').trim().toLowerCase();
+    if (!name) return null;
+    return hallsList.find(h => {
+      if (editingHallId && (h._id === editingHallId || h.id === editingHallId)) return false;
+      const existingName = (h.hallName || '').trim().toLowerCase();
+      return existingName && existingName === name;
+    });
+  }, [hallForm.hallName, hallsList, editingHallId]);
 
   const deptFilteredSubjects = useMemo(() => {
     return availableSubjects.filter(s => {
@@ -1086,6 +1720,22 @@ export default function ExaminationManagement({ user }) {
         allocatedStudents: Number(hallForm.allocatedStudents) || 0,
         allocatedSubjects: hallAllocatedSubjects
       };
+
+      if (hallInvigilatorConflict) {
+        const proceed = window.confirm(`⚠️ Invigilator Conflict Warning:\n\nChief Invigilator "${payload.invigilator}" is already allocated to "${hallInvigilatorConflict.hallName}".\n\nAre you sure you want to re-allocate this person to "${payload.hallName}"?`);
+        if (!proceed) {
+          setIsSubmittingHall(false);
+          return;
+        }
+      }
+
+      if (!editingHallId && hallNameConflict) {
+        const proceed = window.confirm(`⚠️ Hall Conflict Warning:\n\nExam Hall "${payload.hallName}" is already registered/allocated.\n\nDo you want to proceed and save it?`);
+        if (!proceed) {
+          setIsSubmittingHall(false);
+          return;
+        }
+      }
 
       if (editingHallId) {
         const res = await fetch(`${API_BASE}/exams/halls/${editingHallId}`, {
@@ -1766,6 +2416,14 @@ export default function ExaminationManagement({ user }) {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
+                            onClick={(e) => handleOpenEditSchedule(exam, e)}
+                            title="Edit Exam Schedule & Timing"
+                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setViewingExamDetails(exam)}
                             title="View Detailed Exam Checkup"
                             className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center"
@@ -1943,8 +2601,16 @@ export default function ExaminationManagement({ user }) {
                   <label className="block text-[10px] font-bold text-slate-600 mb-1">Session</label>
                   <select
                     value={adminHtNewSession}
-                    onChange={(e) => setAdminHtNewSession(e.target.value)}
-                    className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-rose-500/20"
+                    onChange={(e) => {
+                      const sess = e.target.value;
+                      setAdminHtNewSession(sess);
+                      if (sess.includes('AN')) {
+                        setAdminHtNewTime('01:30 PM - 04:30 PM');
+                      } else {
+                        setAdminHtNewTime('09:30 AM - 12:30 PM');
+                      }
+                    }}
+                    className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-rose-500/20 cursor-pointer"
                   >
                     <option value="Forenoon (FN)">FN (09:30 AM - 12:30 PM)</option>
                     <option value="Afternoon (AN)">AN (01:30 PM - 04:30 PM)</option>
@@ -1993,30 +2659,113 @@ export default function ExaminationManagement({ user }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {currentDeptScheduledSubjects.map((sub, idx) => (
-                        <tr key={sub.code || idx} className="hover:bg-slate-50/60">
-                          <td className="py-2.5 px-3 font-semibold text-slate-500">{idx + 1}</td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-rose-600">{sub.code}</td>
-                          <td className="py-2.5 px-3 font-semibold text-slate-900">{sub.name}</td>
-                          <td className="py-2.5 px-3 text-slate-700">{sub.date || 'TBD'}</td>
-                          <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 bg-slate-100 font-bold text-[11px] rounded text-slate-700">
-                              {sub.session || 'FN'}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600">{sub.time || '09:30 AM - 12:30 PM'}</td>
-                          <td className="py-2.5 px-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteAdminHtSubject(sub.code)}
-                              title="Delete Subject"
-                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {currentDeptScheduledSubjects.map((sub, idx) => {
+                        const isEditingThis = editingHtSubjectCode === sub.code;
+                        if (isEditingThis) {
+                          return (
+                            <tr key={sub.code || idx} className="bg-blue-50/40">
+                              <td className="py-2.5 px-3 font-semibold text-slate-500">{idx + 1}</td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-rose-600">{sub.code}</td>
+                              <td className="py-2.5 px-3">
+                                <input
+                                  type="text"
+                                  value={editingHtSubjectForm.name}
+                                  onChange={(e) => setEditingHtSubjectForm(prev => ({ ...prev, name: e.target.value }))}
+                                  className="w-full text-xs font-semibold px-2 py-1 bg-white border border-blue-400 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
+                                />
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <input
+                                  type="date"
+                                  value={editingHtSubjectForm.date}
+                                  onChange={(e) => setEditingHtSubjectForm(prev => ({ ...prev, date: e.target.value }))}
+                                  className="text-xs font-semibold px-2 py-1 bg-white border border-blue-400 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
+                                />
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <select
+                                  value={editingHtSubjectForm.session?.includes('AN') || editingHtSubjectForm.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
+                                  onChange={(e) => {
+                                    const sess = e.target.value;
+                                    setEditingHtSubjectForm(prev => ({
+                                      ...prev,
+                                      session: sess,
+                                      time: sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'
+                                    }));
+                                  }}
+                                  className="text-xs font-bold px-2 py-1 bg-white border border-blue-400 rounded-lg outline-none cursor-pointer"
+                                >
+                                  <option value="Forenoon (FN)">FN (Forenoon)</option>
+                                  <option value="Afternoon (AN)">AN (Afternoon)</option>
+                                </select>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <input
+                                  type="text"
+                                  value={editingHtSubjectForm.time}
+                                  onChange={(e) => setEditingHtSubjectForm(prev => ({ ...prev, time: e.target.value }))}
+                                  className="w-full text-xs font-semibold px-2 py-1 bg-white border border-blue-400 rounded-lg outline-none"
+                                />
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={handleSaveEditAdminHtSubject}
+                                    title="Save Changes"
+                                    className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all cursor-pointer shadow-xs"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelEditAdminHtSubject}
+                                    title="Cancel"
+                                    className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-all cursor-pointer"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={sub.code || idx} className="hover:bg-slate-50/60">
+                            <td className="py-2.5 px-3 font-semibold text-slate-500">{idx + 1}</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-rose-600">{sub.code}</td>
+                            <td className="py-2.5 px-3 font-semibold text-slate-900">{sub.name}</td>
+                            <td className="py-2.5 px-3 text-slate-700">{sub.date || 'TBD'}</td>
+                            <td className="py-2.5 px-3">
+                              <span className="px-2 py-0.5 bg-slate-100 font-bold text-[11px] rounded text-slate-700">
+                                {sub.session || 'FN'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600">{sub.time || '09:30 AM - 12:30 PM'}</td>
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditAdminHtSubject(sub)}
+                                  title="Edit Subject Schedule"
+                                  className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAdminHtSubject(sub.code)}
+                                  title="Delete Subject"
+                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2024,84 +2773,167 @@ export default function ExaminationManagement({ user }) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div>
-              <h3 className="font-extrabold text-sm text-slate-900">Hall Ticket Issuance & Attendance Verification</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Students with minimum 75% attendance and fee clearance are eligible</p>
+              <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                <span>Hall Ticket Issuance &amp; Examination Hall Allocation</span>
+                <span className="text-xs font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">
+                  {hallTicketStudents.length} Students
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">Allocate exam halls from registered halls and verify attendance/fee eligibility</p>
             </div>
 
-            <button
-              onClick={() => showToast('All eligible Hall Tickets generated in batch.')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all"
-            >
-              <QrCode className="w-4 h-4" />
-              <span>Generate All Hall Tickets</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Batch Hall Allocation Selector */}
+              <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap pl-1">Assign Hall to All:</span>
+                <select
+                  value={batchHallToAssign}
+                  onChange={(e) => setBatchHallToAssign(e.target.value)}
+                  className="text-xs font-bold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
+                >
+                  <option value="">-- Choose Hall --</option>
+                  {selectableHalls.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => handleBatchAssignHall(batchHallToAssign)}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>Apply</span>
+                </button>
+              </div>
+
+              {/* Save & Publish Allocations */}
+              <button
+                type="button"
+                onClick={handleSaveAndPublishHtSchedule}
+                disabled={isSavingHtAllocation}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSavingHtAllocation ? 'Saving...' : 'Save Allocations'}</span>
+              </button>
+
+              {/* Generate All Hall Tickets */}
+              <button
+                type="button"
+                onClick={() => showToast('All eligible Hall Tickets generated in batch with allocated halls.')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>Generate All</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[800px]">
+              <table className="w-full text-left border-collapse min-w-[900px]">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="py-4 px-6">STUDENT ROLL & NAME</th>
+                    <th className="py-4 px-6">STUDENT ROLL &amp; NAME</th>
                     <th className="py-4 px-4">DEPARTMENT</th>
                     <th className="py-4 px-4">ATTENDANCE %</th>
                     <th className="py-4 px-4">ELIGIBILITY</th>
+                    <th className="py-4 px-4 min-w-[220px]">ALLOCATE EXAM HALL</th>
                     <th className="py-4 px-6 text-right">HALL TICKET</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                  {filteredStudents.map((s, idx) => (
-                    <tr key={s._id || s.id || s.rollNo || `ht-${idx}`} className="hover:bg-slate-50/50">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono font-bold text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
-                            {s.rollNo}
-                          </span>
-                          <div>
-                            <p className="font-bold text-slate-900">{s.name}</p>
-                            <span className="text-[11px] text-slate-400 font-mono">Reg: {s.regNo}</span>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="py-4 px-4 font-semibold text-slate-700 text-xs">
-                        {s.department} (Yr {s.year})
-                      </td>
-
-                      <td className="py-4 px-4">
-                        <span className={`font-extrabold text-xs ${s.attendance >= 75 ? 'text-emerald-600' : 'text-rose-600'
-                          }`}>
-                          {s.attendance}%
-                        </span>
-                      </td>
-
-
-                      <td className="py-4 px-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${s.status === 'Eligible'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200'
-                          }`}>
-                          {s.status}
-                        </span>
-                      </td>
-
-                      <td className="py-4 px-6 text-right">
-                        {s.status === 'Eligible' ? (
-                          <button
-                            onClick={() => setViewingHallTicketStudent(s)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-all shadow-xs"
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                            <span>View Hall Ticket</span>
-                          </button>
-                        ) : (
-                          <span className="text-xs text-slate-400 font-semibold italic">Not Issued</span>
-                        )}
+                  {hallTicketStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="py-12 text-center text-slate-400 font-semibold text-xs">
+                        No students enrolled or matching {adminHtDept}.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    hallTicketStudents.map((s, idx) => (
+                      <tr key={s._id || s.id || s.rollNo || `ht-${idx}`} className="hover:bg-slate-50/50">
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-bold text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
+                              {s.rollNo}
+                            </span>
+                            <div>
+                              <p className="font-bold text-slate-900">{s.name}</p>
+                              <span className="text-[11px] text-slate-400 font-mono">Reg: {s.regNo}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4 font-semibold text-slate-700 text-xs">
+                          {s.department} (Yr {s.year})
+                        </td>
+
+                        <td className="py-4 px-4">
+                          <span className={`font-extrabold text-xs ${s.attendance >= 75 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {s.attendance}%
+                          </span>
+                        </td>
+
+                        <td className="py-4 px-4">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${s.status === 'Eligible'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}>
+                            {s.status}
+                          </span>
+                        </td>
+
+                        {/* Exam Hall Allocation Dropdown & Seat No */}
+                        <td className="py-4 px-4">
+                          <div className="space-y-1.5 max-w-[210px]">
+                            <select
+                              value={s.hallNo || ''}
+                              onChange={(e) => handleStudentHallChange(s.rollNo, e.target.value)}
+                              className="w-full text-xs font-bold px-2.5 py-1.5 bg-slate-50 border border-slate-300 hover:border-indigo-500 focus:border-indigo-600 focus:bg-white rounded-xl outline-none cursor-pointer transition-all"
+                            >
+                              <option value="">-- Choose Hall --</option>
+                              {selectableHalls.map(hallName => (
+                                <option key={hallName} value={hallName}>{hallName}</option>
+                              ))}
+                            </select>
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-semibold pl-1">
+                              <span>Seat No:</span>
+                              <input
+                                type="text"
+                                value={s.seatNo || ''}
+                                placeholder={`A${idx + 1}`}
+                                onChange={(e) => {
+                                  const newSeat = e.target.value;
+                                  setStudentMarksList(prev => prev.map(item => 
+                                    (item.rollNo || '').toUpperCase() === (s.rollNo || '').toUpperCase() 
+                                      ? { ...item, seatNo: newSeat } 
+                                      : item
+                                  ));
+                                }}
+                                className="w-20 px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono font-bold text-slate-800 outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-6 text-right">
+                          {s.status === 'Eligible' ? (
+                            <button
+                              onClick={() => setViewingHallTicketStudent(s)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-all shadow-xs cursor-pointer"
+                            >
+                              <QrCode className="w-3.5 h-3.5" />
+                              <span>View Hall Ticket</span>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-semibold italic">Not Issued</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2751,26 +3583,54 @@ export default function ExaminationManagement({ user }) {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Session Timing *</label>
                   <select
                     value={scheduleForm.session?.includes('AN') || scheduleForm.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, session: e.target.value })}
+                    onChange={(e) => {
+                      const sess = e.target.value;
+                      setScheduleForm(prev => ({
+                        ...prev,
+                        session: sess,
+                        time: sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'
+                      }));
+                    }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
                     required
                   >
                     <option value="Forenoon (FN)">Forenoon (FN)</option>
                     <option value="Afternoon (AN)">Afternoon (AN)</option>
                   </select>
+                  <input
+                    type="text"
+                    value={scheduleForm.time || (scheduleForm.session?.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM')}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
+                    placeholder="e.g. 02:00 PM - 05:00 PM"
+                    className="mt-1.5 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-semibold text-slate-800 outline-none"
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Hall</label>
-                  <input
-                    type="text"
-                    value={scheduleForm.hall}
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Hall *</label>
+                  <select
+                    value={scheduleForm.hall || ''}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, hall: e.target.value })}
-                    placeholder="Hall 101 (Ramanujan Block)"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
-                  />
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
+                  >
+                    <option value="">-- Select Exam Hall --</option>
+                    {selectableHalls.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                    <option value="CUSTOM">+ Custom Hall...</option>
+                  </select>
+                  {scheduleForm.hall === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      value={scheduleForm.customHall || ''}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, customHall: e.target.value })}
+                      placeholder="Enter custom hall name (e.g. Hall 204)"
+                      className="mt-2 w-full px-3.5 py-2 bg-white border border-purple-300 rounded-xl text-xs font-medium focus:outline-none"
+                      required
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -2788,29 +3648,79 @@ export default function ExaminationManagement({ user }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Chief Invigilator</label>
-                  <input
-                    type="text"
+                  <select
                     value={scheduleForm.invigilator}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, invigilator: e.target.value })}
-                    placeholder="Enter Invigilator Name"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
-                  />
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Select Signed-Up Staff --</option>
+                    {facultyList.map(st => (
+                      <option key={st._id || st.staffId || st.name} value={st.name}>
+                        {st.name} {st.staffId ? `(${st.staffId})` : ''} {st.department ? `• ${st.department}` : ''}
+                      </option>
+                    ))}
+                    <option value="CUSTOM">+ Enter Custom Invigilator Name...</option>
+                  </select>
+                  {scheduleForm.invigilator === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      value={scheduleForm.customInvigilator || ''}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, customInvigilator: e.target.value })}
+                      placeholder="Enter Custom Invigilator Name"
+                      className="mt-2 w-full px-3.5 py-2 bg-white border border-purple-300 rounded-xl text-xs font-medium focus:outline-none"
+                      required
+                    />
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Type</label>
-                  <select
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Type (Typeable)</label>
+                  <input
+                    type="text"
+                    list="add-exam-type-presets"
                     value={scheduleForm.type}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, type: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
-                  >
-                    <option value="End Semester Theory">End Semester Theory</option>
-                    <option value="Practical Lab Exam">Practical Lab Exam</option>
-                    <option value="Continuous Internal Assessment (CIA)">Continuous Internal Assessment (CIA)</option>
-                    <option value="Supplementary / Arrear">Supplementary / Arrear</option>
-                  </select>
+                    placeholder="Type or select exam type"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
+                    required
+                  />
+                  <datalist id="add-exam-type-presets">
+                    <option value="End Semester Theory" />
+                    <option value="Practical Lab Exam" />
+                    <option value="Continuous Internal Assessment (CIA)" />
+                    <option value="Supplementary / Arrear" />
+                    <option value="Internal Test 1" />
+                    <option value="Internal Test 2" />
+                    <option value="Model Examination" />
+                    <option value="Retest / Special Exam" />
+                  </datalist>
                 </div>
               </div>
+
+              {/* Conflict Warnings */}
+              {addScheduleInvigilatorConflict && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Invigilator Already Allocated!</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      <span className="font-semibold">{scheduleForm.invigilator}</span> is already allocated to <span className="font-bold">{addScheduleInvigilatorConflict.code}</span> ({addScheduleInvigilatorConflict.name}) in <span className="font-bold">{addScheduleInvigilatorConflict.hall}</span> on {scheduleForm.date} ({scheduleForm.session}).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {addScheduleHallConflict && (
+                <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2.5 text-rose-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Hall Already Allocated!</strong>
+                    <p className="mt-0.5 text-rose-800">
+                      Exam Hall <span className="font-bold">{scheduleForm.hall}</span> is already allocated to <span className="font-bold">{addScheduleHallConflict.code}</span> ({addScheduleHallConflict.name}) on {scheduleForm.date} ({scheduleForm.session}).
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
@@ -3419,6 +4329,31 @@ export default function ExaminationManagement({ user }) {
                 </select>
               </div>
 
+              {/* Conflict Warnings */}
+              {hallInvigilatorConflict && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Invigilator Already Allocated to a Hall!</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      Chief Invigilator <span className="font-semibold">{hallForm.invigilator}</span> is already allocated to <span className="font-bold underline">{hallInvigilatorConflict.hallName}</span>. Allocating them to this hall may cause an invigilation conflict.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!editingHallId && hallNameConflict && (
+                <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2.5 text-rose-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Hall Name Already Registered!</strong>
+                    <p className="mt-0.5 text-rose-800">
+                      Exam Hall <span className="font-bold">{hallForm.hallName}</span> is already registered in the system (Invigilator: {hallNameConflict.invigilator || 'Staff In-Charge'}).
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -3639,15 +4574,23 @@ export default function ExaminationManagement({ user }) {
                   <span>Date &amp; Session</span>
                 </div>
                 <p className="text-sm font-black text-slate-900 mt-1">
-                  {viewingExamDetails.date}
+                  {viewingExamDetails.date || '2026-10-20'}
                 </p>
                 <p className="text-xs font-bold text-rose-600">
-                  {viewingExamDetails.session?.includes('AN') || viewingExamDetails.session?.toLowerCase().includes('afternoon')
-                    ? 'Afternoon Session (AN) • 02:00 PM - 05:00 PM'
-                    : 'Forenoon Session (FN) • 09:30 AM - 12:30 PM'}
+                  {viewingExamDetails.time 
+                    ? `${viewingExamDetails.session || (viewingExamDetails.time.includes('09:') ? 'Forenoon (FN)' : 'Afternoon (AN)')} • ${viewingExamDetails.time}`
+                    : (viewingExamDetails.session?.includes('AN') || viewingExamDetails.session?.toLowerCase().includes('afternoon')
+                        ? 'Afternoon Session (AN) • 01:30 PM - 04:30 PM'
+                        : 'Forenoon Session (FN) • 09:30 AM - 12:30 PM')}
                 </p>
                 <p className="text-[11px] text-slate-500 font-medium">
-                  Candidate Reporting Time: {viewingExamDetails.session?.includes('AN') || viewingExamDetails.session?.toLowerCase().includes('afternoon') ? '01:30 PM' : '09:00 AM'}
+                  Candidate Reporting Time: {
+                    viewingExamDetails.time?.toLowerCase().includes('01:30') || viewingExamDetails.session?.includes('AN') || viewingExamDetails.session?.toLowerCase().includes('afternoon')
+                      ? '01:00 PM'
+                      : viewingExamDetails.time?.toLowerCase().includes('02:00')
+                        ? '01:30 PM'
+                        : '09:00 AM'
+                  }
                 </p>
               </div>
 
@@ -3658,10 +4601,12 @@ export default function ExaminationManagement({ user }) {
                   <span>Exam Hall(s) Allocated</span>
                 </div>
                 <p className="text-sm font-black text-slate-900 mt-1">
-                  {viewingExamDetails.hall || 'Main Examination Block'}
+                  {viewingExamDetails.hall || viewingExamDetails.hallNumber || viewingExamDetails.venue || (hallsList[0]?.hallName) || 'Hall 101'}
                 </p>
                 <p className="text-xs text-slate-600 font-medium">
-                  Total Capacity: <span className="font-bold text-slate-900">{viewingExamDetails.totalStudents || 60} Candidates</span>
+                  Total Capacity: <span className="font-bold text-slate-900">
+                    {viewingExamDetails.totalStudents || (studentMarksList.length > 0 ? studentMarksList.length : 60)} Candidates
+                  </span>
                 </p>
                 <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -3676,7 +4621,7 @@ export default function ExaminationManagement({ user }) {
                   <span>Question Paper &amp; Marks</span>
                 </div>
                 <p className="text-sm font-black font-mono text-purple-700 mt-1">
-                  QP: {viewingExamDetails.qpCode ? viewingExamDetails.qpCode : 'QP-SEALED-2026'}
+                  QP: {viewingExamDetails.qpCode || `QP-${viewingExamDetails.code}-${(viewingExamDetails.date ? viewingExamDetails.date.split('-')[0] : '2026')}`}
                 </p>
                 <p className="text-xs text-slate-600 font-medium">
                   Confidential Status: <span className="font-bold text-emerald-700">Sealed &amp; Vault Verified</span>
@@ -3693,10 +4638,10 @@ export default function ExaminationManagement({ user }) {
                   <span>Chief Invigilator</span>
                 </div>
                 <p className="text-sm font-black text-slate-900 mt-1">
-                  {viewingExamDetails.invigilator || 'Assigned Faculty Member'}
+                  {viewingExamDetails.invigilator || viewingExamDetails.facultyName || facultyList[0]?.name || 'Latha V'}
                 </p>
                 <p className="text-xs text-slate-600 font-medium">
-                  Faculty Dept: <span className="font-semibold text-slate-800">{viewingExamDetails.invigilatorDept || viewingExamDetails.department || 'Examination Cell'}</span>
+                  Faculty Dept: <span className="font-semibold text-slate-800">{viewingExamDetails.invigilatorDept || viewingExamDetails.department || 'Computer Science'}</span>
                 </p>
                 <p className="text-[11px] text-indigo-600 font-semibold">
                   Invigilation Squad Order: Confirmed
@@ -3740,6 +4685,14 @@ export default function ExaminationManagement({ user }) {
               </button>
               <button
                 type="button"
+                onClick={() => handleOpenEditSchedule(viewingExamDetails)}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <Edit className="w-4 h-4" />
+                <span>Edit Timing & Details</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   window.print();
                   showToast(`Exam schedule report for ${viewingExamDetails.code} sent to print.`);
@@ -3750,6 +4703,261 @@ export default function ExaminationManagement({ user }) {
                 <span>Print Schedule Brief</span>
               </button>
             </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 15. MODAL: EDIT EXAM SCHEDULE & TIMING                                    */}
+      {/* ========================================================================= */}
+      {isEditScheduleOpen && editingExamSchedule && (
+        <ModalPortal isOpen={isEditScheduleOpen} onClose={() => setIsEditScheduleOpen(false)}>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                  <Edit className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-tight">Edit Examination Schedule &amp; Timing</h3>
+                  <p className="text-[11px] text-slate-500">Update subject timings, date, allocated hall &amp; invigilator for {editingExamSchedule.code}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsEditScheduleOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSchedule} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code</label>
+                  <input
+                    type="text"
+                    value={editingExamSchedule.code}
+                    disabled
+                    className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name *</label>
+                  <input
+                    type="text"
+                    value={editingExamSchedule.name}
+                    onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
+                  <select
+                    value={editingExamSchedule.department}
+                    onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, department: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                  >
+                    {availableDepartments.filter(d => d !== 'All Departments').map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Semester</label>
+                  <select
+                    value={editingExamSchedule.sem}
+                    onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, sem: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                  >
+                    {['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5', 'Sem 6', 'Sem 7', 'Sem 8'].map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Date *</label>
+                  <input
+                    type="date"
+                    value={editingExamSchedule.date}
+                    onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, date: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Session</label>
+                  <select
+                    value={editingExamSchedule.session?.includes('AN') || editingExamSchedule.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
+                    onChange={(e) => {
+                      const sess = e.target.value;
+                      setEditingExamSchedule(prev => ({
+                        ...prev,
+                        session: sess,
+                        time: sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="Forenoon (FN)">Forenoon (FN)</option>
+                    <option value="Afternoon (AN)">Afternoon (AN)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Exact Session Timing with presets */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Session Timing *</label>
+                <input
+                  type="text"
+                  value={editingExamSchedule.time}
+                  onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, time: e.target.value })}
+                  placeholder="e.g. 02:00 PM - 05:00 PM"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
+                  required
+                />
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Quick Presets:</span>
+                  {[
+                    '09:30 AM - 12:30 PM',
+                    '01:30 PM - 04:30 PM',
+                    '02:00 PM - 05:00 PM',
+                    '10:00 AM - 01:00 PM'
+                  ].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setEditingExamSchedule(prev => ({ ...prev, time: preset, session: preset.includes('01:') || preset.includes('02:') ? 'Afternoon (AN)' : 'Forenoon (FN)' }))}
+                      className="px-2 py-0.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 rounded-md text-[10px] font-mono font-semibold transition-all cursor-pointer"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Hall *</label>
+                  <select
+                    value={editingExamSchedule.hall || ''}
+                    onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, hall: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Select Exam Hall --</option>
+                    {selectableHalls.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                    <option value="CUSTOM">+ Custom Hall...</option>
+                  </select>
+                  {editingExamSchedule.hall === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      value={editingExamSchedule.customHall || ''}
+                      onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, customHall: e.target.value })}
+                      placeholder="Enter custom hall name"
+                      className="mt-2 w-full px-3.5 py-2 bg-white border border-blue-300 rounded-xl text-xs font-medium focus:outline-none"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">QP Code</label>
+                  <input
+                    type="text"
+                    value={editingExamSchedule.qpCode}
+                    onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, qpCode: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Chief Invigilator</label>
+                  <select
+                    value={editingExamSchedule.invigilator}
+                    onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, invigilator: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Select Faculty --</option>
+                    {facultyList.map(st => (
+                      <option key={st._id || st.staffId || st.name} value={st.name}>
+                        {st.name} {st.staffId ? `(${st.staffId})` : ''}
+                      </option>
+                    ))}
+                    <option value="CUSTOM">+ Enter Custom Invigilator...</option>
+                  </select>
+                  {editingExamSchedule.invigilator === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      value={editingExamSchedule.customInvigilator || ''}
+                      onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, customInvigilator: e.target.value })}
+                      placeholder="Enter custom invigilator name"
+                      className="mt-2 w-full px-3.5 py-2 bg-white border border-blue-300 rounded-xl text-xs font-medium focus:outline-none"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Type</label>
+                  <input
+                    type="text"
+                    value={editingExamSchedule.type}
+                    onChange={(e) => setEditingExamSchedule({ ...editingExamSchedule, type: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Conflict Warnings */}
+              {editScheduleInvigilatorConflict && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Invigilator Already Allocated!</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      <span className="font-semibold">{editingExamSchedule.invigilator}</span> is already allocated to <span className="font-bold">{editScheduleInvigilatorConflict.code}</span> ({editScheduleInvigilatorConflict.name}) in <span className="font-bold">{editScheduleInvigilatorConflict.hall}</span> on {editingExamSchedule.date} ({editingExamSchedule.session}).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {editScheduleHallConflict && (
+                <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2.5 text-rose-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Hall Already Allocated!</strong>
+                    <p className="mt-0.5 text-rose-800">
+                      Exam Hall <span className="font-bold">{editingExamSchedule.hall}</span> is already allocated to <span className="font-bold">{editScheduleHallConflict.code}</span> ({editScheduleHallConflict.name}) on {editingExamSchedule.date} ({editingExamSchedule.session}).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditScheduleOpen(false)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEditSchedule}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 transition-all flex items-center gap-2 disabled:opacity-60 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isSubmittingEditSchedule ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </ModalPortal>
       )}

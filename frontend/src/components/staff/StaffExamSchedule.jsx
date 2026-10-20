@@ -247,9 +247,117 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
     setNewSubDate('');
   };
 
-  const handleRemoveExamSubject = (code) => {
-    setExamSubjects(prev => prev.filter(s => s.code.toUpperCase() !== code.toUpperCase()));
+  // Editing state for staff exam subjects
+  const [editingStaffSubCode, setEditingStaffSubCode] = useState(null);
+  const [editingStaffSubForm, setEditingStaffSubForm] = useState({
+    name: '',
+    date: '',
+    session: 'Forenoon (FN)',
+    time: '09:30 AM - 12:30 PM'
+  });
+
+  const handleStartEditExamSubject = (s) => {
+    setEditingStaffSubCode(s.code);
+    const sessionVal = s.session?.includes('AN') || s.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)';
+    setEditingStaffSubForm({
+      name: s.name || '',
+      date: s.date || new Date().toISOString().split('T')[0],
+      session: sessionVal,
+      time: s.time || (sessionVal.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM')
+    });
   };
+
+  const handleSaveEditExamSubject = async (code) => {
+    const cleanName = editingStaffSubForm.name.trim();
+    if (!cleanName) return alert('Subject name cannot be empty');
+    const cleanDate = editingStaffSubForm.date || new Date().toISOString().split('T')[0];
+    const cleanSession = editingStaffSubForm.session || 'Forenoon (FN)';
+    const cleanTime = editingStaffSubForm.time.trim() || (cleanSession.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM');
+
+    saveCustomTiming(code, {
+      code,
+      name: cleanName,
+      date: cleanDate,
+      session: cleanSession,
+      time: cleanTime
+    });
+
+    setExamSubjects(prev => prev.map(s => s.code.toUpperCase() === code.toUpperCase() ? {
+      ...s,
+      name: cleanName,
+      date: cleanDate,
+      session: cleanSession,
+      time: cleanTime
+    } : s));
+
+    // Update Hall Ticket and Exam in backend so Admin side immediately reflects it
+    fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        name: cleanName,
+        date: cleanDate,
+        session: cleanSession,
+        time: cleanTime,
+        department: selectedDept,
+        semester: Number(selectedSem) || 1
+      })
+    }).catch(e => console.warn('Could not sync edited subject to hall-tickets:', e));
+
+    fetch(`${API_BASE}/exams`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        name: cleanName,
+        department: selectedDept,
+        year: Math.ceil(Number(selectedSem) / 2) || 1,
+        sem: `Sem ${selectedSem}`,
+        date: cleanDate,
+        session: cleanSession,
+        time: cleanTime,
+        hall: halls.map(h => h.hallName).join(', ') || 'Hall 101',
+        qpCode: `QP-${code}-2026`,
+        status: 'Scheduled',
+        type: 'End Semester Theory'
+      })
+    }).catch(e => console.warn('Could not sync edited subject to exams:', e));
+
+    setEditingStaffSubCode(null);
+  };
+
+  const handleCancelEditExamSubject = () => {
+    setEditingStaffSubCode(null);
+  };
+
+  const handleRemoveExamSubject = (code) => {
+    const cleanCode = code.toUpperCase();
+    setExamSubjects(prev => prev.filter(s => s.code.toUpperCase() !== cleanCode));
+    fetch(`${API_BASE}/hall-tickets/remove-subject-schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        department: selectedDept,
+        semester: Number(selectedSem) || 1
+      })
+    }).catch(() => {});
+  };
+
+  // Listen for subject removals across the system
+  useEffect(() => {
+    const handleSubjectRemoved = (e) => {
+      const code = e?.detail?.code;
+      if (code) {
+        const clean = code.toUpperCase();
+        setAvailableCatalogSubjects(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
+        setExamSubjects(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
+      }
+    };
+    window.addEventListener('vcas_subject_removed', handleSubjectRemoved);
+    return () => window.removeEventListener('vcas_subject_removed', handleSubjectRemoved);
+  }, []);
 
   // Fetch Students & Calculate Attendance / Fee Status
   const fetchStudentsForEligibility = async () => {
@@ -295,54 +403,92 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
     fetchStudentsForEligibility();
   }, [selectedDept, selectedSem]);
 
-  // Load any existing seating allocation from database
+  // Load any existing seating allocation from database AND admin-scheduled exams
   useEffect(() => {
     const fetchExistingAllocation = async () => {
       try {
-        const res = await fetch(`${API_BASE}/hall-tickets?department=${encodeURIComponent(selectedDept)}&semester=${selectedSem}`);
-        const data = await res.json();
-        if (data.success && data.data?.length > 0) {
-          const alloc = data.data[0];
-          const newMap = {};
-          (alloc.students || []).forEach(st => {
-            const roll = (st.rollNo || '').toUpperCase();
-            if (roll && st.hallNo) {
-              newMap[roll] = { hallNo: st.hallNo, seatNo: st.seatNo || '' };
-            }
-          });
-          if (Object.keys(newMap).length > 0) {
-            setSeatingAllocations(prev => ({ ...prev, ...newMap }));
-          }
-          if (Array.isArray(alloc.commonSubjects) && alloc.commonSubjects.length > 0) {
-            const cachedTimings = getSavedCustomTimings();
-            const enriched = alloc.commonSubjects.map(s => {
-              const custom = cachedTimings[s.code.toUpperCase()];
-              return {
-                ...s,
-                date: custom?.date || s.date,
-                session: custom?.session || s.session,
-                time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : s.time
-              };
-            });
-            setExamSubjects(enriched);
-          }
-          if (Array.isArray(alloc.halls) && alloc.halls.length > 0) {
-            setHalls(prev => {
-              const merged = [...prev];
-              alloc.halls.forEach(ah => {
-                const existing = merged.find(m => m.hallName.toLowerCase() === ah.hallNo.toLowerCase() || m.hallName.toLowerCase().includes(ah.hallNo.toLowerCase()));
-                if (existing) {
-                  existing.capacity = Number(ah.capacity) || existing.capacity;
-                } else if (ah.hallNo) {
-                  merged.push({ id: `h-${Date.now()}-${Math.random()}`, hallName: ah.hallNo, capacity: Number(ah.capacity) || 30, active: true });
-                }
-              });
-              return merged;
+        const [res, exRes] = await Promise.allSettled([
+          fetch(`${API_BASE}/hall-tickets?department=${encodeURIComponent(selectedDept)}&semester=${selectedSem}`),
+          fetch(`${API_BASE}/exams?department=${encodeURIComponent(selectedDept)}`)
+        ]);
+
+        const combinedSubjectsMap = new Map();
+        const cachedTimings = getSavedCustomTimings();
+
+        // 1. Load subjects from /api/exams (Admin added examinations)
+        if (exRes.status === 'fulfilled' && exRes.value.ok) {
+          const exData = await exRes.value.json();
+          if (exData.success && Array.isArray(exData.exams)) {
+            exData.exams.forEach(ex => {
+              const code = (ex.code || '').trim().toUpperCase();
+              if (code) {
+                const custom = cachedTimings[code];
+                combinedSubjectsMap.set(code, {
+                  code,
+                  name: ex.name || code,
+                  date: custom?.date || ex.date || '2026-05-15',
+                  session: custom?.session || ex.session || 'Forenoon (FN)',
+                  time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : (ex.time || '09:30 AM - 12:30 PM')
+                });
+              }
             });
           }
         }
+
+        // 2. Load subjects and allocations from HallTicket
+        if (res.status === 'fulfilled' && res.value.ok) {
+          const data = await res.value.json();
+          if (data.success && data.data?.length > 0) {
+            const newMap = {};
+            data.data.forEach(alloc => {
+              (alloc.students || []).forEach(st => {
+                const roll = (st.rollNo || '').toUpperCase();
+                if (roll && st.hallNo && st.hallNo !== 'Unassigned') {
+                  newMap[roll] = { hallNo: st.hallNo, seatNo: st.seatNo || '' };
+                }
+              });
+              if (Array.isArray(alloc.commonSubjects) && alloc.commonSubjects.length > 0) {
+                alloc.commonSubjects.forEach(s => {
+                  const code = (s.code || '').trim().toUpperCase();
+                  if (code) {
+                    const custom = cachedTimings[code];
+                    combinedSubjectsMap.set(code, {
+                      ...s,
+                      code,
+                      name: s.name || combinedSubjectsMap.get(code)?.name || code,
+                      date: custom?.date || s.date || combinedSubjectsMap.get(code)?.date || '2026-05-15',
+                      session: custom?.session || s.session || combinedSubjectsMap.get(code)?.session || 'Forenoon (FN)',
+                      time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : (s.time || combinedSubjectsMap.get(code)?.time || '09:30 AM - 12:30 PM')
+                    });
+                  }
+                });
+              }
+              if (Array.isArray(alloc.halls) && alloc.halls.length > 0) {
+                setHalls(prev => {
+                  const merged = [...prev];
+                  alloc.halls.forEach(ah => {
+                    const existing = merged.find(m => m.hallName.toLowerCase() === ah.hallNo.toLowerCase() || m.hallName.toLowerCase().includes(ah.hallNo.toLowerCase()));
+                    if (existing) {
+                      existing.capacity = Number(ah.capacity) || existing.capacity;
+                    } else if (ah.hallNo) {
+                      merged.push({ id: ah.hallNo, hallName: ah.hallNo, capacity: Number(ah.capacity) || 30 });
+                    }
+                  });
+                  return merged;
+                });
+              }
+            });
+            if (Object.keys(newMap).length > 0) {
+              setSeatingAllocations(prev => ({ ...prev, ...newMap }));
+            }
+          }
+        }
+
+        if (combinedSubjectsMap.size > 0) {
+          setExamSubjects(Array.from(combinedSubjectsMap.values()));
+        }
       } catch (err) {
-        console.error('Failed to load existing allocation:', err);
+        console.error('Failed to load existing allocation or admin exams:', err);
       }
     };
     fetchExistingAllocation();
@@ -533,33 +679,35 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
   };
 
   // Auto-Allocate Seating Algorithm based on Editable Hall Capacities
-  const handleAutoAllocateSeating = () => {
+  const handleAutoAllocateSeating = async () => {
     setIsAllocatingSeating(true);
-    let eligibleStudents = evaluatedStudents.filter(s => s.isEligible);
+    // Prioritize candidates meeting attendance, fallback to all enrolled candidates
+    let eligibleStudents = evaluatedStudents.filter(s => s.meetsAttendance || s.isEligible || s.attendance >= 50);
     if (eligibleStudents.length === 0) {
-      const confirmAllocateAll = window.confirm(
-        'No students currently have fee clearance (No Due = Paid). Would you like to allocate seating for all enrolled candidates anyway?'
-      );
-      if (confirmAllocateAll) {
-        eligibleStudents = evaluatedStudents;
-      } else {
-        setIsAllocatingSeating(false);
-        return;
-      }
+      eligibleStudents = evaluatedStudents;
     }
 
-    const activeHalls = halls.filter(h => h.active && h.capacity > 0);
-    if (activeHalls.length === 0) {
-      alert('Please add at least one examination hall with capacity before auto-allocating seating.');
+    if (eligibleStudents.length === 0) {
+      alert('No enrolled students found for the selected department and semester.');
       setIsAllocatingSeating(false);
       return;
+    }
+
+    let activeHalls = halls.filter(h => h.active && h.capacity > 0);
+    if (activeHalls.length === 0) {
+      if (halls.length > 0) {
+        activeHalls = halls;
+      } else {
+        activeHalls = [{ id: 'h-def', hallName: 'Hall 101', capacity: 30, active: true }];
+        setHalls(activeHalls);
+      }
     }
 
     const newSeating = {};
     let studentIndex = 0;
 
     activeHalls.forEach(hall => {
-      const cap = hall.capacity;
+      const cap = hall.capacity || 30;
       const hallCode = hall.hallName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'H';
       for (let seat = 1; seat <= cap && studentIndex < eligibleStudents.length; seat++) {
         const st = eligibleStudents[studentIndex];
@@ -572,31 +720,118 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
       }
     });
 
-    // Mark remaining ineligible or overflow as Unassigned
-    evaluatedStudents.forEach(st => {
-      if (!newSeating[st.roll]) {
+    // For any candidate not seated due to hall capacity, wrap around to first hall
+    evaluatedStudents.forEach((st, idx) => {
+      if (!newSeating[st.roll] || newSeating[st.roll].hallNo === 'Unassigned') {
+        const fallbackHall = activeHalls[idx % activeHalls.length] || activeHalls[0];
+        const hallCode = fallbackHall.hallName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'H';
         newSeating[st.roll] = {
-          hallNo: 'Unassigned',
-          seatNo: '—'
+          hallNo: fallbackHall.hallName,
+          seatNo: `${hallCode}-${String((idx % 30) + 1).padStart(2, '0')}`
         };
       }
     });
 
     setSeatingAllocations(newSeating);
     setIsAllocatingSeating(false);
-    setSaveSuccessMsg(`Successfully allocated seating for ${studentIndex} eligible students across ${activeHalls.length} halls.`);
+    setSaveSuccessMsg(`Successfully allocated seating for ${evaluatedStudents.length} candidate(s) across ${activeHalls.length} hall(s).`);
     setTimeout(() => setSaveSuccessMsg(''), 4000);
+
+    // Immediately persist to backend so seating allocation never reverts to Unassigned
+    try {
+      const studentsPayload = evaluatedStudents.map(st => {
+        const seat = newSeating[st.roll] || { hallNo: activeHalls[0]?.hallName || 'Hall 101', seatNo: 'A1' };
+        return {
+          rollNo: st.roll,
+          name: st.name,
+          dept: selectedDept,
+          semester: Number(selectedSem) || 1,
+          section: st.section || 'A',
+          hallNo: seat.hallNo,
+          seatNo: seat.seatNo,
+          eligible: true,
+          remarks: 'Eligible for Examination',
+          subjects: examSubjects
+        };
+      });
+
+      const payload = {
+        examName: `University Examinations - ${selectedDept} (Sem ${selectedSem})`,
+        examType: 'Semester End Examination',
+        academicYear: '2025-2026',
+        department: selectedDept,
+        semester: Number(selectedSem) || 1,
+        section: 'All',
+        halls: activeHalls.map(h => ({ hallNo: h.hallName, capacity: h.capacity })),
+        allocatedByStaffId: staffUser?.staffId || 'STAFF',
+        allocatedByStaffName: staffUser?.name || 'Faculty In-Charge',
+        commonSubjects: examSubjects,
+        students: studentsPayload
+      };
+
+      await fetch(`${API_BASE}/hall-tickets/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (saveErr) {
+      console.warn('Auto-save allocation to backend failed:', saveErr);
+    }
   };
 
   // Inline edit individual student's assigned hall or seat number
   const handleUpdateStudentSeating = (roll, field, value) => {
-    setSeatingAllocations(prev => ({
-      ...prev,
+    const updated = {
+      ...seatingAllocations,
       [roll]: {
-        ...(prev[roll] || { hallNo: 'Unassigned', seatNo: '—' }),
+        ...(seatingAllocations[roll] || { hallNo: 'Hall 101', seatNo: '—' }),
         [field]: value
       }
-    }));
+    };
+    if (field === 'hallNo' && value && value !== 'Unassigned') {
+      if (!updated[roll].seatNo || updated[roll].seatNo === '—') {
+        const idx = evaluatedStudents.findIndex(s => s.roll === roll);
+        updated[roll].seatNo = `SEAT-${idx >= 0 ? (idx + 1 < 10 ? '0' + (idx + 1) : idx + 1) : '01'}`;
+      }
+    }
+    setSeatingAllocations(updated);
+
+    // Auto-sync individual seating update to backend
+    try {
+      const studentsPayload = evaluatedStudents.map(st => {
+        const seat = updated[st.roll] || { hallNo: 'Hall 101', seatNo: '—' };
+        return {
+          rollNo: st.roll,
+          name: st.name,
+          dept: selectedDept,
+          semester: Number(selectedSem) || 1,
+          section: st.section || 'A',
+          hallNo: seat.hallNo,
+          seatNo: seat.seatNo,
+          eligible: true,
+          remarks: 'Eligible for Examination',
+          subjects: examSubjects
+        };
+      });
+
+      fetch(`${API_BASE}/hall-tickets/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          examName: `University Examinations - ${selectedDept} (Sem ${selectedSem})`,
+          examType: 'Semester End Examination',
+          academicYear: '2025-2026',
+          department: selectedDept,
+          semester: Number(selectedSem) || 1,
+          section: 'All',
+          halls: halls.map(h => ({ hallNo: h.hallName, capacity: h.capacity })),
+          allocatedByStaffId: staffUser?.staffId || 'STAFF',
+          allocatedByStaffName: staffUser?.name || 'Faculty In-Charge',
+          commonSubjects: examSubjects,
+          students: studentsPayload
+        })
+      }).catch(e => console.warn('Could not auto-sync seating update:', e));
+    } catch (_) {}
   };
 
   // Save Seating to Backend Database
@@ -1376,52 +1611,134 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {examSubjects.map((s) => (
-                      <tr key={s.code} className="hover:bg-slate-50/80">
-                        <td className="px-3.5 py-2 font-mono font-bold text-blue-700">{s.code}</td>
-                        <td className="px-3.5 py-2 font-bold text-slate-800">{s.name}</td>
-                        <td className="px-3.5 py-2 text-slate-700">{s.date}</td>
-                        <td className="px-3.5 py-2 text-slate-700">{s.session}</td>
-                        <td className="px-3.5 py-2 text-slate-700">
-                          <div className="flex items-center gap-1.5">
-                            <span>{s.time || '—'}</span>
-                            {s.time && (
+                    {examSubjects.map((s) => {
+                      const isEditing = editingStaffSubCode === s.code;
+                      if (isEditing) {
+                        return (
+                          <tr key={s.code} className="bg-blue-50/40">
+                            <td className="px-3.5 py-2 font-mono font-bold text-blue-700">{s.code}</td>
+                            <td className="px-3.5 py-2">
+                              <input
+                                type="text"
+                                value={editingStaffSubForm.name}
+                                onChange={(e) => setEditingStaffSubForm(prev => ({ ...prev, name: e.target.value }))}
+                                className="w-full bg-white border border-blue-400 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 outline-none"
+                              />
+                            </td>
+                            <td className="px-3.5 py-2">
+                              <input
+                                type="date"
+                                value={editingStaffSubForm.date}
+                                onChange={(e) => setEditingStaffSubForm(prev => ({ ...prev, date: e.target.value }))}
+                                className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-xs font-medium text-slate-800 outline-none"
+                              />
+                            </td>
+                            <td className="px-3.5 py-2">
+                              <select
+                                value={editingStaffSubForm.session?.includes('AN') || editingStaffSubForm.session?.toLowerCase().includes('afternoon') ? 'Afternoon (AN)' : 'Forenoon (FN)'}
+                                onChange={(e) => {
+                                  const sess = e.target.value;
+                                  setEditingStaffSubForm(prev => ({
+                                    ...prev,
+                                    session: sess,
+                                    time: sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM'
+                                  }));
+                                }}
+                                className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none cursor-pointer"
+                              >
+                                <option value="Forenoon (FN)">Forenoon (FN)</option>
+                                <option value="Afternoon (AN)">Afternoon (AN)</option>
+                              </select>
+                            </td>
+                            <td className="px-3.5 py-2">
+                              <input
+                                type="text"
+                                value={editingStaffSubForm.time}
+                                onChange={(e) => setEditingStaffSubForm(prev => ({ ...prev, time: e.target.value }))}
+                                className="w-full bg-white border border-blue-400 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 outline-none"
+                              />
+                            </td>
+                            <td className="px-3.5 py-2 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEditExamSubject(s.code)}
+                                  className="p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-xs"
+                                  title="Save Changes"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditExamSubject}
+                                  className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-colors"
+                                  title="Cancel"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return (
+                        <tr key={s.code} className="hover:bg-slate-50/80">
+                          <td className="px-3.5 py-2 font-mono font-bold text-blue-700">{s.code}</td>
+                          <td className="px-3.5 py-2 font-bold text-slate-800">{s.name}</td>
+                          <td className="px-3.5 py-2 text-slate-700">{s.date}</td>
+                          <td className="px-3.5 py-2 text-slate-700">{s.session}</td>
+                          <td className="px-3.5 py-2 text-slate-700">
+                            <div className="flex items-center gap-1.5">
+                              <span>{s.time || '—'}</span>
+                              {s.time && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    saveCustomTiming(s.code, { time: '' });
+                                    setExamSubjects(prev => prev.map(sub => sub.code === s.code ? { ...sub, time: '' } : sub));
+                                    fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        code: s.code,
+                                        time: '',
+                                        department: selectedDept,
+                                        semester: Number(selectedSem) || 1
+                                      })
+                                    }).catch(() => {});
+                                  }}
+                                  className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
+                                  title="Delete / Clear Exam Time"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3.5 py-2 text-right">
+                            <div className="flex items-center justify-end gap-1">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  saveCustomTiming(s.code, { time: '' });
-                                  setExamSubjects(prev => prev.map(sub => sub.code === s.code ? { ...sub, time: '' } : sub));
-                                  fetch(`${API_BASE}/hall-tickets/update-subject-schedule`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      code: s.code,
-                                      time: '',
-                                      department: selectedDept,
-                                      semester: Number(selectedSem) || 1
-                                    })
-                                  }).catch(() => {});
-                                }}
-                                className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
-                                title="Delete / Clear Exam Time"
+                                onClick={() => handleStartEditExamSubject(s)}
+                                className="text-slate-400 hover:text-blue-600 p-1 rounded transition-colors"
+                                title="Edit Subject Schedule"
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Edit2 className="w-3.5 h-3.5" />
                               </button>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-3.5 py-2 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveExamSubject(s.code)}
-                            className="text-slate-400 hover:text-rose-600 p-1 rounded"
-                            title="Remove Subject"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveExamSubject(s.code)}
+                                className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors"
+                                title="Remove Subject"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

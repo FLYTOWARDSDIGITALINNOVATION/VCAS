@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BACKEND_URL } from '../apiConfig';
+import { API_BASE, BACKEND_URL } from '../apiConfig';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
 import {
   LayoutDashboard,
@@ -49,8 +49,6 @@ import {
   FolderOpen,
   ExternalLink
 } from 'lucide-react';
-
-const API_BASE = BACKEND_URL;
 
 const NAV_SECTIONS = [
   {

@@ -48,13 +48,40 @@ exports.getAllExams = async (req, res) => {
 };
 
 // @desc    Create exam schedule
-// @route   POST /api/exams
 exports.createExam = async (req, res) => {
   try {
+    const { date, session, hall, invigilator } = req.body;
+    let conflictWarning = null;
+
+    if (date && session) {
+      if (invigilator && invigilator !== 'Assigned Faculty') {
+        const invClash = await Exam.findOne({
+          date: date.trim(),
+          session: { $regex: (session || '').includes('AN') ? 'AN' : 'FN', $options: 'i' },
+          invigilator: { $regex: `^${invigilator.trim()}$`, $options: 'i' }
+        });
+        if (invClash) {
+          conflictWarning = `⚠️ Warning: Invigilator "${invigilator}" is already allocated to ${invClash.code} in ${invClash.hall} on ${date} (${session}).`;
+        }
+      }
+      if (hall) {
+        const hallClash = await Exam.findOne({
+          date: date.trim(),
+          session: { $regex: (session || '').includes('AN') ? 'AN' : 'FN', $options: 'i' },
+          hall: { $regex: `^${hall.trim()}$`, $options: 'i' }
+        });
+        if (hallClash) {
+          const hallWarn = `⚠️ Warning: Hall "${hall}" is already allocated to ${hallClash.code} on ${date} (${session}).`;
+          conflictWarning = conflictWarning ? `${conflictWarning} ${hallWarn}` : hallWarn;
+        }
+      }
+    }
+
     const newExam = await Exam.create(req.body);
     return res.status(201).json({
       success: true,
-      message: 'Exam schedule published successfully',
+      message: conflictWarning ? `Exam scheduled with warning: ${conflictWarning}` : 'Exam schedule published successfully',
+      warning: conflictWarning,
       exam: newExam
     });
   } catch (err) {
@@ -68,16 +95,45 @@ exports.createExam = async (req, res) => {
 };
 
 // @desc    Update exam schedule
-// @route   PUT /api/exams/:id
 exports.updateExam = async (req, res) => {
   try {
+    const { date, session, hall, invigilator } = req.body;
+    let conflictWarning = null;
+
+    if (date && session) {
+      if (invigilator && invigilator !== 'Assigned Faculty') {
+        const invClash = await Exam.findOne({
+          _id: { $ne: req.params.id },
+          date: date.trim(),
+          session: { $regex: (session || '').includes('AN') ? 'AN' : 'FN', $options: 'i' },
+          invigilator: { $regex: `^${invigilator.trim()}$`, $options: 'i' }
+        });
+        if (invClash) {
+          conflictWarning = `⚠️ Warning: Invigilator "${invigilator}" is already allocated to ${invClash.code} in ${invClash.hall} on ${date} (${session}).`;
+        }
+      }
+      if (hall) {
+        const hallClash = await Exam.findOne({
+          _id: { $ne: req.params.id },
+          date: date.trim(),
+          session: { $regex: (session || '').includes('AN') ? 'AN' : 'FN', $options: 'i' },
+          hall: { $regex: `^${hall.trim()}$`, $options: 'i' }
+        });
+        if (hallClash) {
+          const hallWarn = `⚠️ Warning: Hall "${hall}" is already allocated to ${hallClash.code} on ${date} (${session}).`;
+          conflictWarning = conflictWarning ? `${conflictWarning} ${hallWarn}` : hallWarn;
+        }
+      }
+    }
+
     const updated = await Exam.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updated) {
       return res.status(404).json({ success: false, message: 'Exam schedule not found' });
     }
     return res.status(200).json({
       success: true,
-      message: 'Exam schedule updated successfully',
+      message: conflictWarning ? `Exam schedule updated with warning: ${conflictWarning}` : 'Exam schedule updated successfully',
+      warning: conflictWarning,
       exam: updated
     });
   } catch (err) {
@@ -182,10 +238,23 @@ exports.getHalls = async (req, res) => {
 // @route   POST /api/exams/halls
 exports.createHall = async (req, res) => {
   try {
+    const { invigilator, hallName } = req.body;
+    let conflictWarning = null;
+
+    if (invigilator && invigilator.trim() && invigilator !== 'Faculty Assigned' && invigilator !== 'Staff In-Charge') {
+      const existing = await ExamHall.findOne({
+        invigilator: { $regex: `^${invigilator.trim()}$`, $options: 'i' }
+      });
+      if (existing) {
+        conflictWarning = `⚠️ Warning: Chief Invigilator "${invigilator}" is already allocated to "${existing.hallName}".`;
+      }
+    }
+
     const newHall = await ExamHall.create(req.body);
     return res.status(201).json({
       success: true,
-      message: 'Examination hall registered successfully',
+      message: conflictWarning ? `Exam hall created with warning: ${conflictWarning}` : 'Examination hall registered successfully',
+      warning: conflictWarning,
       hall: newHall
     });
   } catch (err) {
@@ -202,13 +271,27 @@ exports.createHall = async (req, res) => {
 // @route   PUT /api/exams/halls/:id
 exports.updateHall = async (req, res) => {
   try {
+    const { invigilator } = req.body;
+    let conflictWarning = null;
+
+    if (invigilator && invigilator.trim() && invigilator !== 'Faculty Assigned' && invigilator !== 'Staff In-Charge') {
+      const existing = await ExamHall.findOne({
+        _id: { $ne: req.params.id },
+        invigilator: { $regex: `^${invigilator.trim()}$`, $options: 'i' }
+      });
+      if (existing) {
+        conflictWarning = `⚠️ Warning: Chief Invigilator "${invigilator}" is already allocated to "${existing.hallName}".`;
+      }
+    }
+
     const updated = await ExamHall.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updated) {
       return res.status(404).json({ success: false, message: 'Exam hall not found' });
     }
     return res.status(200).json({
       success: true,
-      message: 'Exam hall updated successfully',
+      message: conflictWarning ? `Exam hall updated with warning: ${conflictWarning}` : 'Exam hall updated successfully',
+      warning: conflictWarning,
       hall: updated
     });
   } catch (err) {

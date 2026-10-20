@@ -215,8 +215,9 @@ exports.getEligibleStudents = async (req, res) => {
 
     // Retrieve any saved timetable configurations from HallTicket and Exam to retain customized dates, sessions and times
     const customTimingsMap = new Map();
+    let savedTickets = [];
     try {
-      const savedTickets = await HallTicket.find(deptRegex ? { department: deptRegex } : {}).lean();
+      savedTickets = await HallTicket.find(deptRegex ? { department: deptRegex } : {}).lean();
       savedTickets.forEach(t => {
         (t.commonSubjects || []).forEach(sub => {
           const c = (sub.code || '').trim().toUpperCase();
@@ -314,13 +315,15 @@ exports.getEligibleStudents = async (req, res) => {
     try {
       let stuFilter = {};
       if (deptRegex) {
+        const genRegex = /^general$/i;
         stuFilter = {
           $or: [
             { department: deptRegex },
             { course: deptRegex },
             { courseAdmitted: deptRegex },
-            { department: 'General' },
+            { department: genRegex },
             { department: '' },
+            { department: null },
             { department: { $exists: false } }
           ]
         };
@@ -364,6 +367,24 @@ exports.getEligibleStudents = async (req, res) => {
           val.attendance = val.attendance !== undefined ? val.attendance : 85;
           val.regNo = val.regNo || key;
         }
+      });
+      // Enrich with previously allocated hall and seat from savedTickets
+      savedTickets.forEach(t => {
+        (t.students || []).forEach(allocatedSt => {
+          const r = (allocatedSt.rollNo || '').trim().toUpperCase();
+          if (r && studentMap.has(r)) {
+            const cur = studentMap.get(r);
+            if (allocatedSt.hallNo && allocatedSt.hallNo !== 'Unassigned' && allocatedSt.hallNo !== 'TBA') {
+              cur.hallNo = allocatedSt.hallNo;
+            }
+            if (allocatedSt.seatNo && allocatedSt.seatNo !== '—' && allocatedSt.seatNo !== 'TBA') {
+              cur.seatNo = allocatedSt.seatNo;
+            }
+            if (Array.isArray(allocatedSt.subjects) && allocatedSt.subjects.length > 0 && (!cur.subjects || cur.subjects.length === 0)) {
+              cur.subjects = allocatedSt.subjects;
+            }
+          }
+        });
       });
     } catch (sErr) {
       console.error('Error fetching registered students for exam eligibility:', sErr.message);
@@ -559,11 +580,13 @@ exports.createOrUpdateAllocation = async (req, res) => {
         allocation = await HallTicket.create(payload);
       }
     } else {
+      const deptPattern = new RegExp(`^${payload.department.trim()}$`, 'i');
       const existingExam = await HallTicket.findOne({
-        examName: payload.examName,
-        department: payload.department,
-        semester: payload.semester
-      });
+        $or: [
+          { department: { $regex: deptPattern }, semester: payload.semester },
+          { examName: payload.examName, department: payload.department, semester: payload.semester }
+        ]
+      }).sort({ updatedAt: -1 });
 
       if (existingExam) {
         mergeWithExisting(existingExam);
@@ -1036,5 +1059,55 @@ exports.updateSubjectSchedule = async (req, res) => {
     });
   }
 };
+
+// @desc    Remove subject schedule from hall tickets and exams
+// @route   POST /api/hall-tickets/remove-subject-schedule
+exports.removeSubjectSchedule = async (req, res) => {
+  try {
+    const { code, department, semester } = req.body;
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'Subject code is required' });
+    }
+    const cleanCode = code.trim().toUpperCase();
+
+    const filter = {};
+    if (department && department !== 'All') {
+      filter.department = new RegExp(department.trim().split(' ')[0], 'i');
+    }
+    if (semester && semester !== 'All') {
+      filter.semester = Number(semester);
+    }
+
+    // Pull from commonSubjects and students.subjects
+    await HallTicket.updateMany(
+      filter,
+      {
+        $pull: {
+          commonSubjects: { code: cleanCode },
+          'students.$[].subjects': { code: cleanCode }
+        }
+      }
+    );
+
+    // Also remove from Exam collection
+    const examFilter = { code: cleanCode };
+    if (department && department !== 'All') {
+      examFilter.department = new RegExp(department.trim().split(' ')[0], 'i');
+    }
+    await Exam.deleteMany(examFilter);
+
+    return res.status(200).json({
+      success: true,
+      message: `Subject ${cleanCode} removed from schedule successfully.`
+    });
+  } catch (error) {
+    console.error('removeSubjectSchedule error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to remove subject schedule: ' + error.message
+    });
+  }
+};
+
 
 

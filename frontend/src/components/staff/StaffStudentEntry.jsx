@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BACKEND_URL } from '../../apiConfig';
+import { API_BASE, BACKEND_URL } from '../../apiConfig';
 import { 
   UserPlus, 
   Users, 
@@ -15,8 +15,6 @@ import {
   X
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
-
-const API_BASE = BACKEND_URL;
 
 export default function StaffStudentEntry({ staffUser }) {
   const [students, setStudents] = useState([]);
@@ -67,7 +65,7 @@ export default function StaffStudentEntry({ staffUser }) {
   const fetchStudents = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/students`);
+      const res = await fetch(`${API_BASE}/students`);
       const data = await res.json();
       if (res.ok && data.success) {
         setStudents(data.data || []);
@@ -119,7 +117,7 @@ export default function StaffStudentEntry({ staffUser }) {
         feeStatus: 'Paid'
       };
 
-      const res = await fetch(`${API_BASE}/api/students`, {
+      const res = await fetch(`${API_BASE}/students`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -191,7 +189,7 @@ export default function StaffStudentEntry({ staffUser }) {
         course: (editingStudent.courseAdmitted || '').trim()
       };
 
-      const res = await fetch(`${API_BASE}/api/students/${targetId}`, {
+      const res = await fetch(`${API_BASE}/students/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

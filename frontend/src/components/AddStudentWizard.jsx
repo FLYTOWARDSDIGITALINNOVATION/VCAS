@@ -14,7 +14,14 @@ import {
   Save,
   UserPlus,
   Key,
-  Loader2
+  Loader2,
+  UploadCloud,
+  FileCheck,
+  Eye,
+  Trash2,
+  Camera,
+  File,
+  ExternalLink
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
@@ -185,10 +192,173 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
     drivingLicense: '',
     address: '',
     feeStatus: '',
-    attendance: ''
+    attendance: '',
+    // Super Admin Documents & Photo
+    photo: '',
+    docAadhaar: '',
+    docPan: '',
+    docIncomeCert: '',
+    docDrivingLicense: '',
+    doc10th: '',
+    doc12th: ''
   };
 
   const [formData, setFormData] = useState(initialForm);
+  const [docPreviewModal, setDocPreviewModal] = useState(null);
+
+  // Super Admin validation check
+  const isSuperAdmin =
+    user?.role === 'Super Admin' ||
+    user?.role === 'superadmin' ||
+    user?.isSuperAdmin === true ||
+    JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin' ||
+    JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'superadmin';
+
+  // File Upload Helper to convert file to Base64 Data URL
+  const handleFileUpload = (field, file) => {
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) {
+      alert('Selected file is too large (maximum 12 MB). Please select a compressed file.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setFormData(prev => ({
+        ...prev,
+        [field]: event.target.result
+      }));
+    };
+    reader.onerror = () => {
+      alert('Error reading file. Please try again.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Remove file handler
+  const handleRemoveFile = (field) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: ''
+    }));
+  };
+
+  // Document preview opener
+  const openDocPreview = (title, dataUrl) => {
+    if (!dataUrl) return;
+    setDocPreviewModal({ title, dataUrl });
+  };
+
+  // Reusable Super Admin document upload card
+  const renderDocUploadCard = ({ key, title, subtitle, accept = 'image/*,application/pdf', icon: Icon = FileText, isImage = false }) => {
+    const value = formData[key];
+    const isUploaded = Boolean(value);
+    const inputId = `upload-${key}`;
+
+    return (
+      <div 
+        key={key} 
+        className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+          isUploaded 
+            ? 'bg-emerald-50/70 border-emerald-300 shadow-2xs' 
+            : 'bg-white border-slate-200 hover:border-indigo-300'
+        }`}
+      >
+        <div>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                isUploaded ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-50 text-indigo-600'
+              }`}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div>
+                <h5 className="font-extrabold text-slate-900 text-xs leading-tight">{title}</h5>
+                <p className="text-[10px] text-slate-500">{subtitle}</p>
+              </div>
+            </div>
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+              isUploaded 
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                : 'bg-slate-100 text-slate-500'
+            }`}>
+              {isUploaded ? '✓ Attached' : 'Pending'}
+            </span>
+          </div>
+
+          {/* Image Thumbnail Preview */}
+          {isUploaded && typeof value === 'string' && value.startsWith('data:image') && (
+            <div className="mb-2 flex items-center justify-center bg-slate-100 rounded-lg p-1 border border-slate-200 overflow-hidden max-h-24">
+              <img 
+                src={value} 
+                alt={title} 
+                className="max-h-20 w-auto object-contain rounded"
+              />
+            </div>
+          )}
+
+          {/* PDF Badge */}
+          {isUploaded && typeof value === 'string' && value.startsWith('data:application/pdf') && (
+            <div className="mb-2 p-2 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-[11px] text-rose-700 font-bold">
+              <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+              <span className="truncate">PDF Document Loaded</span>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 mt-2">
+          <input
+            id={inputId}
+            type="file"
+            accept={accept}
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                handleFileUpload(key, e.target.files[0]);
+              }
+            }}
+          />
+
+          {!isUploaded ? (
+            <label
+              htmlFor={inputId}
+              className="w-full py-1.5 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>Upload {title}</span>
+            </label>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => openDocPreview(title, value)}
+                className="flex-1 py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-all"
+              >
+                <Eye className="w-3 h-3" />
+                <span>View</span>
+              </button>
+              <label
+                htmlFor={inputId}
+                className="py-1 px-2 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-all border border-slate-200"
+                title="Replace / Change Document"
+              >
+                <UploadCloud className="w-3 h-3" />
+                <span>Change</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => handleRemoveFile(key)}
+                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                title="Remove Attached File"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // Handle Form Change with Login ID auto-sync
   const handleChange = (e) => {
@@ -446,6 +616,106 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
         </div>
 
         <form onSubmit={handleSubmitNewStudent} className="space-y-6 text-xs">
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* SUPER ADMIN EXCLUSIVE: STATUTORY DOCUMENT & PHOTO UPLOADS       */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {isSuperAdmin && (
+            <div className="p-5 sm:p-6 bg-gradient-to-br from-indigo-50/90 via-purple-50/70 to-blue-50/90 rounded-2xl border-2 border-indigo-200/90 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-indigo-200/80 gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-xs flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" />
+                      Super Admin Side Only
+                    </span>
+                    <span className="text-[11px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                      7 Statutory Documents
+                    </span>
+                  </div>
+                  <h4 className="text-sm sm:text-base font-black text-indigo-950 mt-1.5 flex items-center gap-2">
+                    Mandatory Student Identity &amp; Statutory Document Uploads
+                  </h4>
+                  <p className="text-xs text-indigo-900/75 mt-0.5">
+                    Exclusive to Super Admin: Upload digital copies of Aadhar, PAN Card, Photo, Income Certificate, Driving Licence, 10th &amp; 12th Mark Sheets.
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-xs font-mono font-bold text-indigo-700 bg-white/90 border border-indigo-200 px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 shadow-2xs">
+                    <FileCheck className="w-4 h-4 text-emerald-600" />
+                    {[formData.photo, formData.docAadhaar, formData.docPan, formData.docIncomeCert, formData.docDrivingLicense, formData.doc10th, formData.doc12th].filter(Boolean).length} / 7 Uploaded
+                  </span>
+                </div>
+              </div>
+
+              {/* Document Upload Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                {/* 1. Student Photo */}
+                {renderDocUploadCard({
+                  key: 'photo',
+                  title: 'Student Photo',
+                  subtitle: 'Passport size photograph (JPG, PNG, WebP)',
+                  accept: 'image/*',
+                  icon: Camera,
+                  isImage: true
+                })}
+
+                {/* 2. Aadhar Card */}
+                {renderDocUploadCard({
+                  key: 'docAadhaar',
+                  title: 'Aadhar Card',
+                  subtitle: 'UIDAI Aadhaar copy (PDF or Image)',
+                  accept: 'image/*,application/pdf',
+                  icon: CreditCard
+                })}
+
+                {/* 3. PAN Card */}
+                {renderDocUploadCard({
+                  key: 'docPan',
+                  title: 'PAN Card',
+                  subtitle: 'Income Tax PAN Card copy (PDF/Image)',
+                  accept: 'image/*,application/pdf',
+                  icon: IdCard
+                })}
+
+                {/* 4. Income Certificate */}
+                {renderDocUploadCard({
+                  key: 'docIncomeCert',
+                  title: 'Income Certificate',
+                  subtitle: 'Revenue Dept official cert (PDF/Image)',
+                  accept: 'image/*,application/pdf',
+                  icon: FileText
+                })}
+
+                {/* 5. Driving Licence */}
+                {renderDocUploadCard({
+                  key: 'docDrivingLicense',
+                  title: 'Driving Licence',
+                  subtitle: 'Valid RTO Driving Licence copy (PDF/Image)',
+                  accept: 'image/*,application/pdf',
+                  icon: FileCheck
+                })}
+
+                {/* 6. 10th Mark Sheet */}
+                {renderDocUploadCard({
+                  key: 'doc10th',
+                  title: '10th Mark Sheet',
+                  subtitle: 'SSLC / 10th Std Mark Sheet (PDF/Image)',
+                  accept: 'image/*,application/pdf',
+                  icon: GraduationCap
+                })}
+
+                {/* 7. 12th Mark Sheet */}
+                {renderDocUploadCard({
+                  key: 'doc12th',
+                  title: '12th Mark Sheet',
+                  subtitle: 'HSC / +2 Std Mark Sheet (PDF/Image)',
+                  accept: 'image/*,application/pdf',
+                  icon: BookOpen
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* SHEET 1: COVER / CORE IDENTIFICATION & STATUTORY DETAILS         */}
@@ -1029,7 +1299,14 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Aadhar Card No.</label>
+                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>Aadhar Card No.</span>
+                  {isSuperAdmin && (
+                    <span className={`text-[10px] font-bold ${formData.docAadhaar ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {formData.docAadhaar ? '✓ Uploaded' : ''}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="text"
                   name="aadhaar"
@@ -1039,9 +1316,29 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                   onChange={handleChange}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold focus:outline-none"
                 />
+                {isSuperAdmin && (
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className={`text-[10px] ${formData.docAadhaar ? 'text-emerald-700 font-bold' : 'text-slate-400'}`}>
+                      {formData.docAadhaar ? '✓ Aadhaar attached' : 'No doc attached'}
+                    </span>
+                    <label
+                      htmlFor="upload-docAadhaar"
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                    >
+                      {formData.docAadhaar ? 'Change' : 'Upload File'}
+                    </label>
+                  </div>
+                )}
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">PAN Card No.</label>
+                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>PAN Card No.</span>
+                  {isSuperAdmin && (
+                    <span className={`text-[10px] font-bold ${formData.docPan ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {formData.docPan ? '✓ Uploaded' : ''}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="text"
                   name="pan"
@@ -1051,9 +1348,29 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                   onChange={handleChange}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold uppercase focus:outline-none"
                 />
+                {isSuperAdmin && (
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className={`text-[10px] ${formData.docPan ? 'text-emerald-700 font-bold' : 'text-slate-400'}`}>
+                      {formData.docPan ? '✓ PAN attached' : 'No doc attached'}
+                    </span>
+                    <label
+                      htmlFor="upload-docPan"
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                    >
+                      {formData.docPan ? 'Change' : 'Upload File'}
+                    </label>
+                  </div>
+                )}
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Income Certificate No.</label>
+                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>Income Certificate No.</span>
+                  {isSuperAdmin && (
+                    <span className={`text-[10px] font-bold ${formData.docIncomeCert ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {formData.docIncomeCert ? '✓ Uploaded' : ''}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="text"
                   name="incomeCertNo"
@@ -1062,9 +1379,29 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                   onChange={handleChange}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-mono focus:outline-none"
                 />
+                {isSuperAdmin && (
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className={`text-[10px] ${formData.docIncomeCert ? 'text-emerald-700 font-bold' : 'text-slate-400'}`}>
+                      {formData.docIncomeCert ? '✓ Cert attached' : 'No doc attached'}
+                    </span>
+                    <label
+                      htmlFor="upload-docIncomeCert"
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                    >
+                      {formData.docIncomeCert ? 'Change' : 'Upload File'}
+                    </label>
+                  </div>
+                )}
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Driving Licence No.</label>
+                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>Driving Licence No.</span>
+                  {isSuperAdmin && (
+                    <span className={`text-[10px] font-bold ${formData.docDrivingLicense ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {formData.docDrivingLicense ? '✓ Uploaded' : ''}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="text"
                   name="drivingLicense"
@@ -1073,6 +1410,19 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                   onChange={handleChange}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-mono uppercase focus:outline-none"
                 />
+                {isSuperAdmin && (
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className={`text-[10px] ${formData.docDrivingLicense ? 'text-emerald-700 font-bold' : 'text-slate-400'}`}>
+                      {formData.docDrivingLicense ? '✓ DL attached' : 'No doc attached'}
+                    </span>
+                    <label
+                      htmlFor="upload-docDrivingLicense"
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                    >
+                      {formData.docDrivingLicense ? 'Change' : 'Upload File'}
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1259,6 +1609,7 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                     <th className="p-2.5">Year of Passing</th>
                     <th className="p-2.5">Board / University</th>
                     <th className="p-2.5">Marks Obtained</th>
+                    {isSuperAdmin && <th className="p-2.5 text-center">Mark Sheet Upload (Super Admin)</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1304,6 +1655,29 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold focus:outline-none"
                       />
                     </td>
+                    {isSuperAdmin && (
+                      <td className="p-2 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <label
+                            htmlFor="upload-doc10th"
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1 border border-indigo-200"
+                          >
+                            <UploadCloud className="w-3 h-3" />
+                            <span>{formData.doc10th ? 'Change' : 'Upload 10th'}</span>
+                          </label>
+                          {formData.doc10th && (
+                            <button
+                              type="button"
+                              onClick={() => openDocPreview('10th Mark Sheet', formData.doc10th)}
+                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                   <tr>
                     <td className="p-2 font-bold text-slate-700">XII Std</td>
@@ -1347,6 +1721,29 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold focus:outline-none"
                       />
                     </td>
+                    {isSuperAdmin && (
+                      <td className="p-2 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <label
+                            htmlFor="upload-doc12th"
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1 border border-indigo-200"
+                          >
+                            <UploadCloud className="w-3 h-3" />
+                            <span>{formData.doc12th ? 'Change' : 'Upload 12th'}</span>
+                          </label>
+                          {formData.doc12th && (
+                            <button
+                              type="button"
+                              onClick={() => openDocPreview('12th Mark Sheet', formData.doc12th)}
+                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                   <tr>
                     <td className="p-2 font-bold text-slate-700">
@@ -1394,12 +1791,17 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                       <input
                         type="text"
                         name="degreeMarks"
-                        placeholder="CGPA / %"
+                        placeholder="Marks / %"
                         value={formData.degreeMarks}
                         onChange={handleChange}
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold focus:outline-none"
                       />
                     </td>
+                    {isSuperAdmin && (
+                      <td className="p-2 text-center text-slate-400 text-[11px]">
+                        Optional
+                      </td>
+                    )}
                   </tr>
                 </tbody>
               </table>
@@ -2083,6 +2485,90 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                   className="py-2.5 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
                 >
                   Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────────── */}
+      {/* MODAL: DOCUMENT PREVIEW (FOR SUPER ADMIN UPLOADED FILES)          */}
+      {/* ───────────────────────────────────────────────────────────────── */}
+      {docPreviewModal && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/60 backdrop-blur-xs" 
+              onClick={() => setDocPreviewModal(null)} 
+            />
+            <div className="relative bg-white rounded-3xl shadow-2xl p-5 sm:p-6 w-full max-w-3xl z-10 border border-slate-200 animate-scaleUp flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
+                    <FileText className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-slate-900">
+                      {docPreviewModal.title}
+                    </h3>
+                    <p className="text-[11px] text-slate-500">Document Preview</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={docPreviewModal.dataUrl}
+                    download={`${docPreviewModal.title.replace(/\s+/g, '_')}_document`}
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setDocPreviewModal(null)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto bg-slate-50 rounded-2xl p-2 border border-slate-200 flex items-center justify-center min-h-[300px]">
+                {docPreviewModal.dataUrl.startsWith('data:image') ? (
+                  <img
+                    src={docPreviewModal.dataUrl}
+                    alt={docPreviewModal.title}
+                    className="max-h-[70vh] max-w-full object-contain rounded-xl shadow-xs"
+                  />
+                ) : docPreviewModal.dataUrl.startsWith('data:application/pdf') ? (
+                  <iframe
+                    src={docPreviewModal.dataUrl}
+                    title={docPreviewModal.title}
+                    className="w-full h-[65vh] rounded-xl border border-slate-200"
+                  />
+                ) : (
+                  <div className="text-center p-8 space-y-2">
+                    <FileText className="w-12 h-12 text-slate-400 mx-auto" />
+                    <p className="text-sm font-bold text-slate-700">Document format not directly previewable</p>
+                    <a
+                      href={docPreviewModal.dataUrl}
+                      download="document"
+                      className="inline-block px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold"
+                    >
+                      Click here to Download File
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDocPreviewModal(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Close Preview
                 </button>
               </div>
             </div>

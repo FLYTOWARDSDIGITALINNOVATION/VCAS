@@ -393,15 +393,17 @@ exports.deleteSubject = async (req, res) => {
 
     const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { code: codeToDelete };
     const deleted = await Subject.findOneAndDelete(query);
+    const actualCode = (deleted?.code || codeToDelete).trim().toUpperCase();
 
-    // Also remove from any Department coursesList if present
+    // 1. Remove from any Department coursesList if present
     await Department.updateMany(
       {},
       {
         $pull: {
           coursesList: {
             $or: [
-              { code: codeToDelete },
+              { code: actualCode },
+              { code: new RegExp(`^${actualCode}$`, 'i') },
               { code: id }
             ]
           }
@@ -409,10 +411,49 @@ exports.deleteSubject = async (req, res) => {
       }
     ).catch(() => {});
 
+    // 2. Remove from Exam schedule collections
+    if (actualCode) {
+      await Exam.deleteMany({
+        $or: [
+          { code: actualCode },
+          { code: new RegExp(`^${actualCode}$`, 'i') }
+        ]
+      }).catch(() => {});
+
+      // 3. Remove from HallTicket commonSubjects & student subject lists
+      await HallTicket.updateMany(
+        {},
+        {
+          $pull: {
+            commonSubjects: {
+              $or: [
+                { code: actualCode },
+                { code: new RegExp(`^${actualCode}$`, 'i') }
+              ]
+            },
+            'students.$[].subjects': {
+              $or: [
+                { code: actualCode },
+                { code: new RegExp(`^${actualCode}$`, 'i') }
+              ]
+            }
+          }
+        }
+      ).catch(() => {});
+
+      // 4. Remove from Class if present
+      await Class.deleteMany({
+        $or: [
+          { code: actualCode },
+          { code: new RegExp(`^${actualCode}$`, 'i') }
+        ]
+      }).catch(() => {});
+    }
+
     res.status(200).json({
       success: true,
-      message: deleted ? `Subject "${deleted.name}" removed successfully.` : 'Subject removed successfully.',
-      data: deleted || { code: codeToDelete }
+      message: deleted ? `Subject "${deleted.name}" (${actualCode}) removed everywhere.` : `Subject ${actualCode} removed successfully.`,
+      data: deleted || { code: actualCode }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -420,3 +461,4 @@ exports.deleteSubject = async (req, res) => {
 };
 
 exports.autoGenerateExamAndHallTickets = autoGenerateExamAndHallTickets;
+

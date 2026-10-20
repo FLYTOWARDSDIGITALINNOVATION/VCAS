@@ -221,6 +221,20 @@ export default function StaffTimetable({ staffUser }) {
     }
   };
 
+  // Real-time conflict check for Period Already Allocated
+  const staffPeriodConflict = useMemo(() => {
+    if (!isSlotModalOpen) return null;
+    const currentAssigned = schedule[slotForm.day]?.[String(slotForm.slot)];
+    if (currentAssigned && currentAssigned.code && currentAssigned.code.toUpperCase() !== (slotForm.code || '').trim().toUpperCase()) {
+      return {
+        code: currentAssigned.code,
+        name: currentAssigned.name,
+        room: currentAssigned.room
+      };
+    }
+    return null;
+  }, [isSlotModalOpen, schedule, slotForm.day, slotForm.slot, slotForm.code]);
+
   // Save slot to database
   const handleSaveSlot = async (e) => {
     e.preventDefault();
@@ -229,6 +243,11 @@ export default function StaffTimetable({ staffUser }) {
     if (!slotForm.code.trim() || !slotForm.name.trim()) {
       setSlotModalError('Subject Code and Subject Name are required.');
       return;
+    }
+
+    if (staffPeriodConflict) {
+      const proceed = window.confirm(`⚠️ Period Already Allocated Warning:\n\nPeriod ${slotForm.slot} on ${slotForm.day} is already allocated to ${staffPeriodConflict.code} (${staffPeriodConflict.name}) in ${staffPeriodConflict.room || 'Room'}.\n\nDo you want to re-allocate this period to ${slotForm.code.trim().toUpperCase()}?`);
+      if (!proceed) return;
     }
 
     try {
@@ -952,6 +971,19 @@ export default function StaffTimetable({ staffUser }) {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Period Conflict Warning */}
+              {staffPeriodConflict && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 text-xs shadow-xs animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">⚠️ Warning: Period Already Allocated!</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      Period {slotForm.slot} on {slotForm.day} is already allocated to <strong>{staffPeriodConflict.code}</strong> ({staffPeriodConflict.name}). Saving will overwrite and re-allocate this period.
+                    </p>
+                  </div>
                 </div>
               )}
 

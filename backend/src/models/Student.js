@@ -401,7 +401,15 @@ const studentSchema = new mongoose.Schema({
   hoursAbsent: { type: String, default: '' },
   totalArrearsTillLastSem: { type: String, default: '' },
   arrearsClearedThisSem: { type: String, default: '' },
-  arrearsYetToBeCleared: { type: String, default: '' }
+  arrearsYetToBeCleared: { type: String, default: '' },
+  // Super Admin Document Uploads
+  photo: { type: String, default: '' },
+  docAadhaar: { type: String, default: '' },
+  docPan: { type: String, default: '' },
+  docIncomeCert: { type: String, default: '' },
+  docDrivingLicense: { type: String, default: '' },
+  doc10th: { type: String, default: '' },
+  doc12th: { type: String, default: '' }
 }, {
   timestamps: true,
   collection: 'students',

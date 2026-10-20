@@ -9,7 +9,8 @@ const {
   createOrUpdateAllocation,
   cleanupDuplicates,
   deleteAllocation,
-  updateSubjectSchedule
+  updateSubjectSchedule,
+  removeSubjectSchedule
 } = require('../controllers/hallTicketController');
 
 router.get('/', getAllHallTickets);
@@ -19,7 +20,9 @@ router.get('/student/:identifier', getStudentHallTicket);
 router.get('/:id', getHallTicketById);
 router.post('/allocate', createOrUpdateAllocation);
 router.post('/update-subject-schedule', updateSubjectSchedule);
+router.post('/remove-subject-schedule', removeSubjectSchedule);
 router.post('/cleanup-duplicates', cleanupDuplicates);
 router.delete('/:id', deleteAllocation);
 
 module.exports = router;
+
