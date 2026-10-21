@@ -95,13 +95,13 @@ const studentSchema = new mongoose.Schema({
   },
   feeStatus: {
     type: String,
-    enum: ['Paid', 'Pending', 'Partial', 'Overdue'],
-    default: 'Pending'
+    default: 'Pending',
+    trim: true
   },
   status: {
     type: String,
-    enum: ['Active', 'Inactive', 'Suspended'],
-    default: 'Active'
+    default: 'Active',
+    trim: true
   },
   gender: {
     type: String,

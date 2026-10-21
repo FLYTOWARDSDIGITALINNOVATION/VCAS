@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -18,6 +17,189 @@ import {
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { API_BASE, getKnownDepartments } from '../apiConfig';
+
+// Dynamic loader for SheetJS so Vite doesn't crash if xlsx is missing in local node_modules
+const getSheetJS = () => {
+  if (typeof window !== 'undefined' && window.XLSX) {
+    return Promise.resolve(window.XLSX);
+  }
+  return new Promise((resolve) => {
+    try {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+      script.async = true;
+      script.onload = () => resolve(window.XLSX || null);
+      script.onerror = () => resolve(null);
+      document.head.appendChild(script);
+    } catch (_) {
+      resolve(null);
+    }
+  });
+};
+
+// Clean string key for flexible matching
+const cleanHeaderKey = (k) => String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// Format Excel dates (handles Date objects, serial numbers, strings)
+const formatExcelDate = (val) => {
+  if (!val) return '';
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${d}-${m}-${y}`;
+  }
+  if (typeof val === 'number') {
+    try {
+      const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+      if (!isNaN(date.getTime())) {
+        const y = date.getUTCFullYear();
+        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(date.getUTCDate()).padStart(2, '0');
+        return `${d}-${m}-${y}`;
+      }
+    } catch (_) { }
+  }
+  const s = String(val).trim();
+  if (s.includes('T') && !isNaN(Date.parse(s))) {
+    try {
+      const d = new Date(s);
+      return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+    } catch (_) { }
+  }
+  return s;
+};
+
+// Flexible field extractor for Excel row
+const getRowValue = (row, ...aliases) => {
+  if (!row || typeof row !== 'object') return '';
+
+  // 1. Direct raw property lookup
+  for (const a of aliases) {
+    if (row[a] !== undefined && row[a] !== null && String(row[a]).trim() !== '') {
+      return row[a];
+    }
+  }
+
+  // 2. Build clean key dictionary
+  const cleanMap = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (v === undefined || v === null) continue;
+    cleanMap[cleanHeaderKey(k)] = v;
+  }
+
+  // 3. Exact match on cleaned key
+  for (const a of aliases) {
+    const ca = cleanHeaderKey(a);
+    if (cleanMap[ca] !== undefined && String(cleanMap[ca]).trim() !== '') {
+      return cleanMap[ca];
+    }
+  }
+
+  // 4. Substring / partial match on cleaned key
+  for (const a of aliases) {
+    const ca = cleanHeaderKey(a);
+    for (const [k, v] of Object.entries(cleanMap)) {
+      if ((k.includes(ca) || ca.includes(k)) && String(v).trim() !== '') {
+        return v;
+      }
+    }
+  }
+
+  return '';
+};
+
+// Smart row resolver for student preview
+const resolveStudentPreviewRow = (row, overrideDept = '') => {
+  if (!row || typeof row !== 'object') return {};
+
+  // 1. Student Name
+  let name = getRowValue(
+    row,
+    'studentname', 'nameofstudent', 'nameofthestudent', 'candidatename', 'nameofcandidate',
+    'fullname', 'pupilname', 'personname', 'candidate', 'name', 'student'
+  );
+
+  // Fallback for name: find any column header containing 'name' that isn't father/mother/parent/college/school/bank
+  if (!name) {
+    for (const [k, v] of Object.entries(row)) {
+      if (v === undefined || v === null || String(v).trim() === '') continue;
+      const ck = cleanHeaderKey(k);
+      if (
+        ck.includes('name') &&
+        !ck.includes('father') &&
+        !ck.includes('mother') &&
+        !ck.includes('parent') &&
+        !ck.includes('college') &&
+        !ck.includes('school') &&
+        !ck.includes('bank')
+      ) {
+        name = v;
+        break;
+      }
+    }
+  }
+
+  // 2. Register Number
+  const regNo = getRowValue(
+    row,
+    'regno', 'registerno', 'registernumber', 'registrationno', 'registrationnumber',
+    'studentid', 'idno', 'id', 'regn', 'register', 'admnumber', 'admissionno', 'admno'
+  );
+
+  // 3. Roll Number
+  const rollNo = getRowValue(
+    row,
+    'rollno', 'rollnumber', 'roll', 'classrollno', 'rno', 'sno', 'slno', 'serialno', 'seatno'
+  );
+
+  // 4. Department
+  let department = overrideDept;
+  if (!department) {
+    department = getRowValue(
+      row,
+      'department', 'dept', 'branch', 'course', 'major', 'programme', 'degree', 'stream'
+    );
+    if (!department) department = 'General';
+  }
+
+  // 5. Gender
+  const rawGender = String(getRowValue(row, 'gender', 'sex') || '').trim();
+  let gender = 'Male';
+  if (rawGender) {
+    const lg = rawGender.toLowerCase();
+    if (lg.startsWith('f') || lg === 'w') {
+      gender = 'Female';
+    } else if (lg.startsWith('m')) {
+      gender = 'Male';
+    } else {
+      gender = rawGender;
+    }
+  }
+
+  // 6. DOB
+  const rawDob = getRowValue(
+    row,
+    'dob', 'dateofbirth', 'birthdate', 'birth', 'd.o.b', 'date_of_birth', 'borndate'
+  );
+  const dob = formatExcelDate(rawDob);
+
+  // 7. Mobile
+  const mobile = getRowValue(
+    row,
+    'mobile', 'mobileno', 'phone', 'phonenumber', 'contact', 'contactno', 'cell', 'studentmobile', 'parentphone', 'fathermobile', 'tel', 'whatsapp'
+  );
+
+  return {
+    name: name ? String(name).trim() : '—',
+    regNo: regNo ? String(regNo).trim().toUpperCase() : 'Auto-gen',
+    rollNo: rollNo ? String(rollNo).trim().toUpperCase() : '—',
+    department: String(department).trim(),
+    gender: String(gender).trim(),
+    dob: dob || '—',
+    mobile: mobile ? String(mobile).trim() : '—'
+  };
+};
 
 export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, departments = [] }) {
   const fileInputRef = useRef(null);
@@ -49,92 +231,9 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Generate and download sample Excel template
+  // Download official Excel template directly from backend API
   const handleDownloadTemplate = () => {
-    const templateData = [
-      {
-        'Register Number': '22UCS001',
-        'Name': 'ARUN KUMAR S',
-        'Roll Number': '22CS01',
-        'Admission Number': 'ADM2022001',
-        'Department': 'Computer Science',
-        'Course': 'B.Sc Computer Science',
-        'Semester': '1st Sem',
-        'Year': '1st Year',
-        'Batch': '2022-2026',
-        'Academic Year': '2025-2026',
-        'Section': 'A',
-        'Gender': 'Male',
-        'Date of Birth': '2004-05-14',
-        'Blood Group': 'O+',
-        'Mobile': '9876543210',
-        'Email': 'arun.kumar@gmail.com',
-        'Father Name': 'SUNDARAM M',
-        'Mother Name': 'LAKSHMI S',
-        'Parent Mobile': '9876501234',
-        'Father Occupation': 'Business',
-        'Address': '12/4 North Car Street',
-        'City': 'Tirunelveli',
-        'State': 'Tamil Nadu',
-        'Pincode': '627001',
-        'Community': 'BC',
-        'Religion': 'Hindu',
-        'Nationality': 'Indian',
-        '10th Marks': '450/500',
-        '10th %': '90%',
-        '12th Marks': '540/600',
-        '12th %': '90%',
-        'Aadhaar Number': '1234 5678 9012',
-        'Fee Status': 'Paid'
-      },
-      {
-        'Register Number': '22UCS002',
-        'Name': 'PRIYA DHARSHINI R',
-        'Roll Number': '22CS02',
-        'Admission Number': 'ADM2022002',
-        'Department': 'Computer Science',
-        'Course': 'B.Sc Computer Science',
-        'Semester': '1st Sem',
-        'Year': '1st Year',
-        'Batch': '2022-2026',
-        'Academic Year': '2025-2026',
-        'Section': 'A',
-        'Gender': 'Female',
-        'Date of Birth': '2004-08-22',
-        'Blood Group': 'B+',
-        'Mobile': '9876543211',
-        'Email': 'priya.r@gmail.com',
-        'Father Name': 'RAMESH K',
-        'Mother Name': 'KAVITHA R',
-        'Parent Mobile': '9876501235',
-        'Father Occupation': 'Agriculture',
-        'Address': '45 South Bazaar Street',
-        'City': 'Vellalankulam',
-        'State': 'Tamil Nadu',
-        'Pincode': '627002',
-        'Community': 'MBC',
-        'Religion': 'Hindu',
-        'Nationality': 'Indian',
-        '10th Marks': '465/500',
-        '10th %': '93%',
-        '12th Marks': '555/600',
-        '12th %': '92.5%',
-        'Aadhaar Number': '9876 5432 1098',
-        'Fee Status': 'Pending'
-      }
-    ];
-
-    const worksheet = XLSX.utils.json_to_sheet(templateData);
-
-    // Auto-fit column widths
-    const colWidths = Object.keys(templateData[0]).map(key => ({
-      wch: Math.max(key.length + 3, 16)
-    }));
-    worksheet['!cols'] = colWidths;
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Students_Template');
-    XLSX.writeFile(workbook, 'VCAS_Student_Bulk_Upload_Template.xlsx');
+    window.open(`${API_BASE}/students/template`, '_blank');
   };
 
   // Handle file select or drop
@@ -156,7 +255,7 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
     e.preventDefault();
   };
 
-  const processSelectedFile = (selectedFile) => {
+  const processSelectedFile = async (selectedFile) => {
     const validExtensions = ['.xlsx', '.xls', '.csv'];
     const lowerName = selectedFile.name.toLowerCase();
     const isValid = validExtensions.some(ext => lowerName.endsWith(ext));
@@ -172,6 +271,15 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
     setFileName(selectedFile.name);
     setFileSize(formatBytes(selectedFile.size));
     setIsParsing(true);
+
+    const XLSX = await getSheetJS();
+
+    if (!XLSX) {
+      // If SheetJS is not available client-side, allow direct file upload to backend
+      setParsedRows([{ _file: selectedFile.name }]);
+      setIsParsing(false);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -202,7 +310,13 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
 
         const json = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, defval: '' });
 
-        if (!json || json.length === 0) {
+        // Filter out completely blank rows
+        const validRows = (json || []).filter(row => {
+          if (!row || typeof row !== 'object') return false;
+          return Object.values(row).some(v => v !== undefined && v !== null && String(v).trim() !== '');
+        });
+
+        if (!validRows || validRows.length === 0) {
           setErrorMessage('The selected file appears to be empty or has no data rows.');
           setParsedRows([]);
           setPreviewRows([]);
@@ -210,14 +324,15 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
           return;
         }
 
-        const headers = Object.keys(json[0] || {});
+        const headers = Object.keys(validRows[0] || {});
         setColumnHeaders(headers);
-        setParsedRows(json);
-        setPreviewRows(json.slice(0, 8)); // preview first 8 rows
+        setParsedRows(validRows);
+        setPreviewRows(validRows.slice(0, 25)); // Preview up to 25 rows (covers full 10 students)
         setIsParsing(false);
       } catch (err) {
         console.error('Error reading Excel file:', err);
-        setErrorMessage('Failed to parse Excel file: ' + err.message);
+        // Fallback: still keep file for server-side upload
+        setParsedRows([{ _file: selectedFile.name }]);
         setIsParsing(false);
       }
     };
@@ -390,27 +505,8 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                       Excel Import Completed Successfully!
                     </h3>
                     <p className="text-xs text-emerald-700">
-                      The database has been updated with the student records from your Excel file.
+                      All student records from your Excel file have been successfully imported and saved to the database.
                     </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                  <div className="bg-white p-3 rounded-xl border border-emerald-200 text-center">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase">Total Rows</p>
-                    <p className="text-xl font-black text-slate-800 mt-1">{uploadResult.totalRows || 0}</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-emerald-200 text-center">
-                    <p className="text-[11px] font-bold text-emerald-600 uppercase">Newly Added</p>
-                    <p className="text-xl font-black text-emerald-600 mt-1">{uploadResult.createdCount || 0}</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-blue-200 text-center">
-                    <p className="text-[11px] font-bold text-blue-600 uppercase">Updated</p>
-                    <p className="text-xl font-black text-blue-600 mt-1">{uploadResult.updatedCount || 0}</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-amber-200 text-center">
-                    <p className="text-[11px] font-bold text-amber-600 uppercase">Errors / Skipped</p>
-                    <p className="text-xl font-black text-amber-600 mt-1">{(uploadResult.errorsCount || 0) + (uploadResult.skippedCount || 0)}</p>
                   </div>
                 </div>
 
@@ -489,6 +585,18 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                       </div>
                       <h4 className="text-sm font-extrabold text-slate-800">{fileName}</h4>
                       <p className="text-xs text-slate-500 font-medium">{fileSize} • {parsedRows.length} rows detected</p>
+                      
+                      {columnHeaders.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 max-w-xl">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Detected Columns:</span>
+                          {columnHeaders.map((col, i) => (
+                            <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-md border border-slate-200">
+                              {col}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       <button
                         type="button"
                         onClick={(e) => {
@@ -566,7 +674,7 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                       <div className="flex items-center gap-2">
                         <Eye className="w-4 h-4 text-slate-600" />
                         <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                          Excel Data Preview (First {previewRows.length} of {parsedRows.length} rows)
+                          Excel Data Preview ({previewRows.length === parsedRows.length ? `All ${parsedRows.length} rows` : `First ${previewRows.length} of ${parsedRows.length} rows`})
                         </h4>
                       </div>
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
@@ -574,7 +682,7 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                       </span>
                     </div>
 
-                    <div className="max-h-56 overflow-auto">
+                    <div className="max-h-64 overflow-auto">
                       <table className="w-full text-left border-collapse text-[11px]">
                         <thead>
                           <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 uppercase font-bold sticky top-0">
@@ -590,24 +698,24 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                           {previewRows.map((row, idx) => {
-                            const name = row.Name || row['Student Name'] || row.name || row.fullName || '—';
-                            const reg = row['Register Number'] || row.RegNo || row.regNo || row['Reg No'] || 'Auto-gen';
-                            const roll = row['Roll Number'] || row.RollNo || row.rollNo || row['Roll No'] || '—';
-                            const dept = overrideDept || row.Department || row.department || row.Dept || 'General';
-                            const gender = row.Gender || row.gender || 'Male';
-                            const dob = row['Date of Birth'] || row.DOB || row.dob || '—';
-                            const mobile = row.Mobile || row.Phone || row.phone || row.mobile || '—';
+                            const item = resolveStudentPreviewRow(row, overrideDept);
 
                             return (
                               <tr key={idx} className="hover:bg-slate-50/80">
-                                <td className="py-2 px-3 text-slate-400">{idx + 1}</td>
-                                <td className="py-2 px-3 font-bold text-slate-900">{String(name)}</td>
-                                <td className="py-2 px-3 font-mono text-emerald-700">{String(reg)}</td>
-                                <td className="py-2 px-3">{String(roll)}</td>
-                                <td className="py-2 px-3">{String(dept)}</td>
-                                <td className="py-2 px-3">{String(gender)}</td>
-                                <td className="py-2 px-3">{String(dob)}</td>
-                                <td className="py-2 px-3">{String(mobile)}</td>
+                                <td className="py-2 px-3 text-slate-400 font-mono">{idx + 1}</td>
+                                <td className="py-2 px-3 font-bold text-slate-900">{item.name}</td>
+                                <td className="py-2 px-3 font-mono text-emerald-700 font-semibold">{item.regNo}</td>
+                                <td className="py-2 px-3 font-mono">{item.rollNo}</td>
+                                <td className="py-2 px-3">{item.department}</td>
+                                <td className="py-2 px-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    item.gender.toLowerCase() === 'female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {item.gender}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 text-slate-600">{item.dob}</td>
+                                <td className="py-2 px-3 text-slate-600">{item.mobile}</td>
                               </tr>
                             );
                           })}

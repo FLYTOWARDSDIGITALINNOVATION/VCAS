@@ -549,7 +549,7 @@ function formatExcelDate(val) {
         const d = String(date.getUTCDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
       }
-    } catch (_) {}
+    } catch (_) { }
   }
   return String(val).trim();
 }
@@ -606,11 +606,19 @@ function normalizeStudentRow(rawRow) {
     return null;
   }
 
-  const regNo = String(getVal('regno', 'registerno', 'registernumber', 'registrationno', 'studentid', 'id', 'regn', 'register')).trim().toUpperCase();
-  const rollNo = String(getVal('rollno', 'rollnumber', 'roll', 'classrollno', 'rno')).trim().toUpperCase();
-  const admNo = String(getVal('admno', 'admissionno', 'admissionnumber', 'admn', 'admission')).trim().toUpperCase();
+  const regNo = String(getVal('regno', 'registerno', 'registernumber', 'registrationno', 'registrationnumber', 'studentid', 'id', 'regn', 'register', 'admnumber', 'admissionno')).trim().toUpperCase();
+  const rollNo = String(getVal('rollno', 'rollnumber', 'roll', 'classrollno', 'rno', 'sno', 'slno', 'serialno', 'seatno')).trim().toUpperCase();
+  
+  // Date of Admission vs Admission Number: never let admission date be captured as admNo
+  const dateOfAdmission = formatExcelDate(getVal('dateofadmission', 'admissiondate', 'doa', 'doadm', 'admissionyear'));
+  let admNo = String(getVal('admno', 'admissionno', 'admissionnumber', 'admissionid', 'admnumber')).trim().toUpperCase();
+  // If admNo was mistakenly assigned a date string like "15/06/2024", clear it
+  if (admNo.includes('/') || (admNo.includes('-') && admNo.length === 10)) {
+    admNo = '';
+  }
+
   const umisNumber = String(getVal('umisnumber', 'umis', 'emis', 'emisnumber')).trim().toUpperCase();
-  const department = String(getVal('department', 'dept', 'branch', 'major') || 'General').trim();
+  const department = String(getVal('department', 'dept', 'branch', 'major', 'course', 'stream') || 'General').trim();
   const course = String(getVal('course', 'degree', 'programme', 'prog') || 'Undergraduate').trim();
   const courseAdmitted = String(getVal('courseadmitted', 'admittedcourse') || course).trim();
   const sem = String(getVal('sem', 'semester', 'currentsem') || '1st Sem').trim();
@@ -618,11 +626,19 @@ function normalizeStudentRow(rawRow) {
   const batch = String(getVal('batch', 'batchyear') || '2022-2026').replace('–', '-').trim();
   const academicYear = String(getVal('academicyear', 'session') || '2025-2026').replace('–', '-').trim();
   const section = String(getVal('section', 'sec') || 'A').trim();
-  const gender = String(getVal('gender', 'sex') || 'Male').trim();
-  const dobRaw = getVal('dob', 'dateofbirth', 'birthdate', 'birth');
+  const rawGender = String(getVal('gender', 'sex') || '').trim();
+  let gender = 'Male';
+  if (rawGender) {
+    if (rawGender.toLowerCase().startsWith('f') || rawGender.toLowerCase() === 'w') {
+      gender = 'Female';
+    } else {
+      gender = 'Male';
+    }
+  }
+  const dobRaw = getVal('dob', 'dateofbirth', 'birthdate', 'birth', 'd.o.b', 'date_of_birth', 'borndate');
   const dob = formatExcelDate(dobRaw);
   const bloodGroup = String(getVal('bloodgroup', 'blood', 'bg') || 'O+').trim();
-  const phone = String(getVal('phone', 'mobile', 'mobileno', 'phonenumber', 'contact', 'contactno', 'cell')).trim();
+  const phone = String(getVal('phone', 'mobile', 'mobileno', 'phonenumber', 'contact', 'contactno', 'cell', 'studentmobile', 'parentphone', 'fathermobile', 'tel', 'whatsapp')).trim();
   const email = String(getVal('email', 'emailid', 'mail')).trim().toLowerCase();
   const fatherName = String(getVal('fathername', 'fathersname', 'father')).trim();
   const motherName = String(getVal('mothername', 'mothersname', 'mother')).trim();
@@ -645,8 +661,28 @@ function normalizeStudentRow(rawRow) {
   const cgpa = String(getVal('cgpa', 'gpa') || '8.0').trim();
   const rawAtt = getVal('attendance', 'attendancepercent');
   const attendance = rawAtt !== '' && !isNaN(Number(rawAtt)) ? Number(rawAtt) : 85;
-  const feeStatus = String(getVal('feestatus', 'feesstatus') || 'Pending').trim();
-  const status = String(getVal('status') || 'Active').trim();
+  const rawFeeStatus = String(getVal('feestatus', 'feesstatus') || 'Pending').trim().toLowerCase();
+  let feeStatus = 'Pending';
+  if (rawFeeStatus.includes('paid') || rawFeeStatus === 'cleared' || rawFeeStatus === 'yes' || rawFeeStatus === 'done') {
+    feeStatus = 'Paid';
+  } else if (rawFeeStatus.includes('partial')) {
+    feeStatus = 'Partial';
+  } else if (rawFeeStatus.includes('overdue')) {
+    feeStatus = 'Overdue';
+  }
+
+  // Sanitize student status (ignore unrelated columns like Parent Status, Occupation, Working, School, College, etc.)
+  const rawStatus = String(getVal('studentstatus', 'enrollmentstatus', 'academicstatus', 'status') || 'Active').trim().toLowerCase();
+  let status = 'Active';
+  if (rawStatus === 'inactive' || rawStatus === 'discontinued' || rawStatus === 'dropped') {
+    status = 'Inactive';
+  } else if (rawStatus === 'suspended') {
+    status = 'Suspended';
+  } else {
+    // If the Excel column contained values like "Working", "School", "College", "Not Applicable", default to Active student!
+    status = 'Active';
+  }
+
   const aadhaar = String(getVal('aadhaar', 'aadhaarno', 'aadhar', 'aadharno', 'uid')).trim();
   const pan = String(getVal('pan', 'panno')).trim().toUpperCase();
 
@@ -659,6 +695,7 @@ function normalizeStudentRow(rawRow) {
     department,
     course,
     courseAdmitted,
+    dateOfAdmission: dateOfAdmission || '',
     sem,
     year,
     batch,
@@ -749,9 +786,9 @@ async function processStudentsBatch(rawRows) {
         continue;
       }
 
-      // Check existing student by regNo or admNo or rollNo+department
+      // Check existing student ONLY by explicit unique regNo or rollNo (NEVER by admNo to prevent date collisions)
       let existingStudent = null;
-      if (normalized.regNo) {
+      if (normalized.regNo && !normalized.regNo.toLowerCase().includes('auto') && !normalized.regNo.toLowerCase().includes('tba') && !normalized.regNo.includes('/')) {
         existingStudent = await Student.findOne({
           $or: [
             { regNo: normalized.regNo },
@@ -759,10 +796,7 @@ async function processStudentsBatch(rawRows) {
           ]
         });
       }
-      if (!existingStudent && normalized.admNo) {
-        existingStudent = await Student.findOne({ admNo: normalized.admNo });
-      }
-      if (!existingStudent && normalized.rollNo && normalized.department && normalized.department !== 'General') {
+      if (!existingStudent && normalized.rollNo && normalized.rollNo.length >= 3 && !normalized.rollNo.includes('/') && normalized.department && normalized.department !== 'General') {
         existingStudent = await Student.findOne({
           rollNo: normalized.rollNo,
           department: normalized.department
