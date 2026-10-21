@@ -1,6 +1,8 @@
 const Student = require('../models/Student');
 const Attendance = require('../models/Attendance');
 const xlsx = require('xlsx');
+const ExcelJS = require('exceljs');
+const AdmZip = require('adm-zip');
 
 // @desc   Get all students
 // @route  GET /api/students
@@ -683,8 +685,48 @@ function normalizeStudentRow(rawRow) {
     status = 'Active';
   }
 
-  const aadhaar = String(getVal('aadhaar', 'aadhaarno', 'aadhar', 'aadharno', 'uid')).trim();
-  const pan = String(getVal('pan', 'panno')).trim().toUpperCase();
+  const cleanTextNo = (val) => {
+    if (!val || typeof val !== 'string') return '';
+    const s = val.trim();
+    if (s.startsWith('data:image/') || s.startsWith('http://') || s.startsWith('https://') || s.startsWith('DATA:IMAGE/')) return '';
+    return s;
+  };
+
+  const aadhaar = cleanTextNo(String(getVal('aadhaarno', 'aadharno', 'aadhaar', 'aadhar', 'uid')));
+  const pan = cleanTextNo(String(getVal('panno', 'pan'))).toUpperCase();
+  const incomeCertNo = cleanTextNo(String(getVal('incomecertno', 'incomecert', 'incomecertificate', 'incomeno', 'annualincomecert')));
+  const drivingLicense = cleanTextNo(String(getVal('drivinglicenseno', 'drivinglicenceno', 'dlno', 'drivinglicense', 'drivinglicence', 'license', 'licence'))).toUpperCase();
+
+  const isImageValue = (v) => {
+    if (!v || typeof v !== 'string') return false;
+    const s = v.trim();
+    return s.startsWith('data:image/') || s.startsWith('http://') || s.startsWith('https://') || s.startsWith('/uploads/') || s.startsWith('blob:');
+  };
+
+  const getDocImage = (key, ...aliases) => {
+    // 1. Direct rawRow properties (populated by extractStudentsWithImages)
+    if (isImageValue(rawRow[key])) return rawRow[key].trim();
+    for (const a of aliases) {
+      if (isImageValue(rawRow[a])) return rawRow[a].trim();
+    }
+
+    // 2. Check getVal ONLY if the value is a valid image URI
+    for (const a of [key, ...aliases]) {
+      const v = getVal(a);
+      if (isImageValue(v)) return String(v).trim();
+    }
+
+    return '';
+  };
+
+  // Document Images (Base64 data URIs or image URLs only)
+  const photo = getDocImage('photo', 'studentphoto', 'photoimage', 'passportphoto', 'image', 'profilephoto');
+  const docAadhaar = getDocImage('docAadhaar', 'aadhaarcardimage', 'aadhaarimage', 'aadhardocument', 'aadhaardoc', 'aadharimage');
+  const docPan = getDocImage('docPan', 'pancardimage', 'panimage', 'pandocument', 'pandoc');
+  const docIncomeCert = getDocImage('docIncomeCert', 'incomecertificateimage', 'incomecertimage', 'incomecertificatedoc', 'incomecertdoc');
+  const docDrivingLicense = getDocImage('docDrivingLicense', 'drivinglicenceimage', 'drivinglicenseimage', 'drivinglicencedoc', 'drivinglicensedoc', 'dlimage', 'dldoc');
+  const doc10th = getDocImage('doc10th', '10thmarksheetimage', '10thmarksheet', '10thimage', '10thdoc', 'sslcimage', 'sslcdoc');
+  const doc12th = getDocImage('doc12th', '12thmarksheetimage', '12thmarksheet', '12thimage', '12thdoc', 'hscimage', 'hscdoc');
 
   return {
     name,
@@ -731,13 +773,21 @@ function normalizeStudentRow(rawRow) {
     feeStatus,
     status,
     aadhaar,
-    pan
+    pan,
+    incomeCertNo,
+    drivingLicense,
+    photo,
+    docAadhaar,
+    docPan,
+    docIncomeCert,
+    docDrivingLicense,
+    doc10th,
+    doc12th
   };
 }
 
 // Helper: Smart Excel sheet parser that finds the header row automatically
 function extractRowsFromWorksheet(worksheet) {
-  // Try raw 2D array first to find the real header row
   const rawMatrix = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
   if (!rawMatrix || rawMatrix.length === 0) return [];
 
@@ -747,8 +797,8 @@ function extractRowsFromWorksheet(worksheet) {
     if (Array.isArray(row)) {
       const rowStr = row.map(c => String(c).toLowerCase().replace(/[^a-z0-9]/g, '')).join(' ');
       if (
-        (rowStr.includes('name') && (rowStr.includes('reg') || rowStr.includes('roll') || rowStr.includes('adm') || rowStr.includes('dept') || rowStr.includes('gender'))) ||
-        (rowStr.includes('student') && (rowStr.includes('roll') || rowStr.includes('reg')))
+        (rowStr.includes('name') && (rowStr.includes('reg') || rowStr.includes('roll') || rowStr.includes('adm') || rowStr.includes('dept') || rowStr.includes('gender') || rowStr.includes('photo') || rowStr.includes('aadhaar'))) ||
+        (rowStr.includes('student') && (rowStr.includes('roll') || rowStr.includes('reg') || rowStr.includes('name')))
       ) {
         headerRowIndex = r;
         break;
@@ -756,13 +806,248 @@ function extractRowsFromWorksheet(worksheet) {
     }
   }
 
-  // Parse using detected header row
   const rows = xlsx.utils.sheet_to_json(worksheet, {
     range: headerRowIndex,
     defval: ''
   });
 
   return rows;
+}
+
+// Helper: Extract student rows along with embedded drawings, cell images, and media
+async function extractStudentsWithImages(workbookBuffer) {
+  const workbook = xlsx.read(workbookBuffer, { type: 'buffer', cellDates: true });
+  if (!workbook.SheetNames || workbook.SheetNames.length === 0) return [];
+
+  const firstSheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[firstSheetName];
+  
+  const rawMatrix = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  if (!rawMatrix || rawMatrix.length === 0) return [];
+
+  let headerRowIndex = 0;
+  for (let r = 0; r < Math.min(rawMatrix.length, 12); r++) {
+    const row = rawMatrix[r];
+    if (Array.isArray(row)) {
+      const rowStr = row.map(c => String(c).toLowerCase().replace(/[^a-z0-9]/g, '')).join(' ');
+      if (
+        (rowStr.includes('name') && (rowStr.includes('reg') || rowStr.includes('roll') || rowStr.includes('adm') || rowStr.includes('dept') || rowStr.includes('gender') || rowStr.includes('photo') || rowStr.includes('aadhaar'))) ||
+        (rowStr.includes('student') && (rowStr.includes('roll') || rowStr.includes('reg') || rowStr.includes('name')))
+      ) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+  }
+
+  const headerColumns = Array.isArray(rawMatrix[headerRowIndex]) 
+    ? rawMatrix[headerRowIndex].map(c => String(c || '').trim()) 
+    : [];
+
+  const rows = xlsx.utils.sheet_to_json(worksheet, {
+    range: headerRowIndex,
+    defval: ''
+  });
+
+  if (!rows || rows.length === 0) return [];
+
+  // Extract embedded images by row and column
+  const imagesByRowCol = {};
+  const setImg = (r, c, dataUri) => {
+    if (!imagesByRowCol[r]) imagesByRowCol[r] = {};
+    imagesByRowCol[r][c] = dataUri;
+  };
+
+  // 1. Primary: AdmZip parser for media, drawing XML & cell images
+  try {
+    const zip = new AdmZip(workbookBuffer);
+    const zipEntries = zip.getEntries();
+    
+    const mediaMap = {};
+    for (const entry of zipEntries) {
+      if (entry.entryName.startsWith('xl/media/')) {
+        const fileName = entry.entryName.split('/').pop();
+        const ext = fileName.split('.').pop().toLowerCase();
+        const mime = ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : (ext === 'webp' ? 'image/webp' : 'application/octet-stream');
+        const base64Data = entry.getData().toString('base64');
+        mediaMap[fileName] = `data:${mime};base64,${base64Data}`;
+      }
+    }
+
+    if (Object.keys(mediaMap).length > 0) {
+      const drawingRels = {};
+      for (const entry of zipEntries) {
+        if (entry.entryName.startsWith('xl/drawings/_rels/')) {
+          const text = entry.getData().toString('utf8');
+          const relTagRegex = /<Relationship\b([^>]+)\/?>/g;
+          let rMatch;
+          while ((rMatch = relTagRegex.exec(text)) !== null) {
+            const attrs = rMatch[1];
+            const idM = attrs.match(/Id="([^"]+)"/);
+            const targetM = attrs.match(/Target="([^"]+)"/);
+            if (idM && targetM) {
+              const id = idM[1];
+              const fileName = targetM[1].split('/').pop();
+              drawingRels[id] = fileName;
+            }
+          }
+        }
+      }
+
+      for (const entry of zipEntries) {
+        if (entry.entryName.startsWith('xl/drawings/') && entry.entryName.endsWith('.xml') && !entry.entryName.includes('/_rels/')) {
+          const xml = entry.getData().toString('utf8');
+          const anchorRegex = /<(?:xdr:)?(?:oneCellAnchor|twoCellAnchor)[^>]*>([\s\S]*?)<\/(?:xdr:)?(?:oneCellAnchor|twoCellAnchor)>/g;
+          let aMatch;
+          while ((aMatch = anchorRegex.exec(xml)) !== null) {
+            const block = aMatch[1];
+            const colMatch = block.match(/<(?:xdr:)?col>(\d+)<\/(?:xdr:)?col>/);
+            const rowMatch = block.match(/<(?:xdr:)?row>(\d+)<\/(?:xdr:)?row>/);
+            const blipMatch = block.match(/(?:<a:blip|<blip)[^>]+(?:r:embed|embed)="([^"]+)"/);
+
+            if (colMatch && rowMatch && blipMatch) {
+              const col = parseInt(colMatch[1], 10);
+              const row = parseInt(rowMatch[1], 10);
+              const rId = blipMatch[1];
+              const fileName = drawingRels[rId];
+              if (fileName && mediaMap[fileName] && (!imagesByRowCol[row] || !imagesByRowCol[row][col])) {
+                setImg(row, col, mediaMap[fileName]);
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (zipErr) {
+    console.warn('AdmZip parser error:', zipErr.message);
+  }
+
+  // 2. Secondary: ExcelJS parser for drawings & anchored images (safe fallback)
+  try {
+    const ejWb = new ExcelJS.Workbook();
+    await ejWb.xlsx.load(workbookBuffer);
+    const ejWs = ejWb.worksheets[0];
+    if (ejWs && typeof ejWs.getImages === 'function') {
+      const ejImages = ejWs.getImages();
+      for (const img of ejImages) {
+        try {
+          const imgObj = ejWb.getImage(img.imageId);
+          if (imgObj && imgObj.buffer) {
+            const ext = (imgObj.extension || 'png').toLowerCase();
+            const mime = ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : (ext === 'webp' ? 'image/webp' : 'application/octet-stream');
+            const dataUri = `data:${mime};base64,${imgObj.buffer.toString('base64')}`;
+
+            const r = (img.range?.tl?.nativeRow !== undefined) ? img.range.tl.nativeRow : (img.range?.tl?.row !== undefined ? Math.floor(img.range.tl.row) : -1);
+            const c = (img.range?.tl?.nativeCol !== undefined) ? img.range.tl.nativeCol : (img.range?.tl?.col !== undefined ? Math.floor(img.range.tl.col) : -1);
+
+            if (r >= 0 && c >= 0 && (!imagesByRowCol[r] || !imagesByRowCol[r][c])) {
+              setImg(r, c, dataUri);
+            }
+          }
+        } catch (e) {
+          // ignore single image read error
+        }
+      }
+    }
+  } catch (ejErr) {
+    // ExcelJS error caught safely
+  }
+
+  // Map column index to student document field name
+  const colDocFieldMap = {};
+  
+  // Pass 1: Prioritize explicit image columns
+  headerColumns.forEach((colName, cIdx) => {
+    if (!colName) return;
+    const clean = colName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    if (clean.includes('photo') || clean.includes('avatar') || clean.includes('passport') || clean.includes('profilepic') || clean.includes('profilephoto')) {
+      colDocFieldMap[cIdx] = 'photo';
+    } else if ((clean.includes('aadhaar') || clean.includes('aadhar')) && clean.includes('image')) {
+      colDocFieldMap[cIdx] = 'docAadhaar';
+    } else if (clean.includes('pan') && clean.includes('image')) {
+      colDocFieldMap[cIdx] = 'docPan';
+    } else if (clean.includes('income') && clean.includes('image')) {
+      colDocFieldMap[cIdx] = 'docIncomeCert';
+    } else if ((clean.includes('driving') || clean.includes('licence') || clean.includes('license') || clean.includes('dl')) && clean.includes('image')) {
+      colDocFieldMap[cIdx] = 'docDrivingLicense';
+    } else if ((clean.includes('10th') || clean.includes('sslc') || clean.includes('tenth') || clean.includes('xstd')) && clean.includes('image')) {
+      colDocFieldMap[cIdx] = 'doc10th';
+    } else if ((clean.includes('12th') || clean.includes('hsc') || clean.includes('twelfth') || clean.includes('xiistd') || clean.includes('plus2')) && clean.includes('image')) {
+      colDocFieldMap[cIdx] = 'doc12th';
+    }
+  });
+
+  // Pass 2: Fallback for sheets without explicit 'image' in the header title
+  const mappedFields = new Set(Object.values(colDocFieldMap));
+  headerColumns.forEach((colName, cIdx) => {
+    if (!colName || colDocFieldMap[cIdx]) return;
+    const clean = colName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    if (!mappedFields.has('docAadhaar') && (clean.includes('aadhaar') || clean.includes('aadhar')) && !clean.includes('no') && !clean.includes('num')) {
+      colDocFieldMap[cIdx] = 'docAadhaar';
+      mappedFields.add('docAadhaar');
+    } else if (!mappedFields.has('docPan') && clean.includes('pan') && !clean.includes('no') && !clean.includes('num')) {
+      colDocFieldMap[cIdx] = 'docPan';
+      mappedFields.add('docPan');
+    } else if (!mappedFields.has('docIncomeCert') && clean.includes('income') && !clean.includes('no') && !clean.includes('num')) {
+      colDocFieldMap[cIdx] = 'docIncomeCert';
+      mappedFields.add('docIncomeCert');
+    } else if (!mappedFields.has('docDrivingLicense') && (clean.includes('driving') || clean.includes('licence') || clean.includes('license') || clean.includes('dl')) && !clean.includes('no') && !clean.includes('num')) {
+      colDocFieldMap[cIdx] = 'docDrivingLicense';
+      mappedFields.add('docDrivingLicense');
+    } else if (!mappedFields.has('doc10th') && (clean.includes('10th') || clean.includes('sslc') || clean.includes('tenth')) && (clean.includes('sheet') || clean.includes('upload') || clean.includes('doc'))) {
+      colDocFieldMap[cIdx] = 'doc10th';
+      mappedFields.add('doc10th');
+    } else if (!mappedFields.has('doc12th') && (clean.includes('12th') || clean.includes('hsc') || clean.includes('twelfth')) && (clean.includes('sheet') || clean.includes('upload') || clean.includes('doc'))) {
+      colDocFieldMap[cIdx] = 'doc12th';
+      mappedFields.add('doc12th');
+    }
+  });
+
+  // Prepare ordered list per column for fallback row-sequence matching
+  const colOrderedList = {};
+  for (const [rStr, cols] of Object.entries(imagesByRowCol)) {
+    const r = parseInt(rStr, 10);
+    if (r <= headerRowIndex) continue;
+    for (const [cStr, dataUri] of Object.entries(cols)) {
+      const c = parseInt(cStr, 10);
+      if (!colOrderedList[c]) colOrderedList[c] = [];
+      colOrderedList[c].push({ row: r, dataUri });
+    }
+  }
+  for (const c of Object.keys(colOrderedList)) {
+    colOrderedList[c].sort((a, b) => a.row - b.row);
+  }
+
+  // Attach images to student rows
+  const enrichedRows = rows.map((rowObj, rowIdx) => {
+    const sheetRow = headerRowIndex + 1 + rowIdx;
+    const enriched = { ...rowObj };
+
+    const directImages = imagesByRowCol[sheetRow] || imagesByRowCol[sheetRow + 1] || imagesByRowCol[sheetRow - 1];
+
+    for (const [cStr, docField] of Object.entries(colDocFieldMap)) {
+      const colIdx = parseInt(cStr, 10);
+      let imgData = directImages ? directImages[colIdx] : null;
+
+      if (!imgData && colOrderedList[colIdx] && colOrderedList[colIdx][rowIdx]) {
+        imgData = colOrderedList[colIdx][rowIdx].dataUri;
+      }
+
+      if (imgData) {
+        enriched[docField] = imgData;
+        const colHeader = headerColumns[colIdx];
+        if (colHeader) {
+          enriched[colHeader] = imgData;
+        }
+      }
+    }
+
+    return enriched;
+  });
+
+  return enrichedRows;
 }
 
 // Helper: Process array of student rows (from Excel or JSON)
@@ -921,17 +1206,8 @@ exports.uploadExcelStudents = async (req, res) => {
       });
     }
 
-    const workbook = xlsx.read(req.file.buffer, { type: 'buffer', cellDates: true });
-    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'The uploaded Excel file contains no sheets.'
-      });
-    }
-
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-    const rawRows = extractRowsFromWorksheet(worksheet);
+    // Extract student rows WITH embedded images!
+    const rawRows = await extractStudentsWithImages(req.file.buffer);
 
     if (!rawRows || rawRows.length === 0) {
       return res.status(400).json({
@@ -961,6 +1237,7 @@ exports.uploadExcelStudents = async (req, res) => {
       data: result
     });
   } catch (error) {
+    console.error('Error in uploadExcelStudents:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

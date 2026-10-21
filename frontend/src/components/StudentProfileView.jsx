@@ -39,6 +39,7 @@ export default function StudentProfileView({
 }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
   const [activeTab, setActiveTab] = useState('Overview');
+  const [previewModalDoc, setPreviewModalDoc] = useState(null);
 
   // Helper to ensure ONLY real entered data is shown, displaying '—' for empty/unspecified fields
   const val = (v) => (v !== null && v !== undefined && String(v).trim() !== '' ? String(v).trim() : '—');
@@ -636,32 +637,121 @@ export default function StudentProfileView({
                   { label: '10th Mark Sheet', no: student?.tenthMarks, doc: student?.doc10th },
                   { label: '12th Mark Sheet', no: student?.twelfthMarks, doc: student?.doc12th },
                 ].map((item, i) => (
-                  <div key={i} className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 flex flex-col justify-between">
+                  <div key={i} className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 flex flex-col justify-between hover:border-indigo-300 transition-all">
                     <div>
                       <span className="text-slate-500 font-bold block mb-0.5">{item.label}</span>
                       <span className="font-mono font-bold text-slate-800 text-xs block truncate">
                         {item.no || '—'}
                       </span>
                     </div>
+
+                    {/* Document Thumbnail Preview if Attached */}
+                    {typeof item.doc === 'string' && (item.doc.startsWith('data:image/') || item.doc.startsWith('http') || item.doc.startsWith('/')) && (
+                      <div 
+                        onClick={() => setPreviewModalDoc({ title: item.label, src: item.doc, no: item.no })}
+                        className="my-2.5 p-1 bg-white rounded-lg border border-indigo-200/80 shadow-xs cursor-pointer group hover:border-indigo-400 transition-all overflow-hidden"
+                        title="Click to view full document"
+                      >
+                        <img
+                          src={item.doc}
+                          alt={item.label}
+                          className="w-full h-24 object-contain rounded group-hover:scale-105 transition-transform duration-200"
+                        />
+                        <div className="text-[9px] text-center font-bold text-indigo-600 pt-1 group-hover:underline">
+                          🔍 Click to Preview Full Document
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mt-2 pt-2 border-t border-indigo-100/60 flex items-center justify-between">
-                      <span className={`text-[10px] font-bold ${item.doc ? 'text-emerald-700' : 'text-slate-400'}`}>
-                        {item.doc ? '✓ Document Attached' : 'Not Attached'}
+                      <span className={`text-[10px] font-bold flex items-center gap-1 ${typeof item.doc === 'string' && (item.doc.startsWith('data:image/') || item.doc.startsWith('http') || item.doc.startsWith('/')) ? 'text-emerald-700' : 'text-slate-400'}`}>
+                        {typeof item.doc === 'string' && (item.doc.startsWith('data:image/') || item.doc.startsWith('http') || item.doc.startsWith('/')) ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            ✓ Document Attached
+                          </>
+                        ) : 'Not Attached'}
                       </span>
-                      {item.doc && (
-                        <a
-                          href={item.doc}
-                          download={`${item.label.replace(/\s+/g, '_')}_document`}
-                          className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View / Download
-                        </a>
+                      {typeof item.doc === 'string' && (item.doc.startsWith('data:image/') || item.doc.startsWith('http') || item.doc.startsWith('/')) && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModalDoc({ title: item.label, src: item.doc, no: item.no })}
+                            className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                          >
+                            View
+                          </button>
+                          <span className="text-slate-300">•</span>
+                          <a
+                            href={item.doc}
+                            download={`${item.label.replace(/\s+/g, '_')}_document`}
+                            className="text-[10px] text-slate-600 hover:text-indigo-800 font-bold underline"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Download
+                          </a>
+                        </div>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* Document Full View Modal */}
+              {previewModalDoc && (
+                <div 
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in"
+                  onClick={() => setPreviewModalDoc(null)}
+                >
+                  <div 
+                    className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div>
+                        <h4 className="font-extrabold text-base text-slate-900">{previewModalDoc.title}</h4>
+                        {previewModalDoc.no && previewModalDoc.no !== '—' && (
+                          <p className="text-xs font-mono font-bold text-slate-500 mt-0.5">ID / No: {previewModalDoc.no}</p>
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => setPreviewModalDoc(null)}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="max-h-[65vh] overflow-auto flex items-center justify-center bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                      <img 
+                        src={previewModalDoc.src} 
+                        alt={previewModalDoc.title} 
+                        className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-xs"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-xs text-slate-500 font-medium">Verified Student Document Record</span>
+                      <div className="flex items-center gap-3">
+                        <a 
+                          href={previewModalDoc.src} 
+                          download={`${previewModalDoc.title.replace(/\s+/g, '_')}_document`}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                        >
+                          Download Document
+                        </a>
+                        <button 
+                          onClick={() => setPreviewModalDoc(null)}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -365,7 +365,7 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
 
       setUploadProgress(45);
 
-      // Try uploading file directly via FormData first
+      // Direct FormData upload to /upload-excel preserves all embedded document images
       let uploadSuccess = false;
       let responseData = null;
 
@@ -384,12 +384,18 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
         if (res.ok && data.success) {
           uploadSuccess = true;
           responseData = data;
+        } else {
+          throw new Error(data.message || 'Failed to import Excel file with images');
         }
       } catch (err) {
+        // If file is not an xlsx or xls, try JSON fallback, otherwise throw direct error
+        if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+          throw err;
+        }
         console.warn('FormData direct upload failed, trying bulk JSON payload fallback:', err);
       }
 
-      // Fallback: send parsed JSON directly if upload-excel route had an issue
+      // Fallback for CSV or purely tabular files
       if (!uploadSuccess) {
         setUploadProgress(70);
         const res = await fetch(`${API_BASE}/students/bulk`, {
