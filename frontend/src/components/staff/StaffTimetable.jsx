@@ -120,14 +120,26 @@ export default function StaffTimetable({ staffUser }) {
     setTimeout(() => setToastMsg(''), 4000);
   };
 
-  // Fetch timetable and classes from backend API
-  const fetchData = async () => {
-    if (!staffUser?.staffId) return;
+  // Check if current staff user is HOD or Admin
+  const isHod = staffUser?.designation?.toUpperCase()?.includes('HOD') || 
+                staffUser?.role?.toUpperCase()?.includes('HOD') || 
+                staffUser?.role?.toUpperCase()?.includes('ADMIN') || 
+                staffUser?.isHod === true ||
+                staffUser?.canAllocateTasks === true;
+
+  const currentStaffId = staffUser?.staffId || staffUser?.employeeId || '';
+  const [selectedStaffId, setSelectedStaffId] = useState(currentStaffId);
+  const [departmentStaffList, setDepartmentStaffList] = useState([]);
+
+  // Fetch timetable and classes from backend API for selected staff
+  const fetchData = async (targetId = selectedStaffId) => {
+    const idToFetch = targetId || currentStaffId;
+    if (!idToFetch) return;
     try {
       setLoading(true);
       const [tRes, cRes] = await Promise.all([
-        fetch(`${API_BASE}/timetable/staff/${staffUser.staffId}`),
-        fetch(`${API_BASE}/classes/staff/${staffUser.staffId}`)
+        fetch(`${API_BASE}/timetable/staff/${idToFetch}`),
+        fetch(`${API_BASE}/classes/staff/${idToFetch}`)
       ]);
 
       const tData = await tRes.json();
@@ -146,12 +158,30 @@ export default function StaffTimetable({ staffUser }) {
     }
   };
 
+  // Fetch all staff members from department so normal staff & HOD can view department timetables
   useEffect(() => {
-    fetchData();
-  }, [staffUser?.staffId]);
+    fetch(`${API_BASE}/api/staff`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.staff)) {
+          const myDept = (staffUser?.department || '').trim().toLowerCase();
+          const deptStaff = data.staff.filter(s => {
+            const sDept = (s.department || '').trim().toLowerCase();
+            return !myDept || sDept === myDept || sDept.includes(myDept) || myDept.includes(sDept);
+          });
+          setDepartmentStaffList(deptStaff.length > 0 ? deptStaff : data.staff);
+        }
+      })
+      .catch(() => {});
+  }, [staffUser?.department]);
 
-  // Open modal to assign or edit a specific day & slot
+  useEffect(() => {
+    fetchData(selectedStaffId);
+  }, [selectedStaffId]);
+
+  // Open modal to assign or edit a specific day & slot (Only HOD has permission)
   const handleOpenSlotModal = (day, slot) => {
+    if (!isHod) return; // Non-HOD staff can only view, not edit or add
     setSlotModalError('');
     const existing = schedule[day]?.[String(slot)] || null;
 
@@ -297,7 +327,8 @@ export default function StaffTimetable({ staffUser }) {
         }
       };
 
-      const res = await fetch(`${API_BASE}/timetable/staff/${staffUser.staffId}/slot`, {
+      const targetStaffId = selectedStaffId || staffUser.staffId;
+      const res = await fetch(`${API_BASE}/timetable/staff/${targetStaffId}/slot`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -326,7 +357,7 @@ export default function StaffTimetable({ staffUser }) {
       showToast(slotMsg);
       setIsSlotModalOpen(false);
       if (data.schedule) setSchedule(data.schedule);
-      fetchData();
+      fetchData(targetStaffId);
     } catch (err) {
       setSlotModalError('Network error: ' + err.message);
     } finally {
@@ -334,12 +365,14 @@ export default function StaffTimetable({ staffUser }) {
     }
   };
 
-  // Clear a slot
+  // Clear a slot (Only HOD has permission)
   const handleClearSlot = async (day, slot) => {
+    if (!isHod) return;
     if (!window.confirm(`Clear Period ${slot} on ${day}?`)) return;
 
     try {
-      const res = await fetch(`${API_BASE}/timetable/staff/${staffUser.staffId}/slot/${day}/${slot}`, {
+      const targetStaffId = selectedStaffId || staffUser.staffId;
+      const res = await fetch(`${API_BASE}/timetable/staff/${targetStaffId}/slot/${day}/${slot}`, {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -347,7 +380,7 @@ export default function StaffTimetable({ staffUser }) {
         showToast(`Period ${slot} on ${day} cleared.`);
         setIsSlotModalOpen(false);
         if (data.schedule) setSchedule(data.schedule);
-        fetchData();
+        fetchData(targetStaffId);
       } else {
         alert(data.message || 'Failed to clear slot.');
       }
@@ -397,25 +430,90 @@ export default function StaffTimetable({ staffUser }) {
         </div>
       )}
 
+      {/* Department Faculty Timetable Selector Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <Building2 className="w-5 h-5 text-indigo-600 shrink-0" />
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-xs sm:text-sm">
+              Department Faculty Timetable Viewer
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              Department: <span className="font-bold text-slate-700">{staffUser?.department || 'College'}</span> • Viewing:{' '}
+              <span className="font-bold text-indigo-600">
+                {selectedStaffId === currentStaffId
+                  ? `${staffUser?.name || 'My Timetable'} (You)`
+                  : (departmentStaffList.find(s => (s.staffId || s.employeeId) === selectedStaffId)?.name || selectedStaffId)
+                }
+              </span>
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-bold text-slate-600 whitespace-nowrap">View Faculty:</label>
+          <select
+            value={selectedStaffId}
+            onChange={(e) => setSelectedStaffId(e.target.value)}
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+          >
+            <option value={currentStaffId}>👤 My Timetable ({staffUser?.name || 'Me'})</option>
+            {departmentStaffList
+              .filter(s => (s.staffId || s.employeeId) && (s.staffId || s.employeeId) !== currentStaffId)
+              .map(s => (
+                <option key={s.staffId || s._id} value={s.staffId || s.employeeId}>
+                  👤 {s.name} ({s.designation || 'Faculty'} - {s.staffId || s.employeeId})
+                </option>
+              ))
+            }
+          </select>
+        </div>
+      </div>
+
+      {/* Permission banner */}
+      {!isHod ? (
+        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-medium">
+          <Info className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>
+            🔒 <strong>View-Only Mode:</strong> Timetables are scheduled &amp; managed exclusively by the Head of Department (HOD). You can view the timetable of any faculty member in your department.
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 text-purple-900 rounded-xl text-xs font-medium">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+            <span>
+              ⭐ <strong>HOD Timetable Management:</strong> You have full rights to allocate, edit continuous lab periods, and manage timetable slots for all faculty in your department.
+            </span>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200/60 text-purple-800">
+            HOD Access
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900">Personal Faculty Timetable</h2>
+          <h2 className="text-xl font-extrabold text-slate-900">
+            {selectedStaffId === currentStaffId ? 'Personal Faculty Timetable' : `Faculty Timetable: ${departmentStaffList.find(s => (s.staffId || s.employeeId) === selectedStaffId)?.name || selectedStaffId}`}
+          </h2>
           <p className="text-sm text-slate-500 mt-0.5">
-            Weekly academic schedule and classroom assignments for {staffUser.name}
+            Weekly academic schedule and classroom assignments
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => handleOpenSlotModal(selectedDay, 1)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Assign Timetable Slot
-          </button>
-        </div>
+        {isHod && (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleOpenSlotModal(selectedDay, 1)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Assign Timetable Slot
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Metric badges */}
@@ -560,14 +658,20 @@ export default function StaffTimetable({ staffUser }) {
                 return (
                   <div
                     key={idx}
-                    onClick={() => handleOpenSlotModal(selectedDay, slotItem.slot)}
-                    className="flex items-center justify-between p-3 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs hover:border-blue-400 hover:bg-blue-50/20 cursor-pointer transition-colors group"
+                    onClick={() => isHod && handleOpenSlotModal(selectedDay, slotItem.slot)}
+                    className={`flex items-center justify-between p-3 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs transition-colors ${
+                      isHod ? 'hover:border-blue-400 hover:bg-blue-50/20 cursor-pointer group' : 'bg-slate-50/50 cursor-default'
+                    }`}
                   >
                     <span className="font-semibold text-slate-500">Period {slotItem.slot}</span>
                     <span className="text-[11px]">{slotItem.time}</span>
-                    <span className="text-[11px] text-blue-600 opacity-0 group-hover:opacity-100 font-bold flex items-center gap-0.5">
-                      <Plus className="w-3 h-3" /> Assign
-                    </span>
+                    {isHod ? (
+                      <span className="text-[11px] text-blue-600 opacity-0 group-hover:opacity-100 font-bold flex items-center gap-0.5">
+                        <Plus className="w-3 h-3" /> Assign
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No Class</span>
+                    )}
                   </div>
                 );
               }
@@ -575,8 +679,10 @@ export default function StaffTimetable({ staffUser }) {
               return (
                 <div
                   key={idx}
-                  onClick={() => handleOpenSlotModal(selectedDay, slotItem.slot)}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer hover:shadow-sm ${COLOR_MAP[cls.color] || 'bg-slate-50 border-slate-200'}`}
+                  onClick={() => isHod && handleOpenSlotModal(selectedDay, slotItem.slot)}
+                  className={`p-3.5 rounded-xl border transition-all ${
+                    isHod ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'
+                  } ${COLOR_MAP[cls.color] || 'bg-slate-50 border-slate-200'}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -613,7 +719,9 @@ export default function StaffTimetable({ staffUser }) {
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="font-extrabold text-slate-900 text-sm">Weekly Timetable Matrix</h3>
-              <p className="text-[11px] text-slate-500">Click on any period cell to assign or edit the subject</p>
+              <p className="text-[11px] text-slate-500">
+                {isHod ? 'Click on any period cell to assign or edit the subject' : 'View-only timetable matrix scheduled by HOD'}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-200">
@@ -660,22 +768,26 @@ export default function StaffTimetable({ staffUser }) {
                           return (
                             <td
                               key={slot}
-                              onClick={() => handleOpenSlotModal(day, slot)}
-                              className="p-2 text-center text-slate-300 hover:bg-blue-50/40 hover:text-blue-600 cursor-pointer transition-colors"
-                              title={`Click to assign Period ${slot} on ${day}`}
+                              onClick={() => isHod && handleOpenSlotModal(day, slot)}
+                              className={`p-2 text-center text-slate-300 transition-colors ${
+                                isHod ? 'hover:bg-blue-50/40 hover:text-blue-600 cursor-pointer' : 'cursor-default font-mono'
+                              }`}
+                              title={isHod ? `Click to assign Period ${slot} on ${day}` : 'No class scheduled'}
                             >
-                              +
+                              {isHod ? '+' : '—'}
                             </td>
                           );
                         }
                         return (
                           <td
                             key={slot}
-                            onClick={() => handleOpenSlotModal(day, slot)}
-                            className="p-1.5 text-center cursor-pointer"
+                            onClick={() => isHod && handleOpenSlotModal(day, slot)}
+                            className={`p-1.5 text-center ${isHod ? 'cursor-pointer' : 'cursor-default'}`}
                             title={`${cell.code} - ${cell.name} (${cell.room})`}
                           >
-                            <div className={`p-1.5 rounded-lg border text-[11px] font-bold truncate transition-all hover:scale-[1.02] ${COLOR_MAP[cell.color] || 'bg-slate-50'}`}>
+                            <div className={`p-1.5 rounded-lg border text-[11px] font-bold truncate transition-all ${
+                              isHod ? 'hover:scale-[1.02]' : ''
+                            } ${COLOR_MAP[cell.color] || 'bg-slate-50'}`}>
                               <div>{cell.code}</div>
                               <div className="text-[9px] opacity-75 font-normal truncate">{cell.room}</div>
                             </div>

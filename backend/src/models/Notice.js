@@ -7,6 +7,8 @@ const noticeSchema = new mongoose.Schema({
   postedBy:        { type: String, required: true, trim: true },
   postedByStaffId: { type: String, default: '', trim: true },
   department:      { type: String, default: 'All', trim: true },
+  targetAudience:  { type: String, default: 'All', trim: true },
+  reason:          { type: String, default: '', trim: true },
   date:            { type: String, default: () => new Date().toISOString().split('T')[0] },
   urgent:          { type: Boolean, default: false },
   pinned:          { type: Boolean, default: false }

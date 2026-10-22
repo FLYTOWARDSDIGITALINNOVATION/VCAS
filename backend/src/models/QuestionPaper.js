@@ -1,13 +1,27 @@
-﻿const mongoose = require("mongoose");
+const mongoose = require("mongoose");
 
 const questionSchema = new mongoose.Schema({
   questionNo: { type: Number, required: true },
   text: { type: String, required: true },
-  marks: { type: Number, required: true },
+  marks: { type: Number, required: true, default: 5 },
   unit: { type: String, default: "" },
-  type: { type: String, enum: ["MCQ","Short","Long","Essay"], default: "Short" },
+  type: { 
+    type: String, 
+    enum: ["MCQ", "5 Mark", "8 Mark", "Short", "Long", "Essay"], 
+    default: "MCQ" 
+  },
   options: [{ type: String }],
-  answer: { type: String, default: "" }
+  answer: { type: String, default: "" },
+  // Table format in questions
+  hasTable: { type: Boolean, default: false },
+  tableData: {
+    headers: [{ type: String }],
+    rows: [[{ type: String }]]
+  },
+  // Image format upload in questions
+  hasImage: { type: Boolean, default: false },
+  imageUrl: { type: String, default: "" },
+  imageCaption: { type: String, default: "" }
 }, { _id: true });
 
 const sectionSchema = new mongoose.Schema({
@@ -26,11 +40,15 @@ const questionPaperSchema = new mongoose.Schema({
   semester: { type: Number, required: true },
   year: { type: Number, required: true },
   section: { type: String, default: "A" },
-  examType: { type: String, enum: ["Internal Test 1","Internal Test 2","Model Exam","Semester Exam","Retest"], default: "Internal Test 1" },
+  examType: { 
+    type: String, 
+    enum: ["Internal Test 1", "Internal Test 2", "Model Exam", "Semester Exam", "Retest"], 
+    default: "Internal Test 1" 
+  },
   duration: { type: String, default: "3 Hours" },
   totalMarks: { type: Number, default: 100 },
   instructions: { type: String, default: "" },
-  status: { type: String, enum: ["Draft","Published","Archived"], default: "Draft" },
+  status: { type: String, enum: ["Draft", "Published", "Archived"], default: "Draft" },
   sections: [sectionSchema],
   academicYear: { type: String, default: "" }
 }, { timestamps: true, collection: "QuestionPapers" });

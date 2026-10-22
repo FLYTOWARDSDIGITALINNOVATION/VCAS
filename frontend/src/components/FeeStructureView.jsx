@@ -39,23 +39,6 @@ export const UG_FEE_STRUCTURE = [
     borderColor: 'border-blue-200',
     bgColor: 'bg-blue-50/50',
     badge: '₹27,000 / Year'
-  },
-  {
-    cluster: 'Computing & Advanced Technology',
-    departments: ['CS', 'AI', 'CFS'],
-    deptNames: [
-      'B.Sc Computer Science (CS)', 
-      'B.Sc Artificial Intelligence (AI)', 
-      'B.Sc Criminology and Forensic Science (CFS)'
-    ],
-    registrationFee: 8000,
-    sem1Fee: 10000,
-    sem2Fee: 10000,
-    totalAnnualFee: 28000,
-    color: 'from-purple-600 to-indigo-600',
-    borderColor: 'border-purple-200',
-    bgColor: 'bg-purple-50/50',
-    badge: '₹28,000 / Year'
   }
 ];
 
@@ -156,7 +139,10 @@ export default function FeeStructureView({ user }) {
     }
   })();
   const userRole = currentUser?.role || 'Super Admin';
-  const canEdit = ['Super Admin', 'Accountant', 'Office Staff', 'Admin'].includes(userRole) || currentUser?.canEditFees;
+  // Strictly prevent Accountant and Office Staff from having edit options in fee structure & scholarships
+  const isSuperAdminOrAdmin = ['Super Admin', 'Admin', 'super admin', 'admin'].includes(userRole);
+  const isRestrictedRole = ['Accountant', 'Office Staff', 'accountant', 'office staff'].includes(userRole);
+  const canEdit = isSuperAdminOrAdmin && !isRestrictedRole;
 
   // Live Synchronized Fee Structure State
   const [clusters, setClusters] = useState(UG_FEE_STRUCTURE);
@@ -164,6 +150,7 @@ export default function FeeStructureView({ user }) {
   const [academicYear, setAcademicYear] = useState('2025–2026');
   const [lastUpdateMeta, setLastUpdateMeta] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [adminDepartments, setAdminDepartments] = useState([]);
 
   // Edit Fee Structure Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -181,7 +168,8 @@ export default function FeeStructureView({ user }) {
       const json = await res.json();
       if (json.success && json.data) {
         if (Array.isArray(json.data.clusters) && json.data.clusters.length > 0) {
-          setClusters(json.data.clusters);
+          const cleanedClusters = json.data.clusters.filter(c => !(c.cluster || '').toLowerCase().includes('computing'));
+          setClusters(cleanedClusters.length > 0 ? cleanedClusters : UG_FEE_STRUCTURE);
         }
         if (Array.isArray(json.data.scholarships) && json.data.scholarships.length > 0) {
           setScholarships(json.data.scholarships);
@@ -204,9 +192,33 @@ export default function FeeStructureView({ user }) {
     }
   };
 
+  // Fetch only admin-added departments from /api/departments
+  const fetchAdminDepartments = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/departments`);
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        setAdminDepartments(json.data);
+        setCalcDept(prev => {
+          const match = json.data.find(d => 
+            (d.code && d.code.toLowerCase() === prev?.toLowerCase()) || 
+            (d.name && d.name.toLowerCase() === prev?.toLowerCase())
+          );
+          return match ? (match.code || match.name) : (json.data[0].code || json.data[0].name);
+        });
+      }
+    } catch (err) {
+      console.warn('Notice fetching admin departments:', err);
+    }
+  };
+
   useEffect(() => {
     fetchFeeStructure();
-    const handleSync = () => fetchFeeStructure();
+    fetchAdminDepartments();
+    const handleSync = () => {
+      fetchFeeStructure();
+      fetchAdminDepartments();
+    };
     window.addEventListener('vcas_feestructure_updated', handleSync);
     window.addEventListener('storage', handleSync);
     return () => {
@@ -215,8 +227,12 @@ export default function FeeStructureView({ user }) {
     };
   }, []);
 
-  // Open Edit Modal with cloned state
+  // Open Edit Modal with cloned state (restricted for Accountant and Office Staff)
   const handleOpenEdit = () => {
+    if (!canEdit) {
+      alert('Access Restricted: Accountant and Office Staff do not have edit options for fee structure and scholarships.');
+      return;
+    }
     setEditClusters(JSON.parse(JSON.stringify(clusters)));
     setEditScholarships(JSON.parse(JSON.stringify(scholarships)));
     setEditAcademicYear(academicYear);
@@ -308,14 +324,22 @@ export default function FeeStructureView({ user }) {
 
   // Calculator state
   const [calcDept, setCalcDept] = useState('B.Com');
+  const [calcYear, setCalcYear] = useState('I');
+  const [calcBatch, setCalcBatch] = useState('2025-2028');
   const [calcScholarship, setCalcScholarship] = useState('none');
   const [specialAmount, setSpecialAmount] = useState(5000);
   const [calcPeriod, setCalcPeriod] = useState('year'); // 'year', 'sem1', 'sem2'
 
-  // Lookups based on live synced clusters
-  const isClusterTech = ['CS', 'AI', 'CFS'].includes(calcDept);
-  const currentCluster = clusters.find(c => c.departments?.includes(calcDept)) || clusters[0] || {};
-  const registrationFee = Number(currentCluster.registrationFee) || (isClusterTech ? 8000 : 7000);
+  // Lookups based on live synced clusters and admin departments
+  const currentCluster = clusters.find(c => {
+    if (!c.departments) return false;
+    const lowerCalc = (calcDept || '').toLowerCase();
+    return c.departments.some(d => {
+      const lowerD = (d || '').toLowerCase();
+      return lowerCalc === lowerD || lowerCalc.includes(lowerD) || lowerD.includes(lowerCalc);
+    });
+  }) || clusters[0] || {};
+  const registrationFee = Number(currentCluster.registrationFee) || 7000;
   const baseSem1 = Number(currentCluster.sem1Fee) || 10000;
   const baseSem2 = Number(currentCluster.sem2Fee) || 10000;
 
@@ -532,7 +556,7 @@ export default function FeeStructureView({ user }) {
             UG Fee Structure & Scholarship Slabs
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Standardised fee schedule across the <strong>5 Undergraduate Departments</strong>. Changes made by Super Admin, Office Staff, or Accountant are dynamically saved and synchronized across all portals.
+            Standardised fee schedule for all college departments. Official updates managed by Administrator. Accountant and Office Staff have read-only viewing and receipt generation access.
           </p>
         </div>
 
@@ -541,7 +565,7 @@ export default function FeeStructureView({ user }) {
             <button
               onClick={handleOpenEdit}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-extrabold text-xs shadow-md shadow-blue-600/30 transition-all cursor-pointer border border-blue-400/30"
-              title="Edit fee amounts for all departments and scholarships"
+              title="Edit fee amounts for all departments and scholarships (Admin only)"
             >
               <Edit3 className="w-4 h-4 text-white" />
               <span>Edit Fee Structure</span>
@@ -717,22 +741,59 @@ export default function FeeStructureView({ user }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
             {/* Department Selection */}
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
-                Undergraduate Department (5 UG Depts)
+                Department {adminDepartments.length > 0 ? `(${adminDepartments.length})` : ''}
               </label>
               <select
                 value={calcDept}
                 onChange={(e) => setCalcDept(e.target.value)}
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
               >
-                <option value="B.Com">B.Com (Commerce)</option>
-                <option value="BBA">BBA (Management)</option>
-                <option value="CS">B.Sc Computer Science (CS)</option>
-                <option value="AI">B.Sc Artificial Intelligence (AI)</option>
-                <option value="CFS">B.Sc Criminology and Forensic Science (CFS)</option>
+                {adminDepartments.length > 0 ? (
+                  adminDepartments.map((dept) => {
+                    const label = dept.name + (dept.code ? ` (${dept.code})` : '');
+                    const value = dept.code || dept.name;
+                    return (
+                      <option key={dept._id || value} value={value}>
+                        {label}
+                      </option>
+                    );
+                  })
+                ) : (
+                  <option value={calcDept}>{calcDept}</option>
+                )}
+              </select>
+            </div>
+
+            {/* Year Filter */}
+            <div>
+              <label className="block text-slate-700 font-bold mb-1.5">Year</label>
+              <select
+                value={calcYear}
+                onChange={(e) => setCalcYear(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
+              >
+                <option value="I">I Year</option>
+                <option value="II">II Year</option>
+                <option value="III">III Year</option>
+              </select>
+            </div>
+
+            {/* Batch Filter */}
+            <div>
+              <label className="block text-slate-700 font-bold mb-1.5">Batch</label>
+              <select
+                value={calcBatch}
+                onChange={(e) => setCalcBatch(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
+              >
+                <option value="2025-2028">2025 – 2028</option>
+                <option value="2024-2027">2024 – 2027</option>
+                <option value="2023-2026">2023 – 2026</option>
+                <option value="2022-2025">2022 – 2025</option>
               </select>
             </div>
 
@@ -797,13 +858,6 @@ export default function FeeStructureView({ user }) {
                 />
               </div>
             )}
-          </div>
-
-          <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between text-xs text-slate-600">
-            <span className="font-semibold">Calculated Department Group:</span>
-            <span className="font-bold text-slate-900">
-              {currentCluster.cluster || (isClusterTech ? 'Computing & Tech Cluster (CS / AI / CFS)' : 'Commerce & Management Cluster (B.Com / BBA)')}
-            </span>
           </div>
         </div>
 

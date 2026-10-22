@@ -3,8 +3,9 @@ import {
   LayoutDashboard, BookOpen, CheckSquare, Calendar, BookMarked,
   Bell, UserCheck, User, LogOut, Menu, X, GraduationCap,
   ChevronRight, ChevronLeft, Shield, FileSpreadsheet, ClipboardList, Ticket, Award, UserPlus,
-  Search, Clock, Sparkles, Building2
+  Search, Clock, Sparkles, Building2, IndianRupee
 } from 'lucide-react';
+import FeeStructureView from '../FeeStructureView';
 import StaffHome from './StaffHome';
 import StaffMyClasses from './StaffMyClasses';
 import StaffAttendance from './StaffAttendance';
@@ -19,6 +20,7 @@ import StaffHallTicket from './StaffHallTicket';
 import StaffStudentEntry from './StaffStudentEntry';
 import StaffStudentModule from './StaffStudentModule';
 import StaffExamSchedule from './StaffExamSchedule';
+import StaffTaskAllocation from './StaffTaskAllocation';
 import CollegeLogo from '../CollegeLogo';
 
 const NAV_SECTIONS = [
@@ -38,7 +40,8 @@ const NAV_SECTIONS = [
       { name: 'Timetable', icon: Calendar },
       { name: 'Hall Allocation & Tickets', icon: Ticket },
       { name: 'Assignments', icon: BookMarked },
-      { name: 'Question Papers', icon: ClipboardList }
+      { name: 'Question Papers', icon: ClipboardList },
+      { name: 'Task Allocation', icon: CheckSquare }
     ]
   },
   {
@@ -140,6 +143,10 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Hall Tickets':         return <StaffHallTicket staffUser={staffUser} onNavigate={setActiveNav} />;
       case 'Assignments':          return <StaffAssignments staffUser={staffUser} />;
       case 'Question Papers':      return <StaffQuestionPaper staffUser={staffUser} />;
+      case 'Task Allocation':
+      case 'Staff Tasks':          return <StaffTaskAllocation staffUser={staffUser} />;
+      case 'Fee Structure':
+      case 'Fees':                 return <FeeStructureView user={staffUser} />;
       case 'My Profile':           return <StaffProfile staffUser={staffUser} />;
       case 'Notices':              return <StaffNotices staffUser={staffUser} />;
       case 'Leave Management':
@@ -147,6 +154,23 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       default:                     return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
     }
   };
+
+  const isFinanceStaff = staffUser?.role === 'Accountant' || 
+    staffUser?.role === 'Office Staff' || 
+    staffUser?.designation === 'Accountant' || 
+    staffUser?.canViewFees === true || 
+    staffUser?.department?.toLowerCase()?.includes('account');
+
+  const navSections = [
+    ...NAV_SECTIONS.slice(0, 2),
+    ...(isFinanceStaff ? [{
+      title: 'FINANCE',
+      items: [
+        { name: 'Fee Structure', icon: IndianRupee }
+      ]
+    }] : []),
+    ...NAV_SECTIONS.slice(2)
+  ];
 
   const SidebarContent = ({ isCollapsed = false }) => (
     <div className="flex flex-col justify-between h-full bg-white select-none min-h-0">
@@ -257,7 +281,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
 
         {/* Categorized Navigation Links Matching Admin */}
         <nav className={`${isCollapsed ? 'py-3 px-2 space-y-1' : 'p-4 space-y-6'}`}>
-          {NAV_SECTIONS.map((section, idx) => (
+          {navSections.map((section, idx) => (
             <div key={idx} className={isCollapsed ? 'space-y-1' : ''}>
               {!isCollapsed && (
                 <h3 className="px-3 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-2">

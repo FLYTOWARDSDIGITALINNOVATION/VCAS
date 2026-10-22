@@ -13,23 +13,6 @@ const DEFAULT_CLUSTERS = [
     borderColor: 'border-blue-200',
     bgColor: 'bg-blue-50/50',
     badge: '₹27,000 / Year'
-  },
-  {
-    cluster: 'Computing & Advanced Technology',
-    departments: ['CS', 'AI', 'CFS'],
-    deptNames: [
-      'B.Sc Computer Science (CS)', 
-      'B.Sc Artificial Intelligence (AI)', 
-      'B.Sc Criminology and Forensic Science (CFS)'
-    ],
-    registrationFee: 8000,
-    sem1Fee: 10000,
-    sem2Fee: 10000,
-    totalAnnualFee: 28000,
-    color: 'from-purple-600 to-indigo-600',
-    borderColor: 'border-purple-200',
-    bgColor: 'bg-purple-50/50',
-    badge: '₹28,000 / Year'
   }
 ];
 
@@ -136,6 +119,14 @@ exports.getFeeStructure = async (req, res) => {
       });
     }
 
+    if (feeDoc && Array.isArray(feeDoc.clusters)) {
+      const filtered = feeDoc.clusters.filter(c => !(c.cluster || '').toLowerCase().includes('computing'));
+      if (filtered.length !== feeDoc.clusters.length) {
+        feeDoc.clusters = filtered.length > 0 ? filtered : DEFAULT_CLUSTERS;
+        await feeDoc.save();
+      }
+    }
+
     return res.status(200).json({
       success: true,
       data: feeDoc
@@ -156,11 +147,19 @@ exports.updateFeeStructure = async (req, res) => {
   try {
     const { clusters, scholarships, academicYear, updatedBy, updatedRole } = req.body;
 
+    // Accountant and Office Staff are not allowed to edit the fee structure or scholarships
+    if (['Accountant', 'Office Staff', 'accountant', 'office staff'].includes(updatedRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Accountant and Office Staff are not permitted to modify the scholarship and fee structure.'
+      });
+    }
+
     let feeDoc = await FeeStructure.findOne().sort({ updatedAt: -1 });
 
     const updateData = {
-      lastUpdatedBy: updatedBy || 'Authorized Staff',
-      lastUpdatedRole: updatedRole || 'Staff',
+      lastUpdatedBy: updatedBy || 'Authorized Administrator',
+      lastUpdatedRole: updatedRole || 'Admin',
       lastUpdatedAt: new Date()
     };
 

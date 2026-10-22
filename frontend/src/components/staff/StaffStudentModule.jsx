@@ -209,6 +209,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
     mentorName: '',
     mentorDesignation: '',
     mentorDepartment: '',
+    mentorPhoto: '',
     counsellingNotes: '',
     coCurricularActivities: '',
     extraCurricularProgrammes: '',
@@ -2234,7 +2235,54 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-start">
+                {/* Mentor Photo Upload */}
+                <div className="flex flex-col items-center gap-2">
+                  <label className="block font-bold text-slate-700 mb-1 text-center">Mentor Photo</label>
+                  <div
+                    className="w-24 h-28 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50 flex items-center justify-center overflow-hidden cursor-pointer hover:border-sky-500 transition-all relative group"
+                    onClick={() => document.getElementById('mentorPhotoInput').click()}
+                  >
+                    {formData.mentorPhoto ? (
+                      <>
+                        <img src={formData.mentorPhoto} alt="Mentor" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-xl">
+                          <span className="text-white text-[10px] font-bold">Change</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center">
+                        <div className="text-2xl mb-1">📷</div>
+                        <span className="text-[10px] font-bold text-sky-500">Upload Photo</span>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    id="mentorPhotoInput"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = ev => {
+                        handleChange({ target: { name: 'mentorPhoto', value: ev.target.result } });
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  {formData.mentorPhoto && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange({ target: { name: 'mentorPhoto', value: '' } })}
+                      className="text-[10px] text-rose-500 hover:text-rose-700 font-semibold"
+                    >Remove</button>
+                  )}
+                </div>
+
+                {/* Mentor Name / Designation / Dept */}
+                <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Name of the Mentor</label>
                   <input
@@ -2276,6 +2324,7 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                       );
                     })}
                   </select>
+                </div>
                 </div>
               </div>
 

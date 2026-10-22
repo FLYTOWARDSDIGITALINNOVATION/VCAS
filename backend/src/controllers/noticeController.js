@@ -31,7 +31,7 @@ exports.getNotices = async (req, res) => {
 // @desc   Publish a new notice
 exports.createNotice = async (req, res) => {
   try {
-    const { title, body, tag, postedBy, postedByStaffId, department, urgent, pinned } = req.body;
+    const { title, body, tag, postedBy, postedByStaffId, department, urgent, pinned, targetAudience, reason } = req.body;
 
     if (!title || !title.trim() || !body || !body.trim()) {
       return res.status(400).json({ success: false, message: 'Notice title and body are required.' });
@@ -46,6 +46,8 @@ exports.createNotice = async (req, res) => {
       postedBy: postedBy || 'Faculty Member',
       postedByStaffId: postedByStaffId || '',
       department: department || 'All',
+      targetAudience: targetAudience || 'All',
+      reason: (reason || '').trim(),
       date: todayStr,
       urgent: Boolean(urgent),
       pinned: Boolean(pinned)
@@ -63,7 +65,7 @@ exports.createNotice = async (req, res) => {
 exports.updateNotice = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, body, tag, urgent } = req.body;
+    const { title, body, tag, urgent, targetAudience, reason } = req.body;
 
     const notice = await Notice.findById(id);
     if (!notice) {
@@ -74,6 +76,8 @@ exports.updateNotice = async (req, res) => {
     if (body && body.trim())   notice.body  = body.trim();
     if (tag)                   notice.tag   = tag;
     if (urgent !== undefined)  notice.urgent = Boolean(urgent);
+    if (targetAudience)        notice.targetAudience = targetAudience;
+    if (reason !== undefined)  notice.reason = reason.trim();
 
     await notice.save();
     res.status(200).json({ success: true, message: 'Notice updated successfully.', notice });

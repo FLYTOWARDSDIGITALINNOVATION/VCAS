@@ -77,13 +77,18 @@ function formatTimeAgo(dateInput) {
 
 export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const [activePortal, setActivePortal] = useState(user?.role || 'Admin');
+  const isFinanceUser = user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.canViewFees === true;
   
   // Restore active page and fee tab from sessionStorage on refresh
   const [activeNav, setActiveNav] = useState(() => {
-    return sessionStorage.getItem('vcas_activeNav') || 'Dashboard';
+    const saved = sessionStorage.getItem('vcas_activeNav');
+    if (saved) return saved;
+    return isFinanceUser ? 'Fees' : 'Dashboard';
   });
   const [selectedFeeType, setSelectedFeeType] = useState(() => {
-    return sessionStorage.getItem('vcas_selectedFeeType') || 'All';
+    const saved = sessionStorage.getItem('vcas_selectedFeeType');
+    if (saved) return saved;
+    return isFinanceUser ? 'Fee Structure' : 'All';
   });
 
   const [feesDropdownOpen, setFeesDropdownOpen] = useState(true);

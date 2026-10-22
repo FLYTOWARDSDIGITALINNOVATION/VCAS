@@ -137,7 +137,15 @@ exports.createStaff = async (req, res) => {
       });
     }
 
-    const finalRole = role || (designation === 'Accountant' ? 'Accountant' : designation === 'Office Staff' ? 'Office Staff' : 'Staff');
+    const finalRole = (role && role !== 'Staff') 
+      ? role 
+      : (designation === 'Accountant' || (department && department.toLowerCase().includes('account'))
+          ? 'Accountant'
+          : (designation === 'Office Staff' || (department && department.toLowerCase().includes('office'))
+              ? 'Office Staff'
+              : (role || 'Staff')));
+
+    const isFinanceOrOffice = finalRole === 'Accountant' || finalRole === 'Office Staff';
 
     const newStaff = new Staff({
       staffId: finalStaffId,
@@ -148,6 +156,7 @@ exports.createStaff = async (req, res) => {
       department: department.trim(),
       designation: designation || (finalRole === 'Accountant' ? 'Accountant' : finalRole === 'Office Staff' ? 'Office Staff' : 'Assistant Professor'),
       role: finalRole,
+      isProfileCompleted: isFinanceOrOffice ? true : false,
       employmentType: employmentType || 'Permanent / Full-Time',
       status: status || 'Active',
       joiningDate: joiningDate || new Date().toISOString().split('T')[0],
@@ -232,8 +241,8 @@ exports.updateStaff = async (req, res) => {
     }
 
     const allowedUpdates = [
-      'name', 'phone', 'department', 'designation', 'role', 'employmentType', 
-      'status', 'joiningDate', 'qualification', 'experience', 'bloodGroup', 
+      'name', 'phone', 'department', 'designation', 'role', 'employmentType',
+      'status', 'joiningDate', 'qualification', 'experience', 'bloodGroup',
       'dob', 'address', 'emergencyContact', 'avatarBg', 'classTeacherOf', 'password', 'profileImage',
       'netSetExamStatus', 'netSetExamCertificate', 'netSetCertificateName',
       'aadhaar', 'pan', 'bankAccountNo', 'bankName', 'ifscCode', 'bankBranch',

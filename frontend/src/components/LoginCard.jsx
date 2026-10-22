@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { BACKEND_URL, getKnownDepartments } from '../apiConfig';
-import { 
-  GraduationCap, 
-  Lock, 
-  Mail, 
-  Eye, 
-  EyeOff, 
+import {
+  GraduationCap,
+  Lock,
+  Mail,
+  Eye,
+  EyeOff,
   ArrowRight,
   Building2,
   Users,
@@ -17,9 +17,9 @@ import {
   ChevronDown,
   ShieldCheck,
   Calendar,
-  Sparkles,
   Phone,
-  User
+  User,
+  IndianRupee
 } from 'lucide-react';
 import CollegeLogo from './CollegeLogo';
 
@@ -28,9 +28,9 @@ const API_BASE = BACKEND_URL;
 const DEPARTMENTS = getKnownDepartments();
 
 export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
-  // Primary portal selection: 'Student' or staff/admin roles ('SuperAdmin' | 'Admin' | 'Staff')
+  // Primary portal selection: 'Student' or staff/admin roles ('SuperAdmin' | 'Admin' | 'Accountant' | 'Staff')
   const [activeRole, setActiveRole] = useState(initialRole);
-  
+
   // 'login' | 'signup' for Staff
   const [staffMode, setStaffMode] = useState('login');
 
@@ -64,7 +64,7 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
           setDepartmentsList(names.length > 0 ? names : getKnownDepartments());
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // ── Shared state ──────────────────────────────────────────────
@@ -74,23 +74,23 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
 
   // Faculty and Admin sub-roles
   const facultyRoles = [
-    { 
-      id: 'SuperAdmin', 
-      label: 'Super Admin', 
-      icon: ShieldCheck, 
-      badge: 'All Access' 
+    {
+      id: 'SuperAdmin',
+      label: 'Super Admin',
+      icon: ShieldCheck,
+      badge: 'All Access'
     },
-    { 
-      id: 'Admin', 
-      label: 'Principal', 
-      icon: Building2, 
-      badge: 'Admin' 
+    {
+      id: 'Admin',
+      label: 'Principal',
+      icon: Building2,
+      badge: 'Admin'
     },
-    { 
-      id: 'Staff', 
-      label: 'Faculty & Staff', 
-      icon: Users, 
-      badge: 'Teachers & Office' 
+    {
+      id: 'Staff',
+      label: 'Faculty & Staff',
+      icon: Users,
+      badge: 'Teachers & Office'
     }
   ];
 
@@ -145,8 +145,8 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
         const adminRes = await fetch(`${API_BASE}/api/auth/admin/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            email: cleanIdentifier.toLowerCase(), 
+          body: JSON.stringify({
+            email: cleanIdentifier.toLowerCase(),
             password,
             expectedRole: 'SuperAdmin'
           })
@@ -167,8 +167,8 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
         const adminRes = await fetch(`${API_BASE}/api/auth/admin/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            email: cleanIdentifier.toLowerCase(), 
+          body: JSON.stringify({
+            email: cleanIdentifier.toLowerCase(),
             password,
             expectedRole: 'Admin'
           })
@@ -198,21 +198,40 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
           const initials = s.name
             ? s.name.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
             : 'ST';
-          
-          const resolvedRole = s.role || (
-            s.designation === 'Accountant' || s.department?.includes('Account') ? 'Accountant' :
-            s.designation === 'Office Staff' || s.department?.includes('Office') ? 'Office Staff' :
-            'Staff'
-          );
-          const isFinanceStaff = resolvedRole === 'Accountant' || resolvedRole === 'Office Staff';
+
+          let resolvedRole = s.role;
+          const isHodUser = s.role === 'HOD' || 
+                            (s.designation && s.designation.toUpperCase().includes('HOD')) || 
+                            (s.role && s.role.toUpperCase().includes('HOD'));
+
+          if (isHodUser) {
+            resolvedRole = 'HOD';
+          } else if (s.role === 'Accountant' || s.designation === 'Accountant' || (s.department && s.department.toLowerCase().includes('account'))) {
+            resolvedRole = 'Accountant';
+          } else if (s.role === 'Office Staff' || s.designation === 'Office Staff' || (s.department && s.department.toLowerCase().includes('office'))) {
+            resolvedRole = 'Office Staff';
+          } else if (!resolvedRole || resolvedRole === 'Staff') {
+            resolvedRole = 'Staff';
+          }
+
+          const isFinanceStaff = resolvedRole === 'Accountant' || resolvedRole === 'Office Staff' || s.canViewFees === true;
+
+          if (isFinanceStaff) {
+            sessionStorage.setItem('vcas_activeNav', 'Fees');
+            sessionStorage.setItem('vcas_selectedFeeType', 'Fee Structure');
+          }
 
           onLoginSuccess({
             ...s,
             role: resolvedRole,
+            isHod: isHodUser,
+            canAllocateTasks: isHodUser || Boolean(s.canAllocateTasks),
+            canHandleLeaves: isHodUser || Boolean(s.canHandleLeaves),
             canViewFees: isFinanceStaff,
+            isProfileCompleted: isFinanceStaff ? true : Boolean(s.isProfileCompleted),
             subjects: s.subjects || (s.classes ? s.classes.map(c => c.code) : []),
-            avatarColor: s.avatarBg || (resolvedRole === 'Accountant' ? 'from-amber-600 to-orange-600' : resolvedRole === 'Office Staff' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'),
-            avatarInitials: s.avatarText || initials
+            avatarColor: s.avatarBg || (isHodUser ? 'from-purple-600 to-indigo-600' : resolvedRole === 'Accountant' ? 'from-amber-600 to-orange-600' : resolvedRole === 'Office Staff' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'),
+            avatarInitials: s.avatarText || (isHodUser ? 'HOD' : initials)
           });
         } else {
           setErrorMsg(data.message || 'Invalid staff email/ID or password.');
@@ -257,20 +276,33 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
 
       if (response.ok && data.success) {
         const s = data.staff;
+        const isHodUser = signup.staffRole === 'HOD' || 
+                          (signup.designation && signup.designation.toUpperCase().includes('HOD')) ||
+                          (s?.designation && s.designation.toUpperCase().includes('HOD'));
+
         const initials = s.name
           ? s.name.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
-          : (signup.staffRole === 'Accountant' ? 'ACC' : signup.staffRole === 'Office Staff' ? 'OS' : 'ST');
-        
-        const effectiveRole = signup.staffRole || 'Staff';
+          : (isHodUser ? 'HOD' : signup.staffRole === 'Accountant' ? 'ACC' : signup.staffRole === 'Office Staff' ? 'OS' : 'ST');
+
+        const effectiveRole = isHodUser ? 'HOD' : (signup.staffRole || 'Staff');
         const isFinanceStaff = effectiveRole === 'Accountant' || effectiveRole === 'Office Staff';
+
+        if (isFinanceStaff) {
+          sessionStorage.setItem('vcas_activeNav', 'Fees');
+          sessionStorage.setItem('vcas_selectedFeeType', 'Fee Structure');
+        }
 
         onLoginSuccess({
           ...s,
           role: effectiveRole,
+          designation: signup.designation || (isHodUser ? 'Head of Department' : 'Faculty'),
+          isHod: isHodUser,
+          canAllocateTasks: isHodUser,
+          canHandleLeaves: isHodUser,
           canViewFees: isFinanceStaff,
           isProfileCompleted: isFinanceStaff ? true : false,
           subjects: [],
-          avatarColor: s.avatarBg || (effectiveRole === 'Accountant' ? 'from-amber-600 to-orange-600' : effectiveRole === 'Office Staff' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'),
+          avatarColor: s.avatarBg || (isHodUser ? 'from-purple-600 to-indigo-600' : effectiveRole === 'Accountant' ? 'from-amber-600 to-orange-600' : effectiveRole === 'Office Staff' ? 'from-emerald-600 to-teal-600' : 'from-blue-600 to-indigo-600'),
           avatarInitials: s.avatarText || initials
         });
       } else {
@@ -287,7 +319,7 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
 
   return (
     <div className="w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl bg-white border border-slate-200/80 p-6 sm:p-8 text-slate-800 transition-all duration-300">
-      
+
       {/* Brand Header */}
       <div className="flex flex-col items-center text-center mb-5">
         <CollegeLogo size="lg" showText={false} className="mb-2" />
@@ -302,11 +334,10 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
         <button
           type="button"
           onClick={() => handleRoleSelect('Student')}
-          className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            isStudentPortal
+          className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${isStudentPortal
               ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
-          }`}
+            }`}
         >
           <GraduationCap className="w-4 h-4" />
           <span>🎓 Student Portal</span>
@@ -314,11 +345,10 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
         <button
           type="button"
           onClick={() => handleRoleSelect(activeRole === 'Student' ? 'SuperAdmin' : activeRole)}
-          className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            !isStudentPortal
+          className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${!isStudentPortal
               ? 'bg-[#0f1e3c] text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
-          }`}
+            }`}
         >
           <Building2 className="w-4 h-4" />
           <span>🏛️ Faculty & Admin</span>
@@ -368,11 +398,10 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
                   key={role.id}
                   type="button"
                   onClick={() => handleRoleSelect(role.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 ${
-                    isActive
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 ${isActive
                       ? 'bg-white text-blue-600 shadow-xs border border-slate-200/60 font-black'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                  }`}
+                    }`}
                 >
                   <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
                   {role.label}
@@ -389,11 +418,10 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
           <button
             type="button"
             onClick={() => { setStaffMode('login'); setErrorMsg(''); setSuccessMsg(''); }}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-              staffMode === 'login'
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${staffMode === 'login'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-indigo-700 hover:bg-indigo-100/60'
-            }`}
+              }`}
           >
             <LogIn className="w-3.5 h-3.5" />
             Sign In
@@ -401,11 +429,10 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
           <button
             type="button"
             onClick={() => { setStaffMode('signup'); setErrorMsg(''); setSuccessMsg(''); }}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-              staffMode === 'signup'
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${staffMode === 'signup'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-indigo-700 hover:bg-indigo-100/60'
-            }`}
+              }`}
           >
             <UserPlus className="w-3.5 h-3.5" />
             Sign Up
@@ -497,6 +524,7 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:outline-none"
               >
                 <option value="Staff">Teaching Faculty</option>
+                <option value="HOD">Head of Department (HOD)</option>
                 <option value="Accountant">Accountant</option>
                 <option value="Office Staff">Office Staff</option>
                 <option value="Tamil">Tamil</option>
@@ -505,6 +533,32 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
                 <option value="Office">Office</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-800 mb-1">
+              Designation *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Head of Department (HOD), Assistant Professor"
+              value={signup.designation}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSignup(prev => ({
+                  ...prev,
+                  designation: val,
+                  staffRole: val.toUpperCase().includes('HOD') ? 'HOD' : prev.staffRole
+                }));
+              }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:border-indigo-500"
+            />
+            {(signup.staffRole === 'HOD' || (signup.designation && signup.designation.toUpperCase().includes('HOD'))) && (
+              <p className="text-[11px] text-purple-700 font-bold mt-1 bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1 flex items-center gap-1.5">
+                <span>⭐</span> HOD Account: Staff Task Allocation, Staff Leave Approvals & Timetable Management enabled.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -552,7 +606,7 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
       {/* ─────────────────────────────────────────────────────────── */}
       {(isStudentPortal || activeRole !== 'Staff' || staffMode === 'login') && (
         <form onSubmit={handleLogin} className="space-y-4 text-xs animate-fadeIn">
-          
+
           {/* Identifier Input (Reg No for Student / Email for Others) */}
           <div>
             <label className="block text-xs font-black text-slate-800 mb-1.5 flex items-center justify-between">
@@ -560,10 +614,10 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
                 {isStudentPortal
                   ? 'Roll Number (Roll No) *'
                   : activeRole === 'Staff'
-                  ? 'Staff Email Address or Staff ID *'
-                  : activeRole === 'Admin'
-                  ? 'Principal Email Address *'
-                  : 'Super Admin Email Address *'}
+                    ? 'Staff Email Address or Staff ID *'
+                    : activeRole === 'Admin'
+                      ? 'Principal Email Address *'
+                      : 'Super Admin Email Address *'}
               </span>
               {isStudentPortal && (
                 <span className="text-[10px] text-blue-700 font-extrabold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
@@ -643,9 +697,9 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
             </label>
             <a
               href="#forgot-password"
-              onClick={(e) => { 
-                e.preventDefault(); 
-                alert(isStudentPortal ? 'Please contact the college academic office with your Reg No to verify your Date of Birth.' : 'Please contact the Super Administrator to reset your password.'); 
+              onClick={(e) => {
+                e.preventDefault();
+                alert(isStudentPortal ? 'Please contact the college academic office with your Reg No to verify your Date of Birth.' : 'Please contact the Super Administrator to reset your password.');
               }}
               className="text-xs text-blue-600 hover:text-blue-700 font-semibold hover:underline transition-all"
             >
@@ -657,11 +711,10 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full mt-2 py-3.5 px-4 text-white rounded-xl text-xs sm:text-sm font-black shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 ${
-              isStudentPortal
+            className={`w-full mt-2 py-3.5 px-4 text-white rounded-xl text-xs sm:text-sm font-black shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 ${isStudentPortal
                 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-500/20 hover:shadow-blue-500/30'
                 : 'bg-gradient-to-r from-[#0f1e3c] to-[#1e3a6f] hover:from-[#162a52] hover:to-[#274887]'
-            }`}
+              }`}
           >
             {isLoading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -669,13 +722,13 @@ export default function LoginCard({ onLoginSuccess, initialRole = 'Student' }) {
               <>
                 <LogIn className="w-4 h-4" />
                 <span>
-                  {isStudentPortal 
-                    ? 'Sign In to Student Portal' 
-                    : activeRole === 'Staff' 
-                    ? 'Sign In to Staff Portal' 
-                    : activeRole === 'Admin' 
-                    ? 'Sign In to Principal Portal' 
-                    : 'Sign In to Super Admin Portal'}
+                  {isStudentPortal
+                    ? 'Sign In to Student Portal'
+                    : activeRole === 'Staff'
+                      ? 'Sign In to Staff Portal'
+                      : activeRole === 'Admin'
+                        ? 'Sign In to Principal Portal'
+                        : 'Sign In to Super Admin Portal'}
                 </span>
                 <ArrowRight className="w-4 h-4 ml-1" />
               </>

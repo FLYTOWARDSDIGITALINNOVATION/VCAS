@@ -168,7 +168,18 @@ export default function LeaveManagement() {
         String(item.leaveType || '').toLowerCase().includes(q) ||
         String(item.department || '').toLowerCase().includes(q)
       );
-      const matchStatus = selectedStatus === 'All' || (item.status || '').toLowerCase() === selectedStatus.toLowerCase();
+      let matchStatus = selectedStatus === 'All';
+      if (!matchStatus) {
+        if (selectedStatus === 'Pending HOD') {
+          matchStatus = item.status === 'Pending HOD' || item.status === 'Pending';
+        } else if (selectedStatus === 'Pending Principal') {
+          matchStatus = item.status === 'Pending Principal';
+        } else if (selectedStatus === 'Pending MD') {
+          matchStatus = item.status === 'Pending MD';
+        } else {
+          matchStatus = (item.status || '').toLowerCase() === selectedStatus.toLowerCase();
+        }
+      }
       const matchDept = selectedDept === 'All' || selectedDept === 'All Departments' || item.department === selectedDept;
       return matchSearch && matchStatus && matchDept;
     });
@@ -272,20 +283,64 @@ export default function LeaveManagement() {
     }
   };
 
-  const statusBadge = (status) => {
+  const handleStageApproval = async (leaveId, stage, action, remarks = '') => {
+    setActionLoadingId(leaveId);
+    try {
+      const res = await fetch(`${API_BASE}/leave/${leaveId}/stage-approval`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage,
+          action,
+          approvedBy: `Admin (${stage})`,
+          remarks
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Leave ${action.toLowerCase()} by ${stage}!`);
+        fetchLeaves();
+      } else {
+        alert(data.message || 'Failed to update leave stage');
+      }
+    } catch (err) {
+      alert('Error updating leave stage: ' + err.message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const statusBadge = (item) => {
+    const status = typeof item === 'string' ? item : (item?.status || 'Pending');
     if (status === 'Approved') {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-          Approved
+          Fully Approved (MD)
         </span>
       );
     }
-    if (status === 'Pending') {
+    if (status === 'Pending MD') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 animate-pulse">
+          <Clock3 className="w-3.5 h-3.5 text-purple-600" />
+          Pending MD
+        </span>
+      );
+    }
+    if (status === 'Pending Principal') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">
+          <Clock3 className="w-3.5 h-3.5 text-blue-600" />
+          Pending Principal
+        </span>
+      );
+    }
+    if (status === 'Pending HOD' || status === 'Pending') {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
           <Clock3 className="w-3.5 h-3.5 text-amber-600" />
-          Pending Review
+          Pending HOD
         </span>
       );
     }
@@ -457,13 +512,13 @@ export default function LeaveManagement() {
           />
         </div>
 
-        {/* Status Filter */}
-        <div className="flex items-center gap-2">
-          {['All', 'Pending', 'Approved', 'Rejected'].map((status) => (
+        {/* Multi-Tier Status Filter */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {['All', 'Pending HOD', 'Pending Principal', 'Pending MD', 'Approved', 'Rejected'].map((status) => (
             <button
               key={status}
               onClick={() => setSelectedStatus(status)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 selectedStatus === status
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -578,14 +633,30 @@ export default function LeaveManagement() {
                       </td>
 
                       {/* Status */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
-                        {statusBadge(item.status)}
+                      <td className="py-4 px-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <div>{statusBadge(item)}</div>
+                          {/* 3-Tier Step Tracker */}
+                          <div className="flex items-center gap-1 text-[9px] font-extrabold text-slate-500 pt-0.5">
+                            <span className={`px-1.5 py-0.5 rounded ${item.hodApproval?.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : item.hodApproval?.status === 'Rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>
+                              HOD {item.hodApproval?.status === 'Approved' ? '✓' : item.hodApproval?.status === 'Rejected' ? '✕' : '⏳'}
+                            </span>
+                            <span>➔</span>
+                            <span className={`px-1.5 py-0.5 rounded ${item.principalApproval?.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : item.principalApproval?.status === 'Rejected' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-500'}`}>
+                              Principal {item.principalApproval?.status === 'Approved' ? '✓' : item.principalApproval?.status === 'Rejected' ? '✕' : (item.status === 'Pending Principal' ? '⏳' : '○')}
+                            </span>
+                            <span>➔</span>
+                            <span className={`px-1.5 py-0.5 rounded ${item.mdApproval?.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : item.mdApproval?.status === 'Rejected' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-500'}`}>
+                              MD {item.mdApproval?.status === 'Approved' ? '✓' : item.mdApproval?.status === 'Rejected' ? '✕' : (item.status === 'Pending MD' ? '⏳' : '○')}
+                            </span>
+                          </div>
+                        </div>
                       </td>
 
                       {/* Approver */}
                       <td className="py-4 px-5 text-slate-500 whitespace-nowrap">
                         <div className="font-medium text-slate-700 text-xs">
-                          {item.approvedBy && item.approvedBy !== '-' ? item.approvedBy : '—'}
+                          {item.approvedBy && item.approvedBy !== '-' ? item.approvedBy : 'In Review'}
                         </div>
                         {item.remarks && (
                           <p className="text-[10px] text-slate-400 italic mt-0.5">
@@ -598,16 +669,49 @@ export default function LeaveManagement() {
                       <td className="py-4 px-5 text-right whitespace-nowrap">
                         {isActioning ? (
                           <Loader2 className="w-4 h-4 animate-spin text-blue-600 inline-block" />
-                        ) : item.status === 'Pending' ? (
-                          <div className="flex items-center justify-end gap-2">
-                            {/* Accept Button */}
+                        ) : String(item.status || '').toLowerCase().startsWith('pending') ? (
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            {/* Step-by-Step Approval Buttons */}
+                            {(!item.status || item.status === 'Pending' || item.status === 'Pending HOD') && (
+                              <button
+                                onClick={() => handleStageApproval(item._id, 'HOD', 'Approved')}
+                                title="Recommend / Approve as HOD (Moves to Principal)"
+                                className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[11px] rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3 h-3 stroke-[3]" />
+                                <span>HOD Approve</span>
+                              </button>
+                            )}
+
+                            {item.status === 'Pending Principal' && (
+                              <button
+                                onClick={() => handleStageApproval(item._id, 'Principal', 'Approved')}
+                                title="Approve as Principal (Moves to MD)"
+                                className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3 h-3 stroke-[3]" />
+                                <span>Principal Approve</span>
+                              </button>
+                            )}
+
+                            {item.status === 'Pending MD' && (
+                              <button
+                                onClick={() => handleStageApproval(item._id, 'MD', 'Approved')}
+                                title="Finalize and Approve as MD"
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3 h-3 stroke-[3]" />
+                                <span>MD Approve</span>
+                              </button>
+                            )}
+
+                            {/* Direct Institutional Full Approve button */}
                             <button
-                              onClick={() => handleUpdateStatus(item._id, 'Approved')}
-                              title="Accept / Approve Leave"
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all"
+                              onClick={() => handleUpdateStatus(item._id, 'Approved', 'Direct Institutional Approval')}
+                              title="Direct Full Approval (All Stages)"
+                              className="px-2 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 font-bold text-[10px] rounded-xl border border-slate-200 transition-all cursor-pointer"
                             >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Accept</span>
+                              Direct All
                             </button>
 
                             {/* Reject Button */}
@@ -617,10 +721,9 @@ export default function LeaveManagement() {
                                 setRejectReason('');
                               }}
                               title="Reject Leave"
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 active:scale-95 font-bold text-xs rounded-xl border border-rose-200 transition-all"
+                              className="px-2 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[11px] rounded-xl border border-rose-200 transition-all cursor-pointer"
                             >
-                              <X className="w-3.5 h-3.5" />
-                              <span>Reject</span>
+                              <X className="w-3 h-3" />
                             </button>
                           </div>
                         ) : (

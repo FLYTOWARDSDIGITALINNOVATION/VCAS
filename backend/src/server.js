@@ -30,6 +30,7 @@ const settingsRoutes         = require('./routes/settingsRoutes');
 const examRoutes             = require('./routes/examRoutes');
 const feeStructureRoutes     = require('./routes/feeStructureRoutes');
 const tcRoutes               = require('./routes/tcRoutes');
+const staffTaskRoutes        = require('./routes/staffTaskRoutes');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -107,6 +108,7 @@ app.use(['/api/settings', '/settings'],                settingsRoutes);
 app.use(['/api/exams', '/exams'],                      examRoutes);
 app.use(['/api/fee-structure', '/fee-structure'],      feeStructureRoutes);
 app.use(['/api/tc', '/tc'],                            tcRoutes);
+app.use(['/api/staff-tasks', '/staff-tasks'],          staffTaskRoutes);
 
 // 404
 app.use((req, res) => {

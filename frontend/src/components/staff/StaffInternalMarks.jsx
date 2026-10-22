@@ -20,6 +20,11 @@ import {
   Sparkles,
   BookMarked,
   ChevronDown,
+  Send,
+  Check,
+  ShieldCheck,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
 
@@ -35,6 +40,7 @@ export const DEFAULT_MAX_CONFIG = {
   cia1: 50,
   cia2: 50,
   model: 75,
+  seminar: 10,
   project: 20,
   assignment1: 5,
   assignment2: 5,
@@ -55,6 +61,7 @@ export const DEFAULT_PASS_CONFIG = {
   cia1: 20,
   cia2: 20,
   model: 30,
+  seminar: 4,
   project: 8,
   assignment1: 2,
   assignment2: 2,
@@ -68,9 +75,11 @@ export const DEFAULT_PASS_CONFIG = {
 export const ASSESSMENT_COMPONENTS = [
   { id: "all",          label: "College Register Sheet (Official Layout)", shortLabel: "📋 Full Register Sheet", defaultMax: 100, defaultPass: 40 },
   { id: "st",           label: "Snap Tests (ST 1 - 4)",                    shortLabel: "Snap Tests (ST1-4)",    defaultMax: 20,  defaultPass: 8  },
-  { id: "it",           label: "Internal Tests (IT 1 & IT 2)",             shortLabel: "Internal (IT1-2)",      defaultMax: 25,  defaultPass: 10 },
+  { id: "it",           label: "Internal 1 (IT 1)",                        shortLabel: "Internal 1",            defaultMax: 25,  defaultPass: 10 },
+  { id: "it2",          label: "Internal 2 (IT 2)",                        shortLabel: "Internal 2",            defaultMax: 25,  defaultPass: 10 },
   { id: "model",        label: "Model Examination",                        shortLabel: "Model Exam",            defaultMax: 75,  defaultPass: 30 },
-  { id: "project",      label: "Project / Seminar",                        shortLabel: "Project / Seminar",     defaultMax: 20,  defaultPass: 8  },
+  { id: "seminar",      label: "Seminar Presentation",                     shortLabel: "Seminar",               defaultMax: 10,  defaultPass: 4  },
+  { id: "project",      label: "Project Work",                             shortLabel: "Project",               defaultMax: 20,  defaultPass: 8  },
   { id: "assignment",   label: "Assignments (1 to 4)",                     shortLabel: "Assignments (1-4)",     defaultMax: 5,   defaultPass: 2  },
   { id: "consolidated", label: "Consolidated Internal Marks",              shortLabel: "Final CIA Summary",     defaultMax: 25,  defaultPass: 10 },
 ];
@@ -110,6 +119,34 @@ export default function StaffInternalMarks({ staffUser }) {
   const [successMsg,    setSuccessMsg]    = useState("");
   const [errorMsg,      setErrorMsg]      = useState("");
   const reqIdRef = useRef(0);
+
+  // Multi-tier stage approval (Order: HOD -> Principal -> MD)
+  const [approvalStatus, setApprovalStatus] = useState("Draft");
+  const [currentApprovalStage, setCurrentApprovalStage] = useState("Staff");
+  const [hodApproval, setHodApproval] = useState(null);
+  const [principalApproval, setPrincipalApproval] = useState(null);
+  const [mdApproval, setMdApproval] = useState(null);
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [isProcessingStage, setIsProcessingStage] = useState(false);
+
+  // Download filtered marks modal (Subject-wise, Department-wise, Year-wise)
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadFilterType, setDownloadFilterType] = useState('subject');
+  const [downloadDept, setDownloadDept] = useState(staffUser?.department || 'Computer Science');
+  const [downloadYear, setDownloadYear] = useState('I Year');
+  const [downloadSemester, setDownloadSemester] = useState('1');
+  const [isExporting, setIsExporting] = useState(false);
+
+  const isHod = staffUser?.designation?.toUpperCase()?.includes('HOD') || 
+                staffUser?.role?.toUpperCase()?.includes('HOD') || 
+                staffUser?.role?.toUpperCase()?.includes('ADMIN') || 
+                staffUser?.isHod === true;
+  const isPrincipal = staffUser?.role?.toUpperCase()?.includes('PRINCIPAL') || 
+                      staffUser?.designation?.toUpperCase()?.includes('PRINCIPAL') || 
+                      staffUser?.role?.toUpperCase()?.includes('ADMIN');
+  const isMD = staffUser?.role?.toUpperCase()?.includes('SUPERADMIN') || 
+               staffUser?.role?.toUpperCase()?.includes('MD') || 
+               staffUser?.designation?.toUpperCase()?.includes('MD');
 
   // Configurable Max & Pass Marks per component
   const [maxMarksConfig, setMaxMarksConfig] = useState({ ...DEFAULT_MAX_CONFIG });
@@ -231,6 +268,11 @@ export default function StaffInternalMarks({ staffUser }) {
         } catch {
           // ignore
         }
+        setApprovalStatus(json.data.approvalStatus || (json.data.isLocked ? 'Pending HOD' : 'Draft'));
+        setCurrentApprovalStage(json.data.currentApprovalStage || 'Staff');
+        setHodApproval(json.data.hodApproval || null);
+        setPrincipalApproval(json.data.principalApproval || null);
+        setMdApproval(json.data.mdApproval || null);
         if (json.data.maxMarks) {
           const loadedMax = { ...DEFAULT_MAX_CONFIG, ...json.data.maxMarks };
           setMaxMarksConfig(loadedMax);
@@ -244,6 +286,11 @@ export default function StaffInternalMarks({ staffUser }) {
       } else {
         setStudents([]);
         setIsLocked(false);
+        setApprovalStatus('Draft');
+        setCurrentApprovalStage('Staff');
+        setHodApproval(null);
+        setPrincipalApproval(null);
+        setMdApproval(null);
       }
     } catch {
       if (currentReqId === reqIdRef.current) {
@@ -445,6 +492,7 @@ export default function StaffInternalMarks({ staffUser }) {
       cia1:         Math.max(1, Number(tempMaxConfig.cia1) || 50),
       cia2:         Math.max(1, Number(tempMaxConfig.cia2) || 50),
       model:        Math.max(1, Number(tempMaxConfig.model) || 75),
+      seminar:      Math.max(1, Number(tempMaxConfig.seminar) || 10),
       project:      Math.max(1, Number(tempMaxConfig.project) || 20),
       assignment1:  Math.max(1, Number(tempMaxConfig.assignment1) || 5),
       assignment2:  Math.max(1, Number(tempMaxConfig.assignment2) || 5),
@@ -466,6 +514,7 @@ export default function StaffInternalMarks({ staffUser }) {
       cia1:         Math.min(validatedMax.cia1, Math.max(0, Number(tempPassConfig.cia1) || 20)),
       cia2:         Math.min(validatedMax.cia2, Math.max(0, Number(tempPassConfig.cia2) || 20)),
       model:        Math.min(validatedMax.model, Math.max(0, Number(tempPassConfig.model) || 30)),
+      seminar:      Math.min(validatedMax.seminar, Math.max(0, Number(tempPassConfig.seminar) || 4)),
       project:      Math.min(validatedMax.project, Math.max(0, Number(tempPassConfig.project) || 8)),
       assignment1:  Math.min(validatedMax.assignment1, Math.max(0, Number(tempPassConfig.assignment1) || 2)),
       assignment2:  Math.min(validatedMax.assignment2, Math.max(0, Number(tempPassConfig.assignment2) || 2)),
@@ -511,6 +560,137 @@ export default function StaffInternalMarks({ staffUser }) {
       toast("Error saving exam criteria.", true);
     } finally {
       setSavingCriteria(false);
+    }
+  };
+
+  // -- Multi-Tier Approval Handlers (Order: HOD -> Principal -> MD) ---
+  const handleSubmitForApproval = async () => {
+    if (!subjectCode) return;
+    setIsSubmittingApproval(true);
+    try {
+      await handleSave();
+      const res = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/submit-approval`, {
+        method: "POST"
+      });
+      const json = await res.json();
+      if (json.success) {
+        setApprovalStatus(json.data?.approvalStatus || 'Pending HOD');
+        setCurrentApprovalStage(json.data?.currentApprovalStage || 'HOD');
+        setIsLocked(true);
+        if (json.data?.hodApproval) setHodApproval(json.data.hodApproval);
+        if (json.data?.principalApproval) setPrincipalApproval(json.data.principalApproval);
+        if (json.data?.mdApproval) setMdApproval(json.data.mdApproval);
+        toast("Marksheet submitted for approval! Stage 1: HOD Review & Recommendation.");
+      } else {
+        toast(json.message || "Failed to submit for approval.", true);
+      }
+    } catch {
+      toast("Server error submitting for approval.", true);
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  };
+
+  const handleStageApprovalAction = async (stage, action) => {
+    if (!subjectCode) return;
+    const remarks = window.prompt(`Enter remarks for ${stage} ${action}:`, action === 'Approved' ? 'Verified and approved' : '');
+    if (remarks === null) return;
+
+    setIsProcessingStage(true);
+    try {
+      const res = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/stage-approval`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage,
+          action,
+          approvedBy: staffUser?.name || stage,
+          remarks: remarks || ''
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setApprovalStatus(json.data.approvalStatus);
+        setCurrentApprovalStage(json.data.currentApprovalStage);
+        if (json.data.isLocked !== undefined) setIsLocked(json.data.isLocked);
+        if (json.data.hodApproval) setHodApproval(json.data.hodApproval);
+        if (json.data.principalApproval) setPrincipalApproval(json.data.principalApproval);
+        if (json.data.mdApproval) setMdApproval(json.data.mdApproval);
+        toast(json.message);
+      } else {
+        toast(json.message || "Stage approval failed.", true);
+      }
+    } catch {
+      toast("Server error processing stage approval.", true);
+    } finally {
+      setIsProcessingStage(false);
+    }
+  };
+
+  // -- Marks Download Handler (Subject-wise, Department-wise, Year-wise) --
+  const handleDownloadMarks = async (type = 'subject') => {
+    setIsExporting(true);
+    try {
+      let marksheetsToExport = [];
+      let filename = '';
+
+      if (type === 'subject') {
+        if (!subjectCode) {
+          toast("Please select a subject to download marks.", true);
+          setIsExporting(false);
+          return;
+        }
+        marksheetsToExport = [{
+          subjectCode,
+          subjectName,
+          department: staffUser?.department || '',
+          students
+        }];
+        filename = `Internal_Marks_${subjectCode}_${new Date().toISOString().slice(0, 10)}`;
+      } else {
+        let queryUrl = `${API}/internal-marks/export/filtered?`;
+        if (type === 'department') {
+          queryUrl += `department=${encodeURIComponent(downloadDept)}`;
+          filename = `Internal_Marks_Dept_${downloadDept.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`;
+        } else if (type === 'year') {
+          queryUrl += `year=${encodeURIComponent(downloadYear)}&semester=${encodeURIComponent(downloadSemester)}`;
+          filename = `Internal_Marks_${downloadYear.replace(/\s+/g, '_')}_Sem${downloadSemester}_${new Date().toISOString().slice(0, 10)}`;
+        }
+        const res = await fetch(queryUrl);
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          marksheetsToExport = json.data;
+        } else {
+          toast(`No marks records found for this ${type} selection.`, true);
+          setIsExporting(false);
+          return;
+        }
+      }
+
+      // Generate comprehensive CSV with separate Model and Seminar marks
+      let csv = `Department,Subject Code,Subject Name,Semester,S.NO,Roll No,Student Name,ST 1,ST 2,ST 3,ST 4,IT 1,IT 2,Model Exam,Seminar,Project,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
+      marksheetsToExport.forEach(ms => {
+        (ms.students || []).forEach((s, idx) => {
+          const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
+          const it2 = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
+          csv += `"${ms.department || ''}","${ms.subjectCode || ''}","${ms.subjectName || ''}",${ms.semester || 1},${idx + 1},"${s.rollNo}","${s.name}",${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${it1},${it2},${s.model ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
+        });
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${filename}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast(`Marks downloaded successfully (${type}-wise)!`);
+      setShowDownloadModal(false);
+    } catch (err) {
+      toast("Error downloading marks: " + err.message, true);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -623,11 +803,11 @@ export default function StaffInternalMarks({ staffUser }) {
 
   // -- Export CSV with all register columns ---------------------------
   const handleExport = () => {
-    let csv = `S.NO,Roll No,Student Name,ST 1,ST 2,ST 3,ST 4,IT 1,IT 2,Model Exam,Project/Seminar,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
+    let csv = `S.NO,Roll No,Student Name,ST 1,ST 2,ST 3,ST 4,IT 1,IT 2,Model Exam,Seminar,Project,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
     students.forEach((s, idx) => {
       const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
       const it2 = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
-      csv += `${idx + 1},"${s.rollNo}","${s.name}",${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${it1},${it2},${s.model ?? "-"},${s.project ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
+      csv += `${idx + 1},"${s.rollNo}","${s.name}",${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${it1},${it2},${s.model ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
     });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url  = URL.createObjectURL(blob);
@@ -664,6 +844,7 @@ export default function StaffInternalMarks({ staffUser }) {
           <td style="text-align: center;">${it1}</td>
           <td style="text-align: center;">${it2}</td>
           <td style="text-align: center;">${s.model !== null && s.model !== undefined ? s.model : ''}</td>
+          <td style="text-align: center;">${s.seminar !== null && s.seminar !== undefined ? s.seminar : ''}</td>
           <td style="text-align: center;">${s.project !== null && s.project !== undefined ? s.project : ''}</td>
           <td style="text-align: center;">${s.assignment1 !== null && s.assignment1 !== undefined ? s.assignment1 : ''}</td>
           <td style="text-align: center;">${s.assignment2 !== null && s.assignment2 !== undefined ? s.assignment2 : ''}</td>
@@ -736,11 +917,11 @@ export default function StaffInternalMarks({ staffUser }) {
             justify-content: space-between;
             font-weight: bold;
             font-size: 9.5pt;
-            padding: 0 30px;
+            padding: 0 20px;
           }
           .sig-box {
             text-align: center;
-            width: 180px;
+            width: 160px;
             border-top: 1px solid #000;
             padding-top: 4px;
           }
@@ -764,8 +945,9 @@ export default function StaffInternalMarks({ staffUser }) {
               <th rowspan="2" style="width: 170px;">STUDENTS NAME</th>
               <th colspan="4">SNAP TEST</th>
               <th colspan="2">INTERNAL</th>
-              <th rowspan="2" style="width: 50px;">MODEL</th>
-              <th rowspan="2" style="width: 80px;">PROJECT /<br/>SEMINAR</th>
+              <th rowspan="2" style="width: 45px;">MODEL</th>
+              <th rowspan="2" style="width: 45px;">SEMINAR</th>
+              <th rowspan="2" style="width: 45px;">PROJECT</th>
               <th colspan="4">ASSIGNMENT</th>
             </tr>
             <tr>
@@ -790,6 +972,7 @@ export default function StaffInternalMarks({ staffUser }) {
           <div class="sig-box">STAFF IN-CHARGE</div>
           <div class="sig-box">HOD</div>
           <div class="sig-box">PRINCIPAL</div>
+          <div class="sig-box">MANAGING DIRECTOR (MD)</div>
         </div>
 
         <script>
@@ -836,6 +1019,16 @@ export default function StaffInternalMarks({ staffUser }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Download Marks (Subject / Dept / Year) */}
+          <button
+            onClick={() => setShowDownloadModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 shadow-xs transition-all cursor-pointer"
+            title="Download marks subject-wise, department-wise, or year-wise"
+          >
+            <Download className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Download Marks (Subject / Dept / Year)</span>
+          </button>
+
           {subjectCode && (
             <>
               <button
@@ -864,6 +1057,18 @@ export default function StaffInternalMarks({ staffUser }) {
                 <Download className="w-3.5 h-3.5 text-slate-500" /> Export CSV
               </button>
 
+              {(!isLocked || approvalStatus === 'Draft' || approvalStatus === 'Rejected') && (
+                <button
+                  onClick={handleSubmitForApproval}
+                  disabled={isSubmittingApproval || students.length === 0}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                  title="Submit marksheet for official HOD approval"
+                >
+                  {isSubmittingApproval ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>Submit for HOD Approval</span>
+                </button>
+              )}
+
               <button
                 onClick={handleToggleLock}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${isLocked ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300" : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20"}`}
@@ -874,6 +1079,217 @@ export default function StaffInternalMarks({ staffUser }) {
           )}
         </div>
       </div>
+
+      {/* Multi-Tier Approval Stepper Banner (Staff Entry -> HOD -> Principal -> MD) */}
+      {subjectCode && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">
+                  Official Verification & Approval Pipeline
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Strict Order: <b className="text-indigo-600">Staff In-Charge ➔ HOD Review ➔ Principal Approval ➔ MD Endorsement</b>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase text-slate-400">Current Status:</span>
+              <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full border ${
+                approvalStatus === 'Approved'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : approvalStatus === 'Rejected'
+                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}>
+                {approvalStatus}
+              </span>
+            </div>
+          </div>
+
+          {/* Stepper Pipeline */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 my-4">
+            {/* Step 1: Staff */}
+            <div className={`p-3 rounded-xl border ${students.length > 0 ? 'bg-blue-50/60 border-blue-200 text-blue-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+              <div className="flex items-center justify-between text-[11px] font-extrabold">
+                <span>1. Staff In-Charge</span>
+                {students.length > 0 ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Clock className="w-3.5 h-3.5 text-slate-400" />}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 truncate">{staffName || "Staff Entry"}</div>
+              <div className="text-[10px] font-bold text-blue-700 mt-0.5">
+                {isLocked || approvalStatus !== 'Draft' ? 'Marks Finalized' : 'Marks Entry Draft'}
+              </div>
+            </div>
+
+            {/* Step 2: HOD */}
+            <div className={`p-3 rounded-xl border ${
+              hodApproval?.status === 'Approved'
+                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+                : approvalStatus === 'Pending HOD'
+                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                : 'bg-slate-50 border-slate-200 text-slate-600'
+            }`}>
+              <div className="flex items-center justify-between text-[11px] font-extrabold">
+                <span>2. HOD Review</span>
+                {hodApproval?.status === 'Approved' ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                ) : approvalStatus === 'Pending HOD' ? (
+                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                ) : (
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                )}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 truncate">{hodApproval?.approvedBy || "Department HOD"}</div>
+              <div className="text-[10px] font-bold mt-0.5">
+                {hodApproval?.status === 'Approved' ? (
+                  <span className="text-emerald-700">✓ Recommended</span>
+                ) : hodApproval?.status === 'Rejected' ? (
+                  <span className="text-rose-700">✕ Rejected</span>
+                ) : approvalStatus === 'Pending HOD' ? (
+                  <span className="text-amber-700">Awaiting HOD</span>
+                ) : (
+                  <span className="text-slate-400">Queue Stage 1</span>
+                )}
+              </div>
+            </div>
+
+            {/* Step 3: Principal */}
+            <div className={`p-3 rounded-xl border ${
+              principalApproval?.status === 'Approved'
+                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+                : approvalStatus === 'Pending Principal'
+                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                : 'bg-slate-50 border-slate-200 text-slate-600'
+            }`}>
+              <div className="flex items-center justify-between text-[11px] font-extrabold">
+                <span>3. Principal Approval</span>
+                {principalApproval?.status === 'Approved' ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                ) : approvalStatus === 'Pending Principal' ? (
+                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                ) : (
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                )}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 truncate">{principalApproval?.approvedBy || "College Principal"}</div>
+              <div className="text-[10px] font-bold mt-0.5">
+                {principalApproval?.status === 'Approved' ? (
+                  <span className="text-emerald-700">✓ Approved</span>
+                ) : principalApproval?.status === 'Rejected' ? (
+                  <span className="text-rose-700">✕ Rejected</span>
+                ) : approvalStatus === 'Pending Principal' ? (
+                  <span className="text-amber-700">Awaiting Principal</span>
+                ) : (
+                  <span className="text-slate-400">Queue Stage 2</span>
+                )}
+              </div>
+            </div>
+
+            {/* Step 4: Managing Director */}
+            <div className={`p-3 rounded-xl border ${
+              mdApproval?.status === 'Approved'
+                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+                : approvalStatus === 'Pending MD'
+                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                : 'bg-slate-50 border-slate-200 text-slate-600'
+            }`}>
+              <div className="flex items-center justify-between text-[11px] font-extrabold">
+                <span>4. Managing Director (MD)</span>
+                {mdApproval?.status === 'Approved' ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                ) : approvalStatus === 'Pending MD' ? (
+                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                ) : (
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                )}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 truncate">{mdApproval?.approvedBy || "Managing Director"}</div>
+              <div className="text-[10px] font-bold mt-0.5">
+                {mdApproval?.status === 'Approved' ? (
+                  <span className="text-emerald-700">✓ Fully Endorsed</span>
+                ) : mdApproval?.status === 'Rejected' ? (
+                  <span className="text-rose-700">✕ Rejected</span>
+                ) : approvalStatus === 'Pending MD' ? (
+                  <span className="text-amber-700">Awaiting MD</span>
+                ) : (
+                  <span className="text-slate-400">Final Stage</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Contextual Action Bar for HOD, Principal, and MD */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="text-[11px] text-slate-500">
+              Role Permission Detected: <b className="text-slate-800">{isMD ? 'Managing Director' : isPrincipal ? 'Principal' : isHod ? 'Head of Department (HOD)' : 'Staff In-Charge'}</b>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* HOD Action Buttons */}
+              {isHod && approvalStatus === 'Pending HOD' && (
+                <>
+                  <button
+                    disabled={isProcessingStage}
+                    onClick={() => handleStageApprovalAction('HOD', 'Rejected')}
+                    className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Reject to Staff
+                  </button>
+                  <button
+                    disabled={isProcessingStage}
+                    onClick={() => handleStageApprovalAction('HOD', 'Approved')}
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  >
+                    ✓ HOD Recommend & Pass to Principal
+                  </button>
+                </>
+              )}
+
+              {/* Principal Action Buttons */}
+              {isPrincipal && approvalStatus === 'Pending Principal' && (
+                <>
+                  <button
+                    disabled={isProcessingStage}
+                    onClick={() => handleStageApprovalAction('Principal', 'Rejected')}
+                    className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    disabled={isProcessingStage}
+                    onClick={() => handleStageApprovalAction('Principal', 'Approved')}
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  >
+                    ✓ Principal Approve & Forward to MD
+                  </button>
+                </>
+              )}
+
+              {/* MD Action Buttons */}
+              {isMD && approvalStatus === 'Pending MD' && (
+                <>
+                  <button
+                    disabled={isProcessingStage}
+                    onClick={() => handleStageApprovalAction('MD', 'Rejected')}
+                    className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    disabled={isProcessingStage}
+                    onClick={() => handleStageApprovalAction('MD', 'Approved')}
+                    className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  >
+                    ★ Final MD Approval & Sign
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Centered Notifications Popup */}
       {(successMsg || errorMsg) && (
@@ -1125,11 +1541,14 @@ export default function StaffInternalMarks({ staffUser }) {
                       <th colSpan={2} className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-100/80 text-indigo-950 font-black tracking-wider">
                         INTERNAL
                       </th>
-                      <th rowSpan={2} className="px-3 py-2 text-center border-r border-slate-300 bg-purple-100/80 text-purple-950 font-black min-w-[70px]">
+                      <th rowSpan={2} className="px-2 py-2 text-center border-r border-slate-300 bg-purple-100/80 text-purple-950 font-black min-w-[65px]">
                         MODEL
                       </th>
-                      <th rowSpan={2} className="px-3 py-2 text-center border-r border-slate-300 bg-emerald-100/80 text-emerald-950 font-black min-w-[110px]">
-                        PROJECT / SEMINAR
+                      <th rowSpan={2} className="px-2 py-2 text-center border-r border-slate-300 bg-teal-100/80 text-teal-950 font-black min-w-[65px]">
+                        SEMINAR
+                      </th>
+                      <th rowSpan={2} className="px-2 py-2 text-center border-r border-slate-300 bg-emerald-100/80 text-emerald-950 font-black min-w-[65px]">
+                        PROJECT
                       </th>
                       <th colSpan={4} className="px-2 py-1.5 text-center border-r border-slate-300 bg-amber-100/80 text-amber-950 font-black tracking-wider">
                         ASSIGNMENT
@@ -1215,18 +1634,29 @@ export default function StaffInternalMarks({ staffUser }) {
                               disabled={isLocked}
                               value={s.model !== null && s.model !== undefined ? s.model : ""}
                               onChange={(e) => handleCellChange(s.rollNo, 'model', e.target.value)}
-                              className="w-14 text-center py-1 px-1 rounded-md text-xs font-bold border border-slate-200 bg-white text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                              className="w-12 text-center py-1 px-1 rounded-md text-xs font-bold border border-slate-200 bg-white text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
                               placeholder="-"
                             />
                           </td>
-                          {/* PROJECT / SEMINAR */}
+                          {/* SEMINAR */}
+                          <td className="p-1 text-center border-r border-slate-200 bg-teal-50/20">
+                            <input
+                              type="text"
+                              disabled={isLocked}
+                              value={s.seminar !== null && s.seminar !== undefined ? s.seminar : ""}
+                              onChange={(e) => handleCellChange(s.rollNo, 'seminar', e.target.value)}
+                              className="w-12 text-center py-1 px-1 rounded-md text-xs font-bold border border-slate-200 bg-white text-slate-900 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                              placeholder="-"
+                            />
+                          </td>
+                          {/* PROJECT */}
                           <td className="p-1 text-center border-r border-slate-200 bg-emerald-50/20">
                             <input
                               type="text"
                               disabled={isLocked}
                               value={s.project !== null && s.project !== undefined ? s.project : ""}
                               onChange={(e) => handleCellChange(s.rollNo, 'project', e.target.value)}
-                              className="w-14 text-center py-1 px-1 rounded-md text-xs font-bold border border-slate-200 bg-white text-slate-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                              className="w-12 text-center py-1 px-1 rounded-md text-xs font-bold border border-slate-200 bg-white text-slate-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
                               placeholder="-"
                             />
                           </td>
@@ -1254,7 +1684,7 @@ export default function StaffInternalMarks({ staffUser }) {
                     })}
                     {filteredStudents.length === 0 && (
                       <tr>
-                        <td colSpan={15} className="py-12 text-center text-slate-500 text-xs">
+                        <td colSpan={16} className="py-12 text-center text-slate-500 text-xs">
                           <p className="font-bold text-slate-800 text-sm">No students in marksheet for {subjectCode}</p>
                           <p className="text-slate-400 mt-1">Use "Add Student" above to populate the student list.</p>
                         </td>
@@ -1489,29 +1919,37 @@ export default function StaffInternalMarks({ staffUser }) {
             </div>
 
             {/* Official Signature Verification Strip matching physical sheet */}
-            <div className="p-4 bg-slate-50/80 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center text-xs font-bold text-slate-700">
+            <div className="p-4 bg-slate-50/80 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs font-bold text-slate-700">
               <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs">
-                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-sm">
+                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-xs truncate">
                   {staffName || "P. KALARANI"}
                 </div>
-                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[10px] text-slate-500 font-extrabold mt-1">
+                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[9px] text-slate-500 font-extrabold mt-1 truncate">
                   STAFF IN-CHARGE
                 </div>
               </div>
               <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs">
-                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-sm">
-                  {isLocked ? "Dr. Meenakshi C" : "Verified"}
+                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-xs truncate">
+                  {hodApproval?.approvedBy || (isLocked ? "Dr. Meenakshi C" : "Pending HOD")}
                 </div>
-                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[10px] text-slate-500 font-extrabold mt-1">
-                  HEAD OF DEPARTMENT (HOD)
+                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[9px] text-slate-500 font-extrabold mt-1 truncate">
+                  HOD APPROVAL
                 </div>
               </div>
               <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs">
-                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-sm">
-                  {isLocked ? "Dr. K. Sundararajan" : "Approved"}
+                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-xs truncate">
+                  {principalApproval?.approvedBy || (isLocked && hodApproval?.status === 'Approved' ? "Dr. K. Sundararajan" : "Pending Principal")}
                 </div>
-                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[10px] text-slate-500 font-extrabold mt-1">
+                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[9px] text-slate-500 font-extrabold mt-1 truncate">
                   PRINCIPAL
+                </div>
+              </div>
+              <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs">
+                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-xs truncate">
+                  {mdApproval?.approvedBy || (approvalStatus === 'Approved' ? "Managing Director" : "Pending MD")}
+                </div>
+                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[9px] text-slate-500 font-extrabold mt-1 truncate">
+                  MANAGING DIRECTOR (MD)
                 </div>
               </div>
             </div>
@@ -1727,6 +2165,164 @@ export default function StaffInternalMarks({ staffUser }) {
                   <>
                     <Lock className="w-4 h-4" />
                     <span>Confirm & Submit</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Download Filtered Marks Modal (Subject-wise, Department-wise, Year-wise) */}
+      {showDownloadModal && (
+        <ModalPortal isOpen={showDownloadModal} onClose={() => !isExporting && setShowDownloadModal(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-7 max-w-lg w-full animate-in fade-in zoom-in-95 text-left my-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200/70 flex items-center justify-center text-indigo-600 shadow-xs">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">Download Internal Marks</h3>
+                  <p className="text-xs text-slate-500 font-medium">Export official marks registers in CSV/Excel format</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isExporting && setShowDownloadModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Filter Mode Selector */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl my-4 text-xs font-bold">
+              {[
+                { id: 'subject', label: 'Subject-wise' },
+                { id: 'department', label: 'Department-wise' },
+                { id: 'year', label: 'Year-wise' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setDownloadFilterType(tab.id)}
+                  className={`py-2 px-3 rounded-lg transition-all text-center cursor-pointer ${
+                    downloadFilterType === tab.id
+                      ? 'bg-white text-indigo-700 shadow-xs font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Content for each tab */}
+            <div className="space-y-4 my-2">
+              {downloadFilterType === 'subject' && (
+                <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-2">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-900">Active Subject Export</div>
+                  <div className="text-sm font-extrabold text-slate-900">
+                    {subjectCode ? `${subjectCode} — ${subjectName || 'Course Register'}` : 'No subject loaded currently'}
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Includes all 16 register columns: Snap Tests (1-4), Internal Tests (1-2), Model Exam, Seminar Presentation, Project Work, Assignments (1-4), and Final Scaled CIA marks.
+                  </p>
+                  {!subjectCode && (
+                    <div className="text-xs text-rose-600 font-semibold mt-1">
+                      ⚠️ Please select or load a subject first, or switch to Department/Year-wise download.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {downloadFilterType === 'department' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      Select Department
+                    </label>
+                    <select
+                      value={downloadDept}
+                      onChange={(e) => setDownloadDept(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    >
+                      {['Computer Science', 'Computer Applications (BCA)', 'Commerce', 'Mathematics', 'English', 'Business Administration (BBA)', 'Physics', 'Chemistry'].map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-500">
+                    Exports marksheets for <b>all subjects and classes</b> registered under the selected department.
+                  </div>
+                </div>
+              )}
+
+              {downloadFilterType === 'year' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                        Academic Year
+                      </label>
+                      <select
+                        value={downloadYear}
+                        onChange={(e) => setDownloadYear(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="I Year">I Year (First Year)</option>
+                        <option value="II Year">II Year (Second Year)</option>
+                        <option value="III Year">III Year (Third Year)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                        Semester
+                      </label>
+                      <select
+                        value={downloadSemester}
+                        onChange={(e) => setDownloadSemester(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        {[1, 2, 3, 4, 5, 6].map(s => (
+                          <option key={s} value={String(s)}>Semester {s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-500">
+                    Exports marks records for all students matching <b>{downloadYear} • Semester {downloadSemester}</b> across all subjects.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center gap-3 pt-4 border-t border-slate-100 mt-4">
+              <button
+                type="button"
+                disabled={isExporting}
+                onClick={() => setShowDownloadModal(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={isExporting || (downloadFilterType === 'subject' && !subjectCode)}
+                onClick={() => handleDownloadMarks(downloadFilterType)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-xs font-bold text-white shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Preparing Download...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Download {downloadFilterType === 'subject' ? 'Subject CSV' : downloadFilterType === 'department' ? 'Dept CSV' : 'Year CSV'}</span>
                   </>
                 )}
               </button>

@@ -133,7 +133,9 @@ const DESIGNATIONS = [
   'HOD',
   'Lecturer',
   'Lab Assistant',
-  'Visiting Professor'
+  'Visiting Professor',
+  'Accountant',
+  'Office Staff'
 ];
 
 const EMPLOYMENT_TYPES = [
@@ -771,7 +773,11 @@ is authorized to export or issue this credential sheet.
   // Dynamic list of departments combining real added departments
   const dynamicDepartments = useMemo(() => {
     const deptNames = departmentsList.map(d => (typeof d === 'string' ? d : d?.name || d?.departmentName || '').trim()).filter(Boolean);
-    const unique = Array.from(new Set(deptNames.length > 0 ? deptNames : getKnownDepartments()));
+    const unique = Array.from(new Set([
+      ...(deptNames.length > 0 ? deptNames : getKnownDepartments()),
+      'Accounts & Finance',
+      'Administrative Office'
+    ]));
     return ['All Departments', ...unique];
   }, [departmentsList]);
 
@@ -1482,7 +1488,9 @@ is authorized to export or issue this credential sheet.
                         const r = e.target.value;
                         setFormData(prev => ({
                           ...prev,
-                          role: r
+                          role: r,
+                          designation: r === 'Accountant' ? 'Accountant' : r === 'Office Staff' ? 'Office Staff' : (prev.designation === 'Accountant' || prev.designation === 'Office Staff' ? 'Assistant Professor' : prev.designation),
+                          department: r === 'Accountant' ? 'Accounts & Finance' : r === 'Office Staff' ? 'Administrative Office' : prev.department
                         }));
                       }}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
@@ -1850,7 +1858,9 @@ is authorized to export or issue this credential sheet.
                         const r = e.target.value;
                         setFormData(prev => ({
                           ...prev,
-                          role: r
+                          role: r,
+                          designation: r === 'Accountant' ? 'Accountant' : r === 'Office Staff' ? 'Office Staff' : (prev.designation === 'Accountant' || prev.designation === 'Office Staff' ? 'Assistant Professor' : prev.designation),
+                          department: r === 'Accountant' ? 'Accounts & Finance' : r === 'Office Staff' ? 'Administrative Office' : prev.department
                         }));
                       }}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"

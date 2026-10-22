@@ -8,6 +8,7 @@ const {
   updateStaffOverrideQuota,
   applyLeave,
   updateLeaveStatus,
+  approveLeaveStage,
   cancelLeave
 } = require('../controllers/leaveController');
 
@@ -29,8 +30,11 @@ router.get('/staff/:staffId', getStaffLeaves);
 // POST   /api/leave/staff/:staffId            - Apply for leave
 router.post('/staff/:staffId', applyLeave);
 
-// PATCH  /api/leave/:id/status                - Approve or Reject leave (HoD / Admin)
+// PATCH  /api/leave/:id/status                - Direct Approve or Reject leave (Admin)
 router.patch('/:id/status', updateLeaveStatus);
+
+// PATCH  /api/leave/:id/stage-approval        - Multi-tier stage approval (HOD -> Principal -> MD)
+router.patch('/:id/stage-approval', approveLeaveStage);
 
 // DELETE /api/leave/:id                       - Cancel a pending leave application
 router.delete('/:id', cancelLeave);

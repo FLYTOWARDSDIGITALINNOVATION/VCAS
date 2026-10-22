@@ -40,6 +40,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   const [statusFilter, setStatusFilter] = useState('All');
   const [courseFilter, setCourseFilter] = useState('All');
   const [feeTypeFilter, setFeeTypeFilter] = useState('All');
+  const [yearFilter, setYearFilter] = useState('All');
+  const [batchFilter, setBatchFilter] = useState('All');
   
   // Toast Notification
   const [toastMessage, setToastMessage] = useState(null);
@@ -59,21 +61,41 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     studentName: '',
     rollNo: '',
     course: '',
-    academicYear: '',
+    year: 'I',
+    batch: '2025-2028',
+    academicYear: '2025 - 2026',
     feeType: 'Exam Fees',
     routeStop: '',
     vehicleNo: '',
+    driverName: '',
+    dailyPetrol: '',
+    mileage: '',
     amount: '',
     dueDate: '',
     fine: '0',
     totalAmount: '',
     paymentMode: 'UPI',
+    upiId: '',
+    accountHolderName: '',
     paymentDate: new Date().toISOString().split('T')[0],
     referenceNo: '',
     balance: '0'
   };
 
   const [entryFormData, setEntryFormData] = useState(emptyEntryForm);
+  const [adminDepartments, setAdminDepartments] = useState([]);
+
+  // Fetch only admin-added departments
+  useEffect(() => {
+    fetch(`${API_BASE}/departments`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          setAdminDepartments(json.data);
+        }
+      })
+      .catch(e => console.warn('Notice fetching admin departments in FeeManagement:', e));
+  }, []);
 
   // Sync prop changes with active view/tab
   useEffect(() => {
@@ -244,6 +266,11 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           feeType: feeTypeName,
           baseAmount: baseAmount,
           fine: fineAmount,
+          routeStop: entryFormData.routeStop || rec.routeStop || '',
+          vehicleNo: entryFormData.vehicleNo || rec.vehicleNo || '',
+          driverName: entryFormData.driverName || rec.driverName || '',
+          dailyPetrol: entryFormData.dailyPetrol || rec.dailyPetrol || '',
+          mileage: entryFormData.mileage || rec.mileage || '',
           paidFee: newPaid,
           paidFeeDisplay: newPaid >= 1000 ? `₹${(newPaid / 1000).toFixed(0)}K` : `₹${newPaid}`,
           totalFee: newTotal,
@@ -273,7 +300,15 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         name: studentName || 'Student',
         rollNo: rollNo || 'STU001',
         course,
+        year: entryFormData.year || 'I',
+        batch: entryFormData.batch || '2025-2028',
+        academicYear: entryFormData.academicYear || '2025 - 2026',
         feeType: feeTypeName,
+        routeStop: entryFormData.routeStop || '',
+        vehicleNo: entryFormData.vehicleNo || '',
+        driverName: entryFormData.driverName || '',
+        dailyPetrol: entryFormData.dailyPetrol || '',
+        mileage: entryFormData.mileage || '',
         baseAmount: baseAmount,
         fine: fineAmount,
         totalFee: totalAmount,
@@ -285,6 +320,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         dueDate: entryFormData.dueDate || payDate,
         lastPaymentDate: payDate,
         paymentMode: entryFormData.paymentMode || 'Online',
+        upiId: entryFormData.upiId || '',
+        accountHolderName: entryFormData.accountHolderName || '',
         paymentRef: txnRef
       };
       finalRecords = [newRec, ...nextRecords];
@@ -463,12 +500,17 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       String(rec.id || '').toLowerCase().includes(term) ||
       String(rec.rollNo || '').toLowerCase().includes(term) ||
       String(rec.course || '').toLowerCase().includes(term) ||
-      String(rec.feeType || '').toLowerCase().includes(term)
+      String(rec.feeType || '').toLowerCase().includes(term) ||
+      String(rec.driverName || '').toLowerCase().includes(term) ||
+      String(rec.vehicleNo || '').toLowerCase().includes(term) ||
+      String(rec.routeStop || '').toLowerCase().includes(term)
     );
     const matchesStatus = statusFilter === 'All' || String(rec.status || '').toLowerCase() === statusFilter.toLowerCase();
     const matchesCourse = courseFilter === 'All' || String(rec.course || '').toLowerCase().includes(courseFilter.toLowerCase());
     const matchesFeeType = feeTypeFilter === 'All' || rec.feeType === feeTypeFilter;
-    return matchesSearch && matchesStatus && matchesCourse && matchesFeeType;
+    const matchesYear = yearFilter === 'All' || String(rec.year || '').toLowerCase() === yearFilter.toLowerCase();
+    const matchesBatch = batchFilter === 'All' || String(rec.batch || rec.academicYear || '').toLowerCase().includes(batchFilter.toLowerCase());
+    return matchesSearch && matchesStatus && matchesCourse && matchesFeeType && matchesYear && matchesBatch;
   });
 
   return (
@@ -746,19 +788,47 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-medium">Course:</span>
+                <span className="text-xs text-slate-500 font-medium">Department:</span>
                 <select
                   value={courseFilter}
                   onChange={(e) => setCourseFilter(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-blue-500"
+                  className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  <option value="All">All Courses</option>
-                  <option value="B.Com">B.Com</option>
-                  <option value="B.Sc CS">B.Sc CS</option>
-                  <option value="B.A. English">B.A. English</option>
-                  <option value="BBA">BBA</option>
-                  <option value="BCA">BCA</option>
-                  <option value="M.Com">M.Com</option>
+                  <option value="All">All Departments</option>
+                  {adminDepartments.map(d => (
+                    <option key={d._id || d.code || d.name} value={d.code || d.name}>
+                      {d.name} {d.code ? `(${d.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Year:</span>
+                <select
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="All">All Years</option>
+                  <option value="I">I Year</option>
+                  <option value="II">II Year</option>
+                  <option value="III">III Year</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Batch:</span>
+                <select
+                  value={batchFilter}
+                  onChange={(e) => setBatchFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="All">All Batches</option>
+                  <option value="2025-2028">2025–2028</option>
+                  <option value="2024-2027">2024–2027</option>
+                  <option value="2023-2026">2023–2026</option>
+                  <option value="2022-2025">2022–2025</option>
                 </select>
               </div>
             </div>
@@ -1165,6 +1235,24 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 <span className="text-slate-500 font-medium">Due Date:</span>
                 <span className="font-bold text-slate-800">{selectedStudentForView.dueDate}</span>
               </div>
+              {selectedStudentForView.driverName && (
+                <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="text-slate-500 font-medium">Driver Name:</span>
+                  <span className="font-bold text-slate-800">{selectedStudentForView.driverName}</span>
+                </div>
+              )}
+              {selectedStudentForView.dailyPetrol && (
+                <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="text-slate-500 font-medium">Daily Petrol:</span>
+                  <span className="font-bold text-emerald-700">{selectedStudentForView.dailyPetrol}</span>
+                </div>
+              )}
+              {selectedStudentForView.mileage && (
+                <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="text-slate-500 font-medium">Mileage:</span>
+                  <span className="font-bold text-blue-700">{selectedStudentForView.mileage}</span>
+                </div>
+              )}
               <div className="flex justify-between py-2">
                 <span className="text-slate-500 font-medium">Status:</span>
                 <span className="font-bold text-slate-800">{selectedStudentForView.status}</span>
@@ -1217,6 +1305,15 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 <div><span className="font-bold">Student ID:</span> {selectedReceiptStudent.id}</div>
                 <div><span className="font-bold">Course:</span> {selectedReceiptStudent.course}</div>
                 <div><span className="font-bold">Fee Category:</span> {selectedReceiptStudent.feeType}</div>
+                {selectedReceiptStudent.driverName && (
+                  <div><span className="font-bold">Driver:</span> {selectedReceiptStudent.driverName}</div>
+                )}
+                {selectedReceiptStudent.dailyPetrol && (
+                  <div><span className="font-bold">Daily Petrol:</span> {selectedReceiptStudent.dailyPetrol}</div>
+                )}
+                {selectedReceiptStudent.mileage && (
+                  <div><span className="font-bold">Mileage:</span> {selectedReceiptStudent.mileage}</div>
+                )}
                 <div><span className="font-bold">Date:</span> {new Date().toLocaleDateString()}</div>
               </div>
 

@@ -140,7 +140,14 @@ export default function App() {
               student={currentUser}
               onLogout={handleLogout}
             />
-          ) : currentUser?.role === 'Staff' ? (
+          ) : (currentUser?.role === 'Staff' && 
+               currentUser?.role !== 'Accountant' && 
+               currentUser?.role !== 'Office Staff' && 
+               currentUser?.designation !== 'Accountant' && 
+               currentUser?.designation !== 'Office Staff' && 
+               !currentUser?.canViewFees && 
+               !currentUser?.department?.toLowerCase()?.includes('account') &&
+               !currentUser?.department?.toLowerCase()?.includes('office')) ? (
             !currentUser?.isProfileCompleted ? (
               <StaffFirstTimeSetup 
                 staffUser={currentUser} 

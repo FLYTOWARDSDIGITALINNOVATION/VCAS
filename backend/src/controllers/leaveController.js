@@ -45,9 +45,12 @@ exports.getAllLeaves = async (req, res) => {
     const allLeaves = await Leave.find(filter).sort({ createdAt: -1 });
 
     const totalApplications = await Leave.countDocuments();
-    const pendingCount = await Leave.countDocuments({ status: { $regex: /^pending$/i } });
+    const pendingCount = await Leave.countDocuments({ status: { $regex: /^pending/i } });
+    const pendingHodCount = await Leave.countDocuments({ status: 'Pending HOD' });
+    const pendingPrincipalCount = await Leave.countDocuments({ status: 'Pending Principal' });
+    const pendingMdCount = await Leave.countDocuments({ status: 'Pending MD' });
     const approvedCount = await Leave.countDocuments({ status: { $regex: /^approved$/i } });
-    const rejectedCount = await Leave.countDocuments({ status: { $regex: /^rejected$/i } });
+    const rejectedCount = await Leave.countDocuments({ status: { $regex: /^rejected/i } });
 
     // Also fetch the current active policy to return in summary
     const policy = await getActivePolicy();
@@ -59,6 +62,9 @@ exports.getAllLeaves = async (req, res) => {
       summary: {
         totalApplications,
         pendingCount,
+        pendingHodCount,
+        pendingPrincipalCount,
+        pendingMdCount,
         approvedCount,
         rejectedCount,
         activePolicy: {
@@ -289,7 +295,11 @@ exports.applyLeave = async (req, res) => {
       toDate,
       days: calculatedDays,
       reason: reason.trim(),
-      status: 'Pending',
+      status: 'Pending HOD',
+      currentStage: 'HOD',
+      hodApproval: { status: 'Pending', approvedBy: '', remarks: '' },
+      principalApproval: { status: 'Pending', approvedBy: '', remarks: '' },
+      mdApproval: { status: 'Pending', approvedBy: '', remarks: '' },
       approvedBy: '-'
     });
 
@@ -321,6 +331,14 @@ exports.updateLeaveStatus = async (req, res) => {
     }
 
     leave.status = status;
+    if (status === 'Approved') {
+      leave.currentStage = 'Completed';
+      leave.hodApproval = { status: 'Approved', approvedBy: approvedBy || 'Admin', approvedAt: new Date(), remarks: remarks || 'Direct Institutional Approval' };
+      leave.principalApproval = { status: 'Approved', approvedBy: approvedBy || 'Principal', approvedAt: new Date(), remarks: remarks || 'Direct Institutional Approval' };
+      leave.mdApproval = { status: 'Approved', approvedBy: approvedBy || 'MD', approvedAt: new Date(), remarks: remarks || 'Direct Institutional Approval' };
+    } else if (status === 'Rejected') {
+      leave.currentStage = 'Rejected';
+    }
     if (approvedBy !== undefined) leave.approvedBy = approvedBy;
     if (remarks !== undefined) leave.remarks = remarks;
 
@@ -333,6 +351,63 @@ exports.updateLeaveStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating leave status:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @route  PATCH /api/leave/:id/stage-approval
+// @desc   Multi-level stage approval (HOD -> Principal -> MD)
+exports.approveLeaveStage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stage, action, approvedBy, remarks } = req.body; // stage: 'HOD' | 'Principal' | 'MD', action: 'Approved' | 'Rejected'
+
+    const leave = await Leave.findById(id);
+    if (!leave) {
+      return res.status(404).json({ success: false, message: 'Leave record not found.' });
+    }
+
+    const reviewerName = approvedBy || stage;
+    const reviewRemarks = remarks || '';
+
+    if (action === 'Rejected') {
+      if (stage === 'HOD') {
+        leave.hodApproval = { status: 'Rejected', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+      } else if (stage === 'Principal') {
+        leave.principalApproval = { status: 'Rejected', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+      } else if (stage === 'MD') {
+        leave.mdApproval = { status: 'Rejected', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+      }
+      leave.status = 'Rejected';
+      leave.currentStage = 'Rejected';
+      leave.remarks = reviewRemarks ? `Rejected by ${stage}: ${reviewRemarks}` : `Rejected by ${stage}`;
+    } else {
+      // Stage Approved
+      if (stage === 'HOD') {
+        leave.hodApproval = { status: 'Approved', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+        leave.status = 'Pending Principal';
+        leave.currentStage = 'Principal';
+      } else if (stage === 'Principal') {
+        leave.principalApproval = { status: 'Approved', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+        leave.status = 'Pending MD';
+        leave.currentStage = 'MD';
+      } else if (stage === 'MD') {
+        leave.mdApproval = { status: 'Approved', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+        leave.status = 'Approved';
+        leave.currentStage = 'Completed';
+        leave.approvedBy = reviewerName;
+      }
+    }
+
+    await leave.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Leave ${action === 'Rejected' ? 'rejected' : 'approved'} by ${stage}. Current status: ${leave.status}.`,
+      leave
+    });
+  } catch (error) {
+    console.error('Error in approveLeaveStage:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

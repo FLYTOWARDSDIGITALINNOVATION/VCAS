@@ -8,8 +8,14 @@ const {
   listMarksheets,
   syncAssignmentsToInternalMarks,
   getAllInternalMarks,
-  getStudentInternalMarks
+  getStudentInternalMarks,
+  submitMarksheetForApproval,
+  approveMarksheetStage,
+  getFilteredInternalMarks
 } = require("../controllers/internalMarksController");
+
+// GET  /api/internal-marks/export/filtered               - filter marks by subject, dept, year for download
+router.get("/export/filtered",                     getFilteredInternalMarks);
 
 // GET  /api/internal-marks                              - get all marksheets for Admin & Super-Admin
 router.get("/",                                   getAllInternalMarks);
@@ -28,6 +34,12 @@ router.post("/:staffId/:subjectCode/sync-assignments", syncAssignmentsToInternal
 
 // POST /api/internal-marks/:staffId/:subjectCode/save   - upsert marks & max marks
 router.post("/:staffId/:subjectCode/save",        saveMarksheet);
+
+// POST /api/internal-marks/:staffId/:subjectCode/submit-approval - submit marksheet for approval (HOD stage)
+router.post("/:staffId/:subjectCode/submit-approval", submitMarksheetForApproval);
+
+// PATCH /api/internal-marks/:staffId/:subjectCode/stage-approval - multi-tier stage approval (HOD -> Principal -> MD)
+router.patch("/:staffId/:subjectCode/stage-approval", approveMarksheetStage);
 
 // PATCH /api/internal-marks/:staffId/:subjectCode/max-marks - update max marks settings
 router.patch("/:staffId/:subjectCode/max-marks",  updateMaxMarks);

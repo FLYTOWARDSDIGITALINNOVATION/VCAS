@@ -130,42 +130,55 @@ exports.staffLogin = async (req, res) => {
     }
 
     // Check if profile is already considered complete (e.g. if qualification & phone exist)
-    const isCompleted = Boolean(staff.isProfileCompleted || (staff.qualification && staff.phone && staff.address) || staff.role === 'Accountant' || staff.role === 'Office Staff');
+    const isAccountantOrOffice = staff.role === 'Accountant' || 
+      staff.role === 'Office Staff' || 
+      staff.designation === 'Accountant' || 
+      staff.designation === 'Office Staff' ||
+      (staff.department && (staff.department.toLowerCase().includes('account') || staff.department.toLowerCase().includes('office')));
 
-    const resolvedRole = staff.role || (staff.designation === 'Accountant' ? 'Accountant' : staff.designation === 'Office Staff' ? 'Office Staff' : 'Staff');
+    const isCompleted = Boolean(staff.isProfileCompleted || (staff.qualification && staff.phone && staff.address) || isAccountantOrOffice);
+
+    const resolvedRole = (staff.role && staff.role !== 'Staff')
+      ? staff.role
+      : (staff.designation === 'Accountant' || (staff.department && staff.department.toLowerCase().includes('account'))
+          ? 'Accountant'
+          : (staff.designation === 'Office Staff' || (staff.department && staff.department.toLowerCase().includes('office'))
+              ? 'Office Staff'
+              : (staff.role || 'Staff')));
 
     // Return complete staff profile
     res.status(200).json({
       success: true,
       message: `Welcome back, ${staff.name}!`,
       staff: {
-        _id:                staff._id,
-        staffId:            staff.staffId,
-        name:               staff.name,
-        email:              staff.email,
-        role:               resolvedRole,
-        designation:        staff.designation,
-        department:         staff.department,
-        employmentType:     staff.employmentType,
-        status:             staff.status,
-        joiningDate:        staff.joiningDate,
-        phone:              staff.phone || '',
-        qualification:      staff.qualification || '',
-        experience:         staff.experience || '',
-        bloodGroup:         staff.bloodGroup || 'O+',
-        dob:                staff.dob || '',
-        address:            staff.address || '',
-        emergencyContact:   staff.emergencyContact || '',
-        avatarBg:           staff.avatarBg || 'bg-purple-600',
-        avatarText:         staff.avatarText || getInitials(staff.name),
-        profileImage:       staff.profileImage || '',
-        netSetExamStatus:      staff.netSetExamStatus || 'Not Applicable',
+        _id: staff._id,
+        staffId: staff.staffId,
+        name: staff.name,
+        email: staff.email,
+        role: resolvedRole,
+        canViewFees: resolvedRole === 'Accountant' || resolvedRole === 'Office Staff' || staff.canViewFees === true,
+        designation: staff.designation,
+        department: staff.department,
+        employmentType: staff.employmentType,
+        status: staff.status,
+        joiningDate: staff.joiningDate,
+        phone: staff.phone || '',
+        qualification: staff.qualification || '',
+        experience: staff.experience || '',
+        bloodGroup: staff.bloodGroup || 'O+',
+        dob: staff.dob || '',
+        address: staff.address || '',
+        emergencyContact: staff.emergencyContact || '',
+        avatarBg: staff.avatarBg || 'bg-purple-600',
+        avatarText: staff.avatarText || getInitials(staff.name),
+        profileImage: staff.profileImage || '',
+        netSetExamStatus: staff.netSetExamStatus || 'Not Applicable',
         netSetExamCertificate: staff.netSetExamCertificate || '',
         netSetCertificateName: staff.netSetCertificateName || '',
-        classTeacherOf:     staff.classTeacherOf || '',
+        classTeacherOf: staff.classTeacherOf || '',
         isProfileCompleted: isCompleted,
-        classes:            staff.classes || [],
-        achievements:       staff.achievements || []
+        classes: staff.classes || [],
+        achievements: staff.achievements || []
       }
     });
   } catch (error) {
@@ -309,24 +322,24 @@ exports.staffRegister = async (req, res) => {
     const finalRole = role || (designation === 'Accountant' ? 'Accountant' : designation === 'Office Staff' ? 'Office Staff' : 'Staff');
 
     const newStaff = new Staff({
-      staffId:            finalStaffId,
-      name:               name.trim(),
-      email:              email.toLowerCase().trim(),
-      password:           password.trim(),
-      role:               finalRole,
-      designation:        designation || (finalRole === 'Accountant' ? 'Accountant' : finalRole === 'Office Staff' ? 'Office Staff' : 'Assistant Professor'),
-      department:         department.trim(),
-      phone:              phone ? phone.trim() : '',
-      qualification:      qualification ? qualification.trim() : '',
-      experience:         experience ? experience.trim() : '',
-      bloodGroup:         bloodGroup || 'O+',
-      dob:                dob || '',
-      address:            address ? address.trim() : '',
-      emergencyContact:   emergencyContact ? emergencyContact.trim() : '',
-      avatarBg:           'bg-purple-600',
-      avatarText:         getInitials(name),
+      staffId: finalStaffId,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password: password.trim(),
+      role: finalRole,
+      designation: designation || (finalRole === 'Accountant' ? 'Accountant' : finalRole === 'Office Staff' ? 'Office Staff' : 'Assistant Professor'),
+      department: department.trim(),
+      phone: phone ? phone.trim() : '',
+      qualification: qualification ? qualification.trim() : '',
+      experience: experience ? experience.trim() : '',
+      bloodGroup: bloodGroup || 'O+',
+      dob: dob || '',
+      address: address ? address.trim() : '',
+      emergencyContact: emergencyContact ? emergencyContact.trim() : '',
+      avatarBg: 'bg-purple-600',
+      avatarText: getInitials(name),
       isProfileCompleted: isCompleted,
-      classes:            []
+      classes: []
     });
 
     await newStaff.save();
@@ -396,10 +409,10 @@ exports.addAchievement = async (req, res) => {
     if (!staff) return res.status(404).json({ success: false, message: 'Staff member not found.' });
 
     staff.achievements.push({
-      title:       title.trim(),
-      category:    category || 'Award',
-      year:        year || '',
-      issuedBy:    issuedBy ? issuedBy.trim() : '',
+      title: title.trim(),
+      category: category || 'Award',
+      year: year || '',
+      issuedBy: issuedBy ? issuedBy.trim() : '',
       description: description ? description.trim() : ''
     });
 

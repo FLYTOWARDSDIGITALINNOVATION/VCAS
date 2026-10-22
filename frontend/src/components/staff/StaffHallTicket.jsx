@@ -113,6 +113,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   // Examination plan selection & typing mode states
   const [planFilterDept, setPlanFilterDept] = useState(staffUser?.department || '');
   const [planFilterSem, setPlanFilterSem] = useState(3);
+  const [semesterParity, setSemesterParity] = useState('Odd'); // 'Odd' | 'Even'
   const [planTypingExamName, setPlanTypingExamName] = useState('Semester End Theory Examinations - 2026');
 
   // Candidate instructions state (fully editable)
@@ -131,7 +132,24 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const [formAcademicYear, setFormAcademicYear] = useState('2025-2026');
   const [formDept, setFormDept] = useState(staffUser?.department || '');
   const [formSemester, setFormSemester] = useState(3);
+  const [formSemesterParity, setFormSemesterParity] = useState('Odd'); // 'Odd' | 'Even'
   const [formSection, setFormSection] = useState('All');
+
+  // Hall Grid State: 6 rows × 3 cols (manual entry)
+  const [hallGridRows, setHallGridRows] = useState(6);
+  const [hallGridCols, setHallGridCols] = useState(3);
+  const [hallGrid, setHallGrid] = useState(() =>
+    Array.from({ length: 6 }, () => Array(3).fill(''))
+  );
+  const [showHallGridModal, setShowHallGridModal] = useState(false);
+
+  // Arrear Section state
+  const [activeHallTab, setActiveHallTab] = useState('regular'); // 'regular' | 'arrear'
+  const [arrearStudents, setArrearStudents] = useState([]);
+  const [loadingArrear, setLoadingArrear] = useState(false);
+  const [arrearDept, setArrearDept] = useState(staffUser?.department || '');
+  const [arrearSearch, setArrearSearch] = useState('');
+
 
   const [hallsList, setHallsList] = useState(() => {
     try {
@@ -2210,6 +2228,16 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
               <Ticket className="w-4 h-4" />
               2. Hall Tickets &amp; Print
             </button>
+            <button
+              onClick={() => setActiveTab('arrear')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'arrear'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+            >
+              <Award className="w-4 h-4" />
+              3. Arrear Students
+            </button>
           </div>
         </div>
 
@@ -2604,6 +2632,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                       onChange={(e) => {
                         const sem = Number(e.target.value);
                         setFormSemester(sem);
+                        setFormSemesterParity(sem % 2 === 0 ? 'Even' : 'Odd');
                         setSelectedAllocationSubject('');
                         setStudentsToAllocate([]);
                         loadAvailableSubjects(formDept, sem, formSection);
@@ -2614,21 +2643,42 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Section</label>
-                    <select
-                      value={formSection}
-                      onChange={(e) => {
-                        const sec = e.target.value;
-                        setFormSection(sec);
-                        setSelectedAllocationSubject('');
-                        setStudentsToAllocate([]);
-                        loadAvailableSubjects(formDept, formSemester, sec);
-                      }}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {availableSections.map(sc => <option key={sc} value={sc}>{sc === 'All' ? 'All Sections' : `Section ${sc}`}</option>)}
-                    </select>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Odd / Even Semester</label>
+                    <div className="flex gap-1.5">
+                      {['Odd', 'Even'].map(parity => (
+                        <button
+                          key={parity}
+                          type="button"
+                          onClick={() => setFormSemesterParity(parity)}
+                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                            formSemesterParity === parity
+                              ? parity === 'Odd' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {parity === 'Odd' ? '☀️ Odd' : '🌙 Even'}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Sem {formSemester} is automatically {formSemester % 2 === 0 ? 'Even' : 'Odd'}</p>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Section</label>
+                  <select
+                    value={formSection}
+                    onChange={(e) => {
+                      const sec = e.target.value;
+                      setFormSection(sec);
+                      setSelectedAllocationSubject('');
+                      setStudentsToAllocate([]);
+                      loadAvailableSubjects(formDept, formSemester, sec);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {availableSections.map(sc => <option key={sc} value={sc}>{sc === 'All' ? 'All Sections' : `Section ${sc}`}</option>)}
+                  </select>
                 </div>
               </div>
             </div>
@@ -2727,6 +2777,57 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                   <p className="text-[11px] text-slate-400 mt-0.5">Use the input above to add the halls/rooms needed for this exam session.</p>
                 </div>
               )}
+            </div>
+
+            {/* Hall Seating Grid (6 Rows × 3 Cols, manual entry) */}
+            <div className="bg-white p-6 rounded-2xl border border-violet-200/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-violet-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center font-bold text-xs">⊞</div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-wider">Hall Seating Layout Grid</h3>
+                    <p className="text-xs text-slate-500">Manual seat entry — {hallGridRows} Rows × {hallGridCols} Cols. Enter roll nos in each seat cell.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] font-bold text-slate-500">Rows:</label>
+                  <input type="number" min={1} max={20} value={hallGridRows} onChange={e => { const r=Math.max(1,Math.min(20,Number(e.target.value))); setHallGridRows(r); setHallGrid(Array.from({length:r},(_,ri)=>Array.from({length:hallGridCols},(__,ci)=>(hallGrid[ri]&&hallGrid[ri][ci])||''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
+                  <label className="text-[11px] font-bold text-slate-500">Cols:</label>
+                  <input type="number" min={1} max={10} value={hallGridCols} onChange={e => { const c=Math.max(1,Math.min(10,Number(e.target.value))); setHallGridCols(c); setHallGrid(Array.from({length:hallGridRows},(_,ri)=>Array.from({length:c},(__,ci)=>(hallGrid[ri]&&hallGrid[ri][ci])||''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
+                  <button type="button" onClick={()=>setHallGrid(Array.from({length:hallGridRows},()=>Array(hallGridCols).fill('')))} className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200 hover:bg-rose-100">Clear</button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="border-collapse border border-slate-300 rounded-xl overflow-hidden text-xs">
+                  <thead>
+                    <tr>
+                      <th className="bg-slate-100 text-slate-500 font-black px-2 py-1.5 border border-slate-300 text-[10px]">Row</th>
+                      {Array.from({length:hallGridCols},(_,ci)=>(
+                        <th key={ci} className="bg-blue-50 text-blue-700 font-black px-2 py-1.5 border border-slate-300 min-w-[100px] text-[10px]">Col {ci+1}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({length:hallGridRows},(_,ri)=>(
+                      <tr key={ri} className={ri%2===0?'bg-white':'bg-slate-50/60'}>
+                        <td className="text-center text-[10px] font-black text-slate-500 border border-slate-200 px-2 py-1">R{ri+1}</td>
+                        {Array.from({length:hallGridCols},(__,ci)=>(
+                          <td key={ci} className="border border-slate-200 p-0.5">
+                            <input
+                              type="text"
+                              value={hallGrid[ri]?.[ci]||''}
+                              onChange={e=>{const val=e.target.value.toUpperCase();setHallGrid(prev=>{const next=prev.map(r=>[...r]);if(!next[ri])next[ri]=Array(hallGridCols).fill('');next[ri][ci]=val;return next;});}}
+                              placeholder={`R${ri+1}C${ci+1}`}
+                              className="w-full text-[10px] font-mono font-bold text-slate-800 text-center bg-transparent px-1 py-1.5 focus:outline-none focus:bg-blue-50 rounded transition-colors placeholder-slate-300"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[10px] text-slate-400 mt-2">Enter roll numbers in each cell. Default: 6×3 layout. Adjust Rows/Cols as needed.</p>
+              </div>
             </div>
 
             {/* Step 3: Subjects & Timetable Schedule to Appear */}
@@ -3428,6 +3529,167 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                   <Save className="w-4 h-4" />
                   {savingAllocation ? 'Saving Allocations...' : 'Save & Publish Hall Tickets'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ------------------- TAB 3: ARREAR STUDENTS ------------------- */}
+        {activeTab === 'arrear' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-rose-900 via-rose-800 to-red-950 text-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
+              <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-rose-500/10 to-transparent pointer-events-none" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/30 text-rose-200 border border-rose-400/30 uppercase tracking-wider">Arrear Management</span>
+                </div>
+                <h2 className="text-lg font-black text-white">Student Arrear Papers</h2>
+                <p className="text-xs text-rose-200 mt-0.5">View students with arrear subjects — S.No, Reg No, Sub Code, Sub Name, Semester, Department, Overall Count</p>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by name, reg no, subject..."
+                  value={arrearSearch}
+                  onChange={e => setArrearSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs font-medium border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+              <select
+                value={arrearDept}
+                onChange={e => setArrearDept(e.target.value)}
+                className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none min-w-[160px]"
+              >
+                <option value="">All Departments</option>
+                {availableDepts.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <button
+                onClick={async () => {
+                  setLoadingArrear(true);
+                  try {
+                    const url = arrearDept
+                      ? `${API_BASE}/students?department=${encodeURIComponent(arrearDept)}`
+                      : `${API_BASE}/students`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    const list = data.success ? (data.students || data.data || []) : [];
+                    const withArrears = list.filter(s =>
+                      (s.arrearsYetToBeCleared && s.arrearsYetToBeCleared !== '0' && s.arrearsYetToBeCleared !== '') ||
+                      (s.totalArrearsTillLastSem && s.totalArrearsTillLastSem !== '0' && s.totalArrearsTillLastSem !== '')
+                    );
+                    setArrearStudents(withArrears);
+                  } catch (e) {
+                    alert('Failed to fetch students: ' + e.message);
+                  } finally {
+                    setLoadingArrear(false);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-500/20 transition-all"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingArrear ? 'animate-spin' : ''}`} />
+                Load Arrear List
+              </button>
+            </div>
+
+            {/* Arrear Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <p className="text-xs font-black text-slate-700 uppercase tracking-wider">Arrear Students — All Subjects</p>
+                <span className="text-[11px] font-semibold text-slate-400">{arrearStudents.filter(s => {
+                  const q = arrearSearch.toLowerCase();
+                  return !q || s.name?.toLowerCase().includes(q) || s.regNo?.toLowerCase().includes(q);
+                }).length} records</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">S.No</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Reg No</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Student Name</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Department</th>
+                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">Sem</th>
+                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-rose-600 uppercase tracking-wider">Total Arrears</th>
+                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">Cleared</th>
+                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-amber-600 uppercase tracking-wider">Yet to Clear</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Arrear Subjects</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {arrearStudents.filter(s => {
+                      const q = arrearSearch.toLowerCase();
+                      return !q || s.name?.toLowerCase().includes(q) || s.regNo?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q);
+                    }).length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
+                          {loadingArrear ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <RefreshCw className="w-4 h-4 animate-spin text-rose-500" />
+                              <span className="text-sm font-semibold">Loading arrear data...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <Award className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                              <p className="font-semibold text-slate-500">No arrear students found</p>
+                              <p className="text-[11px] mt-1">Click "Load Arrear List" to fetch students with pending arrears</p>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      arrearStudents.filter(s => {
+                        const q = arrearSearch.toLowerCase();
+                        return !q || s.name?.toLowerCase().includes(q) || s.regNo?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q);
+                      }).map((s, idx) => {
+                        const totalArrears = Number(s.totalArrearsTillLastSem) || 0;
+                        const cleared = Number(s.arrearsClearedThisSem) || 0;
+                        const yetToClear = Number(s.arrearsYetToBeCleared) || (totalArrears - cleared);
+                        // Build subject list from arrearsYetToBeCleared count (placeholder since subjects stored separately)
+                        const subjectList = s.arrearSubjects || [];
+                        return (
+                          <tr key={s._id || idx} className="border-b border-slate-100 hover:bg-rose-50/30 transition-colors">
+                            <td className="px-3 py-2.5 font-bold text-slate-500">{idx + 1}</td>
+                            <td className="px-3 py-2.5 font-mono font-bold text-blue-700">{s.regNo || s.rollNo || '—'}</td>
+                            <td className="px-3 py-2.5 font-bold text-slate-900">{s.name}</td>
+                            <td className="px-3 py-2.5 text-slate-600 font-medium">{s.department || '—'}</td>
+                            <td className="px-3 py-2.5 text-center text-slate-600 font-semibold">{s.semester || s.currentSemester || '—'}</td>
+                            <td className="px-3 py-2.5 text-center">
+                              <span className="px-2 py-0.5 bg-rose-100 text-rose-700 font-black rounded-full text-[10px]">{totalArrears}</span>
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-black rounded-full text-[10px]">{cleared}</span>
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              <span className={`px-2 py-0.5 font-black rounded-full text-[10px] ${yetToClear > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{yetToClear}</span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {subjectList.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {subjectList.map((sub, si) => (
+                                    <span key={si} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-semibold">
+                                      <span className="font-mono font-black">{sub.code}</span>
+                                      {sub.name && <span className="text-rose-500">— {sub.name}</span>}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-[10px] italic">
+                                  {yetToClear > 0 ? `${yetToClear} paper${yetToClear > 1 ? 's' : ''} pending (details in student profile)` : 'No pending arrears'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

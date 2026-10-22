@@ -16,7 +16,9 @@ const studentMarkSchema = new mongoose.Schema({
   cia2:         { type: mongoose.Schema.Types.Mixed, default: null },
   // MODEL (Model Examination)
   model:        { type: mongoose.Schema.Types.Mixed, default: null },
-  // PROJECT / SEMINAR
+  // SEMINAR (Seminar Presentation)
+  seminar:      { type: mongoose.Schema.Types.Mixed, default: null },
+  // PROJECT
   project:      { type: mongoose.Schema.Types.Mixed, default: null },
   // ASSIGNMENT (1, 2, 3, 4)
   assignment1:  { type: mongoose.Schema.Types.Mixed, default: null },
@@ -36,9 +38,39 @@ const internalMarksSchema = new mongoose.Schema({
   subjectName:  { type: String, default: '' },
   department:   { type: String, default: '' },
   semester:     { type: Number, default: 1 },
+  year:         { type: String, default: 'I Year' },
   academicYear: { type: String, default: '' },
   isLocked:     { type: Boolean, default: false },
   lockedAt:     { type: Date, default: null },
+  // Multi-tier approval workflow (Order: HOD -> Principal -> MD)
+  approvalStatus: {
+    type: String,
+    enum: ['Draft', 'Pending HOD', 'Pending Principal', 'Pending MD', 'Approved', 'Rejected'],
+    default: 'Draft'
+  },
+  currentApprovalStage: {
+    type: String,
+    enum: ['Staff', 'HOD', 'Principal', 'MD', 'Completed', 'Rejected'],
+    default: 'Staff'
+  },
+  hodApproval: {
+    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    approvedBy: { type: String, default: '' },
+    approvedAt: { type: Date, default: null },
+    remarks: { type: String, default: '' }
+  },
+  principalApproval: {
+    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    approvedBy: { type: String, default: '' },
+    approvedAt: { type: Date, default: null },
+    remarks: { type: String, default: '' }
+  },
+  mdApproval: {
+    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    approvedBy: { type: String, default: '' },
+    approvedAt: { type: Date, default: null },
+    remarks: { type: String, default: '' }
+  },
   maxMarks: {
     st1:          { type: Number, default: 20 },
     st2:          { type: Number, default: 20 },
@@ -49,6 +81,7 @@ const internalMarksSchema = new mongoose.Schema({
     cia1:         { type: Number, default: 50 },
     cia2:         { type: Number, default: 50 },
     model:        { type: Number, default: 75 },
+    seminar:      { type: Number, default: 10 },
     project:      { type: Number, default: 20 },
     assignment1:  { type: Number, default: 5 },
     assignment2:  { type: Number, default: 5 },
@@ -68,6 +101,7 @@ const internalMarksSchema = new mongoose.Schema({
     cia1:         { type: Number, default: 20 },
     cia2:         { type: Number, default: 20 },
     model:        { type: Number, default: 30 },
+    seminar:      { type: Number, default: 4 },
     project:      { type: Number, default: 8 },
     assignment1:  { type: Number, default: 2 },
     assignment2:  { type: Number, default: 2 },

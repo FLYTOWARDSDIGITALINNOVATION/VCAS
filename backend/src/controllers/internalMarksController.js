@@ -269,6 +269,7 @@ const saveMarksheet = async (req, res) => {
       subjectName:  subjectName  || "",
       department:   department   || "",
       semester:     semester     || 1,
+      year:         req.body.year || (semester ? (semester <= 2 ? 'I Year' : semester <= 4 ? 'II Year' : 'III Year') : 'I Year'),
       academicYear: academicYear || "",
       students:     students     || [],
     };
@@ -284,6 +285,7 @@ const saveMarksheet = async (req, res) => {
         cia1: Number(maxMarks.cia1) > 0 ? Number(maxMarks.cia1) : 50,
         cia2: Number(maxMarks.cia2) > 0 ? Number(maxMarks.cia2) : 50,
         model: Number(maxMarks.model) > 0 ? Number(maxMarks.model) : 75,
+        seminar: Number(maxMarks.seminar) > 0 ? Number(maxMarks.seminar) : 10,
         project: Number(maxMarks.project) > 0 ? Number(maxMarks.project) : 20,
         assignment1: Number(maxMarks.assignment1) > 0 ? Number(maxMarks.assignment1) : 5,
         assignment2: Number(maxMarks.assignment2) > 0 ? Number(maxMarks.assignment2) : 5,
@@ -306,6 +308,7 @@ const saveMarksheet = async (req, res) => {
         cia1: Number(passMarks.cia1) >= 0 ? Number(passMarks.cia1) : 20,
         cia2: Number(passMarks.cia2) >= 0 ? Number(passMarks.cia2) : 20,
         model: Number(passMarks.model) >= 0 ? Number(passMarks.model) : 30,
+        seminar: Number(passMarks.seminar) >= 0 ? Number(passMarks.seminar) : 4,
         project: Number(passMarks.project) >= 0 ? Number(passMarks.project) : 8,
         assignment1: Number(passMarks.assignment1) >= 0 ? Number(passMarks.assignment1) : 2,
         assignment2: Number(passMarks.assignment2) >= 0 ? Number(passMarks.assignment2) : 2,
@@ -535,6 +538,7 @@ const getStudentInternalMarks = async (req, res) => {
             cia1: marks.cia1 ?? null,
             cia2: marks.cia2 ?? null,
             model: marks.model ?? null,
+            seminar: marks.seminar ?? null,
             project: marks.project ?? null,
             assignment1: marks.assignment1 ?? null,
             assignment2: marks.assignment2 ?? null,
@@ -564,6 +568,137 @@ const getStudentInternalMarks = async (req, res) => {
   }
 };
 
+// POST /api/internal-marks/:staffId/:subjectCode/submit-approval
+// Staff submits marksheet for approval (First stage: HOD)
+const submitMarksheetForApproval = async (req, res) => {
+  try {
+    const { staffId, subjectCode } = req.params;
+    const cleanSub = (subjectCode || "").trim().toUpperCase();
+    const cleanNoSpaces = cleanSub.replace(/\s+/g, "");
+    const subRegex = new RegExp('^(?:' + cleanSub + '|' + cleanNoSpaces + ')$', 'i');
+
+    const marksheet = await InternalMarks.findOne({ subjectCode: subRegex });
+    if (!marksheet) {
+      return res.status(404).json({ success: false, message: "Marksheet not found." });
+    }
+
+    marksheet.approvalStatus = 'Pending HOD';
+    marksheet.currentApprovalStage = 'HOD';
+    marksheet.isLocked = true;
+    marksheet.lockedAt = new Date();
+    marksheet.hodApproval = { status: 'Pending', approvedBy: '', approvedAt: null, remarks: '' };
+    marksheet.principalApproval = { status: 'Pending', approvedBy: '', approvedAt: null, remarks: '' };
+    marksheet.mdApproval = { status: 'Pending', approvedBy: '', approvedAt: null, remarks: '' };
+
+    await marksheet.save();
+
+    res.json({
+      success: true,
+      message: "Marksheet submitted for approval! First stage: HOD review.",
+      data: marksheet
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// PATCH /api/internal-marks/:staffId/:subjectCode/stage-approval
+// Multi-tier stage approval (Order: HOD -> Principal -> MD)
+const approveMarksheetStage = async (req, res) => {
+  try {
+    const { staffId, subjectCode } = req.params;
+    const { stage, action, approvedBy, remarks } = req.body; // stage: 'HOD' | 'Principal' | 'MD', action: 'Approved' | 'Rejected'
+
+    const cleanSub = (subjectCode || "").trim().toUpperCase();
+    const cleanNoSpaces = cleanSub.replace(/\s+/g, "");
+    const subRegex = new RegExp('^(?:' + cleanSub + '|' + cleanNoSpaces + ')$', 'i');
+
+    const marksheet = await InternalMarks.findOne({ subjectCode: subRegex });
+    if (!marksheet) {
+      return res.status(404).json({ success: false, message: "Marksheet not found." });
+    }
+
+    const reviewerName = approvedBy || stage;
+    const reviewRemarks = remarks || '';
+
+    if (action === 'Rejected') {
+      if (stage === 'HOD') {
+        marksheet.hodApproval = { status: 'Rejected', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+      } else if (stage === 'Principal') {
+        marksheet.principalApproval = { status: 'Rejected', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+      } else if (stage === 'MD') {
+        marksheet.mdApproval = { status: 'Rejected', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+      }
+      marksheet.approvalStatus = 'Rejected';
+      marksheet.currentApprovalStage = 'Rejected';
+      marksheet.isLocked = false; // unlock so staff can make corrections if rejected
+    } else {
+      // Stage Approved in order: HOD -> Principal -> MD
+      if (stage === 'HOD') {
+        marksheet.hodApproval = { status: 'Approved', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+        marksheet.approvalStatus = 'Pending Principal';
+        marksheet.currentApprovalStage = 'Principal';
+      } else if (stage === 'Principal') {
+        marksheet.principalApproval = { status: 'Approved', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+        marksheet.approvalStatus = 'Pending MD';
+        marksheet.currentApprovalStage = 'MD';
+      } else if (stage === 'MD') {
+        marksheet.mdApproval = { status: 'Approved', approvedBy: reviewerName, approvedAt: new Date(), remarks: reviewRemarks };
+        marksheet.approvalStatus = 'Approved';
+        marksheet.currentApprovalStage = 'Completed';
+      }
+    }
+
+    await marksheet.save();
+
+    res.json({
+      success: true,
+      message: `Marksheet ${action === 'Rejected' ? 'rejected' : 'approved'} by ${stage}. Current status: ${marksheet.approvalStatus}.`,
+      data: marksheet
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /api/internal-marks/export/filtered
+// Subject-wise, Department-wise, and Year-wise marks export
+const getFilteredInternalMarks = async (req, res) => {
+  try {
+    const { department, year, semester, subjectCode, academicYear } = req.query;
+
+    const filter = {};
+    if (department && department !== 'All' && department !== 'All Departments') {
+      filter.department = { $regex: new RegExp(department.trim(), 'i') };
+    }
+    if (subjectCode && subjectCode !== 'All') {
+      filter.subjectCode = { $regex: new RegExp(subjectCode.trim(), 'i') };
+    }
+    if (semester && semester !== 'All') {
+      filter.semester = Number(semester);
+    }
+    if (year && year !== 'All') {
+      filter.$or = [
+        { year: { $regex: new RegExp(year.trim(), 'i') } },
+        { academicYear: { $regex: new RegExp(year.trim(), 'i') } }
+      ];
+    }
+    if (academicYear && academicYear !== 'All') {
+      filter.academicYear = { $regex: new RegExp(academicYear.trim(), 'i') };
+    }
+
+    const marksheets = await InternalMarks.find(filter).sort({ department: 1, semester: 1, subjectCode: 1 });
+
+    res.json({
+      success: true,
+      count: marksheets.length,
+      data: marksheets
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = { 
   getMarksheet, 
   saveMarksheet, 
@@ -572,6 +707,10 @@ module.exports = {
   listMarksheets,
   syncAssignmentsToInternalMarks,
   getAllInternalMarks,
-  getStudentInternalMarks
+  getStudentInternalMarks,
+  submitMarksheetForApproval,
+  approveMarksheetStage,
+  getFilteredInternalMarks
 };
+
 

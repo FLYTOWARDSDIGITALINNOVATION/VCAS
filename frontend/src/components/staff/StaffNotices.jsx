@@ -30,6 +30,8 @@ export default function StaffNotices({ staffUser = {} }) {
 
   // Form state (shared for create + edit)
   const [newTitle, setNewTitle] = useState('');
+  const [newReason, setNewReason] = useState('');
+  const [targetAudience, setTargetAudience] = useState('All');
   const [newBody, setNewBody] = useState('');
   const [newTag, setNewTag] = useState('Academic');
   const [isUrgent, setIsUrgent] = useState(false);
@@ -37,6 +39,13 @@ export default function StaffNotices({ staffUser = {} }) {
   const [errorMsg, setErrorMsg] = useState('');
 
   const tags = ['ALL', 'Academic', 'Exam', 'Development', 'Event', 'Research'];
+  const audienceOptions = [
+    { id: 'All', label: '📢 Everyone (All Staff & Students)' },
+    { id: 'Students', label: '🎓 All Students' },
+    { id: 'Staff', label: '👨‍🏫 All Faculty & Staff' },
+    { id: 'HODs', label: '🏛️ Heads of Department (HODs)' },
+    { id: 'Administration', label: '🏢 Administration & Office' }
+  ];
 
   // Fetch notices from backend
   const fetchNotices = async () => {
@@ -65,7 +74,12 @@ export default function StaffNotices({ staffUser = {} }) {
   // Open create modal
   const openCreateModal = () => {
     setEditingId(null);
-    setNewTitle(''); setNewBody(''); setNewTag('Academic'); setIsUrgent(false);
+    setNewTitle('');
+    setNewReason('');
+    setTargetAudience('All');
+    setNewBody('');
+    setNewTag('Academic');
+    setIsUrgent(false);
     setErrorMsg('');
     setShowModal(true);
   };
@@ -74,6 +88,8 @@ export default function StaffNotices({ staffUser = {} }) {
   const openEditModal = (notice) => {
     setEditingId(notice._id || notice.id);
     setNewTitle(notice.title || '');
+    setNewReason(notice.reason || '');
+    setTargetAudience(notice.targetAudience || 'All');
     setNewBody(notice.body || notice.content || '');
     setNewTag(notice.tag || 'Academic');
     setIsUrgent(Boolean(notice.urgent));
@@ -84,7 +100,12 @@ export default function StaffNotices({ staffUser = {} }) {
   const closeModal = () => {
     setShowModal(false);
     setEditingId(null);
-    setNewTitle(''); setNewBody(''); setNewTag('Academic'); setIsUrgent(false);
+    setNewTitle('');
+    setNewReason('');
+    setTargetAudience('All');
+    setNewBody('');
+    setNewTag('Academic');
+    setIsUrgent(false);
     setErrorMsg('');
   };
 
@@ -101,6 +122,8 @@ export default function StaffNotices({ staffUser = {} }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
+          reason: newReason.trim(),
+          targetAudience,
           body: newBody.trim(),
           tag: newTag,
           urgent: isUrgent,
@@ -113,7 +136,7 @@ export default function StaffNotices({ staffUser = {} }) {
       const data = await res.json();
       if (res.ok && data.success) {
         closeModal();
-        setSuccessMsg(data.message || 'Notice published successfully!');
+        setSuccessMsg(data.message || 'Notice broadcasted successfully!');
         setTimeout(() => setSuccessMsg(''), 4000);
         fetchNotices();
       } else {
@@ -139,6 +162,8 @@ export default function StaffNotices({ staffUser = {} }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
+          reason: newReason.trim(),
+          targetAudience,
           body: newBody.trim(),
           tag: newTag,
           urgent: isUrgent,
@@ -291,16 +316,35 @@ export default function StaffNotices({ staffUser = {} }) {
                 {notice.body || notice.content}
               </p>
 
-              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                <span className="flex items-center gap-1 font-semibold text-slate-700">
-                  <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  Posted by: {notice.postedBy || notice.author}
-                </span>
-                {notice.department && notice.department !== 'All' && (
-                  <span className="text-slate-400 text-[10px]">
-                    Dept: {notice.department}
-                  </span>
+              <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+                {notice.reason && (
+                  <p className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-2 py-1 rounded-lg">
+                    📝 Reason: {notice.reason}
+                  </p>
                 )}
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span className="flex items-center gap-1 font-semibold text-slate-700">
+                    <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                    Posted by: {notice.postedBy || notice.author}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {notice.targetAudience && notice.targetAudience !== 'All' && (
+                      <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded-full border border-blue-100">
+                        To: {notice.targetAudience}
+                      </span>
+                    )}
+                    {notice.targetAudience === 'All' && (
+                      <span className="text-[10px] px-2 py-0.5 bg-green-50 text-green-700 font-bold rounded-full border border-green-100">
+                        📢 Everyone
+                      </span>
+                    )}
+                    {notice.department && notice.department !== 'All' && (
+                      <span className="text-slate-400 text-[10px]">
+                        Dept: {notice.department}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           ))
@@ -338,19 +382,46 @@ export default function StaffNotices({ staffUser = {} }) {
             )}
 
             <form onSubmit={editingId ? handleUpdateNotice : handlePostNotice} className="space-y-3.5">
+              {/* Broadcast To */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Category / Tag</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">📢 Broadcast To</label>
                 <select
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
+                  className="w-full bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 >
-                  <option value="Academic">Academic</option>
-                  <option value="Exam">Exam</option>
-                  <option value="Development">Development</option>
-                  <option value="Event">Event</option>
-                  <option value="Research">Research</option>
+                  {audienceOptions.map(opt => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
                 </select>
+                <p className="text-[10px] text-slate-400 mt-0.5">Select who should receive this notice broadcast.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Category / Tag</label>
+                  <select
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="Academic">Academic</option>
+                    <option value="Exam">Exam</option>
+                    <option value="Development">Development</option>
+                    <option value="Event">Event</option>
+                    <option value="Research">Research</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Reason <span className="text-slate-400 font-normal">(manual entry)</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Rescheduled due to holiday"
+                    value={newReason}
+                    onChange={(e) => setNewReason(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
               </div>
 
               <div>
@@ -366,11 +437,11 @@ export default function StaffNotices({ staffUser = {} }) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Notice Content</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Notice Content / Details</label>
                 <textarea
                   rows="4"
                   required
-                  placeholder="Detailed announcement text for your department students..."
+                  placeholder="Detailed announcement text..."
                   value={newBody}
                   onChange={(e) => setNewBody(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"

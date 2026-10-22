@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Bus, Save, User, CreditCard, Clock, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { API_BASE } from '../apiConfig';
+import { Bus, Save, User, CreditCard, Clock, AlertCircle, Search, Gauge, Fuel } from 'lucide-react';
 
 export default function TransportFeesManagement({ 
   entryFormData, 
@@ -9,6 +10,24 @@ export default function TransportFeesManagement({
   recordsList = []
 }) {
   const [isCustomStudent, setIsCustomStudent] = useState(false);
+  const [adminDepartments, setAdminDepartments] = useState([]);
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
+  const [tableSearchTerm, setTableSearchTerm] = useState('');
+  const [tableDeptFilter, setTableDeptFilter] = useState('All');
+  const [tableYearFilter, setTableYearFilter] = useState('All');
+  const [tableBatchFilter, setTableBatchFilter] = useState('All');
+
+  // Fetch only admin-added departments
+  useEffect(() => {
+    fetch(`${API_BASE}/departments`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          setAdminDepartments(json.data);
+        }
+      })
+      .catch(err => console.warn('Could not fetch admin departments in transport fees:', err));
+  }, []);
 
   // Auto-fill student details from dropdown
   const handleStudentSelect = (selectedKey) => {
@@ -49,6 +68,37 @@ export default function TransportFeesManagement({
     (r.feeType || '').toLowerCase().includes('transport')
   );
 
+  // Filtered student options based on search query
+  const filteredStudentOptions = (studentOptions || []).filter(s => {
+    if (!studentSearchTerm.trim()) return true;
+    const term = studentSearchTerm.toLowerCase();
+    return (
+      (s.name && s.name.toLowerCase().includes(term)) ||
+      (s.rollNo && s.rollNo.toLowerCase().includes(term)) ||
+      (s.id && s.id.toLowerCase().includes(term)) ||
+      (s.course && s.course.toLowerCase().includes(term))
+    );
+  });
+
+  // Filtered transport records based on table search query and filters
+  const searchedTransportRecords = transportRecords.filter(r => {
+    const term = (tableSearchTerm || '').toLowerCase().trim();
+    const matchesSearch = !term || (
+      (r.name && r.name.toLowerCase().includes(term)) ||
+      (r.rollNo && r.rollNo.toLowerCase().includes(term)) ||
+      (r.id && r.id.toLowerCase().includes(term)) ||
+      (r.course && r.course.toLowerCase().includes(term)) ||
+      (r.driverName && r.driverName.toLowerCase().includes(term)) ||
+      (r.vehicleNo && r.vehicleNo.toLowerCase().includes(term)) ||
+      (r.routeStop && r.routeStop.toLowerCase().includes(term)) ||
+      (r.status && r.status.toLowerCase().includes(term))
+    );
+    const matchesDept = tableDeptFilter === 'All' || String(r.course || '').toLowerCase().includes(tableDeptFilter.toLowerCase());
+    const matchesYear = tableYearFilter === 'All' || String(r.year || '').toLowerCase() === tableYearFilter.toLowerCase();
+    const matchesBatch = tableBatchFilter === 'All' || String(r.batch || r.academicYear || '').toLowerCase().includes(tableBatchFilter.toLowerCase());
+    return matchesSearch && matchesDept && matchesYear && matchesBatch;
+  });
+
   return (
     <div className="space-y-6">
       
@@ -72,8 +122,8 @@ export default function TransportFeesManagement({
 
         <form onSubmit={handleSaveEntrySubmit} className="space-y-5 text-xs">
           
-          {/* ROW 1: Student, Roll No., Course, Academic Year, Fee Type */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* ROW 1: Student, Roll No., Department, Year, Batch */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             
             {/* Student Dropdown */}
             <div className="lg:col-span-2">
@@ -91,19 +141,41 @@ export default function TransportFeesManagement({
               </div>
 
               {!isCustomStudent ? (
-                <select
-                  value={entryFormData.rollNo || ''}
-                  onChange={(e) => handleStudentSelect(e.target.value)}
-                  className="w-full p-2.5 bg-blue-50/50 border border-blue-300 rounded-xl text-slate-900 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
-                  required
-                >
-                  <option value="">-- Select Student ({studentOptions?.length || 0}) --</option>
-                  {(studentOptions || []).map((s, idx) => (
-                    <option key={idx} value={s.rollNo || s.id}>
-                      {s.name} ({s.rollNo || s.id}) • {s.course}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-1.5">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search student by name or roll no..."
+                      value={studentSearchTerm}
+                      onChange={(e) => setStudentSearchTerm(e.target.value)}
+                      className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 text-[11px] placeholder-slate-400 focus:outline-none focus:border-emerald-500 shadow-2xs"
+                    />
+                    {studentSearchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setStudentSearchTerm('')}
+                        className="absolute right-2 top-1.5 text-xs text-slate-400 hover:text-slate-600 font-bold"
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={entryFormData.rollNo || ''}
+                    onChange={(e) => handleStudentSelect(e.target.value)}
+                    className="w-full p-2.5 bg-emerald-50/50 border border-emerald-300 rounded-xl text-slate-900 font-bold focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
+                    required
+                  >
+                    <option value="">-- Select Student ({filteredStudentOptions.length} available) --</option>
+                    {filteredStudentOptions.map((s, idx) => (
+                      <option key={idx} value={s.rollNo || s.id}>
+                        {s.name} ({s.rollNo || s.id}) • {s.course}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               ) : (
                 <input
                   type="text"
@@ -131,10 +203,10 @@ export default function TransportFeesManagement({
               />
             </div>
 
-            {/* Course */}
+            {/* Department */}
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
-                Course <span className="text-rose-500">*</span>
+                Department <span className="text-rose-500">*</span>
               </label>
               <select
                 value={entryFormData.course}
@@ -142,72 +214,146 @@ export default function TransportFeesManagement({
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               >
-                <option value="">Select course...</option>
-                <option value="B.Com">B.Com</option>
-                <option value="B.Sc CS">B.Sc CS</option>
-                <option value="B.A. English">B.A. English</option>
-                <option value="BBA">BBA</option>
-                <option value="BCA">BCA</option>
-                <option value="M.Com">M.Com</option>
+                <option value="">Select dept...</option>
+                {adminDepartments.length > 0 ? (
+                  adminDepartments.map((dept) => {
+                    const val = dept.code || dept.name;
+                    return (
+                      <option key={dept._id || val} value={val}>
+                        {dept.name} {dept.code ? `(${dept.code})` : ''}
+                      </option>
+                    );
+                  })
+                ) : (
+                  <option value={entryFormData.course || 'B.Com'}>{entryFormData.course || 'B.Com'}</option>
+                )}
               </select>
             </div>
 
-            {/* Academic Year */}
+            {/* Year */}
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Academic Year <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={entryFormData.academicYear}
-                onChange={(e) => setEntryFormData({...entryFormData, academicYear: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
-                placeholder="e.g., 2024 - 2025"
-                required
-              />
+              <label className="block text-slate-700 font-bold mb-1.5">Year <span className="text-rose-500">*</span></label>
+              <select
+                value={entryFormData.year || 'I'}
+                onChange={(e) => setEntryFormData({...entryFormData, year: e.target.value})}
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
+              >
+                <option value="I">I Year</option>
+                <option value="II">II Year</option>
+                <option value="III">III Year</option>
+              </select>
+            </div>
+
+            {/* Batch */}
+            <div>
+              <label className="block text-slate-700 font-bold mb-1.5">Batch <span className="text-rose-500">*</span></label>
+              <select
+                value={entryFormData.batch || '2025-2028'}
+                onChange={(e) => setEntryFormData({...entryFormData, batch: e.target.value})}
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
+              >
+                <option value="2025-2028">2025–2028</option>
+                <option value="2024-2027">2024–2027</option>
+                <option value="2023-2026">2023–2026</option>
+                <option value="2022-2025">2022–2025</option>
+              </select>
             </div>
 
           </div>
 
-          {/* ROW 2: Route / Stop, Transport Vehicle / No., Due Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Route / Stop <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={entryFormData.routeStop}
-                onChange={(e) => setEntryFormData({...entryFormData, routeStop: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
-                placeholder="e.g., Central Station - Gate 2"
-                required
-              />
+          {/* ROW 2: MANDATORY TRANSPORT DETAILS (Driver Name, Daily Petrol, Mileage, Vehicle No, Route/Stop) */}
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-extrabold text-emerald-900 flex items-center gap-1.5">
+                <Bus className="w-4 h-4 text-emerald-600" />
+                Transport Fleet, Driver & Operational Mileage
+              </span>
+              <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">
+                Driver Name, Daily Petrol & Mileage Required
+              </span>
             </div>
 
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Transport Vehicle / No. <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={entryFormData.vehicleNo}
-                onChange={(e) => setEntryFormData({...entryFormData, vehicleNo: e.target.value.toUpperCase()})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs uppercase font-mono"
-                placeholder="e.g., TN 09 AB 1234 or Bus 04"
-                required
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Route / Stop <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={entryFormData.routeStop || ''}
+                  onChange={(e) => setEntryFormData({...entryFormData, routeStop: e.target.value})}
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  placeholder="e.g., Central Station - Gate 2"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Transport Vehicle / No. <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={entryFormData.vehicleNo || ''}
+                  onChange={(e) => setEntryFormData({...entryFormData, vehicleNo: e.target.value.toUpperCase()})}
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-emerald-500 focus:outline-none shadow-2xs uppercase font-mono"
+                  placeholder="e.g., TN-09-CB-4412"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Driver Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={entryFormData.driverName || ''}
+                  onChange={(e) => setEntryFormData({...entryFormData, driverName: e.target.value})}
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  placeholder="e.g., M. Selvam (98402 11001)"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Daily Petrol <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={entryFormData.dailyPetrol || ''}
+                  onChange={(e) => setEntryFormData({...entryFormData, dailyPetrol: e.target.value})}
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  placeholder="e.g., 18 Litres (₹1,840)"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Mileage <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={entryFormData.mileage || ''}
+                  onChange={(e) => setEntryFormData({...entryFormData, mileage: e.target.value})}
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  placeholder="e.g., 12.5 km/l"
+                  required
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
+            <div className="pt-2">
+              <label className="block text-slate-700 font-bold mb-1">
                 Due Date <span className="text-rose-500">*</span>
               </label>
               <input
                 type="date"
                 value={entryFormData.dueDate || ''}
                 onChange={(e) => setEntryFormData({...entryFormData, dueDate: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
+                className="w-full sm:w-64 p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               />
             </div>
@@ -341,8 +487,8 @@ export default function TransportFeesManagement({
 
           </div>
 
-          {/* ROW 4: Payment Mode, Payment Date, Remarks */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* ROW 4: Payment Mode, Payment Date, UPI optional */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
                 Payment Mode <span className="text-rose-500">*</span>
@@ -372,16 +518,48 @@ export default function TransportFeesManagement({
                 required
               />
             </div>
+          </div>
 
-            <div className="flex items-end justify-end">
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all text-xs cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>Save Transport Entry</span>
-              </button>
+          {/* UPI ID & Account Holder Name (Optional) */}
+          {['UPI', 'Online', 'Bank'].includes(entryFormData.paymentMode) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                  <span>UPI ID</span>
+                  <span className="text-[10px] text-indigo-500 font-bold">Optional</span>
+                </label>
+                <input
+                  type="text"
+                  value={entryFormData.upiId || ''}
+                  onChange={(e) => setEntryFormData({...entryFormData, upiId: e.target.value})}
+                  className="w-full p-2.5 bg-white border border-indigo-200 rounded-xl text-slate-800 font-medium focus:border-indigo-400 focus:outline-none shadow-2xs"
+                  placeholder="e.g. student@okicici"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                  <span>Account Holder Name</span>
+                  <span className="text-[10px] text-indigo-500 font-bold">Optional</span>
+                </label>
+                <input
+                  type="text"
+                  value={entryFormData.accountHolderName || ''}
+                  onChange={(e) => setEntryFormData({...entryFormData, accountHolderName: e.target.value})}
+                  className="w-full p-2.5 bg-white border border-indigo-200 rounded-xl text-slate-800 font-medium focus:border-indigo-400 focus:outline-none shadow-2xs"
+                  placeholder="Account holder's full name"
+                />
+              </div>
             </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all text-xs cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save Transport Entry</span>
+            </button>
           </div>
 
         </form>
@@ -390,25 +568,92 @@ export default function TransportFeesManagement({
 
       {/* BELOW: ADDED STUDENTS & COLLECTIONS LIST */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <span>📋 Added Transport Fee Students & Collections</span>
               <span className="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-bold">
-                {transportRecords.length} Records
+                {searchedTransportRecords.length} / {transportRecords.length} Records
               </span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Live list of all students with transport fee collections recorded. Newly saved students appear right at the top.
+              Live list of all students with transport collections recorded, with driver details, daily petrol, and mileage.
             </p>
+          </div>
+
+          {/* Search and Filters: Department, Year, Batch */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="relative w-full sm:w-52">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search student, driver, bus..."
+                value={tableSearchTerm}
+                onChange={(e) => setTableSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none transition-all shadow-2xs"
+              />
+              {tableSearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setTableSearchTerm('')}
+                  className="absolute right-2.5 top-1.5 text-xs text-slate-400 hover:text-slate-600 font-bold"
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Department Filter */}
+            <select
+              value={tableDeptFilter}
+              onChange={(e) => setTableDeptFilter(e.target.value)}
+              className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Depts</option>
+              {adminDepartments.map(d => (
+                <option key={d._id || d.code || d.name} value={d.code || d.name}>
+                  {d.name} {d.code ? `(${d.code})` : ''}
+                </option>
+              ))}
+            </select>
+
+            {/* Year Filter */}
+            <select
+              value={tableYearFilter}
+              onChange={(e) => setTableYearFilter(e.target.value)}
+              className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Years</option>
+              <option value="I">I Year</option>
+              <option value="II">II Year</option>
+              <option value="III">III Year</option>
+            </select>
+
+            {/* Batch Filter */}
+            <select
+              value={tableBatchFilter}
+              onChange={(e) => setTableBatchFilter(e.target.value)}
+              className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Batches</option>
+              <option value="2025-2028">2025–2028</option>
+              <option value="2024-2027">2024–2027</option>
+              <option value="2023-2026">2023–2026</option>
+              <option value="2022-2025">2022–2025</option>
+            </select>
           </div>
         </div>
 
-        {transportRecords.length === 0 ? (
+        {searchedTransportRecords.length === 0 ? (
           <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
             <User className="w-8 h-8 mx-auto mb-2 opacity-40 text-emerald-500" />
-            <p className="text-xs font-semibold text-slate-600">No transport entries added yet</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Select a student above and click "Save Transport Entry" to record collections.</p>
+            <p className="text-xs font-semibold text-slate-600">
+              {tableSearchTerm ? 'No students match your search query' : 'No transport entries added yet'}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {tableSearchTerm ? 'Try typing a different name, roll no, or vehicle' : 'Select a student above and click "Save Transport Entry" to record collections.'}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -418,6 +663,9 @@ export default function TransportFeesManagement({
                   <th className="py-3 px-3">Student Name</th>
                   <th className="py-3 px-3">Roll No</th>
                   <th className="py-3 px-3">Course</th>
+                  <th className="py-3 px-3">Driver Name</th>
+                  <th className="py-3 px-3">Daily Petrol</th>
+                  <th className="py-3 px-3">Mileage</th>
                   <th className="py-3 px-3 text-right">Base Amount</th>
                   <th className="py-3 px-3 text-right">Fine</th>
                   <th className="py-3 px-3 text-right">Total Payable</th>
@@ -428,7 +676,7 @@ export default function TransportFeesManagement({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {transportRecords.map((r, i) => {
+                {searchedTransportRecords.map((r, i) => {
                   const fineVal = Number(r.fine) || 0;
                   const totalVal = Number(r.totalFee) || (Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0);
                   const baseVal = r.baseAmount !== undefined ? Number(r.baseAmount) : (totalVal - fineVal);
@@ -450,6 +698,19 @@ export default function TransportFeesManagement({
                       </td>
                       <td className="py-3 px-3 font-semibold text-slate-700">{r.rollNo || r.id}</td>
                       <td className="py-3 px-3 text-slate-600">{r.course || 'Degree'}</td>
+                      <td className="py-3 px-3 font-medium text-slate-800">
+                        {r.driverName || 'M. Selvam'}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold text-[11px] border border-emerald-200/60">
+                          {r.dailyPetrol || '18 L / day'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold text-[11px] border border-blue-200/60">
+                          {r.mileage || '12.5 km/l'}
+                        </span>
+                      </td>
                       <td className="py-3 px-3 text-right font-semibold text-slate-800">₹{baseVal.toLocaleString('en-IN')}</td>
                       <td className="py-3 px-3 text-right">
                         {fineVal > 0 ? (

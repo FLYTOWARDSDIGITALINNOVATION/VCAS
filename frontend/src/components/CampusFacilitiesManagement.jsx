@@ -36,9 +36,39 @@ export default function CampusFacilitiesManagement({ initialTab = 'library' }) {
 
   // Transport Routes
   const busRoutes = [
-    { routeNo: 'Route 12', from: 'Tambaram East', via: 'Chromepet, Pallavaram, Guindy', busNo: 'TN-09-CB-4412', driver: 'M. Selvam (98402 11001)', capacity: '52 / 55 Seats' },
-    { routeNo: 'Route 18', from: 'Anna Nagar West', via: 'Koyambedu, Vadapalani, Ashok Nagar', busNo: 'TN-09-CB-4418', driver: 'K. Balan (98402 11002)', capacity: '48 / 55 Seats' },
-    { routeNo: 'Route 24', from: 'Velachery Bypass', via: 'Medavakkam, Kovilambakkam', busNo: 'TN-09-CB-4424', driver: 'P. Mani (98402 11003)', capacity: '50 / 55 Seats' }
+    { 
+      routeNo: 'Route 12', 
+      from: 'Tambaram East', 
+      via: 'Chromepet, Pallavaram, Guindy', 
+      busNo: 'TN-09-CB-4412', 
+      driver: 'M. Selvam (98402 11001)', 
+      driverName: 'M. Selvam', 
+      dailyPetrol: '18 Litres (₹1,840/day)', 
+      mileage: '12.5 km/l', 
+      capacity: '52 / 55 Seats' 
+    },
+    { 
+      routeNo: 'Route 18', 
+      from: 'Anna Nagar West', 
+      via: 'Koyambedu, Vadapalani, Ashok Nagar', 
+      busNo: 'TN-09-CB-4418', 
+      driver: 'K. Balan (98402 11002)', 
+      driverName: 'K. Balan', 
+      dailyPetrol: '22 Litres (₹2,250/day)', 
+      mileage: '11.8 km/l', 
+      capacity: '48 / 55 Seats' 
+    },
+    { 
+      routeNo: 'Route 24', 
+      from: 'Velachery Bypass', 
+      via: 'Medavakkam, Kovilambakkam', 
+      busNo: 'TN-09-CB-4424', 
+      driver: 'P. Mani (98402 11003)', 
+      driverName: 'P. Mani', 
+      dailyPetrol: '16 Litres (₹1,630/day)', 
+      mileage: '13.2 km/l', 
+      capacity: '50 / 55 Seats' 
+    }
   ];
 
   return (
@@ -187,9 +217,19 @@ export default function CampusFacilitiesManagement({ initialTab = 'library' }) {
                   <span className="text-xs font-bold text-slate-700">{r.capacity}</span>
                 </div>
                 <p className="text-[11px] text-slate-500"><strong className="text-slate-700">Via:</strong> {r.via}</p>
-                <div className="pt-2 border-t border-slate-100 flex justify-between text-[11px] text-slate-500 font-medium">
-                  <span>Bus: <strong className="font-mono text-slate-800">{r.busNo}</strong></span>
-                  <span>Driver: {r.driver}</span>
+                <div className="pt-2 border-t border-slate-100 space-y-1.5 text-[11px] text-slate-500 font-medium">
+                  <div className="flex justify-between items-center">
+                    <span>Bus: <strong className="font-mono text-slate-800">{r.busNo}</strong></span>
+                    <span>Driver: <strong className="text-slate-800">{r.driverName || r.driver}</strong></span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[10px]">
+                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded font-bold">
+                      ⛽ Daily Petrol: {r.dailyPetrol}
+                    </span>
+                    <span className="text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded font-bold">
+                      ⚡ Mileage: {r.mileage}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
