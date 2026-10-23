@@ -71,6 +71,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     dailyPetrol: '',
     mileage: '',
     amount: '',
+    uniformFee: '0',
+    bookFee: '0',
     dueDate: '',
     fine: '0',
     totalAmount: '',
@@ -228,8 +230,10 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   const handleSaveEntrySubmit = async (e) => {
     e.preventDefault();
     const baseAmount = parseFloat(entryFormData.amount || entryFormData.totalAmount) || 0;
+    const uniformFee = parseFloat(entryFormData.uniformFee) || 0;
+    const bookFee = parseFloat(entryFormData.bookFee) || 0;
     const fineAmount = parseFloat(entryFormData.fine) || 0;
-    const totalAmount = baseAmount + fineAmount;
+    const totalAmount = baseAmount + uniformFee + bookFee + fineAmount;
     const paidAmount = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
       ? parseFloat(entryFormData.paidAmount) || 0
       : totalAmount;
@@ -265,6 +269,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           ...rec,
           feeType: feeTypeName,
           baseAmount: baseAmount,
+          uniformFee: uniformFee,
+          bookFee: bookFee,
           fine: fineAmount,
           routeStop: entryFormData.routeStop || rec.routeStop || '',
           vehicleNo: entryFormData.vehicleNo || rec.vehicleNo || '',
@@ -310,6 +316,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         dailyPetrol: entryFormData.dailyPetrol || '',
         mileage: entryFormData.mileage || '',
         baseAmount: baseAmount,
+        uniformFee: uniformFee,
+        bookFee: bookFee,
         fine: fineAmount,
         totalFee: totalAmount,
         paidFee: paidAmount,

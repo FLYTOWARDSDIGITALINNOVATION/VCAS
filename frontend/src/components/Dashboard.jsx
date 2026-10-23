@@ -38,7 +38,8 @@ import {
   PanelLeftOpen,
   RefreshCw,
   Loader2,
-  Award
+  Award,
+  Receipt
 } from 'lucide-react';
 import StaffManagement from './StaffManagement';
 import DepartmentManagement from './DepartmentManagement';
@@ -58,6 +59,7 @@ import CampusFacilitiesManagement from './CampusFacilitiesManagement';
 import FeeManagement from './FeeManagement';
 import TCManagement from './TCManagement';
 import BonafideManagement from './BonafideManagement';
+import ExpenseManagement from './ExpenseManagement';
 
 function formatTimeAgo(dateInput) {
   if (!dateInput) return 'Recently';
@@ -748,6 +750,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           name: 'Fees', 
           icon: IndianRupee,
           subItems: ['Fee Structure', 'Tuition Fees', 'Exam Fees', 'Transport Fees']
+        },
+        {
+          name: 'Expenses',
+          icon: Receipt
         }
       ]
     }] : []),
@@ -796,13 +802,23 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       navTarget: 'Fees' 
     },
     { 
+      title: 'EXPENSES & EVENTS', 
+      value: 'Expenditures', 
+      change: 'Student supplies & events', 
+      isUp: true, 
+      icon: Receipt, 
+      bg: 'bg-indigo-500', 
+      textColor: 'text-indigo-600', 
+      navTarget: 'Expenses' 
+    },
+    { 
       title: 'NOTICES & CIRCULARS', 
       value: String(dashboardStats.noticesCount !== undefined ? dashboardStats.noticesCount : 0), 
       change: `${dashboardStats.noticesCount || 0} published notice(s)`, 
       isUp: true, 
       icon: Bell, 
-      bg: 'bg-indigo-500', 
-      textColor: 'text-indigo-600', 
+      bg: 'bg-purple-500', 
+      textColor: 'text-purple-600', 
       navTarget: 'Notices' 
     }
   ] : [
@@ -1340,6 +1356,30 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                 <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
                 <p className="text-xs text-slate-500 leading-relaxed">
                   Fee details and collection records are strictly restricted to <strong>Super Admin</strong>, <strong>Accountant</strong> and <strong>Office Staff</strong> personnel only.
+                </p>
+                <button
+                  onClick={() => setActiveNav('Dashboard')}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            </main>
+          )
+        ) : activeNav === 'Expenses' ? (
+          canViewFees ? (
+            <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
+              <ExpenseManagement user={user} />
+            </main>
+          ) : (
+            <main className="flex-1 p-6 flex items-center justify-center">
+              <div className="max-w-md bg-white border border-rose-200 rounded-3xl p-8 text-center shadow-lg space-y-4">
+                <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+                  <ShieldCheck className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Expenditure records and budget allocations are restricted to <strong>Super Admin</strong>, <strong>Accountant</strong> and <strong>Office Staff</strong> personnel only.
                 </p>
                 <button
                   onClick={() => setActiveNav('Dashboard')}

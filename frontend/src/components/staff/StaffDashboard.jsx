@@ -3,9 +3,10 @@ import {
   LayoutDashboard, BookOpen, CheckSquare, Calendar, BookMarked,
   Bell, UserCheck, User, LogOut, Menu, X, GraduationCap,
   ChevronRight, ChevronLeft, Shield, FileSpreadsheet, ClipboardList, Ticket, Award, UserPlus,
-  Search, Clock, Sparkles, Building2, IndianRupee
+  Search, Clock, Sparkles, Building2, IndianRupee, Receipt
 } from 'lucide-react';
 import FeeStructureView from '../FeeStructureView';
+import ExpenseManagement from '../ExpenseManagement';
 import StaffHome from './StaffHome';
 import StaffMyClasses from './StaffMyClasses';
 import StaffAttendance from './StaffAttendance';
@@ -150,6 +151,8 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Staff Tasks':          return <StaffTaskAllocation staffUser={staffUser} />;
       case 'Fee Structure':
       case 'Fees':                 return <FeeStructureView user={staffUser} />;
+      case 'Expenses':
+      case 'Expense':              return <ExpenseManagement user={staffUser} />;
       case 'Student Attendance':   return <StaffAttendance staffUser={staffUser} isReadOnly={true} />;
       case 'Bonafide Certificate':
       case 'Bonafide':             return <BonafideManagement user={staffUser} />;
@@ -196,9 +199,10 @@ export default function StaffDashboard({ staffUser, onLogout }) {
   const officeStaffNavSections = [
     { title: 'MAIN', items: [{ name: 'Dashboard', icon: LayoutDashboard }] },
     {
-      title: 'SERVICES',
+      title: 'SERVICES & EXPENSES',
       items: [
         { name: 'Fee Structure', icon: IndianRupee },
+        { name: 'Expenses', icon: Receipt },
         { name: 'Student Attendance', icon: CheckSquare }
       ]
     },
@@ -212,13 +216,14 @@ export default function StaffDashboard({ staffUser, onLogout }) {
     }
   ];
 
-  // Accountant: Dashboard + Finance & Services (fees + attendance + bonafide) + profile only
+  // Accountant: Dashboard + Finance & Services (fees + expenses + attendance + bonafide) + profile only
   const accountantNavSections = [
     { title: 'MAIN', items: [{ name: 'Dashboard', icon: LayoutDashboard }] },
     {
       title: 'FINANCE & SERVICES',
       items: [
         { name: 'Fee Structure', icon: IndianRupee },
+        { name: 'Expenses', icon: Receipt },
         { name: 'Student Attendance', icon: CheckSquare },
         { name: 'Bonafide Certificate', icon: Award }
       ]
@@ -244,6 +249,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       title: 'FINANCE & SERVICES',
       items: [
         { name: 'Fee Structure', icon: IndianRupee },
+        { name: 'Expenses', icon: Receipt },
         { name: 'Student Attendance', icon: CheckSquare }
       ]
     }] : []),

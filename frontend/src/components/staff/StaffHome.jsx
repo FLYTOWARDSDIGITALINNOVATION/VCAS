@@ -4,7 +4,7 @@ import {
   CheckSquare, BookMarked, BookOpen, Bell, UserCheck,
   ChevronRight, TrendingUp, Clock, AlertCircle, CalendarCheck2,
   Users, GraduationCap, Zap, Calendar, FileSpreadsheet, Ticket,
-  ClipboardList, RefreshCw, Sparkles, UserPlus, Building2
+  ClipboardList, RefreshCw, Sparkles, UserPlus, Building2, Receipt
 } from 'lucide-react';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -156,8 +156,20 @@ export default function StaffHome({ staffUser, onNavigate }) {
     }
   ];
 
+  const isFinanceStaff = staffUser?.role === 'Accountant' || 
+    staffUser?.role === 'Office Staff' || 
+    staffUser?.designation === 'Accountant' || 
+    staffUser?.canViewFees === true || 
+    staffUser?.department?.toLowerCase()?.includes('account');
+
   // Quick actions matching Admin quick actions grid
-  const quickActions = [
+  const quickActions = isFinanceStaff ? [
+    { label: 'Record Expense', icon: Receipt, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Expenses' },
+    { label: 'Fee Structure', icon: Building2, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Fee Structure' },
+    { label: 'Student Attendance', icon: CheckSquare, bg: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700', navTarget: 'Student Attendance' },
+    { label: 'Apply Leave', icon: UserCheck, bg: 'bg-teal-50 hover:bg-teal-100 text-teal-700', navTarget: 'Leave' },
+    { label: 'Notices', icon: Bell, bg: 'bg-purple-50 hover:bg-purple-100 text-purple-700', navTarget: 'Notices' }
+  ] : [
     { label: 'Mark Attendance', icon: CheckSquare, bg: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700', navTarget: 'Attendance' },
     { label: 'Student', icon: GraduationCap, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Student' },
     { label: 'Hall Allocation & Tickets', icon: Ticket, bg: 'bg-rose-50 hover:bg-rose-100 text-rose-700', navTarget: 'Hall Allocation & Tickets' },
@@ -185,12 +197,14 @@ export default function StaffHome({ staffUser, onNavigate }) {
       <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/80 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-sm">
-            👨‍🏫
+            {isFinanceStaff ? '💰' : '👨‍🏫'}
           </div>
           <div>
             <h3 className="text-xs sm:text-sm font-extrabold text-blue-900 flex items-center gap-2">
-              Faculty Academic Session Active
-              <span className="text-[10px] bg-blue-200/80 text-blue-800 px-2 py-0.5 rounded-full font-bold">MSU Affiliated Faculty</span>
+              {isFinanceStaff ? 'Finance & Administration Portal' : 'Faculty Academic Session Active'}
+              <span className="text-[10px] bg-blue-200/80 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                {isFinanceStaff ? 'Accounts & Operations' : 'MSU Affiliated Faculty'}
+              </span>
             </h3>
             <p className="text-[11px] text-blue-700 font-medium mt-0.5">
               {staffUser?.designation || 'Faculty'} • {staffUser?.department || 'Department'} • Staff ID: <span className="font-mono font-bold text-slate-900">{staffUser?.staffId || '—'}</span>
@@ -198,18 +212,37 @@ export default function StaffHome({ staffUser, onNavigate }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button 
-            onClick={() => onNavigate('Hall Allocation & Tickets')}
-            className="px-3.5 py-1.5 bg-white hover:bg-blue-50 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 shadow-xs transition-all cursor-pointer"
-          >
-            Hall Allocation &amp; Tickets →
-          </button>
-          <button 
-            onClick={() => onNavigate('Student')}
-            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
-          >
-            Student →
-          </button>
+          {isFinanceStaff ? (
+            <>
+              <button 
+                onClick={() => onNavigate('Expenses')}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                Expenses Module →
+              </button>
+              <button 
+                onClick={() => onNavigate('Fee Structure')}
+                className="px-3.5 py-1.5 bg-white hover:bg-blue-50 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 shadow-xs transition-all cursor-pointer"
+              >
+                Fee Structure →
+              </button>
+            </>
+          ) : (
+            <>
+              <button 
+                onClick={() => onNavigate('Hall Allocation & Tickets')}
+                className="px-3.5 py-1.5 bg-white hover:bg-blue-50 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 shadow-xs transition-all cursor-pointer"
+              >
+                Hall Allocation &amp; Tickets →
+              </button>
+              <button 
+                onClick={() => onNavigate('Student')}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                Student →
+              </button>
+            </>
+          )}
         </div>
       </div>
 

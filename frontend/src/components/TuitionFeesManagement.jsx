@@ -52,18 +52,20 @@ export default function TuitionFeesManagement({
     else if (component === 'Sem2') total = semPayable;
     else if (component === 'FullYear') total = regFee + (semPayable * 2);
 
+    const uniformNum = parseFloat(entryFormData.uniformFee) || 0;
+    const bookNum = parseFloat(entryFormData.bookFee) || 0;
     const fineNum = parseFloat(entryFormData.fine) || 0;
-    const grandTotal = total + fineNum;
+    const grandTotal = total + uniformNum + bookNum + fineNum;
     const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
       ? parseFloat(entryFormData.paidAmount) || 0
-      : total;
+      : grandTotal;
 
     setEntryFormData(prev => ({
       ...prev,
       course: selectedCourse,
       amount: String(total),
       totalAmount: String(grandTotal),
-      paidAmount: prev.paidAmount !== undefined ? prev.paidAmount : String(total),
+      paidAmount: prev.paidAmount !== undefined ? prev.paidAmount : String(grandTotal),
       balance: String(Math.max(0, grandTotal - currentPaid))
     }));
   };
@@ -110,8 +112,10 @@ export default function TuitionFeesManagement({
       const regFee = 7000;
       const baseSemFee = 10000;
       const calcAmt = feeComponent === 'Reg' ? regFee : (feeComponent === 'FullYear' ? regFee + 20000 : baseSemFee);
+      const uniformNum = parseFloat(entryFormData.uniformFee) || 0;
+      const bookNum = parseFloat(entryFormData.bookFee) || 0;
       const fineNum = parseFloat(entryFormData.fine) || 0;
-      const totalPayable = calcAmt + fineNum;
+      const totalPayable = calcAmt + uniformNum + bookNum + fineNum;
 
       setEntryFormData(prev => ({
         ...prev,
@@ -367,8 +371,8 @@ export default function TuitionFeesManagement({
               </div>
             </div>
 
-            {/* ROW 3: Due Date, Amount, Fine */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* ROW 3: Due Date, Base Amount, Uniform Fees, Book Fees, Fine */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
                 <label className="block text-slate-700 font-bold mb-1.5">
                   Due Date <span className="text-rose-500">*</span>
@@ -385,8 +389,8 @@ export default function TuitionFeesManagement({
               {/* Base Amount */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
-                  <span>Base Amount (₹) <span className="text-rose-500">*</span></span>
-                  <span className="text-[10px] text-emerald-600 font-bold">Fee Matrix</span>
+                  <span>Tuition / Base (₹) <span className="text-rose-500">*</span></span>
+                  <span className="text-[10px] text-emerald-600 font-bold">Matrix</span>
                 </label>
                 <input
                   type="number"
@@ -394,8 +398,10 @@ export default function TuitionFeesManagement({
                   onChange={(e) => {
                     const amtVal = e.target.value;
                     const baseAmt = parseFloat(amtVal) || 0;
+                    const uniformNum = parseFloat(entryFormData.uniformFee) || 0;
+                    const bookNum = parseFloat(entryFormData.bookFee) || 0;
                     const fineNum = parseFloat(entryFormData.fine) || 0;
-                    const total = baseAmt + fineNum;
+                    const total = baseAmt + uniformNum + bookNum + fineNum;
                     const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
                       ? parseFloat(entryFormData.paidAmount) || 0
                       : total;
@@ -412,11 +418,75 @@ export default function TuitionFeesManagement({
                 />
               </div>
 
+              {/* Uniform Fees Field */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                  <span>Uniform Fees (₹)</span>
+                  <span className="text-[10px] text-purple-600 font-bold">+ Uniform</span>
+                </label>
+                <input
+                  type="number"
+                  value={entryFormData.uniformFee || ''}
+                  onChange={(e) => {
+                    const uniVal = e.target.value;
+                    const uniformNum = parseFloat(uniVal) || 0;
+                    const baseAmt = parseFloat(entryFormData.amount) || 0;
+                    const bookNum = parseFloat(entryFormData.bookFee) || 0;
+                    const fineNum = parseFloat(entryFormData.fine) || 0;
+                    const total = baseAmt + uniformNum + bookNum + fineNum;
+                    const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
+                      ? parseFloat(entryFormData.paidAmount) || 0
+                      : total;
+                    setEntryFormData(prev => ({
+                      ...prev,
+                      uniformFee: uniVal,
+                      totalAmount: String(total),
+                      balance: String(Math.max(0, total - currentPaid))
+                    }));
+                  }}
+                  className="w-full p-2.5 bg-purple-50/40 border border-purple-200 focus:border-purple-400 rounded-xl text-purple-950 font-bold focus:outline-none shadow-2xs"
+                  placeholder="0"
+                />
+                <span className="text-[10px] text-purple-600 mt-1 block font-medium">Blazers, dress kit</span>
+              </div>
+
+              {/* Book Fees Field */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                  <span>Book Fees (₹)</span>
+                  <span className="text-[10px] text-blue-600 font-bold">+ Books</span>
+                </label>
+                <input
+                  type="number"
+                  value={entryFormData.bookFee || ''}
+                  onChange={(e) => {
+                    const bkVal = e.target.value;
+                    const bookNum = parseFloat(bkVal) || 0;
+                    const baseAmt = parseFloat(entryFormData.amount) || 0;
+                    const uniformNum = parseFloat(entryFormData.uniformFee) || 0;
+                    const fineNum = parseFloat(entryFormData.fine) || 0;
+                    const total = baseAmt + uniformNum + bookNum + fineNum;
+                    const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
+                      ? parseFloat(entryFormData.paidAmount) || 0
+                      : total;
+                    setEntryFormData(prev => ({
+                      ...prev,
+                      bookFee: bkVal,
+                      totalAmount: String(total),
+                      balance: String(Math.max(0, total - currentPaid))
+                    }));
+                  }}
+                  className="w-full p-2.5 bg-blue-50/40 border border-blue-200 focus:border-blue-400 rounded-xl text-blue-950 font-bold focus:outline-none shadow-2xs"
+                  placeholder="0"
+                />
+                <span className="text-[10px] text-blue-600 mt-1 block font-medium">Textbooks, manuals</span>
+              </div>
+
               {/* Fine Amount (Auto Added) */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
                   <span>Fine (₹)</span>
-                  <span className="text-[10px] text-rose-500 font-bold">+ Auto-adds to Total</span>
+                  <span className="text-[10px] text-rose-500 font-bold">+ Fine</span>
                 </label>
                 <input
                   type="number"
@@ -425,10 +495,12 @@ export default function TuitionFeesManagement({
                     const fineVal = e.target.value;
                     const fineNum = parseFloat(fineVal) || 0;
                     const baseAmt = parseFloat(entryFormData.amount) || 0;
-                    const total = baseAmt + fineNum;
+                    const uniformNum = parseFloat(entryFormData.uniformFee) || 0;
+                    const bookNum = parseFloat(entryFormData.bookFee) || 0;
+                    const total = baseAmt + uniformNum + bookNum + fineNum;
                     const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
                       ? parseFloat(entryFormData.paidAmount) || 0
-                      : baseAmt;
+                      : total;
                     setEntryFormData(prev => ({
                       ...prev,
                       fine: fineVal,
@@ -439,10 +511,10 @@ export default function TuitionFeesManagement({
                   className="w-full p-2.5 bg-white border border-rose-200 focus:border-rose-400 rounded-xl text-slate-800 font-bold focus:outline-none shadow-2xs"
                   placeholder="0"
                 />
-                <div className="mt-1.5 p-1.5 bg-rose-50/80 border border-rose-100 rounded-lg flex items-center justify-between text-[11px]">
-                  <span className="text-slate-600 font-medium">Total with Fine:</span>
+                <div className="mt-1 p-1 bg-rose-50/80 border border-rose-100 rounded-lg flex items-center justify-between text-[10px]">
+                  <span className="text-slate-600 font-medium">Total:</span>
                   <span className="text-rose-700 font-black">
-                    ₹{((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0)).toLocaleString('en-IN')}
+                    ₹{((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.uniformFee) || 0) + (parseFloat(entryFormData.bookFee) || 0) + (parseFloat(entryFormData.fine) || 0)).toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
@@ -456,7 +528,7 @@ export default function TuitionFeesManagement({
                   <button
                     type="button"
                     onClick={() => {
-                      const total = (parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0);
+                      const total = (parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.uniformFee) || 0) + (parseFloat(entryFormData.bookFee) || 0) + (parseFloat(entryFormData.fine) || 0);
                       setEntryFormData(prev => ({
                         ...prev,
                         paidAmount: String(total),
@@ -465,7 +537,7 @@ export default function TuitionFeesManagement({
                     }}
                     className="text-[10px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
                   >
-                    Pay Full (₹{((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0)).toLocaleString('en-IN')})
+                    Pay Full (₹{((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.uniformFee) || 0) + (parseFloat(entryFormData.bookFee) || 0) + (parseFloat(entryFormData.fine) || 0)).toLocaleString('en-IN')})
                   </button>
                 </label>
                 <input
@@ -473,7 +545,7 @@ export default function TuitionFeesManagement({
                   value={entryFormData.paidAmount !== undefined ? entryFormData.paidAmount : (entryFormData.amount || '')}
                   onChange={(e) => {
                     const paid = e.target.value;
-                    const total = (parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0);
+                    const total = (parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.uniformFee) || 0) + (parseFloat(entryFormData.bookFee) || 0) + (parseFloat(entryFormData.fine) || 0);
                     const paidVal = paid === '' ? 0 : parseFloat(paid) || 0;
                     const bal = Math.max(0, total - paidVal);
                     setEntryFormData(prev => ({
@@ -498,13 +570,13 @@ export default function TuitionFeesManagement({
                   value={
                     entryFormData.balance !== undefined
                       ? entryFormData.balance
-                      : String(Math.max(0, ((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.fine) || 0)) - (parseFloat(entryFormData.paidAmount !== undefined ? entryFormData.paidAmount : entryFormData.amount) || 0)))
+                      : String(Math.max(0, ((parseFloat(entryFormData.amount) || 0) + (parseFloat(entryFormData.uniformFee) || 0) + (parseFloat(entryFormData.bookFee) || 0) + (parseFloat(entryFormData.fine) || 0)) - (parseFloat(entryFormData.paidAmount !== undefined ? entryFormData.paidAmount : entryFormData.amount) || 0)))
                   }
                   readOnly
                   className="w-full p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl text-amber-950 font-black shadow-2xs cursor-not-allowed"
                   placeholder="0"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Total (Base + Fine) − Paid</p>
+                <p className="text-[10px] text-slate-400 mt-1">Total (Base + Uniform + Book + Fine) − Paid</p>
               </div>
 
               <div>
@@ -756,7 +828,9 @@ export default function TuitionFeesManagement({
                   <th className="py-3 px-3">Student Name</th>
                   <th className="py-3 px-3">Roll No</th>
                   <th className="py-3 px-3">Department</th>
-                  <th className="py-3 px-3 text-right">Base Amount</th>
+                  <th className="py-3 px-3 text-right">Base Tuition</th>
+                  <th className="py-3 px-3 text-right">Uniform Fee</th>
+                  <th className="py-3 px-3 text-right">Book Fee</th>
                   <th className="py-3 px-3 text-right">Fine</th>
                   <th className="py-3 px-3 text-right">Total Payable</th>
                   <th className="py-3 px-3 text-right">Paid Amount</th>
@@ -768,8 +842,10 @@ export default function TuitionFeesManagement({
               <tbody className="divide-y divide-slate-100 font-medium">
                 {searchedTuitionRecords.map((r, i) => {
                   const fineVal = Number(r.fine) || 0;
+                  const uniVal = Number(r.uniformFee) || 0;
+                  const bkVal = Number(r.bookFee) || 0;
                   const totalVal = Number(r.totalFee) || (Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0);
-                  const baseVal = r.baseAmount !== undefined ? Number(r.baseAmount) : (totalVal - fineVal);
+                  const baseVal = r.baseAmount !== undefined ? Number(r.baseAmount) : Math.max(0, totalVal - uniVal - bkVal - fineVal);
                   const paidVal = Number(r.paidFee) || 0;
                   const pendVal = Number(r.pendingFee) || Math.max(0, totalVal - paidVal);
 
@@ -789,6 +865,24 @@ export default function TuitionFeesManagement({
                       <td className="py-3 px-3 font-semibold text-slate-700">{r.rollNo || r.id}</td>
                       <td className="py-3 px-3 text-slate-600">{r.course || 'UG'}</td>
                       <td className="py-3 px-3 text-right font-semibold text-slate-800">₹{baseVal.toLocaleString('en-IN')}</td>
+                      <td className="py-3 px-3 text-right">
+                        {uniVal > 0 ? (
+                          <span className="font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded text-[11px]">
+                            ₹{uniVal.toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">₹0</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        {bkVal > 0 ? (
+                          <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">
+                            ₹{bkVal.toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">₹0</span>
+                        )}
+                      </td>
                       <td className="py-3 px-3 text-right">
                         {fineVal > 0 ? (
                           <span className="font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded text-[11px]">

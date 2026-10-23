@@ -33,6 +33,7 @@ const tcRoutes               = require('./routes/tcRoutes');
 const staffTaskRoutes        = require('./routes/staffTaskRoutes');
 const coursePlanRoutes       = require('./routes/coursePlanRoutes');
 const bonafideRoutes         = require('./routes/bonafideRoutes');
+const expenseRoutes          = require('./routes/expenseRoutes');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -113,6 +114,7 @@ app.use(['/api/tc', '/tc'],                            tcRoutes);
 app.use(['/api/staff-tasks', '/staff-tasks'],          staffTaskRoutes);
 app.use(['/api/course-plans', '/course-plans'],        coursePlanRoutes);
 app.use(['/api/bonafide', '/bonafide'],                bonafideRoutes);
+app.use(['/api/expenses', '/expenses'],                expenseRoutes);
 
 // 404
 app.use((req, res) => {
