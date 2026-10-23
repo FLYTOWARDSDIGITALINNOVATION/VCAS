@@ -15,7 +15,10 @@ import {
   Loader2,
   Info,
   CalendarCheck,
-  Sparkles
+  Sparkles,
+  BookOpen,
+  Users,
+  CheckSquare
 } from 'lucide-react';
 
 export default function StaffLeave({ staffUser = {} }) {
@@ -61,6 +64,24 @@ export default function StaffLeave({ staffUser = {} }) {
   const [reviewRemarks, setReviewRemarks] = useState('');
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
 
+  // Department Timetable state for leave period allocation
+  const [deptStaffList, setDeptStaffList] = useState([]);
+  const [selectedTimetableStaffId, setSelectedTimetableStaffId] = useState(staffId || '');
+  const [deptSchedule, setDeptSchedule] = useState({});
+  const [loadingTimetable, setLoadingTimetable] = useState(false);
+
+  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const PERIODS = [
+    { num: 1, time: '09:30 - 10:25' },
+    { num: 2, time: '10:25 - 11:20' },
+    { num: 3, time: '11:35 - 12:30' },
+    { num: 4, time: '12:30 - 01:25' },
+    { num: 5, time: '02:05 - 03:00' },
+    { num: 6, time: '03:00 - 03:55' },
+    { num: 7, time: '04:00 - 04:45' },
+    { num: 8, time: '04:45 - 05:30' }
+  ];
+
   // Fetch leaves from MongoDB
   const fetchLeaves = async () => {
     if (!staffId) return;
@@ -101,12 +122,55 @@ export default function StaffLeave({ staffUser = {} }) {
     }
   };
 
+  // Fetch all staff members in the department
+  const fetchDeptStaff = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/staff`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.staff)) {
+        const myDept = (staffUser?.department || '').trim().toLowerCase();
+        const filtered = data.staff.filter(s => {
+          const sDept = (s.department || '').trim().toLowerCase();
+          return !myDept || sDept === myDept || sDept.includes(myDept) || myDept.includes(sDept);
+        });
+        setDeptStaffList(filtered.length > 0 ? filtered : data.staff);
+      }
+    } catch (e) {
+      console.error('Failed to load dept staff:', e);
+    }
+  };
+
+  const fetchStaffTimetable = async (targetId) => {
+    if (!targetId) return;
+    try {
+      setLoadingTimetable(true);
+      const res = await fetch(`${API_BASE}/timetable/staff/${targetId}`);
+      const data = await res.json();
+      if (data.success && data.schedule) {
+        setDeptSchedule(data.schedule);
+      } else {
+        setDeptSchedule({});
+      }
+    } catch (e) {
+      setDeptSchedule({});
+    } finally {
+      setLoadingTimetable(false);
+    }
+  };
+
   useEffect(() => {
     fetchLeaves();
+    fetchDeptStaff();
     if (isHod) {
       fetchDepartmentLeaves();
     }
   }, [staffId, isHod]);
+
+  useEffect(() => {
+    if (selectedTimetableStaffId) {
+      fetchStaffTimetable(selectedTimetableStaffId);
+    }
+  }, [selectedTimetableStaffId]);
 
   const handleStageApproval = async (leaveId, action, remarks = '') => {
     try {
@@ -278,12 +342,12 @@ export default function StaffLeave({ staffUser = {} }) {
         </div>
       )}
 
-      {/* HOD Tabs */}
-      {isHod && (
-        <div className="flex border-b border-slate-200 gap-2 mb-2">
+      {/* Tabs Header - available for all staff to view Department Timetable for Leave Allocation */}
+      <div className="flex border-b border-slate-200 gap-2 mb-2 overflow-x-auto">
+        {isHod && (
           <button
             onClick={() => setActiveTab('staff_requests')}
-            className={`pb-3 px-4 text-xs font-black transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
+            className={`pb-3 px-4 text-xs font-black transition-all flex items-center gap-2 border-b-2 cursor-pointer shrink-0 ${
               activeTab === 'staff_requests'
                 ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-xl'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -297,22 +361,37 @@ export default function StaffLeave({ staffUser = {} }) {
               </span>
             )}
           </button>
-          <button
-            onClick={() => setActiveTab('my_leaves')}
-            className={`pb-3 px-4 text-xs font-black transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
-              activeTab === 'my_leaves'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Calendar className="w-4 h-4 text-blue-600" />
-            <span>My Leave Applications</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
-              {leaves.length}
-            </span>
-          </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={() => setActiveTab('my_leaves')}
+          className={`pb-3 px-4 text-xs font-black transition-all flex items-center gap-2 border-b-2 cursor-pointer shrink-0 ${
+            activeTab === 'my_leaves'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Calendar className="w-4 h-4 text-blue-600" />
+          <span>My Leave Applications</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+            {leaves.length}
+          </span>
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('dept_timetable');
+            if (deptStaffList.length === 0) fetchDeptStaff();
+            if (!selectedTimetableStaffId && staffId) setSelectedTimetableStaffId(staffId);
+          }}
+          className={`pb-3 px-4 text-xs font-black transition-all flex items-center gap-2 border-b-2 cursor-pointer shrink-0 ${
+            activeTab === 'dept_timetable'
+              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <CalendarCheck className="w-4 h-4 text-indigo-600" />
+          <span>Department Timetable & Period Allocation</span>
+        </button>
+      </div>
 
       {/* Leave Summary Cards (Remaining leave count removed per user request) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -513,7 +592,7 @@ export default function StaffLeave({ staffUser = {} }) {
       )}
 
       {/* TAB 2: MY LEAVE APPLICATIONS */}
-      {(!isHod || activeTab === 'my_leaves') && (
+      {activeTab === 'my_leaves' && (
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-4 sm:px-6 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -593,7 +672,7 @@ export default function StaffLeave({ staffUser = {} }) {
                         <button
                           onClick={() => handleCancelLeave(item._id)}
                           title="Cancel Application"
-                          className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all"
+                          className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -608,6 +687,101 @@ export default function StaffLeave({ staffUser = {} }) {
           </div>
         )}
       </div>
+      )}
+
+      {/* TAB 3: DEPARTMENT TIMETABLE & PERIOD ALLOCATION FOR LEAVE PLANNING */}
+      {activeTab === 'dept_timetable' && (
+        <div className="bg-white rounded-2xl border border-indigo-200/80 shadow-xs overflow-hidden space-y-4 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-600" />
+                Department Timetable & Staff Period Allocation
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Department: <span className="font-bold text-slate-800">{staffUser?.department || 'General'}</span> • View schedules to manage period swap and substitute class allocation
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500">Select Faculty:</span>
+              <select
+                value={selectedTimetableStaffId}
+                onChange={(e) => setSelectedTimetableStaffId(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold py-2 px-3 rounded-xl focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                {deptStaffList.map((s) => (
+                  <option key={s.staffId || s._id} value={s.staffId}>
+                    {s.name} ({s.staffId}) {s.staffId === staffId ? '— You' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {loadingTimetable ? (
+            <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+              <p className="text-xs font-medium">Loading faculty timetable schedule...</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-xs text-center border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-slate-200 font-extrabold text-slate-800">
+                    <th className="py-3 px-3 w-28 text-left bg-slate-200/70 border-r border-slate-200">Day</th>
+                    {PERIODS.map(p => (
+                      <th key={p.num} className="py-2 px-2 border-r border-slate-200">
+                        <div className="text-[11px] font-black text-slate-900">Period {p.num}</div>
+                        <div className="text-[9px] text-slate-500 font-medium">{p.time}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {DAYS.map(day => (
+                    <tr key={day} className="hover:bg-indigo-50/20 transition-colors">
+                      <td className="py-3 px-3 font-extrabold text-slate-900 text-left bg-slate-50/60 border-r border-slate-200">
+                        {day}
+                      </td>
+                      {PERIODS.map(p => {
+                        const slotData = deptSchedule[day]?.[String(p.num)] || null;
+                        return (
+                          <td key={p.num} className="py-2 px-2 border-r border-slate-100 min-w-[100px]">
+                            {slotData ? (
+                              <div className="p-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 shadow-2xs">
+                                <div className="font-extrabold text-[11px] truncate" title={slotData.name}>
+                                  {slotData.code || slotData.name}
+                                </div>
+                                <div className="text-[9px] text-blue-600 font-semibold truncate">
+                                  {slotData.name}
+                                </div>
+                                {slotData.room && (
+                                  <div className="text-[9px] text-slate-500 font-mono mt-0.5">
+                                    Rm {slotData.room}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-block px-2 py-1 rounded text-[10px] font-bold text-slate-400 bg-slate-50/50">
+                                Free
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 font-medium flex items-center gap-2">
+            <Info className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Staff marked as <strong>Free</strong> in any period can be assigned for substitute class allocation during leave.</span>
+          </div>
+        </div>
       )}
 
       {/* HOD Review & Stage Approval Modal */}

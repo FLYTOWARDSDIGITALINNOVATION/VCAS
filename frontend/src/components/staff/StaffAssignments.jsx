@@ -37,6 +37,7 @@ export default function StaffAssignments({ staffUser }) {
   const [loading, setLoading]             = useState(true);
   const [filterSubject, setFilterSubject] = useState("ALL");
   const [filterStatus, setFilterStatus]   = useState("ALL");
+  const [filterCategory, setFilterCategory] = useState("ALL");
   const [showModal, setShowModal]         = useState(false);
   const [successMsg, setSuccessMsg]       = useState("");
   const [errorMsg, setErrorMsg]           = useState("");
@@ -60,6 +61,8 @@ export default function StaffAssignments({ staffUser }) {
 
   // Form state (shared for create + edit)
   const [newTitle, setNewTitle]               = useState("");
+  const [newCategory, setNewCategory]         = useState("Regular"); // Regular | Project
+  const [newProjectPhase, setNewProjectPhase] = useState("Phase 1 - Topic & Problem Statement");
   const [newSubjectCode, setNewSubjectCode]   = useState("");
   const [newSubjectName, setNewSubjectName]   = useState("");
   const [newDueDate, setNewDueDate]           = useState("");
@@ -106,6 +109,8 @@ export default function StaffAssignments({ staffUser }) {
   const filteredAssignments = assignments.filter((item) => {
     if (filterSubject !== "ALL" && item.subjectCode !== filterSubject) return false;
     if (filterStatus  !== "ALL" && item.status      !== filterStatus)  return false;
+    if (filterCategory === "Project" && item.category !== "Project") return false;
+    if (filterCategory === "Regular" && item.category === "Project") return false;
     return true;
   });
 
@@ -210,10 +215,13 @@ export default function StaffAssignments({ staffUser }) {
   };
 
   // Open modal for creating
-  const openCreateModal = () => {
+  const openCreateModal = (presetCategory = "Regular") => {
     setEditingId(null);
+    setNewCategory(presetCategory);
+    setNewProjectPhase("Phase 1 - Topic & Problem Statement");
     setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
-    setNewDescription(""); setNewDueDate(""); setNewMarks("20");
+    setNewDescription(""); setNewDueDate(""); 
+    setNewMarks(presetCategory === "Project" ? "50" : "20");
     setAttachmentName(""); setAttachmentData(""); setAttachmentSize(""); setAttachmentType("");
     setErrorMsg("");
     setShowModal(true);
@@ -222,11 +230,13 @@ export default function StaffAssignments({ staffUser }) {
   // Open modal pre-filled for editing
   const openEditModal = (asgt) => {
     setEditingId(asgt._id);
+    setNewCategory(asgt.category || "Regular");
+    setNewProjectPhase(asgt.projectPhase || "Phase 1 - Topic & Problem Statement");
     setNewTitle(asgt.title || "");
     setNewSubjectCode(asgt.subjectCode || "");
     setNewSubjectName(asgt.subjectName || "");
     setNewDueDate(asgt.dueDate || "");
-    setNewMarks(String(asgt.totalMarks || "20"));
+    setNewMarks(String(asgt.totalMarks || (asgt.category === "Project" ? "50" : "20")));
     setNewDescription(asgt.description || "");
     setAttachmentName(asgt.attachmentName || "");
     setAttachmentData(asgt.attachmentData || "");
@@ -239,6 +249,8 @@ export default function StaffAssignments({ staffUser }) {
   const closeModal = () => {
     setShowModal(false);
     setEditingId(null);
+    setNewCategory("Regular");
+    setNewProjectPhase("Phase 1 - Topic & Problem Statement");
     setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
     setNewDescription(""); setNewDueDate(""); setNewMarks("");
     setAttachmentName(""); setAttachmentData(""); setAttachmentSize(""); setAttachmentType("");
@@ -246,7 +258,7 @@ export default function StaffAssignments({ staffUser }) {
 
   const handleCreateAssignment = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newDueDate || !newSubjectCode.trim()) return;
+    if (!newTitle.trim() || !newDueDate) return;
     setSaving(true);
     try {
       const res  = await fetch(`${API}/assignments/${staffId}`, {
@@ -260,7 +272,9 @@ export default function StaffAssignments({ staffUser }) {
           title:       newTitle.trim(),
           description: newDescription.trim(),
           dueDate:     newDueDate,
-          totalMarks:  Number(newMarks) || 20,
+          totalMarks:  Number(newMarks) || (newCategory === "Project" ? 50 : 20),
+          category:    newCategory,
+          projectPhase: newCategory === "Project" ? newProjectPhase : "",
           attachmentName,
           attachmentData,
           attachmentSize,
@@ -271,7 +285,7 @@ export default function StaffAssignments({ staffUser }) {
       if (json.success) {
         setAssignments((prev) => [json.data, ...prev]);
         closeModal();
-        toast("Assignment created and published successfully!");
+        toast(newCategory === "Project" ? "Project Assignment created and published!" : "Assignment created and published successfully!");
       } else {
         toast(json.message, true);
       }
@@ -284,7 +298,7 @@ export default function StaffAssignments({ staffUser }) {
 
   const handleUpdateAssignment = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newDueDate || !newSubjectCode.trim()) return;
+    if (!newTitle.trim() || !newDueDate) return;
     setSaving(true);
     try {
       const res  = await fetch(`${API}/assignments/${staffId}/${editingId}`, {
@@ -296,7 +310,9 @@ export default function StaffAssignments({ staffUser }) {
           title:       newTitle.trim(),
           description: newDescription.trim(),
           dueDate:     newDueDate,
-          totalMarks:  Number(newMarks) || 20,
+          totalMarks:  Number(newMarks) || (newCategory === "Project" ? 50 : 20),
+          category:    newCategory,
+          projectPhase: newCategory === "Project" ? newProjectPhase : "",
           attachmentName,
           attachmentData,
           attachmentSize,
@@ -589,22 +605,49 @@ export default function StaffAssignments({ staffUser }) {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-slate-400" />
-          <span className="text-xs font-bold text-slate-700">Filter By:</span>
+      {/* Category Pills & Filters */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setFilterCategory("ALL")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              filterCategory === "ALL" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            All ({assignments.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterCategory("Regular")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              filterCategory === "Regular" ? "bg-blue-600 text-white shadow-xs" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            📝 Regular Assignments ({assignments.filter(a => a.category !== "Project").length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterCategory("Project")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              filterCategory === "Project" ? "bg-purple-600 text-white shadow-xs" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            🚀 Project Assignments ({assignments.filter(a => a.category === "Project").length})
+          </button>
         </div>
-        <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
-          <option value="ALL">All Subjects</option>
-          {subjects.map((code) => (<option key={code} value={code}>{code}</option>))}
-        </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
-          <option value="ALL">All Statuses</option>
-          <option value="Active">Active</option>
-          <option value="Closed">Closed</option>
-        </select>
-        <span className="text-xs text-slate-400 font-medium ml-auto">Showing {filteredAssignments.length} assignments</span>
+
+        <div className="flex items-center gap-2">
+          <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
+            <option value="ALL">All Subjects</option>
+            {subjects.map((code) => (<option key={code} value={code}>{code}</option>))}
+          </select>
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
+            <option value="ALL">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Closed">Closed</option>
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -625,7 +668,18 @@ export default function StaffAssignments({ staffUser }) {
                 <div key={asgt._id} className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 flex flex-col justify-between hover:shadow-md transition-all">
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">{asgt.subjectCode}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">{asgt.subjectCode || 'General'}</span>
+                        {asgt.category === "Project" ? (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                            🚀 Project {asgt.projectPhase ? `• ${asgt.projectPhase}` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                            Assignment
+                          </span>
+                        )}
+                      </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isOverdue ? "bg-red-50 text-red-700 border border-red-100" : isActive ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-slate-100 text-slate-600"}`}>
                         {isOverdue ? "Overdue" : asgt.status}
                       </span>
@@ -756,10 +810,53 @@ export default function StaffAssignments({ staffUser }) {
             </div>
 
             <form onSubmit={editingId ? handleUpdateAssignment : handleCreateAssignment} className="space-y-4">
+              {/* Category Selector */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Assignment Type</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => { setNewCategory("Regular"); if (newMarks === "50") setNewMarks("20"); }}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      newCategory === "Regular" ? "bg-white text-blue-600 shadow-xs font-black" : "text-slate-600"
+                    }`}
+                  >
+                    📝 Regular Assignment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setNewCategory("Project"); if (!newMarks || newMarks === "20") setNewMarks("50"); }}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      newCategory === "Project" ? "bg-purple-600 text-white shadow-xs font-black" : "text-slate-600"
+                    }`}
+                  >
+                    🚀 Project Assignment
+                  </button>
+                </div>
+              </div>
+
+              {newCategory === "Project" && (
+                <div>
+                  <label className="block text-xs font-bold text-purple-900 mb-1">Project Phase / Milestone *</label>
+                  <select
+                    value={newProjectPhase}
+                    onChange={(e) => setNewProjectPhase(e.target.value)}
+                    className="w-full bg-purple-50 border border-purple-200 text-purple-900 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
+                  >
+                    <option value="Phase 1 - Topic & Problem Statement">Phase 1 - Topic & Problem Statement</option>
+                    <option value="Phase 2 - Architecture & Design Methodology">Phase 2 - Architecture & Design Methodology</option>
+                    <option value="Phase 3 - Code & Implementation Review">Phase 3 - Code & Implementation Review</option>
+                    <option value="Phase 4 - Final Project Report & Viva">Phase 4 - Final Project Report & Viva</option>
+                    <option value="Mini Project Submission">Mini Project Submission</option>
+                    <option value="Capstone Project Review">Capstone Project Review</option>
+                  </select>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
-                  <input type="text" required placeholder="e.g., CS401" value={newSubjectCode} onChange={(e) => setNewSubjectCode(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input type="text" placeholder="e.g., CS401 (optional)" value={newSubjectCode} onChange={(e) => setNewSubjectCode(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name</label>

@@ -18,7 +18,7 @@ const studentSubmissionSchema = new mongoose.Schema({
 const assignmentSchema = new mongoose.Schema({
   staffId:      { type: String, required: true },
   staffName:    { type: String, default: "" },
-  subjectCode:  { type: String, required: true },
+  subjectCode:  { type: String, default: "" },
   subjectName:  { type: String, default: "" },
   department:   { type: String, default: "" },
   semester:     { type: Number, default: 1 },
@@ -27,6 +27,8 @@ const assignmentSchema = new mongoose.Schema({
   description:  { type: String, default: "" },
   dueDate:      { type: String, required: true },
   totalMarks:   { type: Number, default: 20 },
+  category:     { type: String, enum: ["Regular", "Project"], default: "Regular" },
+  projectPhase: { type: String, default: "" },
   status:       { type: String, enum: ["Active", "Closed"], default: "Active" },
   submissions:  { type: Number, default: 0 },
   attachmentName: { type: String, default: "" },

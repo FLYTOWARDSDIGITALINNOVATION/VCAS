@@ -35,7 +35,7 @@ const questionPaperSchema = new mongoose.Schema({
   staffId: { type: String, required: true },
   staffName: { type: String, required: true },
   department: { type: String, required: true },
-  subjectCode: { type: String, required: true },
+  subjectCode: { type: String, default: "" },
   subjectName: { type: String, required: true },
   semester: { type: Number, required: true },
   year: { type: Number, required: true },

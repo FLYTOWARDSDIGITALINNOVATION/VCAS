@@ -70,7 +70,7 @@ const staffSchema = new mongoose.Schema({
   phone:              { type: String, default: '' },
   department:         { type: String, required: true, trim: true },
   designation:        { type: String, default: 'Assistant Professor' },
-  role:               { type: String, default: 'Staff', enum: ['Staff', 'Accountant', 'Office Staff', 'Tamil', 'English', 'Physical Education', 'Office'] },
+  role:               { type: String, default: 'Staff', enum: ['Staff', 'HOD', 'Accountant', 'Office Staff', 'Tamil', 'English', 'Physical Education', 'Office'] },
   employmentType:     { type: String, default: 'Permanent / Full-Time' },
   status:             { type: String, default: 'Active' },
   joiningDate:        { type: String, default: '' },

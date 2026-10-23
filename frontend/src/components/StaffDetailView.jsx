@@ -342,8 +342,8 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
     e.preventDefault();
     setClassFormError('');
 
-    if (!classForm.code.trim() || !classForm.name.trim()) {
-      setClassFormError('Subject Code and Subject Name are required.');
+    if (!classForm.name.trim()) {
+      setClassFormError('Subject Name is required.');
       return;
     }
 
@@ -1948,11 +1948,10 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
               {/* Subject Code & Name */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. CS2001"
+                    placeholder="e.g. CS2001 (optional)"
                     value={classForm.code}
                     onChange={(e) => setClassForm({ ...classForm, code: e.target.value.toUpperCase() })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-blue-500 focus:outline-none"

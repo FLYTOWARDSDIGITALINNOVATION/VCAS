@@ -110,10 +110,11 @@ export default function StaffTaskAllocation({ staffUser }) {
     try {
       const res = await fetch(`${API_BASE}/staff`);
       const json = await res.json();
-      if (json.success && Array.isArray(json.staff)) {
-        setStaffList(json.staff);
-        if (json.staff.length > 0 && !newTaskForm.assignedStaffId) {
-          setNewTaskForm(prev => ({ ...prev, assignedStaffId: json.staff[0].staffId || json.staff[0]._id }));
+      const list = Array.isArray(json.data) ? json.data : (Array.isArray(json.staff) ? json.staff : []);
+      if (list.length > 0) {
+        setStaffList(list);
+        if (!newTaskForm.assignedStaffId) {
+          setNewTaskForm(prev => ({ ...prev, assignedStaffId: list[0].staffId || list[0]._id }));
         }
       }
     } catch (err) {

@@ -34,7 +34,7 @@ const studentMarkSchema = new mongoose.Schema({
 const internalMarksSchema = new mongoose.Schema({
   staffId:      { type: String, required: true },
   staffName:    { type: String, default: '' },
-  subjectCode:  { type: String, required: true },
+  subjectCode:  { type: String, default: '' },
   subjectName:  { type: String, default: '' },
   department:   { type: String, default: '' },
   semester:     { type: Number, default: 1 },

@@ -132,13 +132,13 @@ exports.addClass = async (req, res) => {
       students
     } = req.body;
 
-    const finalCode = (code || '').trim().toUpperCase();
+    const finalCode = (code || '').trim().toUpperCase() || `SUB-${Date.now().toString(36).toUpperCase()}`;
     const finalStaffId = (staffId || staffIdParam || '').trim();
 
-    if (!finalCode || !name || !semester || !year) {
+    if (!name || !semester || !year) {
       return res.status(400).json({
         success: false,
-        message: 'code, name, semester, and year are required.'
+        message: 'name, semester, and year are required.'
       });
     }
 

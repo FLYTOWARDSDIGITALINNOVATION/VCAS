@@ -137,8 +137,8 @@ export default function StaffMyClasses({ staffUser }) {
   const handleCreateClass = async (e) => {
     e.preventDefault();
     setClassError('');
-    if (!newClass.name.trim() || !newClass.code.trim()) {
-      setClassError('Please enter both subject name and subject code.');
+    if (!newClass.name.trim()) {
+      setClassError('Please enter subject name.');
       return;
     }
 
@@ -617,11 +617,10 @@ export default function StaffMyClasses({ staffUser }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. CS401"
+                    placeholder="e.g. CS401 (optional)"
                     value={newClass.code}
                     onChange={(e) => setNewClass({ ...newClass, code: e.target.value.toUpperCase() })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold uppercase text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"

@@ -1809,7 +1809,7 @@ export default function AssignmentManagement({ user }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
                   <input
                     type="text"
                     value={assignmentForm.code}
@@ -1822,9 +1822,8 @@ export default function AssignmentManagement({ user }) {
                         ...(matched && !prev.subject ? { subject: matched.name, department: matched.dept || prev.department } : {})
                       }));
                     }}
-                    placeholder="e.g. CS401"
+                    placeholder="e.g. CS401 (optional)"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
-                    required
                   />
                 </div>
 

@@ -95,17 +95,17 @@ const createAssignment = async (req, res) => {
   try {
     const staffId = req.params.staffId || req.body.staffId || "ADMIN";
     const { staffName, subjectCode, subjectName, department, semester, academicYear,
-            title, description, dueDate, totalMarks, dueTime, weightage, type,
+            title, description, dueDate, totalMarks, dueTime, weightage, type, category, projectPhase,
             attachmentName, attachmentData, attachmentSize, attachmentType } = req.body;
 
-    if (!title || !dueDate || !subjectCode) {
-      return res.status(400).json({ success: false, message: "title, dueDate and subjectCode are required." });
+    if (!title || !dueDate) {
+      return res.status(400).json({ success: false, message: "title and dueDate are required." });
     }
 
     const assignment = await Assignment.create({
       staffId,
       staffName: staffName || "Admin / Faculty",
-      subjectCode: subjectCode.trim().toUpperCase(),
+      subjectCode: (subjectCode || "").trim().toUpperCase(),
       subjectName: subjectName || "",
       department: department || "",
       semester: semester ? Number(semester) : 1,
@@ -114,6 +114,8 @@ const createAssignment = async (req, res) => {
       description: description || "",
       dueDate,
       totalMarks: Number(totalMarks) || 20,
+      category: category === "Project" ? "Project" : "Regular",
+      projectPhase: projectPhase || "",
       status: "Active",
       submissions: 0,
       attachmentName: attachmentName || "",
@@ -154,17 +156,19 @@ const updateAssignment = async (req, res) => {
     const query = { _id: targetId };
     if (staffId && id) query.staffId = staffId;
 
-    const { subjectCode, subjectName, title, description, dueDate, totalMarks, status, department, semester, academicYear, staffName,
+    const { subjectCode, subjectName, title, description, dueDate, totalMarks, status, department, semester, academicYear, staffName, category, projectPhase,
             attachmentName, attachmentData, attachmentSize, attachmentType } = req.body;
     const assignment = await Assignment.findOne(query);
     if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
 
-    if (subjectCode)               assignment.subjectCode  = subjectCode.trim().toUpperCase();
+    if (subjectCode !== undefined) assignment.subjectCode  = subjectCode.trim().toUpperCase();
     if (subjectName !== undefined) assignment.subjectName  = subjectName;
     if (title)                     assignment.title        = title.trim();
     if (description !== undefined) assignment.description  = description;
     if (dueDate)                   assignment.dueDate      = dueDate;
     if (totalMarks)                assignment.totalMarks   = Number(totalMarks);
+    if (category)                  assignment.category     = category;
+    if (projectPhase !== undefined) assignment.projectPhase = projectPhase;
     if (status)                    assignment.status       = status;
     if (department)                assignment.department   = department;
     if (semester)                  assignment.semester     = Number(semester);

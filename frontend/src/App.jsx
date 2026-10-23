@@ -140,31 +140,34 @@ export default function App() {
               student={currentUser}
               onLogout={handleLogout}
             />
-          ) : (currentUser?.role === 'Staff' && 
-               currentUser?.role !== 'Accountant' && 
-               currentUser?.role !== 'Office Staff' && 
-               currentUser?.designation !== 'Accountant' && 
-               currentUser?.designation !== 'Office Staff' && 
-               !currentUser?.canViewFees && 
-               !currentUser?.department?.toLowerCase()?.includes('account') &&
-               !currentUser?.department?.toLowerCase()?.includes('office')) ? (
-            !currentUser?.isProfileCompleted ? (
-              <StaffFirstTimeSetup 
-                staffUser={currentUser} 
-                onComplete={handleLoginSuccess}
-                onLogout={handleLogout}
-              />
-            ) : (
-              <StaffDashboard 
-                staffUser={currentUser} 
-                onLogout={handleLogout} 
-              />
-            )
-          ) : (
+          ) : (currentUser?.role === 'Admin' || 
+               currentUser?.role === 'SuperAdmin' || 
+               currentUser?.role === 'Super Admin' || 
+               currentUser?.isSuperAdmin === true ||
+               currentUser?.role === 'Accountant' ||
+               currentUser?.role === 'Office Staff' ||
+               currentUser?.designation === 'Accountant' ||
+               currentUser?.designation === 'Office Staff' ||
+               currentUser?.department?.toLowerCase()?.includes('account') ||
+               currentUser?.department?.toLowerCase()?.includes('office')) ? (
             <Dashboard 
               user={currentUser} 
               onLogout={handleLogout} 
               onSwitchPortal={handleSwitchPortal} 
+            />
+          ) : (!currentUser?.isProfileCompleted && 
+               currentUser?.role === 'Staff' && 
+               !currentUser?.isHod && 
+               currentUser?.role !== 'HOD') ? (
+            <StaffFirstTimeSetup 
+              staffUser={currentUser} 
+              onComplete={handleLoginSuccess}
+              onLogout={handleLogout}
+            />
+          ) : (
+            <StaffDashboard 
+              staffUser={currentUser} 
+              onLogout={handleLogout} 
             />
           )
         ) : (

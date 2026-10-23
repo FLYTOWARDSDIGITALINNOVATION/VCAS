@@ -272,42 +272,11 @@ export function generatePrintableTCHtml(tcData = {}) {
               <td colspan="2" style="font-weight: bold; text-transform: uppercase;">${(tcData.courseAdmitted || '—').toUpperCase()}</td>
             </tr>
 
-            <!-- 9. SUBJECT STUDIED -->
+
+            <!-- MEDIUM OF INSTRUCTION (directly after course admitted) -->
             <tr>
               <td style="font-weight: normal;">9.</td>
-              <td style="font-weight: normal; text-transform: uppercase;">SUBJECT STUDIED</td>
-              <td style="text-align: center;"></td>
-              <td colspan="2"></td>
-            </tr>
-
-            <!-- Sub items Part-I, II, III -->
-            <tr>
-              <td></td>
-              <td colspan="4" style="padding-left: 140px;">
-                <div style="display: flex; flex-direction: column; gap: 2px; font-size: 9.5pt;">
-                  <div style="display: flex; gap: 14px;">
-                    <span style="width: 75px; font-weight: normal;">PART-I</span>
-                    <span style="width: 14px; text-align: center;">-</span>
-                    <span style="font-weight: bold; text-transform: uppercase;">${(tcData.subjectStudiedPart1 || 'TAMIL').toUpperCase()}</span>
-                  </div>
-                  <div style="display: flex; gap: 14px;">
-                    <span style="width: 75px; font-weight: normal;">PART-II</span>
-                    <span style="width: 14px; text-align: center;">-</span>
-                    <span style="font-weight: bold; text-transform: uppercase;">${(tcData.subjectStudiedPart2 || 'ENGLISH').toUpperCase()}</span>
-                  </div>
-                  <div style="display: flex; gap: 14px;">
-                    <span style="width: 75px; font-weight: normal;">PART- III</span>
-                    <span style="width: 14px; text-align: center;">-</span>
-                    <span style="font-weight: bold; text-transform: uppercase;">${(tcData.subjectStudiedPart3 || 'CRIMINOLOGY AND FORENSIC SCIENCE').toUpperCase()}</span>
-                  </div>
-                </div>
-              </td>
-            </tr>
-
-            <!-- MEDIUM OF INSTRUCTION -->
-            <tr>
-              <td></td>
-              <td style="font-weight: normal; text-transform: uppercase; text-align: right; padding-right: 6px;">MEDIUM OF INSTRUCTION</td>
+              <td style="font-weight: normal; text-transform: uppercase;">MEDIUM OF INSTRUCTION</td>
               <td style="text-align: center;">:</td>
               <td colspan="2" style="font-weight: bold; text-transform: uppercase;">${(tcData.mediumOfInstruction || 'ENGLISH').toUpperCase()}</td>
             </tr>
@@ -612,42 +581,11 @@ export default function TCCertificatePreview({
                   <td colSpan={2} className="py-0.5 align-top font-bold uppercase">{(data.courseAdmitted || '—').toUpperCase()}</td>
                 </tr>
 
-                {/* 9. SUBJECT STUDIED */}
+
+                {/* MEDIUM OF INSTRUCTION (directly after course admitted) */}
                 <tr>
                   <td className="py-0.5 align-top font-normal">9.</td>
-                  <td className="py-0.5 align-top font-normal uppercase">SUBJECT STUDIED</td>
-                  <td className="py-0.5 align-top text-center"></td>
-                  <td colSpan={2} className="py-0.5 align-top"></td>
-                </tr>
-
-                {/* Sub items Part-I, II, III */}
-                <tr>
-                  <td className="py-0.5 align-top"></td>
-                  <td colSpan={4} className="py-0.5 align-top pl-24 sm:pl-32">
-                    <div className="flex flex-col gap-0.5 text-xs sm:text-sm">
-                      <div className="flex gap-3">
-                        <span className="w-20 font-normal">PART-I</span>
-                        <span className="w-3 text-center">-</span>
-                        <span className="font-bold uppercase">{(data.subjectStudiedPart1 || 'TAMIL').toUpperCase()}</span>
-                      </div>
-                      <div className="flex gap-3">
-                        <span className="w-20 font-normal">PART-II</span>
-                        <span className="w-3 text-center">-</span>
-                        <span className="font-bold uppercase">{(data.subjectStudiedPart2 || 'ENGLISH').toUpperCase()}</span>
-                      </div>
-                      <div className="flex gap-3">
-                        <span className="w-20 font-normal">PART- III</span>
-                        <span className="w-3 text-center">-</span>
-                        <span className="font-bold uppercase">{(data.subjectStudiedPart3 || 'CRIMINOLOGY AND FORENSIC SCIENCE').toUpperCase()}</span>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-
-                {/* MEDIUM OF INSTRUCTION */}
-                <tr>
-                  <td className="py-0.5 align-top"></td>
-                  <td className="py-0.5 align-top font-normal uppercase text-right pr-2">MEDIUM OF INSTRUCTION</td>
+                  <td className="py-0.5 align-top font-normal uppercase">MEDIUM OF INSTRUCTION</td>
                   <td className="py-0.5 align-top text-center">:</td>
                   <td colSpan={2} className="py-0.5 align-top font-bold uppercase">{(data.mediumOfInstruction || 'ENGLISH').toUpperCase()}</td>
                 </tr>

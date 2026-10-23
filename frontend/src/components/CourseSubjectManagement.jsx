@@ -541,7 +541,9 @@ export default function CourseSubjectManagement({ user }) {
     e.preventDefault();
     const errors = {};
     if (!subjectForm.name.trim()) errors.name = 'Subject name is required';
-    if (!subjectForm.code.trim()) errors.code = 'Subject code is required';
+    if (!subjectForm.code.trim()) {
+      subjectForm.code = `SUB-${Date.now().toString(36).toUpperCase()}`;
+    }
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -1950,7 +1952,7 @@ export default function CourseSubjectManagement({ user }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Subject Code *
+                    Subject Code <span className="text-slate-400 font-normal">(optional)</span>
                   </label>
                   <input
                     type="text"

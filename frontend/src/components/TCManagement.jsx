@@ -1038,48 +1038,6 @@ export default function TCManagement({ user }) {
                   </select>
                 </div>
 
-                {/* 14. Subject Studied - Part I */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    14. Subject Studied – Part I
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.subjectStudiedPart1}
-                    onChange={(e) => handleChange('subjectStudiedPart1', e.target.value)}
-                    placeholder="e.g. Tamil / Hindi / French"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  />
-                </div>
-
-                {/* 15. Subject Studied - Part II */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    15. Subject Studied – Part II
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.subjectStudiedPart2}
-                    onChange={(e) => handleChange('subjectStudiedPart2', e.target.value)}
-                    placeholder="e.g. English"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  />
-                </div>
-
-                {/* 16. Subject Studied - Part III */}
-                <div className="sm:col-span-2 lg:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    16. Subject Studied – Part III (Major & Allied)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.subjectStudiedPart3}
-                    onChange={(e) => handleChange('subjectStudiedPart3', e.target.value)}
-                    placeholder="e.g. Major: Computer Science, Allied: Mathematics & Physics"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  />
-                </div>
-
                 {/* 18. Class/Year at Leaving */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">

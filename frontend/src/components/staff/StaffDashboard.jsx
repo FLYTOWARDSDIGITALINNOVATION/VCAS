@@ -21,6 +21,8 @@ import StaffStudentEntry from './StaffStudentEntry';
 import StaffStudentModule from './StaffStudentModule';
 import StaffExamSchedule from './StaffExamSchedule';
 import StaffTaskAllocation from './StaffTaskAllocation';
+import StaffCoursePlan from './StaffCoursePlan';
+import BonafideManagement from '../BonafideManagement';
 import CollegeLogo from '../CollegeLogo';
 
 const NAV_SECTIONS = [
@@ -143,10 +145,14 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Hall Tickets':         return <StaffHallTicket staffUser={staffUser} onNavigate={setActiveNav} />;
       case 'Assignments':          return <StaffAssignments staffUser={staffUser} />;
       case 'Question Papers':      return <StaffQuestionPaper staffUser={staffUser} />;
+      case 'Course Plan':          return <StaffCoursePlan staffUser={staffUser} />;
       case 'Task Allocation':
       case 'Staff Tasks':          return <StaffTaskAllocation staffUser={staffUser} />;
       case 'Fee Structure':
       case 'Fees':                 return <FeeStructureView user={staffUser} />;
+      case 'Student Attendance':   return <StaffAttendance staffUser={staffUser} isReadOnly={true} />;
+      case 'Bonafide Certificate':
+      case 'Bonafide':             return <BonafideManagement user={staffUser} />;
       case 'My Profile':           return <StaffProfile staffUser={staffUser} />;
       case 'Notices':              return <StaffNotices staffUser={staffUser} />;
       case 'Leave Management':
@@ -161,15 +167,94 @@ export default function StaffDashboard({ staffUser, onLogout }) {
     staffUser?.canViewFees === true || 
     staffUser?.department?.toLowerCase()?.includes('account');
 
-  const navSections = [
-    ...NAV_SECTIONS.slice(0, 2),
-    ...(isFinanceStaff ? [{
-      title: 'FINANCE',
+  // Office Staff gets a restricted sidebar (fees + attendance only, no academic menus)
+  const isOfficeStaff = staffUser?.role === 'Office Staff';
+  // Accountant-specific (has bonafide too)
+  const isAccountantOnly = staffUser?.role === 'Accountant' || staffUser?.designation === 'Accountant';
+
+  const isHodUser = staffUser?.isHod === true || 
+    staffUser?.role === 'HOD' || 
+    staffUser?.designation?.toUpperCase()?.includes('HOD') ||
+    staffUser?.canAllocateTasks === true;
+
+  // Build dynamic academic section based on role - exact order requested:
+  // timetable, course plan, assignment, question paper, internal mark, hall allocation, hall ticket
+  const academicItems = [
+    { name: 'Timetable', icon: Calendar },
+    { name: 'Course Plan', icon: FileSpreadsheet },
+    { name: 'Assignments', icon: BookMarked },
+    { name: 'Question Papers', icon: ClipboardList },
+    { name: 'Internal Marks', icon: FileSpreadsheet },
+    { name: 'Hall Allocation & Tickets', icon: Ticket },
+    { name: 'Attendance', icon: CheckSquare },
+    { name: 'My Classes', icon: BookOpen },
+    { name: 'Student', icon: GraduationCap },
+    ...(isHodUser ? [{ name: 'Task Allocation', icon: CheckSquare }] : [])
+  ];
+
+  // Office Staff: Dashboard + restricted finance section + profile only
+  const officeStaffNavSections = [
+    { title: 'MAIN', items: [{ name: 'Dashboard', icon: LayoutDashboard }] },
+    {
+      title: 'SERVICES',
       items: [
-        { name: 'Fee Structure', icon: IndianRupee }
+        { name: 'Fee Structure', icon: IndianRupee },
+        { name: 'Student Attendance', icon: CheckSquare }
+      ]
+    },
+    {
+      title: 'PROFILE & LEAVE',
+      items: [
+        { name: 'My Profile', icon: User },
+        { name: 'Leave Management', icon: UserCheck },
+        { name: 'Notices', icon: Bell }
+      ]
+    }
+  ];
+
+  // Accountant: Dashboard + Finance & Services (fees + attendance + bonafide) + profile only
+  const accountantNavSections = [
+    { title: 'MAIN', items: [{ name: 'Dashboard', icon: LayoutDashboard }] },
+    {
+      title: 'FINANCE & SERVICES',
+      items: [
+        { name: 'Fee Structure', icon: IndianRupee },
+        { name: 'Student Attendance', icon: CheckSquare },
+        { name: 'Bonafide Certificate', icon: Award }
+      ]
+    },
+    {
+      title: 'PROFILE & LEAVE',
+      items: [
+        { name: 'My Profile', icon: User },
+        { name: 'Leave Management', icon: UserCheck },
+        { name: 'Notices', icon: Bell }
+      ]
+    }
+  ];
+
+  const navSections = isOfficeStaff
+    ? officeStaffNavSections
+    : isAccountantOnly
+    ? accountantNavSections
+    : [
+    { title: 'MAIN', items: [{ name: 'Dashboard', icon: LayoutDashboard }] },
+    { title: 'ACADEMIC', items: academicItems },
+    ...(isFinanceStaff ? [{
+      title: 'FINANCE & SERVICES',
+      items: [
+        { name: 'Fee Structure', icon: IndianRupee },
+        { name: 'Student Attendance', icon: CheckSquare }
       ]
     }] : []),
-    ...NAV_SECTIONS.slice(2)
+    {
+      title: 'PROFILE & LEAVE',
+      items: [
+        { name: 'My Profile', icon: User },
+        { name: 'Leave Management', icon: UserCheck },
+        { name: 'Notices', icon: Bell }
+      ]
+    }
   ];
 
   const SidebarContent = ({ isCollapsed = false }) => (

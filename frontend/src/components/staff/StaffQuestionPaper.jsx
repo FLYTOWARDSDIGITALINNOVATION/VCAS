@@ -94,7 +94,6 @@ export default function StaffQuestionPaper({ staffUser }) {
   const openPreview = (paper) => { setCurrent(JSON.parse(JSON.stringify(paper))); setView("preview"); };
 
   const savePaper = async () => {
-    if (!current.subjectCode?.trim()) { showToast("Subject Code is required", "error"); return; }
     if (!current.subjectName?.trim()) { showToast("Subject Name is required", "error"); return; }
     if (!current.staffId?.trim()) { showToast("Staff ID missing – please re-login", "error"); return; }
 
@@ -352,8 +351,8 @@ export default function StaffQuestionPaper({ staffUser }) {
           <h3 className="text-xs font-extrabold uppercase text-slate-400 tracking-wider">Exam Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
             <div>
-              <label className="block text-slate-700 font-bold mb-1">Subject Code *</label>
-              <input value={current.subjectCode} onChange={e => updateField("subjectCode", e.target.value.toUpperCase())} placeholder="e.g. CS301" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase" required />
+              <label className="block text-slate-700 font-bold mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
+              <input value={current.subjectCode} onChange={e => updateField("subjectCode", e.target.value.toUpperCase())} placeholder="e.g. CS301 (optional)" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase" />
             </div>
             <div>
               <label className="block text-slate-700 font-bold mb-1">Subject Name *</label>

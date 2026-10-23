@@ -57,6 +57,7 @@ import FeesManagement from './FeesManagement';
 import CampusFacilitiesManagement from './CampusFacilitiesManagement';
 import FeeManagement from './FeeManagement';
 import TCManagement from './TCManagement';
+import BonafideManagement from './BonafideManagement';
 
 function formatTimeAgo(dateInput) {
   if (!dateInput) return 'Recently';
@@ -702,9 +703,14 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   };
 
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
+  const isFinanceOrOffice = user?.role === 'Accountant' || 
+    user?.role === 'Office Staff' || 
+    user?.designation === 'Accountant' || 
+    user?.designation === 'Office Staff' ||
+    (user?.department && (user?.department.toLowerCase().includes('account') || user?.department.toLowerCase().includes('office')));
+
   // Fees visibility is enabled for Super Admin alone among admins, plus Accountant and Office Staff
-  const canViewFees = isSuperAdmin || user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.canViewFees === true;
-  const isFinanceOrOffice = user?.role === 'Accountant' || user?.role === 'Office Staff';
+  const canViewFees = isSuperAdmin || isFinanceOrOffice || user?.canViewFees === true;
 
   // Nav categories
   const navSections = [
@@ -719,6 +725,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       items: [
         { name: 'Students', icon: GraduationCap },
         { name: 'TC', icon: Award },
+        { name: 'Bonafide', icon: Award },
         { name: 'Staff', icon: Users },
         { name: 'Departments', icon: Building2 },
         { name: 'Subjects', icon: BookOpen },
@@ -727,13 +734,13 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         { name: 'Timetable', icon: Calendar },
         { name: 'Assignments', icon: BookMarked }
       ]
-    }] : []),
-    ...(isFinanceOrOffice && user?.role === 'Office Staff' ? [{
-      title: 'CERTIFICATES',
+    }] : [{
+      title: 'ACADEMIC',
       items: [
-        { name: 'TC', icon: Award }
+        { name: 'Bonafide', icon: Award },
+        { name: 'Students Attendance', icon: CheckSquare }
       ]
-    }] : []),
+    }]),
     ...(canViewFees ? [{
       title: 'FINANCE',
       items: [
@@ -1267,6 +1274,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
             <TCManagement user={user} />
           </main>
+        ) : (activeNav === 'Bonafide' || activeNav === 'Bonafide Certificate') ? (
+          <main className="flex-1 p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
+            <BonafideManagement user={user} />
+          </main>
         ) : activeNav === 'Staff' ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <StaffManagement user={user} />
@@ -1279,7 +1290,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <CourseSubjectManagement user={user} />
           </main>
-        ) : activeNav === 'Attendance' ? (
+        ) : (activeNav === 'Attendance' || activeNav === 'Students Attendance') ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
             <AttendanceManagement user={user} />
           </main>

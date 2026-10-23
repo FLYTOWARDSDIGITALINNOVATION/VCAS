@@ -31,6 +31,8 @@ const examRoutes             = require('./routes/examRoutes');
 const feeStructureRoutes     = require('./routes/feeStructureRoutes');
 const tcRoutes               = require('./routes/tcRoutes');
 const staffTaskRoutes        = require('./routes/staffTaskRoutes');
+const coursePlanRoutes       = require('./routes/coursePlanRoutes');
+const bonafideRoutes         = require('./routes/bonafideRoutes');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -109,6 +111,8 @@ app.use(['/api/exams', '/exams'],                      examRoutes);
 app.use(['/api/fee-structure', '/fee-structure'],      feeStructureRoutes);
 app.use(['/api/tc', '/tc'],                            tcRoutes);
 app.use(['/api/staff-tasks', '/staff-tasks'],          staffTaskRoutes);
+app.use(['/api/course-plans', '/course-plans'],        coursePlanRoutes);
+app.use(['/api/bonafide', '/bonafide'],                bonafideRoutes);
 
 // 404
 app.use((req, res) => {
