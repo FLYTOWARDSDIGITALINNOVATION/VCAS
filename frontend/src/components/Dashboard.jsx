@@ -739,6 +739,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     }] : [{
       title: 'ACADEMIC',
       items: [
+        { name: 'TC', icon: Award },
         { name: 'Bonafide', icon: Award },
         { name: 'Students Attendance', icon: CheckSquare }
       ]
@@ -1286,7 +1287,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
             <StudentsPage user={user} canViewFees={canViewFees} />
           </main>
-        ) : activeNav === 'TC' ? (
+        ) : (activeNav === 'TC' || activeNav === 'Transfer Certificate') ? (
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
             <TCManagement user={user} />
           </main>

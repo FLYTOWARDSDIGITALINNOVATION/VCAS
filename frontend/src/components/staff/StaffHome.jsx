@@ -164,6 +164,7 @@ export default function StaffHome({ staffUser, onNavigate }) {
 
   // Quick actions matching Admin quick actions grid
   const quickActions = isFinanceStaff ? [
+    { label: 'Transfer Certificate (TC)', icon: FileSpreadsheet, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Transfer Certificate' },
     { label: 'Record Expense', icon: Receipt, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Expenses' },
     { label: 'Fee Structure', icon: Building2, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Fee Structure' },
     { label: 'Student Attendance', icon: CheckSquare, bg: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700', navTarget: 'Student Attendance' },

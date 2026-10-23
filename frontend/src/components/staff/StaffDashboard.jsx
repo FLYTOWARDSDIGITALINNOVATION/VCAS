@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BookOpen, CheckSquare, Calendar, BookMarked,
   Bell, UserCheck, User, LogOut, Menu, X, GraduationCap,
   ChevronRight, ChevronLeft, Shield, FileSpreadsheet, ClipboardList, Ticket, Award, UserPlus,
-  Search, Clock, Sparkles, Building2, IndianRupee, Receipt
+  Search, Clock, Sparkles, Building2, IndianRupee, Receipt, FileOutput
 } from 'lucide-react';
 import FeeStructureView from '../FeeStructureView';
 import ExpenseManagement from '../ExpenseManagement';
@@ -24,6 +24,7 @@ import StaffExamSchedule from './StaffExamSchedule';
 import StaffTaskAllocation from './StaffTaskAllocation';
 import StaffCoursePlan from './StaffCoursePlan';
 import BonafideManagement from '../BonafideManagement';
+import TCManagement from '../TCManagement';
 import CollegeLogo from '../CollegeLogo';
 
 const NAV_SECTIONS = [
@@ -156,6 +157,8 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Student Attendance':   return <StaffAttendance staffUser={staffUser} isReadOnly={true} />;
       case 'Bonafide Certificate':
       case 'Bonafide':             return <BonafideManagement user={staffUser} />;
+      case 'Transfer Certificate':
+      case 'TC':                   return <TCManagement user={staffUser} />;
       case 'My Profile':           return <StaffProfile staffUser={staffUser} />;
       case 'Notices':              return <StaffNotices staffUser={staffUser} />;
       case 'Leave Management':
@@ -203,7 +206,8 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       items: [
         { name: 'Fee Structure', icon: IndianRupee },
         { name: 'Expenses', icon: Receipt },
-        { name: 'Student Attendance', icon: CheckSquare }
+        { name: 'Student Attendance', icon: CheckSquare },
+        { name: 'Transfer Certificate', icon: FileOutput }
       ]
     },
     {
@@ -216,7 +220,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
     }
   ];
 
-  // Accountant: Dashboard + Finance & Services (fees + expenses + attendance + bonafide) + profile only
+  // Accountant: Dashboard + Finance & Services (fees + expenses + attendance + bonafide + TC) + profile only
   const accountantNavSections = [
     { title: 'MAIN', items: [{ name: 'Dashboard', icon: LayoutDashboard }] },
     {
@@ -225,7 +229,8 @@ export default function StaffDashboard({ staffUser, onLogout }) {
         { name: 'Fee Structure', icon: IndianRupee },
         { name: 'Expenses', icon: Receipt },
         { name: 'Student Attendance', icon: CheckSquare },
-        { name: 'Bonafide Certificate', icon: Award }
+        { name: 'Bonafide Certificate', icon: Award },
+        { name: 'Transfer Certificate', icon: FileOutput }
       ]
     },
     {

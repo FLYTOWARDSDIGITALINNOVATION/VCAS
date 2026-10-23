@@ -67,8 +67,12 @@ const examSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['End Semester Theory', 'Continuous Internal Assessment (CIA)', 'Practical Lab Examination', 'Supplementary / Arrear'],
-    default: 'End Semester Theory'
+    enum: [
+      'internal1', 'internal 2', 'model', 'semester', 'seminar', 'project',
+      'Internal 1', 'Internal 2', 'Model', 'Semester', 'Seminar', 'Project',
+      'End Semester Theory', 'Continuous Internal Assessment (CIA)', 'Practical Lab Examination', 'Supplementary / Arrear'
+    ],
+    default: 'internal1'
   },
   status: {
     type: String,

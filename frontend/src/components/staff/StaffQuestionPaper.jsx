@@ -10,7 +10,7 @@ import {
 
 const API = `${API_BASE}/question-papers`;
 
-const EXAM_TYPES = ["Internal Test 1", "Internal Test 2", "Model Exam", "Semester Exam", "Retest"];
+const EXAM_TYPES = ["internal1", "internal 2", "model", "semester", "seminar", "project"];
 const QUESTION_TYPES = ["MCQ", "5 Mark", "8 Mark"];
 const STATUS_COLORS = {
   Draft:     "bg-amber-100 text-amber-700 border-amber-200",
@@ -53,7 +53,7 @@ const blankPaper = (staffUser) => ({
   semester: 1,
   year: 1,
   section: "A",
-  examType: "Internal Test 1",
+  examType: "internal1",
   duration: "3 Hours",
   totalMarks: 100,
   instructions: "1. Answer all questions.\n2. Use blue/black ink pen.",

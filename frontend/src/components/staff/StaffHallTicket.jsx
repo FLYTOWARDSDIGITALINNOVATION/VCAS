@@ -128,7 +128,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
 
   // Allocation Form State
   const [formExamName, setFormExamName] = useState('Semester End Theory Examinations - 2026');
-  const [formExamType, setFormExamType] = useState('Semester End Examination');
+  const [formExamType, setFormExamType] = useState('internal1');
   const [formAcademicYear, setFormAcademicYear] = useState('2025-2026');
   const [formDept, setFormDept] = useState(staffUser?.department || '');
   const [formSemester, setFormSemester] = useState(3);
@@ -813,7 +813,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     try {
       const payload = {
         examName: (formExamName || currentAllocation?.examName || 'Semester End Examination 2026').trim(),
-        examType: formExamType || 'Semester End Examination',
+        examType: formExamType || 'internal1',
         academicYear: (formAcademicYear || '2025-2026').trim(),
         department: formDept || currentAllocation?.department || 'Computer Science',
         semester: Number(formSemester || currentAllocation?.semester || 1),
@@ -2590,10 +2590,12 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     onChange={(e) => setFormExamType(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="Semester End Examination">Semester End Examination</option>
-                    <option value="Internal Assessment">Internal Assessment (CIA / Model)</option>
-                    <option value="Model Examination">Model Examination</option>
-                    <option value="Special Supplementary">Special Supplementary</option>
+                    <option value="internal1">internal1</option>
+                    <option value="internal 2">internal 2</option>
+                    <option value="model">model</option>
+                    <option value="semester">semester</option>
+                    <option value="seminar">seminar</option>
+                    <option value="project">project</option>
                   </select>
                 </div>
 

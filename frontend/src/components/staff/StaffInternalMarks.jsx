@@ -40,6 +40,7 @@ export const DEFAULT_MAX_CONFIG = {
   cia1: 50,
   cia2: 50,
   model: 75,
+  semester: 100,
   seminar: 10,
   project: 20,
   assignment1: 5,
@@ -61,6 +62,7 @@ export const DEFAULT_PASS_CONFIG = {
   cia1: 20,
   cia2: 20,
   model: 30,
+  semester: 40,
   seminar: 4,
   project: 8,
   assignment1: 2,
@@ -73,19 +75,20 @@ export const DEFAULT_PASS_CONFIG = {
 };
 
 export const ASSESSMENT_COMPONENTS = [
-  { id: "all",          label: "College Register Sheet (Official Layout)", shortLabel: "📋 Full Register Sheet", defaultMax: 100, defaultPass: 40 },
-  { id: "st",           label: "Snap Tests (ST 1 - 4)",                    shortLabel: "Snap Tests (ST1-4)",    defaultMax: 20,  defaultPass: 8  },
-  { id: "it",           label: "Internal 1 (IT 1)",                        shortLabel: "Internal 1",            defaultMax: 25,  defaultPass: 10 },
-  { id: "it2",          label: "Internal 2 (IT 2)",                        shortLabel: "Internal 2",            defaultMax: 25,  defaultPass: 10 },
-  { id: "model",        label: "Model Examination",                        shortLabel: "Model Exam",            defaultMax: 75,  defaultPass: 30 },
-  { id: "seminar",      label: "Seminar Presentation",                     shortLabel: "Seminar",               defaultMax: 10,  defaultPass: 4  },
-  { id: "project",      label: "Project Work",                             shortLabel: "Project",               defaultMax: 20,  defaultPass: 8  },
-  { id: "assignment",   label: "Assignments (1 to 4)",                     shortLabel: "Assignments (1-4)",     defaultMax: 5,   defaultPass: 2  },
-  { id: "consolidated", label: "Consolidated Internal Marks",              shortLabel: "Final CIA Summary",     defaultMax: 25,  defaultPass: 10 },
+  { id: "all", label: "College Register Sheet (Official Layout)", shortLabel: "📋 Full Register Sheet", defaultMax: 100, defaultPass: 40 },
+  { id: "it", label: "Internal1 (Internal 1)", shortLabel: "internal1", defaultMax: 25, defaultPass: 10 },
+  { id: "it2", label: "Internal 2 (Internal 2)", shortLabel: "internal 2", defaultMax: 25, defaultPass: 10 },
+  { id: "model", label: "Model (Model Examination)", shortLabel: "model", defaultMax: 75, defaultPass: 30 },
+  { id: "semester", label: "Semester (Semester Examination)", shortLabel: "semester", defaultMax: 100, defaultPass: 40 },
+  { id: "seminar", label: "Seminar (Seminar Presentation)", shortLabel: "seminar", defaultMax: 10, defaultPass: 4 },
+  { id: "project", label: "Project (Project Work)", shortLabel: "project", defaultMax: 20, defaultPass: 8 },
+  { id: "st", label: "Snap Tests (ST 1 - 4)", shortLabel: "Snap Tests (ST1-4)", defaultMax: 20, defaultPass: 8 },
+  { id: "assignment", label: "Assignments (1 to 4)", shortLabel: "Assignments (1-4)", defaultMax: 5, defaultPass: 2 },
+  { id: "consolidated", label: "Consolidated Internal Marks", shortLabel: "Final CIA Summary", defaultMax: 25, defaultPass: 10 },
 ];
 
 export default function StaffInternalMarks({ staffUser }) {
-  const staffId   = staffUser?.staffId || staffUser?.employeeId || "";
+  const staffId = staffUser?.staffId || staffUser?.employeeId || "";
   const staffName = staffUser?.name || "";
   const effectiveStaffId = staffId || staffUser?.staffId || staffUser?.employeeId || "EMP001";
 
@@ -102,22 +105,22 @@ export default function StaffInternalMarks({ staffUser }) {
   };
 
   // -- State ----------------------------------------------------------
-  const [subjectCode,   setSubjectCode]   = useState(getStoredSubject);
-  const [searchInput,   setSearchInput]   = useState(getStoredSubject);
-  const [subjectName,   setSubjectName]   = useState("");
+  const [subjectCode, setSubjectCode] = useState(getStoredSubject);
+  const [searchInput, setSearchInput] = useState(getStoredSubject);
+  const [subjectName, setSubjectName] = useState("");
   const [staffSubjects, setStaffSubjects] = useState([]);
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [componentId,   setComponentId]   = useState("all");
-  const [searchQuery,   setSearchQuery]   = useState("");
-  const [students,      setStudents]      = useState([]); // raw from DB
-  const [isLocked,      setIsLocked]      = useState(false);
+  const [componentId, setComponentId] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [students, setStudents] = useState([]); // raw from DB
+  const [isLocked, setIsLocked] = useState(false);
   const [showFreezeModal, setShowFreezeModal] = useState(false);
   const [isFreezing, setIsFreezing] = useState(false);
-  const [loading,       setLoading]       = useState(false);
-  const [saving,        setSaving]        = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [syncingAssignments, setSyncingAssignments] = useState(false);
-  const [successMsg,    setSuccessMsg]    = useState("");
-  const [errorMsg,      setErrorMsg]      = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const reqIdRef = useRef(0);
 
   // Multi-tier stage approval (Order: HOD -> Principal -> MD)
@@ -137,16 +140,16 @@ export default function StaffInternalMarks({ staffUser }) {
   const [downloadSemester, setDownloadSemester] = useState('1');
   const [isExporting, setIsExporting] = useState(false);
 
-  const isHod = staffUser?.designation?.toUpperCase()?.includes('HOD') || 
-                staffUser?.role?.toUpperCase()?.includes('HOD') || 
-                staffUser?.role?.toUpperCase()?.includes('ADMIN') || 
-                staffUser?.isHod === true;
-  const isPrincipal = staffUser?.role?.toUpperCase()?.includes('PRINCIPAL') || 
-                      staffUser?.designation?.toUpperCase()?.includes('PRINCIPAL') || 
-                      staffUser?.role?.toUpperCase()?.includes('ADMIN');
-  const isMD = staffUser?.role?.toUpperCase()?.includes('SUPERADMIN') || 
-               staffUser?.role?.toUpperCase()?.includes('MD') || 
-               staffUser?.designation?.toUpperCase()?.includes('MD');
+  const isHod = staffUser?.designation?.toUpperCase()?.includes('HOD') ||
+    staffUser?.role?.toUpperCase()?.includes('HOD') ||
+    staffUser?.role?.toUpperCase()?.includes('ADMIN') ||
+    staffUser?.isHod === true;
+  const isPrincipal = staffUser?.role?.toUpperCase()?.includes('PRINCIPAL') ||
+    staffUser?.designation?.toUpperCase()?.includes('PRINCIPAL') ||
+    staffUser?.role?.toUpperCase()?.includes('ADMIN');
+  const isMD = staffUser?.role?.toUpperCase()?.includes('SUPERADMIN') ||
+    staffUser?.role?.toUpperCase()?.includes('MD') ||
+    staffUser?.designation?.toUpperCase()?.includes('MD');
 
   // Configurable Max & Pass Marks per component
   const [maxMarksConfig, setMaxMarksConfig] = useState({ ...DEFAULT_MAX_CONFIG });
@@ -154,13 +157,13 @@ export default function StaffInternalMarks({ staffUser }) {
 
   // Modal to configure criteria
   const [showConfigModal, setShowConfigModal] = useState(false);
-  const [tempMaxConfig,   setTempMaxConfig]   = useState({ ...DEFAULT_MAX_CONFIG });
-  const [tempPassConfig,  setTempPassConfig]  = useState({ ...DEFAULT_PASS_CONFIG });
-  const [savingCriteria,  setSavingCriteria]  = useState(false);
+  const [tempMaxConfig, setTempMaxConfig] = useState({ ...DEFAULT_MAX_CONFIG });
+  const [tempPassConfig, setTempPassConfig] = useState({ ...DEFAULT_PASS_CONFIG });
+  const [savingCriteria, setSavingCriteria] = useState(false);
 
   // Modal to add student
   const [showAddStudent, setShowAddStudent] = useState(false);
-  const [newRollNo,      setNewRollNo]      = useState("");
+  const [newRollNo, setNewRollNo] = useState("");
   const [newStudentName, setNewStudentName] = useState("");
 
   // -- Computed --------------------------------------------------------
@@ -222,25 +225,25 @@ export default function StaffInternalMarks({ staffUser }) {
         totalScore += m; count++;
         if (m >= currentPass) passCount++;
         if (m > highest) highest = m;
-        if (m < lowest)  lowest  = m;
+        if (m < lowest) lowest = m;
       }
     });
     return {
-      total:    students.length,
+      total: students.length,
       appeared: count,
-      absent:   absentCount,
+      absent: absentCount,
       passCount,
-      passPct:  count > 0 ? Math.round((passCount / count) * 100) : 0,
-      average:  count > 0 ? (totalScore / count).toFixed(1) : 0,
-      highest:  highest === -1   ? "-" : highest,
-      lowest:   lowest  === 9999 ? "-" : lowest,
+      passPct: count > 0 ? Math.round((passCount / count) * 100) : 0,
+      average: count > 0 ? (totalScore / count).toFixed(1) : 0,
+      highest: highest === -1 ? "-" : highest,
+      lowest: lowest === 9999 ? "-" : lowest,
     };
   }, [students, componentId, currentPass]);
 
   // -- Toast helper ----------------------------------------------------
   const toast = useCallback((msg, isError = false) => {
     if (isError) { setErrorMsg(msg); setSuccessMsg(""); }
-    else         { setSuccessMsg(msg); setErrorMsg(""); }
+    else { setSuccessMsg(msg); setErrorMsg(""); }
     setTimeout(() => { setSuccessMsg(""); setErrorMsg(""); }, 4500);
   }, []);
 
@@ -251,7 +254,7 @@ export default function StaffInternalMarks({ staffUser }) {
     const currentReqId = ++reqIdRef.current;
     setLoading(true);
     try {
-      const res  = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(cleanCode)}`);
+      const res = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(cleanCode)}`);
       const json = await res.json();
       if (currentReqId !== reqIdRef.current) return;
 
@@ -313,7 +316,7 @@ export default function StaffInternalMarks({ staffUser }) {
       if (sessionStorage.getItem('vcas_internal_subject') === 'CS2001') {
         sessionStorage.removeItem('vcas_internal_subject');
       }
-    } catch {}
+    } catch { }
 
     Promise.all([
       fetch(`${API}/classes/staff/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
@@ -396,7 +399,7 @@ export default function StaffInternalMarks({ staffUser }) {
     const it1 = (it1Val === "AB" || it1Val === "A" || it1Val == null) ? 0 : Number(it1Val) || 0;
     const it2 = (it2Val === "AB" || it2Val === "A" || it2Val == null) ? 0 : Number(it2Val) || 0;
     const mod = (student.model === "AB" || student.model === "A" || student.model == null) ? 0 : Number(student.model) || 0;
-    
+
     // Assignment calculation: sum of assignment 1..4 (or fallback to student.assignment)
     let asgTotal = 0;
     const hasAssignments = [student.assignment1, student.assignment2, student.assignment3, student.assignment4].some(a => a !== null && a !== undefined);
@@ -406,10 +409,10 @@ export default function StaffInternalMarks({ staffUser }) {
       asgTotal = Number(student.assignment) || 0;
     }
 
-    const it1Max  = Number(config.it1) || Number(config.cia1) || 25;
-    const it2Max  = Number(config.it2) || Number(config.cia2) || 25;
-    const modMax  = Number(config.model) || 75;
-    const asgMax  = Number(config.assignment) || 20;
+    const it1Max = Number(config.it1) || Number(config.cia1) || 25;
+    const it2Max = Number(config.it2) || Number(config.cia2) || 25;
+    const modMax = Number(config.model) || 75;
+    const asgMax = Number(config.assignment) || 20;
     const consMax = Number(config.consolidated) || 25;
 
     // Scale Internal Tests to 10 marks total
@@ -428,15 +431,15 @@ export default function StaffInternalMarks({ staffUser }) {
     if (!subjectCode) return;
     setSaving(true);
     try {
-      const res  = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/save`, {
-        method:  "POST",
+      const res = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/save`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
+        body: JSON.stringify({
           staffName, subjectName,
-          department:   staffUser?.department || "",
+          department: staffUser?.department || "",
           academicYear: staffUser?.academicYear || "2025-2026",
           students,
-          maxMarks:  maxMarksConfig,
+          maxMarks: maxMarksConfig,
           passMarks: passMarksConfig,
         }),
       });
@@ -483,45 +486,45 @@ export default function StaffInternalMarks({ staffUser }) {
 
     const validatedMax = {
       ...tempMaxConfig,
-      st1:          Math.max(1, Number(tempMaxConfig.st1) || 20),
-      st2:          Math.max(1, Number(tempMaxConfig.st2) || 20),
-      st3:          Math.max(1, Number(tempMaxConfig.st3) || 20),
-      st4:          Math.max(1, Number(tempMaxConfig.st4) || 20),
-      it1:          Math.max(1, Number(tempMaxConfig.it1) || 25),
-      it2:          Math.max(1, Number(tempMaxConfig.it2) || 25),
-      cia1:         Math.max(1, Number(tempMaxConfig.cia1) || 50),
-      cia2:         Math.max(1, Number(tempMaxConfig.cia2) || 50),
-      model:        Math.max(1, Number(tempMaxConfig.model) || 75),
-      seminar:      Math.max(1, Number(tempMaxConfig.seminar) || 10),
-      project:      Math.max(1, Number(tempMaxConfig.project) || 20),
-      assignment1:  Math.max(1, Number(tempMaxConfig.assignment1) || 5),
-      assignment2:  Math.max(1, Number(tempMaxConfig.assignment2) || 5),
-      assignment3:  Math.max(1, Number(tempMaxConfig.assignment3) || 5),
-      assignment4:  Math.max(1, Number(tempMaxConfig.assignment4) || 5),
-      assignment:   Math.max(1, Number(tempMaxConfig.assignment) || 20),
-      attendance:   Math.max(1, Number(tempMaxConfig.attendance) || 5),
+      st1: Math.max(1, Number(tempMaxConfig.st1) || 20),
+      st2: Math.max(1, Number(tempMaxConfig.st2) || 20),
+      st3: Math.max(1, Number(tempMaxConfig.st3) || 20),
+      st4: Math.max(1, Number(tempMaxConfig.st4) || 20),
+      it1: Math.max(1, Number(tempMaxConfig.it1) || 25),
+      it2: Math.max(1, Number(tempMaxConfig.it2) || 25),
+      cia1: Math.max(1, Number(tempMaxConfig.cia1) || 50),
+      cia2: Math.max(1, Number(tempMaxConfig.cia2) || 50),
+      model: Math.max(1, Number(tempMaxConfig.model) || 75),
+      seminar: Math.max(1, Number(tempMaxConfig.seminar) || 10),
+      project: Math.max(1, Number(tempMaxConfig.project) || 20),
+      assignment1: Math.max(1, Number(tempMaxConfig.assignment1) || 5),
+      assignment2: Math.max(1, Number(tempMaxConfig.assignment2) || 5),
+      assignment3: Math.max(1, Number(tempMaxConfig.assignment3) || 5),
+      assignment4: Math.max(1, Number(tempMaxConfig.assignment4) || 5),
+      assignment: Math.max(1, Number(tempMaxConfig.assignment) || 20),
+      attendance: Math.max(1, Number(tempMaxConfig.attendance) || 5),
       consolidated: Math.max(1, Number(tempMaxConfig.consolidated) || 25),
     };
 
     const validatedPass = {
       ...tempPassConfig,
-      st1:          Math.min(validatedMax.st1, Math.max(0, Number(tempPassConfig.st1) || 8)),
-      st2:          Math.min(validatedMax.st2, Math.max(0, Number(tempPassConfig.st2) || 8)),
-      st3:          Math.min(validatedMax.st3, Math.max(0, Number(tempPassConfig.st3) || 8)),
-      st4:          Math.min(validatedMax.st4, Math.max(0, Number(tempPassConfig.st4) || 8)),
-      it1:          Math.min(validatedMax.it1, Math.max(0, Number(tempPassConfig.it1) || 10)),
-      it2:          Math.min(validatedMax.it2, Math.max(0, Number(tempPassConfig.it2) || 10)),
-      cia1:         Math.min(validatedMax.cia1, Math.max(0, Number(tempPassConfig.cia1) || 20)),
-      cia2:         Math.min(validatedMax.cia2, Math.max(0, Number(tempPassConfig.cia2) || 20)),
-      model:        Math.min(validatedMax.model, Math.max(0, Number(tempPassConfig.model) || 30)),
-      seminar:      Math.min(validatedMax.seminar, Math.max(0, Number(tempPassConfig.seminar) || 4)),
-      project:      Math.min(validatedMax.project, Math.max(0, Number(tempPassConfig.project) || 8)),
-      assignment1:  Math.min(validatedMax.assignment1, Math.max(0, Number(tempPassConfig.assignment1) || 2)),
-      assignment2:  Math.min(validatedMax.assignment2, Math.max(0, Number(tempPassConfig.assignment2) || 2)),
-      assignment3:  Math.min(validatedMax.assignment3, Math.max(0, Number(tempPassConfig.assignment3) || 2)),
-      assignment4:  Math.min(validatedMax.assignment4, Math.max(0, Number(tempPassConfig.assignment4) || 2)),
-      assignment:   Math.min(validatedMax.assignment, Math.max(0, Number(tempPassConfig.assignment) || 8)),
-      attendance:   Math.min(validatedMax.attendance, Math.max(0, Number(tempPassConfig.attendance) || 2)),
+      st1: Math.min(validatedMax.st1, Math.max(0, Number(tempPassConfig.st1) || 8)),
+      st2: Math.min(validatedMax.st2, Math.max(0, Number(tempPassConfig.st2) || 8)),
+      st3: Math.min(validatedMax.st3, Math.max(0, Number(tempPassConfig.st3) || 8)),
+      st4: Math.min(validatedMax.st4, Math.max(0, Number(tempPassConfig.st4) || 8)),
+      it1: Math.min(validatedMax.it1, Math.max(0, Number(tempPassConfig.it1) || 10)),
+      it2: Math.min(validatedMax.it2, Math.max(0, Number(tempPassConfig.it2) || 10)),
+      cia1: Math.min(validatedMax.cia1, Math.max(0, Number(tempPassConfig.cia1) || 20)),
+      cia2: Math.min(validatedMax.cia2, Math.max(0, Number(tempPassConfig.cia2) || 20)),
+      model: Math.min(validatedMax.model, Math.max(0, Number(tempPassConfig.model) || 30)),
+      seminar: Math.min(validatedMax.seminar, Math.max(0, Number(tempPassConfig.seminar) || 4)),
+      project: Math.min(validatedMax.project, Math.max(0, Number(tempPassConfig.project) || 8)),
+      assignment1: Math.min(validatedMax.assignment1, Math.max(0, Number(tempPassConfig.assignment1) || 2)),
+      assignment2: Math.min(validatedMax.assignment2, Math.max(0, Number(tempPassConfig.assignment2) || 2)),
+      assignment3: Math.min(validatedMax.assignment3, Math.max(0, Number(tempPassConfig.assignment3) || 2)),
+      assignment4: Math.min(validatedMax.assignment4, Math.max(0, Number(tempPassConfig.assignment4) || 2)),
+      assignment: Math.min(validatedMax.assignment, Math.max(0, Number(tempPassConfig.assignment) || 8)),
+      attendance: Math.min(validatedMax.attendance, Math.max(0, Number(tempPassConfig.attendance) || 2)),
       consolidated: Math.min(validatedMax.consolidated, Math.max(0, Number(tempPassConfig.consolidated) || 10)),
     };
 
@@ -545,7 +548,7 @@ export default function StaffInternalMarks({ staffUser }) {
           department: staffUser?.department || "",
           academicYear: staffUser?.academicYear || "2025-2026",
           students: updatedStudents,
-          maxMarks:  validatedMax,
+          maxMarks: validatedMax,
           passMarks: validatedPass,
         }),
       });
@@ -667,13 +670,13 @@ export default function StaffInternalMarks({ staffUser }) {
         }
       }
 
-      // Generate comprehensive CSV with separate Model and Seminar marks
-      let csv = `Department,Subject Code,Subject Name,Semester,S.NO,Roll No,Student Name,ST 1,ST 2,ST 3,ST 4,IT 1,IT 2,Model Exam,Seminar,Project,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
+      // Generate comprehensive CSV with order: internal1, internal 2, model, semester, seminar, project
+      let csv = `Department,Subject Code,Subject Name,Semester,S.NO,Roll No,Student Name,internal1,internal 2,model,semester,seminar,project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
       marksheetsToExport.forEach(ms => {
         (ms.students || []).forEach((s, idx) => {
           const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
           const it2 = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
-          csv += `"${ms.department || ''}","${ms.subjectCode || ''}","${ms.subjectName || ''}",${ms.semester || 1},${idx + 1},"${s.rollNo}","${s.name}",${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${it1},${it2},${s.model ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
+          csv += `"${ms.department || ''}","${ms.subjectCode || ''}","${ms.subjectName || ''}",${ms.semester || 1},${idx + 1},"${s.rollNo}","${s.name}",${it1},${it2},${s.model ?? "-"},${s.semester ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
         });
       });
 
@@ -803,17 +806,17 @@ export default function StaffInternalMarks({ staffUser }) {
 
   // -- Export CSV with all register columns ---------------------------
   const handleExport = () => {
-    let csv = `S.NO,Roll No,Student Name,ST 1,ST 2,ST 3,ST 4,IT 1,IT 2,Model Exam,Seminar,Project,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
+    let csv = `S.NO,Roll No,Student Name,internal1,internal 2,model,semester,seminar,project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
     students.forEach((s, idx) => {
       const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
       const it2 = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
-      csv += `${idx + 1},"${s.rollNo}","${s.name}",${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${it1},${it2},${s.model ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
+      csv += `${idx + 1},"${s.rollNo}","${s.name}",${it1},${it2},${s.model ?? "-"},${s.semester ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
     });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `Official_Mark_Register_${subjectCode}_${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = `Official_Mark_Register_${subjectCode}_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -837,15 +840,16 @@ export default function StaffInternalMarks({ staffUser }) {
             ${s.name || '-'}
             <div style="font-size: 8px; color: #555; font-family: monospace;">${s.rollNo}</div>
           </td>
+          <td style="text-align: center;">${it1}</td>
+          <td style="text-align: center;">${it2}</td>
+          <td style="text-align: center;">${s.model !== null && s.model !== undefined ? s.model : ''}</td>
+          <td style="text-align: center;">${s.semester !== null && s.semester !== undefined ? s.semester : ''}</td>
+          <td style="text-align: center;">${s.seminar !== null && s.seminar !== undefined ? s.seminar : ''}</td>
+          <td style="text-align: center;">${s.project !== null && s.project !== undefined ? s.project : ''}</td>
           <td style="text-align: center;">${s.st1 !== null && s.st1 !== undefined ? s.st1 : ''}</td>
           <td style="text-align: center;">${s.st2 !== null && s.st2 !== undefined ? s.st2 : ''}</td>
           <td style="text-align: center;">${s.st3 !== null && s.st3 !== undefined ? s.st3 : ''}</td>
           <td style="text-align: center;">${s.st4 !== null && s.st4 !== undefined ? s.st4 : ''}</td>
-          <td style="text-align: center;">${it1}</td>
-          <td style="text-align: center;">${it2}</td>
-          <td style="text-align: center;">${s.model !== null && s.model !== undefined ? s.model : ''}</td>
-          <td style="text-align: center;">${s.seminar !== null && s.seminar !== undefined ? s.seminar : ''}</td>
-          <td style="text-align: center;">${s.project !== null && s.project !== undefined ? s.project : ''}</td>
           <td style="text-align: center;">${s.assignment1 !== null && s.assignment1 !== undefined ? s.assignment1 : ''}</td>
           <td style="text-align: center;">${s.assignment2 !== null && s.assignment2 !== undefined ? s.assignment2 : ''}</td>
           <td style="text-align: center;">${s.assignment3 !== null && s.assignment3 !== undefined ? s.assignment3 : ''}</td>
@@ -943,20 +947,21 @@ export default function StaffInternalMarks({ staffUser }) {
             <tr>
               <th rowspan="2" style="width: 32px;">S.NO</th>
               <th rowspan="2" style="width: 170px;">STUDENTS NAME</th>
-              <th colspan="4">SNAP TEST</th>
               <th colspan="2">INTERNAL</th>
               <th rowspan="2" style="width: 45px;">MODEL</th>
+              <th rowspan="2" style="width: 45px;">SEMESTER</th>
               <th rowspan="2" style="width: 45px;">SEMINAR</th>
               <th rowspan="2" style="width: 45px;">PROJECT</th>
+              <th colspan="4">SNAP TEST</th>
               <th colspan="4">ASSIGNMENT</th>
             </tr>
             <tr>
+              <th style="width: 44px;">internal1</th>
+              <th style="width: 44px;">internal 2</th>
               <th style="width: 38px;">ST 1</th>
               <th style="width: 38px;">ST 2</th>
               <th style="width: 38px;">ST 3</th>
               <th style="width: 38px;">ST 4</th>
-              <th style="width: 44px;">IT 1</th>
-              <th style="width: 44px;">IT 2</th>
               <th style="width: 35px;">1</th>
               <th style="width: 35px;">2</th>
               <th style="width: 35px;">3</th>
@@ -1097,13 +1102,12 @@ export default function StaffInternalMarks({ staffUser }) {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-extrabold uppercase text-slate-400">Current Status:</span>
-              <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full border ${
-                approvalStatus === 'Approved'
+              <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full border ${approvalStatus === 'Approved'
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   : approvalStatus === 'Rejected'
-                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                  : 'bg-amber-50 text-amber-700 border-amber-200'
-              }`}>
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
                 {approvalStatus}
               </span>
             </div>
@@ -1124,13 +1128,12 @@ export default function StaffInternalMarks({ staffUser }) {
             </div>
 
             {/* Step 2: HOD */}
-            <div className={`p-3 rounded-xl border ${
-              hodApproval?.status === 'Approved'
+            <div className={`p-3 rounded-xl border ${hodApproval?.status === 'Approved'
                 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
                 : approvalStatus === 'Pending HOD'
-                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                : 'bg-slate-50 border-slate-200 text-slate-600'
-            }`}>
+                  ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}>
               <div className="flex items-center justify-between text-[11px] font-extrabold">
                 <span>2. HOD Review</span>
                 {hodApproval?.status === 'Approved' ? (
@@ -1156,13 +1159,12 @@ export default function StaffInternalMarks({ staffUser }) {
             </div>
 
             {/* Step 3: Principal */}
-            <div className={`p-3 rounded-xl border ${
-              principalApproval?.status === 'Approved'
+            <div className={`p-3 rounded-xl border ${principalApproval?.status === 'Approved'
                 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
                 : approvalStatus === 'Pending Principal'
-                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                : 'bg-slate-50 border-slate-200 text-slate-600'
-            }`}>
+                  ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}>
               <div className="flex items-center justify-between text-[11px] font-extrabold">
                 <span>3. Principal Approval</span>
                 {principalApproval?.status === 'Approved' ? (
@@ -1188,13 +1190,12 @@ export default function StaffInternalMarks({ staffUser }) {
             </div>
 
             {/* Step 4: Managing Director */}
-            <div className={`p-3 rounded-xl border ${
-              mdApproval?.status === 'Approved'
+            <div className={`p-3 rounded-xl border ${mdApproval?.status === 'Approved'
                 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
                 : approvalStatus === 'Pending MD'
-                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                : 'bg-slate-50 border-slate-200 text-slate-600'
-            }`}>
+                  ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}>
               <div className="flex items-center justify-between text-[11px] font-extrabold">
                 <span>4. Managing Director (MD)</span>
                 {mdApproval?.status === 'Approved' ? (
@@ -1294,11 +1295,10 @@ export default function StaffInternalMarks({ staffUser }) {
       {/* Centered Notifications Popup */}
       {(successMsg || errorMsg) && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95">
-          <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border pointer-events-auto ${
-            errorMsg 
-              ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40' 
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border pointer-events-auto ${errorMsg
+              ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
               : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
-          }`}>
+            }`}>
             {errorMsg ? (
               <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
             ) : (
@@ -1390,11 +1390,10 @@ export default function StaffInternalMarks({ staffUser }) {
                       setShowCustomInput(false);
                       handleLoadSubject(sub.code);
                     }}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      isSelected
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
                         ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 scale-[1.02]"
                         : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
-                    }`}
+                      }`}
                   >
                     <span>{sub.code}</span>
                     {sub.name && sub.name !== sub.code && (
@@ -1473,11 +1472,11 @@ export default function StaffInternalMarks({ staffUser }) {
           {/* Stats Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
-              { label: "Total Students", value: stats.total,    sub: `${stats.absent} Absent`,      color: "text-slate-900" },
-              { label: "Class Average",  value: stats.average,  sub: `/ ${currentMax}`,             color: "text-blue-600" },
-              { label: "Pass %",         value: `${stats.passPct}%`, sub: `${stats.passCount} passed`, color: stats.passPct >= 75 ? "text-emerald-600" : "text-amber-600" },
-              { label: "Highest",        value: stats.highest,  sub: `/ ${currentMax}`,             color: "text-emerald-600" },
-              { label: "Lowest",         value: stats.lowest,   sub: `/ ${currentMax}`,             color: "text-rose-600" },
+              { label: "Total Students", value: stats.total, sub: `${stats.absent} Absent`, color: "text-slate-900" },
+              { label: "Class Average", value: stats.average, sub: `/ ${currentMax}`, color: "text-blue-600" },
+              { label: "Pass %", value: `${stats.passPct}%`, sub: `${stats.passCount} passed`, color: stats.passPct >= 75 ? "text-emerald-600" : "text-amber-600" },
+              { label: "Highest", value: stats.highest, sub: `/ ${currentMax}`, color: "text-emerald-600" },
+              { label: "Lowest", value: stats.lowest, sub: `/ ${currentMax}`, color: "text-rose-600" },
             ].map((s) => (
               <div key={s.label} className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-sm">
                 <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">{s.label}</span>
@@ -1504,7 +1503,7 @@ export default function StaffInternalMarks({ staffUser }) {
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-1">
                     <span>Staff: <b className="text-slate-800 font-extrabold">{staffName || "P. KALARANI"}</b></span>
                     <span>•</span>
-                    <span>Format: <b>SNAP TEST (1-4) | INTERNAL (1-2) | MODEL | PROJECT | ASSIGNMENT (1-4)</b></span>
+                    <span>Format: <b>INTERNAL (internal1, internal 2) | MODEL | SEMESTER | SEMINAR | PROJECT | SNAP TEST (1-4) | ASSIGNMENT (1-4)</b></span>
                     <span>•</span>
                     <span>Enter <b>AB</b> for Absent, <b>-</b> for Exempt</span>
                   </div>
@@ -1535,20 +1534,23 @@ export default function StaffInternalMarks({ staffUser }) {
                     <tr className="bg-slate-100 text-slate-800 font-black uppercase text-[11px] border-b border-slate-300">
                       <th rowSpan={2} className="px-3 py-2 text-center border-r border-slate-300 w-12 bg-slate-200/80">S.NO</th>
                       <th rowSpan={2} className="px-4 py-2 text-left border-r border-slate-300 min-w-[190px] bg-slate-200/80">STUDENTS NAME</th>
-                      <th colSpan={4} className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-100/80 text-sky-950 font-black tracking-wider">
-                        SNAP TEST
-                      </th>
                       <th colSpan={2} className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-100/80 text-indigo-950 font-black tracking-wider">
                         INTERNAL
                       </th>
                       <th rowSpan={2} className="px-2 py-2 text-center border-r border-slate-300 bg-purple-100/80 text-purple-950 font-black min-w-[65px]">
                         MODEL
                       </th>
+                      <th rowSpan={2} className="px-2 py-2 text-center border-r border-slate-300 bg-rose-100/80 text-rose-950 font-black min-w-[65px]">
+                        SEMESTER
+                      </th>
                       <th rowSpan={2} className="px-2 py-2 text-center border-r border-slate-300 bg-teal-100/80 text-teal-950 font-black min-w-[65px]">
                         SEMINAR
                       </th>
                       <th rowSpan={2} className="px-2 py-2 text-center border-r border-slate-300 bg-emerald-100/80 text-emerald-950 font-black min-w-[65px]">
                         PROJECT
+                      </th>
+                      <th colSpan={4} className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-100/80 text-sky-950 font-black tracking-wider">
+                        SNAP TEST
                       </th>
                       <th colSpan={4} className="px-2 py-1.5 text-center border-r border-slate-300 bg-amber-100/80 text-amber-950 font-black tracking-wider">
                         ASSIGNMENT
@@ -1558,12 +1560,12 @@ export default function StaffInternalMarks({ staffUser }) {
                       </th>
                     </tr>
                     <tr className="bg-slate-50 text-slate-700 font-extrabold uppercase text-[10px] border-b border-slate-300">
+                      <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">internal1</th>
+                      <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">internal 2</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-50 text-sky-900">ST 1</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-50 text-sky-900">ST 2</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-50 text-sky-900">ST 3</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-50 text-sky-900">ST 4</th>
-                      <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">IT 1</th>
-                      <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">IT 2</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-amber-50 text-amber-900">1</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-amber-50 text-amber-900">2</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-amber-50 text-amber-900">3</th>
@@ -1581,23 +1583,6 @@ export default function StaffInternalMarks({ staffUser }) {
                             <div className="font-extrabold text-slate-900">{s.name}</div>
                             <div className="text-[10px] font-mono font-semibold text-slate-400">{s.rollNo}</div>
                           </td>
-                          {/* SNAP TESTS ST1 - ST4 */}
-                          {['st1', 'st2', 'st3', 'st4'].map((f) => (
-                            <td key={f} className="p-1 text-center border-r border-slate-200 bg-sky-50/20">
-                              <input
-                                type="text"
-                                disabled={isLocked}
-                                value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
-                                onChange={(e) => handleCellChange(s.rollNo, f, e.target.value)}
-                                className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${
-                                  s[f] === "AB" || s[f] === "A"
-                                    ? "bg-amber-100 text-amber-900 border-amber-300"
-                                    : "border-slate-200 bg-white text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                } disabled:bg-slate-100 disabled:cursor-not-allowed`}
-                                placeholder="-"
-                              />
-                            </td>
-                          ))}
                           {/* INTERNAL IT1 - IT2 */}
                           <td className="p-1 text-center border-r border-slate-200 bg-indigo-50/20">
                             <input
@@ -1605,11 +1590,10 @@ export default function StaffInternalMarks({ staffUser }) {
                               disabled={isLocked}
                               value={it1Val !== null && it1Val !== undefined ? it1Val : ""}
                               onChange={(e) => handleCellChange(s.rollNo, 'it1', e.target.value)}
-                              className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${
-                                it1Val === "AB" || it1Val === "A"
+                              className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${it1Val === "AB" || it1Val === "A"
                                   ? "bg-amber-100 text-amber-900 border-amber-300"
                                   : "border-slate-200 bg-white text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                              } disabled:bg-slate-100 disabled:cursor-not-allowed`}
+                                } disabled:bg-slate-100 disabled:cursor-not-allowed`}
                               placeholder="-"
                             />
                           </td>
@@ -1619,11 +1603,10 @@ export default function StaffInternalMarks({ staffUser }) {
                               disabled={isLocked}
                               value={it2Val !== null && it2Val !== undefined ? it2Val : ""}
                               onChange={(e) => handleCellChange(s.rollNo, 'it2', e.target.value)}
-                              className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${
-                                it2Val === "AB" || it2Val === "A"
+                              className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${it2Val === "AB" || it2Val === "A"
                                   ? "bg-amber-100 text-amber-900 border-amber-300"
                                   : "border-slate-200 bg-white text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                              } disabled:bg-slate-100 disabled:cursor-not-allowed`}
+                                } disabled:bg-slate-100 disabled:cursor-not-allowed`}
                               placeholder="-"
                             />
                           </td>
@@ -1635,6 +1618,17 @@ export default function StaffInternalMarks({ staffUser }) {
                               value={s.model !== null && s.model !== undefined ? s.model : ""}
                               onChange={(e) => handleCellChange(s.rollNo, 'model', e.target.value)}
                               className="w-12 text-center py-1 px-1 rounded-md text-xs font-bold border border-slate-200 bg-white text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                              placeholder="-"
+                            />
+                          </td>
+                          {/* SEMESTER */}
+                          <td className="p-1 text-center border-r border-slate-200 bg-rose-50/20">
+                            <input
+                              type="text"
+                              disabled={isLocked}
+                              value={s.semester !== null && s.semester !== undefined ? s.semester : ""}
+                              onChange={(e) => handleCellChange(s.rollNo, 'semester', e.target.value)}
+                              className="w-12 text-center py-1 px-1 rounded-md text-xs font-bold border border-slate-200 bg-white text-slate-900 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
                               placeholder="-"
                             />
                           </td>
@@ -1660,6 +1654,22 @@ export default function StaffInternalMarks({ staffUser }) {
                               placeholder="-"
                             />
                           </td>
+                          {/* SNAP TESTS ST1 - ST4 */}
+                          {['st1', 'st2', 'st3', 'st4'].map((f) => (
+                            <td key={f} className="p-1 text-center border-r border-slate-200 bg-sky-50/20">
+                              <input
+                                type="text"
+                                disabled={isLocked}
+                                value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
+                                onChange={(e) => handleCellChange(s.rollNo, f, e.target.value)}
+                                className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${s[f] === "AB" || s[f] === "A"
+                                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                                    : "border-slate-200 bg-white text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                  } disabled:bg-slate-100 disabled:cursor-not-allowed`}
+                                placeholder="-"
+                              />
+                            </td>
+                          ))}
                           {/* ASSIGNMENT 1 - 4 */}
                           {['assignment1', 'assignment2', 'assignment3', 'assignment4'].map((f) => (
                             <td key={f} className="p-1 text-center border-r border-slate-200 bg-amber-50/20">
@@ -1833,7 +1843,7 @@ export default function StaffInternalMarks({ staffUser }) {
                       const it1Val = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
                       const it2Val = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
                       const asgVal = s.assignment1 !== null && s.assignment1 !== undefined
-                        ? (Number(s.assignment1)||0)+(Number(s.assignment2)||0)+(Number(s.assignment3)||0)+(Number(s.assignment4)||0)
+                        ? (Number(s.assignment1) || 0) + (Number(s.assignment2) || 0) + (Number(s.assignment3) || 0) + (Number(s.assignment4) || 0)
                         : (s.assignment ?? "-");
 
                       return (
@@ -1871,9 +1881,9 @@ export default function StaffInternalMarks({ staffUser }) {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {filteredStudents.map((s, idx) => {
-                      const current  = s[componentId];
+                      const current = s[componentId];
                       const isAbsent = current === "A" || current === "AB";
-                      const isNum    = typeof current === "number";
+                      const isNum = typeof current === "number";
                       const isPassed = isNum && current >= currentPass;
                       return (
                         <tr key={s.rollNo} className="hover:bg-slate-50/80 transition-colors">
@@ -1999,19 +2009,19 @@ export default function StaffInternalMarks({ staffUser }) {
 
               <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                 {[
-                  { id: "st1",          name: "Snap Test 1 (ST 1)",       defaultM: 20, defaultP: 8 },
-                  { id: "st2",          name: "Snap Test 2 (ST 2)",       defaultM: 20, defaultP: 8 },
-                  { id: "st3",          name: "Snap Test 3 (ST 3)",       defaultM: 20, defaultP: 8 },
-                  { id: "st4",          name: "Snap Test 4 (ST 4)",       defaultM: 20, defaultP: 8 },
-                  { id: "it1",          name: "Internal Test 1 (IT 1)",   defaultM: 25, defaultP: 10 },
-                  { id: "it2",          name: "Internal Test 2 (IT 2)",   defaultM: 25, defaultP: 10 },
-                  { id: "model",        name: "Model Examination",        defaultM: 75, defaultP: 30 },
-                  { id: "project",      name: "Project / Seminar",        defaultM: 20, defaultP: 8  },
-                  { id: "assignment1",  name: "Assignment 1",             defaultM: 5,  defaultP: 2  },
-                  { id: "assignment2",  name: "Assignment 2",             defaultM: 5,  defaultP: 2  },
-                  { id: "assignment3",  name: "Assignment 3",             defaultM: 5,  defaultP: 2  },
-                  { id: "assignment4",  name: "Assignment 4",             defaultM: 5,  defaultP: 2  },
-                  { id: "consolidated", name: "Consolidated Final CIA",   defaultM: 25, defaultP: 10 },
+                  { id: "st1", name: "Snap Test 1 (ST 1)", defaultM: 20, defaultP: 8 },
+                  { id: "st2", name: "Snap Test 2 (ST 2)", defaultM: 20, defaultP: 8 },
+                  { id: "st3", name: "Snap Test 3 (ST 3)", defaultM: 20, defaultP: 8 },
+                  { id: "st4", name: "Snap Test 4 (ST 4)", defaultM: 20, defaultP: 8 },
+                  { id: "it1", name: "Internal Test 1 (IT 1)", defaultM: 25, defaultP: 10 },
+                  { id: "it2", name: "Internal Test 2 (IT 2)", defaultM: 25, defaultP: 10 },
+                  { id: "model", name: "Model Examination", defaultM: 75, defaultP: 30 },
+                  { id: "project", name: "Project / Seminar", defaultM: 20, defaultP: 8 },
+                  { id: "assignment1", name: "Assignment 1", defaultM: 5, defaultP: 2 },
+                  { id: "assignment2", name: "Assignment 2", defaultM: 5, defaultP: 2 },
+                  { id: "assignment3", name: "Assignment 3", defaultM: 5, defaultP: 2 },
+                  { id: "assignment4", name: "Assignment 4", defaultM: 5, defaultP: 2 },
+                  { id: "consolidated", name: "Consolidated Final CIA", defaultM: 25, defaultP: 10 },
                 ].map((item) => (
                   <div key={item.id} className="p-3 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
@@ -2207,11 +2217,10 @@ export default function StaffInternalMarks({ staffUser }) {
                   key={tab.id}
                   type="button"
                   onClick={() => setDownloadFilterType(tab.id)}
-                  className={`py-2 px-3 rounded-lg transition-all text-center cursor-pointer ${
-                    downloadFilterType === tab.id
+                  className={`py-2 px-3 rounded-lg transition-all text-center cursor-pointer ${downloadFilterType === tab.id
                       ? 'bg-white text-indigo-700 shadow-xs font-black'
                       : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>

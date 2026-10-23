@@ -11,7 +11,14 @@ const noticeSchema = new mongoose.Schema({
   reason:          { type: String, default: '', trim: true },
   date:            { type: String, default: () => new Date().toISOString().split('T')[0] },
   urgent:          { type: Boolean, default: false },
-  pinned:          { type: Boolean, default: false }
+  pinned:          { type: Boolean, default: false },
+  attachments:     [{
+    name: { type: String, default: '' },
+    size: { type: String, default: '' },
+    url: { type: String, default: '' },
+    dataUrl: { type: String, default: '' },
+    type: { type: String, default: '' }
+  }]
 }, {
   timestamps: true,
   collection: 'Notices'
