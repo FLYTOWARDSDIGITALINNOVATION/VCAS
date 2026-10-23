@@ -1928,128 +1928,175 @@ CONTACT:
                   </div>
                 </div>
 
-                {/* Marksheets Table / Cards */}
+                {/* Marksheets Assessment Table and Detailed Component Cards */}
                 {marksData.length > 0 ? (
-                  <div className="space-y-4">
-                    {marksData.map((ms, idx) => {
-                      const m = ms.marks || {};
-                      const max = ms.maxMarks || {};
-                      const pass = ms.passMarks || {};
+                  <div className="space-y-6">
+                    {/* Official Continuous Assessment Summary Table */}
+                    <div className="overflow-x-auto border border-slate-200 rounded-2xl bg-white shadow-2xs">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
+                            <th className="py-3.5 px-4">Subject</th>
+                            <th className="py-3.5 px-4">Evaluation Type</th>
+                            <th className="py-3.5 px-4 text-center">Max Marks</th>
+                            <th className="py-3.5 px-4 text-center">Marks Obtained</th>
+                            <th className="py-3.5 px-4 text-right">Result</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {marksData.map((ms, idx) => {
+                            const m = ms.marks || {};
+                            const maxCons = ms.maxMarks?.consolidated || 25;
+                            const passCons = ms.passMarks?.consolidated || 10;
+                            const hasCons = m.consolidated !== null && m.consolidated !== undefined && m.consolidated !== '';
+                            const isPass = hasCons ? Number(m.consolidated) >= passCons : null;
 
-                      const scoreList = [
-                        { name: 'ST 1', val: m.st1, max: max.st1 || 20, pass: pass.st1 || 8 },
-                        { name: 'ST 2', val: m.st2, max: max.st2 || 20, pass: pass.st2 || 8 },
-                        { name: 'ST 3', val: m.st3, max: max.st3 || 20, pass: pass.st3 || 8 },
-                        { name: 'ST 4', val: m.st4, max: max.st4 || 20, pass: pass.st4 || 8 },
-                        { name: 'CIA 1 / IT 1', val: m.cia1 ?? m.it1, max: max.cia1 || max.it1 || 50, pass: pass.cia1 || pass.it1 || 20 },
-                        { name: 'CIA 2 / IT 2', val: m.cia2 ?? m.it2, max: max.cia2 || max.it2 || 50, pass: pass.cia2 || pass.it2 || 20 },
-                        { name: 'Model Exam', val: m.model, max: max.model || 75, pass: pass.model || 30 },
-                        { name: 'Assignment', val: m.assignment ?? m.assignment1, max: max.assignment || 20, pass: pass.assignment || 8 },
-                        { name: 'Attendance', val: m.attendance, max: max.attendance || 5, pass: pass.attendance || 2 },
-                        { name: 'Consolidated', val: m.consolidated, max: max.consolidated || 25, pass: pass.consolidated || 10, isHighlight: true }
-                      ];
+                            return (
+                              <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <div className="font-bold text-slate-900 flex items-center gap-2">
+                                    <span className="font-mono text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                                      {ms.subjectCode}
+                                    </span>
+                                    <span>{ms.subjectName || ms.subjectCode}</span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 mt-0.5">
+                                    Faculty: {ms.staffName || 'Department Faculty'} • Sem {ms.semester || '1'}
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-4 text-slate-600 font-medium">
+                                  Continuous Assessment (CIA)
+                                </td>
+                                <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-700">
+                                  {maxCons}
+                                </td>
+                                <td className="py-3.5 px-4 text-center font-mono font-bold text-blue-700 text-sm">
+                                  {hasCons ? m.consolidated : (
+                                    <span className="text-slate-400 font-sans text-xs font-medium">In Progress</span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4 text-right">
+                                  {hasCons ? (
+                                    isPass ? (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Pass
+                                      </span>
+                                    ) : (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                        Fail
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                      Pending
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                      return (
-                        <div key={idx} className="border border-slate-200/90 rounded-2xl overflow-hidden bg-slate-50/30 shadow-2xs">
-                          {/* Subject Header */}
-                          <div className="bg-gradient-to-r from-slate-50 to-blue-50/40 p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-md">
-                                  {ms.subjectCode}
-                                </span>
-                                <h4 className="font-extrabold text-sm text-slate-900">{ms.subjectName || ms.subjectCode}</h4>
-                              </div>
-                              <p className="text-xs text-slate-500 mt-1">
-                                Faculty: <strong className="text-slate-700">{ms.staffName || 'Department Faculty'}</strong> • Sem: {ms.semester || '1'}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {ms.isLocked && (
-                                <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                  <Lock className="w-3 h-3" /> Locked & Verified
-                                </span>
-                              )}
-                              <span className="text-xs font-black bg-purple-100 text-purple-800 px-3 py-1 rounded-xl">
-                                Consolidated: {m.consolidated !== null && m.consolidated !== undefined ? `${m.consolidated}/${max.consolidated || 25}` : 'In Progress'}
-                              </span>
-                            </div>
-                          </div>
+                    {/* Detailed Component Breakdown */}
+                    <div className="pt-2">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3">
+                        Detailed Component Breakdown (ST, IT, Model & Assignments)
+                      </h4>
+                      <div className="space-y-4">
+                        {marksData.map((ms, idx) => {
+                          const m = ms.marks || {};
+                          const max = ms.maxMarks || {};
+                          const pass = ms.passMarks || {};
 
-                          {/* Scores Grid */}
-                          <div className="p-4 grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2.5 text-center">
-                            {scoreList.map((sc, sIdx) => {
-                              const hasScore = sc.val !== null && sc.val !== undefined && sc.val !== '';
-                              const isNum = !isNaN(Number(sc.val));
-                              const numVal = isNum ? Number(sc.val) : null;
-                              const isPassed = numVal !== null ? numVal >= sc.pass : true;
+                          const scoreList = [
+                            { name: 'ST 1', val: m.st1, max: max.st1 || 20, pass: pass.st1 || 8 },
+                            { name: 'ST 2', val: m.st2, max: max.st2 || 20, pass: pass.st2 || 8 },
+                            { name: 'ST 3', val: m.st3, max: max.st3 || 20, pass: pass.st3 || 8 },
+                            { name: 'ST 4', val: m.st4, max: max.st4 || 20, pass: pass.st4 || 8 },
+                            { name: 'Internal 1', val: m.it1 ?? m.cia1, max: max.it1 || max.cia1 || 25, pass: pass.it1 || pass.cia1 || 10 },
+                            { name: 'Internal 2', val: m.it2 ?? m.cia2, max: max.it2 || max.cia2 || 25, pass: pass.it2 || pass.cia2 || 10 },
+                            { name: 'Model', val: m.model, max: max.model || 75, pass: pass.model || 30 },
+                            { name: 'Seminar', val: m.seminar, max: max.seminar || 10, pass: pass.seminar || 4 },
+                            { name: 'Project', val: m.project, max: max.project || 20, pass: pass.project || 8 },
+                            { name: 'Consolidated', val: m.consolidated, max: max.consolidated || 25, pass: pass.consolidated || 10, isHighlight: true }
+                          ];
 
-                              return (
-                                <div 
-                                  key={sIdx} 
-                                  className={`p-2.5 rounded-xl border transition-all ${
-                                    sc.isHighlight 
-                                      ? 'bg-purple-50/80 border-purple-200 font-bold' 
-                                      : 'bg-white border-slate-200/80'
-                                  }`}
-                                >
-                                  <p className="text-[9.5px] font-extrabold text-slate-400 uppercase truncate" title={sc.name}>
-                                    {sc.name}
-                                  </p>
-                                  <p className={`text-sm font-black my-0.5 ${
-                                    hasScore 
-                                      ? (isPassed ? 'text-slate-900' : 'text-rose-600') 
-                                      : 'text-slate-300'
-                                  }`}>
-                                    {hasScore ? sc.val : '—'}
-                                  </p>
-                                  <p className="text-[9px] text-slate-400 font-mono">
-                                    Max: {sc.max}
+                          return (
+                            <div key={idx} className="border border-slate-200/90 rounded-2xl overflow-hidden bg-slate-50/30 shadow-2xs">
+                              {/* Subject Header */}
+                              <div className="bg-gradient-to-r from-slate-50 to-blue-50/40 p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-md">
+                                      {ms.subjectCode}
+                                    </span>
+                                    <h4 className="font-extrabold text-sm text-slate-900">{ms.subjectName || ms.subjectCode}</h4>
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    Faculty: <strong className="text-slate-700">{ms.staffName || 'Department Faculty'}</strong> • Sem: {ms.semester || '1'}
                                   </p>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
+                                <div className="flex items-center gap-2">
+                                  {ms.isLocked && (
+                                    <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                      <Lock className="w-3 h-3" /> Locked & Verified
+                                    </span>
+                                  )}
+                                  <span className="text-xs font-black bg-purple-100 text-purple-800 px-3 py-1 rounded-xl">
+                                    Consolidated: {m.consolidated !== null && m.consolidated !== undefined ? `${m.consolidated}/${max.consolidated || 25}` : 'In Progress'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Scores Grid */}
+                              <div className="p-4 grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2.5 text-center">
+                                {scoreList.map((sc, sIdx) => {
+                                  const hasScore = sc.val !== null && sc.val !== undefined && sc.val !== '';
+                                  const isNum = !isNaN(Number(sc.val));
+                                  const numVal = isNum ? Number(sc.val) : null;
+                                  const isPassed = numVal !== null ? numVal >= sc.pass : true;
+
+                                  return (
+                                    <div 
+                                      key={sIdx} 
+                                      className={`p-2.5 rounded-xl border transition-all ${
+                                        sc.isHighlight 
+                                          ? 'bg-purple-50/80 border-purple-200 font-bold' 
+                                          : 'bg-white border-slate-200/80'
+                                      }`}
+                                    >
+                                      <p className="text-[9.5px] font-extrabold text-slate-400 uppercase truncate" title={sc.name}>
+                                        {sc.name}
+                                      </p>
+                                      <p className={`text-sm font-black my-0.5 ${
+                                        hasScore 
+                                          ? (isPassed ? 'text-slate-900' : 'text-rose-600') 
+                                          : 'text-slate-300'
+                                      }`}>
+                                        {hasScore ? sc.val : '—'}
+                                      </p>
+                                      <p className="text-[9px] text-slate-400 font-mono">
+                                        Max: {sc.max}
+                                      </p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 border-b border-slate-200">
-                          <th className="py-3 px-4">Subject</th>
-                          <th className="py-3 px-4">Evaluation Type</th>
-                          <th className="py-3 px-4 text-center">Max Marks</th>
-                          <th className="py-3 px-4 text-center">Marks Obtained</th>
-                          <th className="py-3 px-4 text-right">Result</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        <tr>
-                          <td className="py-3 px-4 font-bold text-slate-900">CS301 · Data Structures & Algorithms</td>
-                          <td className="py-3 px-4 text-slate-600">Continuous Assessment (CIA)</td>
-                          <td className="py-3 px-4 text-center font-mono">25</td>
-                          <td className="py-3 px-4 text-center font-mono font-bold text-blue-700">22</td>
-                          <td className="py-3 px-4 text-right"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Pass</span></td>
-                        </tr>
-                        <tr>
-                          <td className="py-3 px-4 font-bold text-slate-900">CS302 · Database Management Systems</td>
-                          <td className="py-3 px-4 text-slate-600">Continuous Assessment (CIA)</td>
-                          <td className="py-3 px-4 text-center font-mono">25</td>
-                          <td className="py-3 px-4 text-center font-mono font-bold text-blue-700">21</td>
-                          <td className="py-3 px-4 text-right"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Pass</span></td>
-                        </tr>
-                        <tr>
-                          <td className="py-3 px-4 font-bold text-slate-900">MAT201 · Discrete Mathematics</td>
-                          <td className="py-3 px-4 text-slate-600">Continuous Assessment (CIA)</td>
-                          <td className="py-3 px-4 text-center font-mono">25</td>
-                          <td className="py-3 px-4 text-center font-mono font-bold text-blue-700">20</td>
-                          <td className="py-3 px-4 text-right"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Pass</span></td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl">
+                    <FileSpreadsheet className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                    <h4 className="text-sm font-bold text-slate-700">No Assessment Records Found</h4>
+                    <p className="text-xs text-slate-400 mt-1">
+                      No internal marks or examination sheets have been published yet for your register number ({regNo}).
+                    </p>
                   </div>
                 )}
 

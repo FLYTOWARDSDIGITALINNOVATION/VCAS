@@ -10,7 +10,15 @@ import {
 
 const API = `${API_BASE}/question-papers`;
 
-const EXAM_TYPES = ["internal1", "internal 2", "model", "semester", "seminar", "project"];
+const EXAM_TYPE_OPTIONS = [
+  { value: "internal1", label: "Internal 1" },
+  { value: "internal 2", label: "Internal 2" },
+  { value: "model", label: "Model" },
+  { value: "semester", label: "Semester" },
+  { value: "seminar", label: "Seminar" },
+  { value: "project", label: "Project" }
+];
+const EXAM_TYPES = EXAM_TYPE_OPTIONS.map(o => o.value);
 const QUESTION_TYPES = ["MCQ", "5 Mark", "8 Mark"];
 const STATUS_COLORS = {
   Draft:     "bg-amber-100 text-amber-700 border-amber-200",
@@ -361,7 +369,7 @@ export default function StaffQuestionPaper({ staffUser }) {
             <div>
               <label className="block text-slate-700 font-bold mb-1">Exam Type</label>
               <select value={current.examType} onChange={e => updateField("examType", e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer">
-                {EXAM_TYPES.map(t => <option key={t}>{t}</option>)}
+                {EXAM_TYPE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div>

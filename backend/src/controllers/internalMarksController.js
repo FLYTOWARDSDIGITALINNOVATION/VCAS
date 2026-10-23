@@ -495,15 +495,20 @@ const getStudentInternalMarks = async (req, res) => {
     const rLower = rollNo.toLowerCase();
     const regLower = regNo.toLowerCase();
 
-    const marksheets = await InternalMarks.find({}).sort({ subjectCode: 1 });
+    const Subject = require("../models/Subject");
+    const name = student ? (student.name || student.fullName || '') : '';
+    const nameLower = name.trim().toLowerCase();
 
+    const marksheets = await InternalMarks.find({}).sort({ subjectCode: 1 });
     const studentMarksList = [];
+    const processedSubjectCodes = new Set();
 
     marksheets.forEach(ms => {
       const stRec = (ms.students || []).find(s => {
         const sr = (s.rollNo || '').toLowerCase();
         const srg = (s.regNo || '').toLowerCase();
-        return sr === rLower || sr === regLower || srg === rLower || srg === regLower || sr === idClean.toLowerCase();
+        const sn = (s.name || s.studentName || '').trim().toLowerCase();
+        return sr === rLower || sr === regLower || srg === rLower || srg === regLower || sr === idClean.toLowerCase() || (nameLower && sn && sn === nameLower);
       });
 
       const isDeptMatch = student && ms.department && (
@@ -511,19 +516,21 @@ const getStudentInternalMarks = async (req, res) => {
         (student.department || '').toLowerCase().includes(ms.department.toLowerCase())
       );
 
+      // Include if student record exists or if this subject belongs to student's department
       if (stRec || isDeptMatch) {
         const max = ms.maxMarks || DEFAULT_MAX_MARKS;
         const pass = ms.passMarks || DEFAULT_PASS_MARKS;
         const marks = stRec || {};
 
+        processedSubjectCodes.add((ms.subjectCode || '').toUpperCase().trim());
         studentMarksList.push({
           marksheetId: ms._id,
           subjectCode: ms.subjectCode,
-          subjectName: ms.subjectName,
+          subjectName: ms.subjectName || ms.subjectCode,
           staffId: ms.staffId,
           staffName: ms.staffName,
-          department: ms.department,
-          semester: ms.semester,
+          department: ms.department || student?.department || 'Computer Science',
+          semester: ms.semester || 1,
           academicYear: ms.academicYear,
           isLocked: ms.isLocked,
           maxMarks: max,
@@ -551,6 +558,55 @@ const getStudentInternalMarks = async (req, res) => {
         });
       }
     });
+
+    // Also include active subjects from the Subject catalog for the student's department/course
+    try {
+      const deptRegex = student?.department ? new RegExp(student.department.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
+      const query = deptRegex ? { $or: [{ department: deptRegex }, { department: { $exists: false } }] } : {};
+      const allSubjects = await Subject.find(query).sort({ code: 1 });
+
+      allSubjects.forEach(sub => {
+        const sCode = (sub.code || sub.subjectCode || '').toUpperCase().trim();
+        if (sCode && !processedSubjectCodes.has(sCode)) {
+          processedSubjectCodes.add(sCode);
+          studentMarksList.push({
+            marksheetId: sub._id,
+            subjectCode: sub.code || sub.subjectCode,
+            subjectName: sub.name || sub.subjectName || sub.code,
+            staffId: sub.facultyId || '',
+            staffName: sub.faculty || 'Department Faculty',
+            department: sub.department || student?.department || 'Computer Science',
+            semester: sub.sem ? (parseInt(String(sub.sem).replace(/\D/g, '')) || 1) : 1,
+            academicYear: student?.academicYear || '2025-2026',
+            isLocked: false,
+            maxMarks: DEFAULT_MAX_MARKS,
+            passMarks: DEFAULT_PASS_MARKS,
+            marks: {
+              st1: null,
+              st2: null,
+              st3: null,
+              st4: null,
+              it1: null,
+              it2: null,
+              cia1: null,
+              cia2: null,
+              model: null,
+              seminar: null,
+              project: null,
+              assignment1: null,
+              assignment2: null,
+              assignment3: null,
+              assignment4: null,
+              assignment: null,
+              attendance: null,
+              consolidated: null
+            }
+          });
+        }
+      });
+    } catch (subErr) {
+      console.warn("Could not fetch supplementary subjects:", subErr.message);
+    }
 
     res.json({
       success: true,

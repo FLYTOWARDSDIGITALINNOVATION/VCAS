@@ -2590,12 +2590,12 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     onChange={(e) => setFormExamType(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="internal1">internal1</option>
-                    <option value="internal 2">internal 2</option>
-                    <option value="model">model</option>
-                    <option value="semester">semester</option>
-                    <option value="seminar">seminar</option>
-                    <option value="project">project</option>
+                    <option value="internal1">Internal 1</option>
+                    <option value="internal 2">Internal 2</option>
+                    <option value="model">Model</option>
+                    <option value="semester">Semester</option>
+                    <option value="seminar">Seminar</option>
+                    <option value="project">Project</option>
                   </select>
                 </div>
 

@@ -2366,12 +2366,12 @@ export default function ExaminationManagement({ user }) {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-rose-500 focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">All Exam Types</option>
-                  <option value="internal1">internal1</option>
-                  <option value="internal 2">internal 2</option>
-                  <option value="model">model</option>
-                  <option value="semester">semester</option>
-                  <option value="seminar">seminar</option>
-                  <option value="project">project</option>
+                  <option value="internal1">Internal 1</option>
+                  <option value="internal 2">Internal 2</option>
+                  <option value="model">Model</option>
+                  <option value="semester">Semester</option>
+                  <option value="seminar">Seminar</option>
+                  <option value="project">Project</option>
                 </select>
               </div>
             </div>
@@ -2991,7 +2991,7 @@ export default function ExaminationManagement({ user }) {
                 VIVEKANANDA COLLEGE OF ARTS AND SCIENCE • VELLALANKULAM - 627 856
               </div>
               <h3 className="font-extrabold text-sm text-slate-900 mt-0.5">Continuous Internal Assessment (CIA) & Register Marks Entry</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Official College Register: INTERNAL (internal1, internal 2) | MODEL | SEMESTER | SEMINAR | PROJECT | SNAP TEST (ST 1-4) | ASSIGNMENT (1-4)</p>
+              <p className="text-xs text-slate-500 mt-0.5">Official College Register: INTERNAL (Internal 1, Internal 2) | MODEL | SEMESTER | SEMINAR | PROJECT | SNAP TEST (ST 1-4) | ASSIGNMENT (1-4)</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -3029,8 +3029,8 @@ export default function ExaminationManagement({ user }) {
                     <th rowSpan={2} className="py-2.5 px-4 text-right">GRADE</th>
                   </tr>
                   <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-600 uppercase text-center">
-                    <th className="py-1 px-1 border-r border-slate-200 bg-indigo-50 text-indigo-900">internal1</th>
-                    <th className="py-1 px-1 border-r border-slate-200 bg-indigo-50 text-indigo-900">internal 2</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-indigo-50 text-indigo-900">Internal 1</th>
+                    <th className="py-1 px-1 border-r border-slate-200 bg-indigo-50 text-indigo-900">Internal 2</th>
                     <th className="py-1 px-1 border-r border-slate-200 bg-sky-50 text-sky-900">ST 1</th>
                     <th className="py-1 px-1 border-r border-slate-200 bg-sky-50 text-sky-900">ST 2</th>
                     <th className="py-1 px-1 border-r border-slate-200 bg-sky-50 text-sky-900">ST 3</th>
@@ -3746,12 +3746,12 @@ export default function ExaminationManagement({ user }) {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                     required
                   >
-                    <option value="internal1">internal1</option>
-                    <option value="internal 2">internal 2</option>
-                    <option value="model">model</option>
-                    <option value="semester">semester</option>
-                    <option value="seminar">seminar</option>
-                    <option value="project">project</option>
+                    <option value="internal1">Internal 1</option>
+                    <option value="internal 2">Internal 2</option>
+                    <option value="model">Model</option>
+                    <option value="semester">Semester</option>
+                    <option value="seminar">Seminar</option>
+                    <option value="project">Project</option>
                   </select>
                 </div>
               </div>
@@ -4971,12 +4971,12 @@ export default function ExaminationManagement({ user }) {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                     required
                   >
-                    <option value="internal1">internal1</option>
-                    <option value="internal 2">internal 2</option>
-                    <option value="model">model</option>
-                    <option value="semester">semester</option>
-                    <option value="seminar">seminar</option>
-                    <option value="project">project</option>
+                    <option value="internal1">Internal 1</option>
+                    <option value="internal 2">Internal 2</option>
+                    <option value="model">Model</option>
+                    <option value="semester">Semester</option>
+                    <option value="seminar">Seminar</option>
+                    <option value="project">Project</option>
                   </select>
                 </div>
               </div>

@@ -76,12 +76,12 @@ export const DEFAULT_PASS_CONFIG = {
 
 export const ASSESSMENT_COMPONENTS = [
   { id: "all", label: "College Register Sheet (Official Layout)", shortLabel: "📋 Full Register Sheet", defaultMax: 100, defaultPass: 40 },
-  { id: "it", label: "Internal1 (Internal 1)", shortLabel: "internal1", defaultMax: 25, defaultPass: 10 },
-  { id: "it2", label: "Internal 2 (Internal 2)", shortLabel: "internal 2", defaultMax: 25, defaultPass: 10 },
-  { id: "model", label: "Model (Model Examination)", shortLabel: "model", defaultMax: 75, defaultPass: 30 },
-  { id: "semester", label: "Semester (Semester Examination)", shortLabel: "semester", defaultMax: 100, defaultPass: 40 },
-  { id: "seminar", label: "Seminar (Seminar Presentation)", shortLabel: "seminar", defaultMax: 10, defaultPass: 4 },
-  { id: "project", label: "Project (Project Work)", shortLabel: "project", defaultMax: 20, defaultPass: 8 },
+  { id: "it", label: "Internal 1 (Internal 1)", shortLabel: "Internal 1", defaultMax: 25, defaultPass: 10 },
+  { id: "it2", label: "Internal 2 (Internal 2)", shortLabel: "Internal 2", defaultMax: 25, defaultPass: 10 },
+  { id: "model", label: "Model (Model Examination)", shortLabel: "Model", defaultMax: 75, defaultPass: 30 },
+  { id: "semester", label: "Semester (Semester Examination)", shortLabel: "Semester", defaultMax: 100, defaultPass: 40 },
+  { id: "seminar", label: "Seminar (Seminar Presentation)", shortLabel: "Seminar", defaultMax: 10, defaultPass: 4 },
+  { id: "project", label: "Project (Project Work)", shortLabel: "Project", defaultMax: 20, defaultPass: 8 },
   { id: "st", label: "Snap Tests (ST 1 - 4)", shortLabel: "Snap Tests (ST1-4)", defaultMax: 20, defaultPass: 8 },
   { id: "assignment", label: "Assignments (1 to 4)", shortLabel: "Assignments (1-4)", defaultMax: 5, defaultPass: 2 },
   { id: "consolidated", label: "Consolidated Internal Marks", shortLabel: "Final CIA Summary", defaultMax: 25, defaultPass: 10 },
@@ -670,8 +670,8 @@ export default function StaffInternalMarks({ staffUser }) {
         }
       }
 
-      // Generate comprehensive CSV with order: internal1, internal 2, model, semester, seminar, project
-      let csv = `Department,Subject Code,Subject Name,Semester,S.NO,Roll No,Student Name,internal1,internal 2,model,semester,seminar,project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
+      // Generate comprehensive CSV with order: Internal 1, Internal 2, Model, Semester, Seminar, Project
+      let csv = `Department,Subject Code,Subject Name,Semester,S.NO,Roll No,Student Name,Internal 1,Internal 2,Model,Semester,Seminar,Project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
       marksheetsToExport.forEach(ms => {
         (ms.students || []).forEach((s, idx) => {
           const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
@@ -806,7 +806,7 @@ export default function StaffInternalMarks({ staffUser }) {
 
   // -- Export CSV with all register columns ---------------------------
   const handleExport = () => {
-    let csv = `S.NO,Roll No,Student Name,internal1,internal 2,model,semester,seminar,project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
+    let csv = `S.NO,Roll No,Student Name,Internal 1,Internal 2,Model,Semester,Seminar,Project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
     students.forEach((s, idx) => {
       const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
       const it2 = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
@@ -956,8 +956,8 @@ export default function StaffInternalMarks({ staffUser }) {
               <th colspan="4">ASSIGNMENT</th>
             </tr>
             <tr>
-              <th style="width: 44px;">internal1</th>
-              <th style="width: 44px;">internal 2</th>
+              <th style="width: 44px;">Internal 1</th>
+              <th style="width: 44px;">Internal 2</th>
               <th style="width: 38px;">ST 1</th>
               <th style="width: 38px;">ST 2</th>
               <th style="width: 38px;">ST 3</th>
@@ -1503,7 +1503,7 @@ export default function StaffInternalMarks({ staffUser }) {
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-1">
                     <span>Staff: <b className="text-slate-800 font-extrabold">{staffName || "P. KALARANI"}</b></span>
                     <span>•</span>
-                    <span>Format: <b>INTERNAL (internal1, internal 2) | MODEL | SEMESTER | SEMINAR | PROJECT | SNAP TEST (1-4) | ASSIGNMENT (1-4)</b></span>
+                    <span>Format: <b>INTERNAL (Internal 1, Internal 2) | MODEL | SEMESTER | SEMINAR | PROJECT | SNAP TEST (1-4) | ASSIGNMENT (1-4)</b></span>
                     <span>•</span>
                     <span>Enter <b>AB</b> for Absent, <b>-</b> for Exempt</span>
                   </div>
@@ -1560,8 +1560,8 @@ export default function StaffInternalMarks({ staffUser }) {
                       </th>
                     </tr>
                     <tr className="bg-slate-50 text-slate-700 font-extrabold uppercase text-[10px] border-b border-slate-300">
-                      <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">internal1</th>
-                      <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">internal 2</th>
+                      <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">Internal 1</th>
+                      <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">Internal 2</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-50 text-sky-900">ST 1</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-50 text-sky-900">ST 2</th>
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-sky-50 text-sky-900">ST 3</th>
