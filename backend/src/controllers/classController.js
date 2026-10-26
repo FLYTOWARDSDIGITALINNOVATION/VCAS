@@ -1,6 +1,7 @@
 const Class = require('../models/Class');
 const Staff = require('../models/Staff');
 const Student = require('../models/Student');
+const Subject = require('../models/Subject');
 const { autoGenerateExamAndHallTickets } = require('./courseSubjectController');
 const { autoGenerateTimetableSchedule } = require('./timetableController');
 
@@ -57,10 +58,60 @@ exports.getAllClasses = async (req, res) => {
 exports.getStaffClasses = async (req, res) => {
   try {
     const { staffId } = req.params;
-    const staff = await Staff.findOne({ staffId });
+    let staff = await Staff.findOne({
+      $or: [
+        { staffId: staffId.trim() },
+        { _id: staffId.match(/^[0-9a-fA-F]{24}$/) ? staffId : null }
+      ].filter(Boolean)
+    });
 
-    // Query Class collection directly
-    let classes = await Class.find({ staffId }).sort({ code: 1 });
+    const staffName = staff ? staff.name : '';
+    const cleanStaffId = staff ? staff.staffId : staffId.trim();
+
+    // 1. Find any subjects assigned to this staff in the Subject catalog (by faculty name or staff ID)
+    const subjectQuery = [];
+    if (cleanStaffId) subjectQuery.push({ faculty: cleanStaffId });
+    if (staffName) subjectQuery.push({ faculty: new RegExp('^' + staffName.trim() + '$', 'i') });
+
+    if (subjectQuery.length > 0) {
+      const assignedSubjects = await Subject.find({ $or: subjectQuery });
+      for (const subj of assignedSubjects) {
+        const cleanCode = (subj.code || '').trim().toUpperCase();
+        if (!cleanCode) continue;
+
+        let cls = await Class.findOne({ code: cleanCode });
+        const semNum = Number(String(subj.sem).replace(/\D/g, '')) || 1;
+        const yearNum = Number(subj.year) || 1;
+
+        if (!cls) {
+          cls = await Class.create({
+            code: cleanCode,
+            name: subj.name,
+            dept: subj.department || (staff ? staff.department : 'General'),
+            semester: semNum,
+            year: yearNum,
+            section: 'A',
+            credits: Number(subj.credits) || 3,
+            staffId: cleanStaffId,
+            staffName: staffName || cleanStaffId,
+            theoryHours: Number(subj.theoryHours) || 3,
+            labHours: Number(subj.labHours) || 0,
+            isContinuousLab: true
+          });
+        } else if (cls.staffId !== cleanStaffId) {
+          cls.staffId = cleanStaffId;
+          cls.staffName = staffName || cls.staffName;
+          await cls.save();
+        }
+      }
+    }
+
+    // 2. Query Class collection directly for this staff
+    const classQueries = [{ staffId: cleanStaffId }];
+    if (staffName) {
+      classQueries.push({ staffName: new RegExp('^' + staffName.trim() + '$', 'i') });
+    }
+    let classes = await Class.find({ $or: classQueries }).sort({ code: 1 });
 
     // Fallback: If no classes in Class collection but staff has embedded classes, return them
     if (classes.length === 0 && staff && staff.classes && staff.classes.length > 0) {
@@ -69,8 +120,8 @@ exports.getStaffClasses = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      staffId: staff ? staff.staffId : staffId,
-      staffName: staff ? staff.name : '',
+      staffId: cleanStaffId,
+      staffName: staffName,
       department: staff ? staff.department : '',
       classTeacherOf: staff ? staff.classTeacherOf : '',
       classes

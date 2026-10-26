@@ -3,6 +3,7 @@ const Subject = require('../models/Subject');
 const Department = require('../models/Department');
 const Class = require('../models/Class');
 const Student = require('../models/Student');
+const Staff = require('../models/Staff');
 const HallTicket = require('../models/HallTicket');
 const { Exam } = require('../models/Exam');
 const { autoGenerateTimetableSchedule } = require('./timetableController');
@@ -255,6 +256,82 @@ const autoGenerateExamAndHallTickets = async (subjectDoc) => {
   }
 };
 
+// Helper: Ensure subject is automatically synchronized with Class collection and assigned Staff
+const syncSubjectToClass = async (subjectDoc) => {
+  try {
+    if (!subjectDoc || !subjectDoc.code) return;
+    const cleanCode = subjectDoc.code.trim().toUpperCase();
+    let assignedStaff = null;
+    if (subjectDoc.faculty && subjectDoc.faculty.trim()) {
+      const facName = subjectDoc.faculty.trim();
+      assignedStaff = await Staff.findOne({
+        $or: [
+          { name: new RegExp('^' + facName + '$', 'i') },
+          { staffId: facName },
+          { email: facName.toLowerCase() }
+        ]
+      });
+    }
+
+    const staffId = assignedStaff ? assignedStaff.staffId : (subjectDoc.faculty || 'FAC001');
+    const staffName = assignedStaff ? assignedStaff.name : (subjectDoc.faculty || 'Faculty In-Charge');
+    const semNum = Number(String(subjectDoc.sem).replace(/\D/g, '')) || 1;
+    const yearNum = Number(subjectDoc.year) || 1;
+
+    let cls = await Class.findOne({ code: cleanCode });
+    if (cls) {
+      cls.name = subjectDoc.name || cls.name;
+      cls.dept = subjectDoc.department || cls.dept;
+      cls.semester = semNum;
+      cls.year = yearNum;
+      cls.staffId = staffId;
+      cls.staffName = staffName;
+      cls.theoryHours = Number(subjectDoc.theoryHours) || cls.theoryHours || 3;
+      cls.labHours = Number(subjectDoc.labHours) || cls.labHours || 0;
+      await cls.save();
+    } else {
+      cls = await Class.create({
+        code: cleanCode,
+        name: subjectDoc.name,
+        dept: subjectDoc.department,
+        semester: semNum,
+        year: yearNum,
+        section: 'A',
+        credits: Number(subjectDoc.credits) || 3,
+        staffId: staffId,
+        staffName: staffName,
+        theoryHours: Number(subjectDoc.theoryHours) || 3,
+        labHours: Number(subjectDoc.labHours) || 0,
+        isContinuousLab: true
+      });
+    }
+
+    if (assignedStaff) {
+      if (!Array.isArray(assignedStaff.classes)) assignedStaff.classes = [];
+      const existingIdx = assignedStaff.classes.findIndex(c => c.code.toUpperCase() === cleanCode);
+      const classSubjectObj = {
+        code: cleanCode,
+        name: subjectDoc.name,
+        dept: subjectDoc.department,
+        semester: semNum,
+        year: yearNum,
+        section: 'A',
+        credits: Number(subjectDoc.credits) || 3,
+        totalStudents: cls.students ? cls.students.length : 0,
+        enrolledStudents: (cls.students || []).map(s => ({ rollNo: s.rollNo, name: s.name, phone: s.phone || '', present: true }))
+      };
+      if (existingIdx >= 0) {
+        assignedStaff.classes[existingIdx] = classSubjectObj;
+      } else {
+        assignedStaff.classes.push(classSubjectObj);
+      }
+      await assignedStaff.save();
+    }
+  } catch (err) {
+    console.error('Error in syncSubjectToClass:', err);
+  }
+};
+
 exports.createSubject = async (req, res) => {
   try {
     const { code, name, department, year, sem, credits, type, faculty, ltp, hours, theoryHours, labHours, prerequisite, textbooks, studentsEnrolled, units, evaluation } = req.body;
@@ -292,6 +369,9 @@ exports.createSubject = async (req, res) => {
       units: Array.isArray(units) ? units : [],
       evaluation: evaluation || { internal: 40, external: 60 }
     });
+
+    // Automatically sync subject to Class and assigned Staff
+    await syncSubjectToClass(subject);
 
     // Automatically schedule weekly timetable (with continuous lab hours)
     try {
@@ -354,6 +434,9 @@ exports.updateSubject = async (req, res) => {
     if (req.body.evaluation) subject.evaluation = req.body.evaluation;
 
     await subject.save();
+
+    // Automatically sync subject to Class and assigned Staff
+    await syncSubjectToClass(subject);
 
     // Automatically update weekly timetable schedule
     try {

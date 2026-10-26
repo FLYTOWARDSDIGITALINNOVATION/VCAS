@@ -5,11 +5,19 @@ const {
   getStaffSessions,
   getSessionById,
   saveSession,
+  bulkSaveAttendance,
+  getFilteredAttendance,
   updateSession,
   deleteSession,
   getClassSummary,
   getStudentAttendance
 } = require('../controllers/attendanceController');
+
+// ── Export Filtered Attendance (Dep, Yr, Batch, Sem wise) ────
+router.get('/export/filtered', getFilteredAttendance);
+
+// ── Bulk Attendance Upload ─────────────────────────────────
+router.post('/bulk', bulkSaveAttendance);
 
 // ── General Attendance Routes ─────────────────────────────
 router.get('/', getAllAttendance);

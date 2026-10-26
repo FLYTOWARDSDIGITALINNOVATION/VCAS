@@ -311,7 +311,21 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       String(student.department || '').toLowerCase().includes(term)
     );
 
-    const matchesDept = selectedDept === 'All Departments' || student.department === selectedDept;
+    const matchesDept = (() => {
+      if (selectedDept === 'All Departments') return true;
+      const sDept = (student.department || '').toLowerCase().trim();
+      const sCourse = (student.course || '').toLowerCase().trim();
+      const filter = selectedDept.toLowerCase().trim();
+      // exact match first
+      if (sDept === filter || sCourse === filter) return true;
+      // fuzzy: filter value contained in dept/course or vice versa
+      if (sDept.includes(filter) || sCourse.includes(filter)) return true;
+      // specific known mappings
+      if (filter === 'commerce' && (sDept.includes('com') || sCourse.includes('b.com') || sCourse.includes('m.com'))) return true;
+      if (filter === 'computer science' && (sDept.includes('computer') || sCourse.includes('computer') || sCourse.includes('b.sc') || sDept.includes('cs'))) return true;
+      if (filter.length > 2 && (sDept.includes(filter.substring(0, 4)) || sCourse.includes(filter.substring(0, 4)))) return true;
+      return false;
+    })();
     const matchesFee = !canViewFees || selectedFeeStatus === 'All Statuses' || student.feeStatus === selectedFeeStatus;
 
     const sBatch = (student.batch || '').replace('–', '-').trim().toLowerCase();

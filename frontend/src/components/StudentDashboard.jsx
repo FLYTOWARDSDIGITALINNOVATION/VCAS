@@ -47,7 +47,11 @@ import {
   Check,
   RefreshCw,
   FolderOpen,
-  ExternalLink
+  ExternalLink,
+  Bell,
+  BellRing,
+  Pin,
+  Tag
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -72,6 +76,12 @@ const NAV_SECTIONS = [
     items: [
       { name: 'Student Slip', icon: FileText },
       { name: 'Hall Ticket', icon: Ticket }
+    ]
+  },
+  {
+    title: 'INFORMATION',
+    items: [
+      { name: 'Notices', icon: Bell }
     ]
   }
 ];
@@ -150,6 +160,11 @@ export default function StudentDashboard({ student, onLogout }) {
   const [hallTicketInstructions, setHallTicketInstructions] = useState([]);
   const [allocatedStaffName, setAllocatedStaffName] = useState('Chief Superintendent');
   const [liveExams, setLiveExams] = useState([]);
+  const [noticesList, setNoticesList] = useState([]);
+  const [noticesLoading, setNoticesLoading] = useState(false);
+  const [noticeTagFilter, setNoticeTagFilter] = useState('ALL');
+  const [noticeSearch, setNoticeSearch] = useState('');
+  const [expandedNotice, setExpandedNotice] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -313,8 +328,23 @@ export default function StudentDashboard({ student, onLogout }) {
     });
   };
 
+  // Fetch notices from backend
+  const fetchNotices = () => {
+    setNoticesLoading(true);
+    fetch(`${API_BASE}/notices`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.notices)) {
+          setNoticesList(data.notices);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setNoticesLoading(false));
+  };
+
   useEffect(() => {
     fetchAllStudentData();
+    fetchNotices();
   }, [rollNo, regNo]);
 
   const formatBytes = (bytes) => {
@@ -2551,9 +2581,6 @@ CONTACT:
             </div>
           )}
 
-        </main>
-      </div>
-
       {/* Interactive Assignment Submission Modal */}
       {submittingAssignment && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -2779,6 +2806,180 @@ CONTACT:
           </div>
         </div>
       )}
+
+          {/* ─────────────────────────────────────────────────────────── */}
+          {/* TAB 9: NOTICES VIEW                                         */}
+          {/* ─────────────────────────────────────────────────────────── */}
+          {activeNav === 'Notices' && (
+            <div className="space-y-5 w-full max-w-5xl mx-auto animate-fadeIn">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-0.5 bg-amber-100 text-amber-700 font-extrabold text-[10px] rounded-full uppercase tracking-wider">
+                      College Bulletin Board
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-black text-slate-900">Notices &amp; Announcements</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Official announcements, academic alerts and college updates.</p>
+                </div>
+                <button
+                  onClick={fetchNotices}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 shadow-xs transition-all self-start sm:self-auto"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${noticesLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+
+              {/* Search + Tag Filter Row */}
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={noticeSearch}
+                    onChange={e => setNoticeSearch(e.target.value)}
+                    placeholder="Search notices by title or content..."
+                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {['ALL','Academic','Exam','Holiday','Event','General','Urgent'].map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => setNoticeTagFilter(tag)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                        noticeTagFilter === tag
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notices List */}
+              {noticesLoading ? (
+                <div className="py-16 text-center bg-white rounded-2xl border border-slate-100 shadow-xs">
+                  <RefreshCw className="w-6 h-6 animate-spin text-blue-400 mx-auto mb-2" />
+                  <p className="text-xs text-slate-400 font-bold">Loading notices...</p>
+                </div>
+              ) : (() => {
+                const filtered = noticesList.filter(n => {
+                  const matchTag = noticeTagFilter === 'ALL' || n.tag === noticeTagFilter || (noticeTagFilter === 'Urgent' && n.urgent);
+                  const q = noticeSearch.trim().toLowerCase();
+                  const matchSearch = !q || (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q);
+                  return matchTag && matchSearch;
+                });
+                if (filtered.length === 0) {
+                  return (
+                    <div className="py-16 text-center bg-white rounded-2xl border border-slate-100 shadow-xs">
+                      <Bell className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                      <p className="text-sm font-bold text-slate-600">No notices found</p>
+                      <p className="text-xs text-slate-400 mt-1">Check back later for college announcements.</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-3">
+                    {filtered.map((notice, idx) => {
+                      const isExpanded = expandedNotice === (notice._id || idx);
+                      const tagColors = {
+                        Academic: 'bg-blue-50 text-blue-700 border-blue-200',
+                        Exam: 'bg-purple-50 text-purple-700 border-purple-200',
+                        Holiday: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                        Event: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                        General: 'bg-slate-100 text-slate-700 border-slate-200',
+                        Urgent: 'bg-rose-50 text-rose-700 border-rose-200',
+                      };
+                      const tagClass = tagColors[notice.tag] || tagColors.General;
+                      return (
+                        <div
+                          key={notice._id || idx}
+                          className={`bg-white rounded-2xl border shadow-xs transition-all ${
+                            notice.urgent
+                              ? 'border-rose-300 ring-1 ring-rose-200'
+                              : notice.pinned
+                              ? 'border-amber-300 ring-1 ring-amber-100'
+                              : 'border-slate-200/90'
+                          }`}
+                        >
+                          <div
+                            className="p-4 sm:p-5 cursor-pointer"
+                            onClick={() => setExpandedNotice(isExpanded ? null : (notice._id || idx))}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                                  notice.urgent ? 'bg-rose-100 text-rose-600' : notice.pinned ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-blue-600'
+                                }`}>
+                                  {notice.urgent ? <BellRing className="w-4 h-4" /> : notice.pinned ? <Pin className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                    {notice.pinned && (
+                                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded border border-amber-200">📌 Pinned</span>
+                                    )}
+                                    {notice.urgent && (
+                                      <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded border border-rose-200">🔴 Urgent</span>
+                                    )}
+                                    {notice.tag && (
+                                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${tagClass}`}>{notice.tag}</span>
+                                    )}
+                                    <span className="text-[10px] text-slate-400 font-medium ml-auto">{notice.date || new Date(notice.createdAt).toLocaleDateString('en-IN')}</span>
+                                  </div>
+                                  <h4 className="font-black text-slate-900 text-sm leading-snug">{notice.title}</h4>
+                                  <p className="text-[11px] text-slate-500 mt-0.5">Posted by: <span className="font-semibold text-slate-700">{notice.postedBy || 'College Administration'}</span></p>
+                                </div>
+                              </div>
+                              <ChevronRight className={`w-4 h-4 text-slate-400 shrink-0 transition-transform mt-1 ${ isExpanded ? 'rotate-90' : ''}`} />
+                            </div>
+
+                            {/* Preview line */}
+                            {!isExpanded && (
+                              <p className="text-xs text-slate-500 mt-2.5 ml-12 line-clamp-2 leading-relaxed">
+                                {notice.body}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Expanded Body */}
+                          {isExpanded && (
+                            <div className="px-4 sm:px-5 pb-5 ml-12 border-t border-slate-100 pt-3.5">
+                              <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">{notice.body}</p>
+                              {notice.department && notice.department !== 'All' && (
+                                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[11px] text-slate-500">
+                                  <Building2 className="w-3.5 h-3.5" />
+                                  <span>Applies to: <strong className="text-slate-700">{notice.department}</strong></span>
+                                </div>
+                              )}
+                              {Array.isArray(notice.attachments) && notice.attachments.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {notice.attachments.map((att, ai) => (
+                                    <a key={ai} href={att.url || '#'} target="_blank" rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-bold hover:bg-blue-100 transition-colors">
+                                      <ExternalLink className="w-3 h-3" />
+                                      {att.name || `Attachment ${ai + 1}`}
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+        </main>
+      </div>
 
       {/* Floating Tooltip for Sidebar Icons */}
       {hoveredTooltip && (

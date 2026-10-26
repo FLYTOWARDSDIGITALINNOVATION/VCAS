@@ -30,6 +30,7 @@ import TuitionFeesManagement from './TuitionFeesManagement';
 import TransportFeesManagement from './TransportFeesManagement';
 import FeeStructureView from './FeeStructureView';
 import { Building2 } from 'lucide-react';
+import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
 
 export default function FeeManagement({ defaultFeeType = 'All', user }) {
   // Mode state: 'list' or 'form'
@@ -157,13 +158,21 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
             const paid = isPaid ? totalFee : (hasPaymentRecord ? (Number(savedPayments[sid]?.paid) || 0) : 0);
             const pending = Math.max(0, totalFee - paid);
             
+            const rawYear = st.year || st.academicYearNum || (st.semester ? Math.ceil(Number(st.semester) / 2) : 1);
+            const rawBatch = st.batch || st.academicYear || (rawYear === 1 ? '2025-2028' : rawYear === 2 ? '2024-2027' : '2023-2026');
+            const rawDept = st.department || st.course || 'Computer Science';
+
             return {
               id: sid,
               mongoId: st._id || st.id,
               rollNo: st.rollNo,
               name: st.name || st.fullName || 'Student',
               avatar: (st.name || 'S').charAt(0).toUpperCase(),
-              course: st.department || st.course || 'Computer Science',
+              course: rawDept,
+              department: rawDept,
+              year: rawYear,
+              batch: rawBatch,
+              academicYear: rawBatch,
               feeType: 'Tuition Fees',
               totalFee: totalFee,
               totalFeeDisplay: `₹${(totalFee / 1000).toFixed(0)}K`,
@@ -325,7 +334,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         paidFeeDisplay: paidAmount >= 1000 ? `₹${(paidAmount / 1000).toFixed(0)}K` : `₹${paidAmount}`,
         pendingFeeDisplay: pendingAmount === 0 ? '-' : (pendingAmount >= 1000 ? `₹${(pendingAmount / 1000).toFixed(0)}K` : `₹${pendingAmount}`),
         status: feeStatus,
-        dueDate: entryFormData.dueDate || payDate,
+        dueDate: entryFormData.dueDate || '',
         lastPaymentDate: payDate,
         paymentMode: entryFormData.paymentMode || 'Online',
         upiId: entryFormData.upiId || '',
@@ -451,9 +460,13 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       window.dispatchEvent(new Event('vcas_students_updated'));
     } catch (e) {}
 
+    const updatedRec = nextRecords.find(r => r.id === targetStudentId);
     showToast(`Payment of ₹${amountNum.toLocaleString()} successfully recorded!`);
     setShowRecordModal(false);
     setSelectedStudentForPay(null);
+    if (updatedRec) {
+      setSelectedReceiptStudent(updatedRec);
+    }
   };
 
   const handleToggleFeeStatus = (targetStudentId) => {
@@ -500,7 +513,136 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     showToast(`Fee status updated by staff for ${targetStudentId}`);
   };
 
-  // Filter students based on search, status, course, feeType
+  const handleDownloadReceipt = (studentRec) => {
+    if (!studentRec) return;
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('Please allow popups to download/print the official fee receipt bill.');
+      return;
+    }
+
+    const receiptNo = `REC-2026-${String(studentRec.id || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
+    const studentName = studentRec.name || 'Student';
+    const rollNo = studentRec.rollNo || studentRec.id || '—';
+    const dept = studentRec.department || studentRec.course || '—';
+    const feeCategory = studentRec.feeType || 'Fee Collection';
+    const totalFee = Number(studentRec.totalFee) || 0;
+    const paidFee = Number(studentRec.paidFee) || 0;
+    const pendingFee = Math.max(0, totalFee - paidFee);
+    const payMode = studentRec.paymentMode || 'Online / UPI';
+    const txnRef = studentRec.paymentRef || studentRec.referenceNo || `TXN${Date.now().toString().slice(-6)}`;
+    const payDate = studentRec.lastPaymentDate || new Date().toLocaleDateString('en-IN');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Fee_Bill_Receipt_${receiptNo}_${rollNo}</title>
+          <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 0; padding: 20px; background: #fff; }
+            .receipt-box { max-width: 680px; margin: 0 auto; border: 2px solid #0f172a; border-radius: 12px; padding: 24px; position: relative; }
+            .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 70px; font-weight: 900; color: rgba(16, 185, 129, 0.08); text-transform: uppercase; pointer-events: none; }
+            .header { text-align: center; border-bottom: 2px dashed #cbd5e1; padding-bottom: 16px; margin-bottom: 16px; }
+            .brand-name { font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px; }
+            .affiliation { font-size: 11px; font-weight: 600; color: #475569; margin-top: 3px; }
+            .badge { display: inline-block; background: #0f172a; color: #fff; font-size: 11px; font-weight: 800; padding: 4px 14px; border-radius: 9999px; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; margin-bottom: 16px; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
+            .meta-item { display: flex; justify-content: space-between; }
+            .meta-item span { color: #64748b; font-weight: 600; }
+            .meta-item strong { color: #0f172a; font-weight: 700; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+            th { background: #f1f5f9; color: #334155; font-weight: 800; text-transform: uppercase; padding: 10px 12px; border: 1px solid #cbd5e1; text-align: left; }
+            td { padding: 10px 12px; border: 1px solid #cbd5e1; color: #1e293b; }
+            .total-row { font-weight: 800; background: #f8fafc; }
+            .paid-row { font-weight: 800; color: #047857; background: #ecfdf5; font-size: 13px; }
+            .due-row { font-weight: 800; color: #b91c1c; background: #fef2f2; }
+            .footer-sign { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 20px; }
+            .sign-box { text-align: center; width: 180px; }
+            .sign-line { border-top: 1px solid #0f172a; margin-top: 40px; padding-top: 6px; font-size: 11px; font-weight: 700; color: #334155; }
+            .note { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 24px; font-style: italic; }
+            @media print {
+              body { padding: 0; }
+              .receipt-box { border: 2px solid #000; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-box">
+            <div class="watermark">${pendingFee === 0 ? 'FEE PAID' : 'OFFICIAL BILL'}</div>
+            <div class="header">
+              ${getCollegeLogoHtml(44)}
+              <div class="brand-name">Vivekananda College of Arts & Science</div>
+              <div class="affiliation">Affiliated with Manonmaniam Sundaranar University • Vellalankulam, Tamil Nadu</div>
+              <div class="badge">Official Fee Payment Receipt & Billing Voucher</div>
+            </div>
+
+            <div class="meta-grid">
+              <div class="meta-item"><span>Receipt No:</span> <strong>${receiptNo}</strong></div>
+              <div class="meta-item"><span>Payment Date:</span> <strong>${payDate}</strong></div>
+              <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
+              <div class="meta-item"><span>Roll / Reg No:</span> <strong>${rollNo}</strong></div>
+              <div class="meta-item"><span>Department:</span> <strong>${dept}</strong></div>
+              <div class="meta-item"><span>Academic Batch:</span> <strong>${studentRec.batch || '2025-2028'}</strong></div>
+              <div class="meta-item"><span>Payment Mode:</span> <strong>${payMode}</strong></div>
+              <div class="meta-item"><span>Transaction Ref:</span> <strong>${txnRef}</strong></div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 10%;">S.No</th>
+                  <th>Fee Description / Particulars</th>
+                  <th style="text-align: right; width: 25%;">Amount (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="text-align: center;">1</td>
+                  <td><strong>${feeCategory}</strong><br><span style="color: #64748b; font-size: 10px;">Tuition / Examination / Transport / Institution Dues</span></td>
+                  <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
+                </tr>
+                <tr class="total-row">
+                  <td colspan="2" style="text-align: right;">Total Fee Assessed:</td>
+                  <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
+                </tr>
+                <tr class="paid-row">
+                  <td colspan="2" style="text-align: right;">Total Amount Received / Paid:</td>
+                  <td style="text-align: right;">₹${paidFee.toLocaleString('en-IN')}</td>
+                </tr>
+                <tr class="due-row">
+                  <td colspan="2" style="text-align: right;">Balance Outstanding Dues:</td>
+                  <td style="text-align: right;">₹${pendingFee.toLocaleString('en-IN')}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="footer-sign">
+              <div class="sign-box">
+                <div class="sign-line">Student Signature</div>
+              </div>
+              <div class="sign-box">
+                <div style="font-size: 11px; font-weight: bold; color: #047857; margin-bottom: 4px;">✓ VERIFIED & RECORDED</div>
+                <div class="sign-line">Accounts Officer / Cashier</div>
+              </div>
+            </div>
+
+            <div class="note">
+              Computer-generated official receipt issued by Vivekananda College of Arts & Science Finance System.
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  // Filter students based on search, status, course, feeType, year, batch
   const filteredRecords = feeRecords.filter(rec => {
     const term = (searchTerm || '').toLowerCase().trim();
     const matchesSearch = !term || (
@@ -508,16 +650,72 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       String(rec.id || '').toLowerCase().includes(term) ||
       String(rec.rollNo || '').toLowerCase().includes(term) ||
       String(rec.course || '').toLowerCase().includes(term) ||
+      String(rec.department || '').toLowerCase().includes(term) ||
       String(rec.feeType || '').toLowerCase().includes(term) ||
       String(rec.driverName || '').toLowerCase().includes(term) ||
       String(rec.vehicleNo || '').toLowerCase().includes(term) ||
       String(rec.routeStop || '').toLowerCase().includes(term)
     );
-    const matchesStatus = statusFilter === 'All' || String(rec.status || '').toLowerCase() === statusFilter.toLowerCase();
-    const matchesCourse = courseFilter === 'All' || String(rec.course || '').toLowerCase().includes(courseFilter.toLowerCase());
-    const matchesFeeType = feeTypeFilter === 'All' || rec.feeType === feeTypeFilter;
-    const matchesYear = yearFilter === 'All' || String(rec.year || '').toLowerCase() === yearFilter.toLowerCase();
-    const matchesBatch = batchFilter === 'All' || String(rec.batch || rec.academicYear || '').toLowerCase().includes(batchFilter.toLowerCase());
+
+    let matchesStatus = true;
+    if (statusFilter !== 'All') {
+      const recStat = String(rec.status || '').toLowerCase();
+      const fStat = statusFilter.toLowerCase();
+      if (fStat === 'paid') {
+        matchesStatus = recStat === 'paid';
+      } else if (fStat === 'pending') {
+        matchesStatus = recStat === 'pending' || recStat === 'partial' || recStat === 'unpaid';
+      } else if (fStat === 'overdue') {
+        matchesStatus = recStat === 'overdue' || recStat === 'pending';
+      } else {
+        matchesStatus = recStat === fStat;
+      }
+    }
+
+    let matchesCourse = true;
+    if (courseFilter !== 'All') {
+      const cFilter = courseFilter.toLowerCase().trim();
+      const recCourse = String(rec.course || '').toLowerCase().trim();
+      const recDept = String(rec.department || '').toLowerCase().trim();
+
+      const isCommerceFilter = cFilter.includes('commerce') || cFilter === 'b.com' || cFilter === 'c';
+      const isCSFilter = cFilter.includes('computer') || cFilter === 'cs' || cFilter.includes('science');
+
+      const isCommerceStudent = recDept.includes('commerce') || recCourse.includes('commerce') || recDept.includes('b.com') || recCourse.includes('b.com');
+      const isCSStudent = (recDept.includes('computer') || recCourse.includes('computer') || recDept.includes('cs') || recCourse.includes('cs')) && !isCommerceStudent;
+
+      if (isCommerceFilter) {
+        matchesCourse = isCommerceStudent;
+      } else if (isCSFilter) {
+        matchesCourse = isCSStudent;
+      } else {
+        matchesCourse = recDept.includes(cFilter) || recCourse.includes(cFilter) || (cFilter.length >= 4 && (cFilter.includes(recDept) || cFilter.includes(recCourse)));
+      }
+    }
+
+    let matchesFeeType = true;
+    if (feeTypeFilter !== 'All') {
+      matchesFeeType = !rec.feeType || String(rec.feeType).toLowerCase() === feeTypeFilter.toLowerCase();
+    }
+
+    let matchesYear = true;
+    if (yearFilter !== 'All') {
+      const romanMap = { 'i': '1', 'ii': '2', 'iii': '3', 'iv': '4' };
+      const fYearNorm = romanMap[yearFilter.toLowerCase()] || yearFilter.replace(/\D/g, '') || yearFilter.toLowerCase();
+      const recYearRaw = String(rec.year || '').toLowerCase();
+      const recYearNorm = romanMap[recYearRaw] || recYearRaw.replace(/\D/g, '') || recYearRaw;
+      matchesYear = recYearRaw === yearFilter.toLowerCase() || 
+                    (fYearNorm && recYearNorm && fYearNorm === recYearNorm) ||
+                    recYearRaw.includes(yearFilter.toLowerCase());
+    }
+
+    let matchesBatch = true;
+    if (batchFilter !== 'All') {
+      const bFilter = batchFilter.replace(/[^0-9]/g, '');
+      const recBatch = String(rec.batch || rec.academicYear || '').replace(/[^0-9]/g, '');
+      matchesBatch = !rec.batch || !bFilter || recBatch.includes(bFilter) || bFilter.includes(recBatch) || String(rec.batch || '').toLowerCase().includes(batchFilter.toLowerCase());
+    }
+
     return matchesSearch && matchesStatus && matchesCourse && matchesFeeType && matchesYear && matchesBatch;
   });
 
@@ -804,7 +1002,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 >
                   <option value="All">All Departments</option>
                   {adminDepartments.map(d => (
-                    <option key={d._id || d.code || d.name} value={d.code || d.name}>
+                    <option key={d._id || d.code || d.name} value={d.name}>
                       {d.name} {d.code ? `(${d.code})` : ''}
                     </option>
                   ))}
@@ -839,6 +1037,25 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                   <option value="2022-2025">2022–2025</option>
                 </select>
               </div>
+
+              {(searchTerm || feeTypeFilter !== 'All' || statusFilter !== 'All' || courseFilter !== 'All' || yearFilter !== 'All' || batchFilter !== 'All') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFeeTypeFilter('All');
+                    setStatusFilter('All');
+                    setCourseFilter('All');
+                    setYearFilter('All');
+                    setBatchFilter('All');
+                  }}
+                  className="px-2.5 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                  title="Clear all active filters"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -905,7 +1122,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
                         {/* Due Date */}
                         <td className="py-4 px-5 text-slate-500 font-medium">
-                          {row.dueDate}
+                          {row.dueDate || '-'}
                         </td>
 
                         {/* Status Pill */}
@@ -955,11 +1172,19 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                               Pay
                             </button>
 
-                            {/* Printer Icon */}
+                            {/* Download & Print Bill Buttons */}
+                            <button 
+                              onClick={() => handleDownloadReceipt(row)}
+                              title="Download Official Bill (PDF/Print)"
+                              className="hover:text-blue-600 text-slate-500 transition-colors p-1 cursor-pointer"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+
                             <button 
                               onClick={() => setSelectedReceiptStudent(row)}
-                              title="Print Receipt"
-                              className="hover:text-slate-700 transition-colors p-1"
+                              title="View & Print Receipt"
+                              className="hover:text-slate-700 transition-colors p-1 cursor-pointer"
                             >
                               <Printer className="w-4 h-4" />
                             </button>
@@ -1042,16 +1267,26 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               )}
             </div>
 
-            {/* 2 BUTTONS: PRINT AND OK */}
-            <div className="flex items-center gap-4 pt-2">
+            {/* 3 BUTTONS: DOWNLOAD BILL, PRINT AND OK */}
+            <div className="flex items-center gap-3 pt-2">
+              {/* Download Bill Button */}
+              <button
+                type="button"
+                onClick={() => handleDownloadReceipt(savedSuccessData)}
+                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Bill</span>
+              </button>
+
               {/* Print Button */}
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="flex-1 py-3.5 px-6 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl text-sm transition-all shadow-xs flex items-center justify-center gap-2"
+                onClick={() => handleDownloadReceipt(savedSuccessData)}
+                className="flex-1 py-3 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-4 h-4 text-slate-600" />
-                <span>Print</span>
+                <span>Print Bill</span>
               </button>
 
               {/* OK Button */}
@@ -1062,9 +1297,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                   setEntryFormData(emptyEntryForm);
                   setViewMode('list');
                 }}
-                className="flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-sm transition-all shadow-lg shadow-blue-500/25"
+                className="py-3 px-5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs sm:text-sm transition-all shadow-lg shadow-blue-500/25 cursor-pointer"
               >
-                OK
+                Done
               </button>
             </div>
 
@@ -1241,7 +1476,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               </div>
               <div className="flex justify-between py-2 border-b border-slate-100">
                 <span className="text-slate-500 font-medium">Due Date:</span>
-                <span className="font-bold text-slate-800">{selectedStudentForView.dueDate}</span>
+                <span className="font-bold text-slate-800">{selectedStudentForView.dueDate || 'N/A'}</span>
               </div>
               {selectedStudentForView.driverName && (
                 <div className="flex justify-between py-2 border-b border-slate-100">
@@ -1345,21 +1580,26 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setSelectedReceiptStudent(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
               >
                 Close
               </button>
               <button
-                onClick={() => {
-                  window.print();
-                }}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md flex items-center justify-center gap-2"
+                onClick={() => handleDownloadReceipt(selectedReceiptStudent)}
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Bill</span>
+              </button>
+              <button
+                onClick={() => handleDownloadReceipt(selectedReceiptStudent)}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all"
               >
                 <Printer className="w-4 h-4" />
-                <span>Print Receipt</span>
+                <span>Print Bill</span>
               </button>
             </div>
 

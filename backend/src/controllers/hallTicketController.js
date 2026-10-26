@@ -87,7 +87,7 @@ const deduplicateStudents = (students = [], defaultSubjects = []) => {
 exports.getHallTicketMeta = async (req, res) => {
   try {
     const depts = new Set();
-    const semesters = new Set([1, 2, 3, 4, 5, 6, 7, 8]);
+    const semesters = new Set([1, 2, 3, 4, 5, 6]);
     const sections = new Set(['A', 'B', 'C', 'All']);
 
     // Fetch ONLY official departments added by Admin in Department collection

@@ -314,8 +314,8 @@ export default function SettingsManagement() {
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
             >
               <option value="">-- Select Semester Term --</option>
-              <option value="Odd Semester (Sem 1, 3, 5, 7)">Odd Semester (Sem 1, 3, 5, 7)</option>
-              <option value="Even Semester (Sem 2, 4, 6, 8)">Even Semester (Sem 2, 4, 6, 8)</option>
+              <option value="Odd Semester (Sem 1, 3, 5)">Odd Semester (Sem 1, 3, 5)</option>
+              <option value="Even Semester (Sem 2, 4, 6)">Even Semester (Sem 2, 4, 6)</option>
             </select>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { API_BASE, BACKEND_URL } from '../../apiConfig';
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../../apiConfig';
 import {
   FileSpreadsheet,
   Search,
@@ -25,8 +25,29 @@ import {
   ShieldCheck,
   Clock,
   ArrowRight,
+  UploadCloud,
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
+import ExcelMarksUploadModal from "./ExcelMarksUploadModal";
+
+// Dynamic loader for SheetJS
+const getSheetJS = () => {
+  if (typeof window !== 'undefined' && window.XLSX) {
+    return Promise.resolve(window.XLSX);
+  }
+  return new Promise((resolve) => {
+    try {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+      script.async = true;
+      script.onload = () => resolve(window.XLSX || null);
+      script.onerror = () => resolve(null);
+      document.head.appendChild(script);
+    } catch (_) {
+      resolve(null);
+    }
+  });
+};
 
 const API = API_BASE;
 
@@ -114,6 +135,16 @@ export default function StaffInternalMarks({ staffUser }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [students, setStudents] = useState([]); // raw from DB
   const [isLocked, setIsLocked] = useState(false);
+
+  // Department, Year, Batch, Semester filter options
+  const [filterDept, setFilterDept] = useState("All");
+  const [filterYear, setFilterYear] = useState("All");
+  const [filterBatch, setFilterBatch] = useState("All");
+  const [filterSem, setFilterSem] = useState("All");
+  const [allRegisteredStudents, setAllRegisteredStudents] = useState([]);
+  const [adminDepartments, setAdminDepartments] = useState([]);
+  const [currentMarksheetMeta, setCurrentMarksheetMeta] = useState({});
+
   const [showFreezeModal, setShowFreezeModal] = useState(false);
   const [isFreezing, setIsFreezing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -132,12 +163,17 @@ export default function StaffInternalMarks({ staffUser }) {
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [isProcessingStage, setIsProcessingStage] = useState(false);
 
-  // Download filtered marks modal (Subject-wise, Department-wise, Year-wise)
+  // Bulk marks upload modal state
+  const [showBulkUploadMarksModal, setShowBulkUploadMarksModal] = useState(false);
+
+  // Download filtered marks modal (Subject, Dept, Year, Batch, Sem)
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [downloadFilterType, setDownloadFilterType] = useState('subject');
   const [downloadDept, setDownloadDept] = useState(staffUser?.department || 'Computer Science');
   const [downloadYear, setDownloadYear] = useState('I Year');
+  const [downloadBatch, setDownloadBatch] = useState('2022-2026');
   const [downloadSemester, setDownloadSemester] = useState('1');
+  const [downloadFormat, setDownloadFormat] = useState('excel'); // 'excel' | 'csv'
   const [isExporting, setIsExporting] = useState(false);
 
   const isHod = staffUser?.designation?.toUpperCase()?.includes('HOD') ||
@@ -189,24 +225,148 @@ export default function StaffInternalMarks({ staffUser }) {
   }, [componentId, passMarksConfig, activeComp]);
 
   const dropdownSubjects = useMemo(() => {
-    const list = staffSubjects.filter(s => !['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76'].includes((s.code || '').toUpperCase()));
+    const legacyExclusions = ['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004'];
+    const list = staffSubjects.filter(s => {
+      const code = (s.code || '').toUpperCase().trim();
+      // If this subject is in official subjects, keep it; else if it's legacy exclusion, drop it
+      return !legacyExclusions.includes(code);
+    });
     if (subjectCode && !list.some((s) => s.code === subjectCode) && !['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76'].includes(subjectCode.toUpperCase())) {
       list.unshift({ code: subjectCode, name: (subjectName && subjectName !== 'Course') ? subjectName : subjectCode });
     }
     return list;
   }, [staffSubjects, subjectCode, subjectName]);
 
+  // Filter dropdown lists
+  const departmentsList = useMemo(() => {
+    const set = new Set();
+    getKnownDepartments().forEach(d => { if (d) set.add(d); });
+    adminDepartments.forEach(d => {
+      const name = typeof d === 'string' ? d : d?.name;
+      if (name) set.add(name);
+    });
+    allRegisteredStudents.forEach(s => {
+      if (s.department) set.add(s.department);
+      if (s.course) set.add(s.course);
+    });
+    students.forEach(s => {
+      if (s.department) set.add(s.department);
+    });
+    if (staffUser?.department) set.add(staffUser.department);
+    return Array.from(set).sort();
+  }, [adminDepartments, allRegisteredStudents, students, staffUser?.department]);
+
+  const yearsList = useMemo(() => {
+    const set = new Set(['I Year', 'II Year', 'III Year', 'IV Year']);
+    allRegisteredStudents.forEach(s => {
+      if (s.year) set.add(s.year);
+    });
+    students.forEach(s => {
+      if (s.year) set.add(s.year);
+    });
+    return Array.from(set);
+  }, [allRegisteredStudents, students]);
+
+  const batchesList = useMemo(() => {
+    const set = new Set(['2025-2028', '2024-2027', '2023-2026', '2022-2026', '2021-2025']);
+    allRegisteredStudents.forEach(s => {
+      if (s.batch) set.add(s.batch);
+      if (s.academicYear) set.add(s.academicYear);
+    });
+    students.forEach(s => {
+      if (s.batch) set.add(s.batch);
+    });
+    return Array.from(set).sort().reverse();
+  }, [allRegisteredStudents, students]);
+
+  const semestersList = useMemo(() => {
+    const set = new Set(['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6']);
+    allRegisteredStudents.forEach(s => {
+      const semNum = Number(String(s.sem || '').replace(/\D/g, '')) || (s.semester ? Number(s.semester) : 0);
+      if (semNum >= 1 && semNum <= 6) set.add(`Semester ${semNum}`);
+    });
+    return Array.from(set).sort((a, b) => {
+      const na = Number(a.replace(/\D/g, ''));
+      const nb = Number(b.replace(/\D/g, ''));
+      return na - nb;
+    });
+  }, [allRegisteredStudents]);
+
+  // Merge each student with metadata from registered students collection
+  const studentsWithMeta = useMemo(() => {
+    const metaMap = new Map();
+    allRegisteredStudents.forEach(st => {
+      const key = (st.rollNo || st.regNo || st.studentId || '').toUpperCase().trim();
+      if (key) metaMap.set(key, st);
+    });
+
+    return students.map(s => {
+      const key = (s.rollNo || '').toUpperCase().trim();
+      const meta = metaMap.get(key) || {};
+      return {
+        ...s,
+        department: s.department || meta.department || meta.course || currentMarksheetMeta?.department || '',
+        year: s.year || meta.year || currentMarksheetMeta?.year || '',
+        batch: s.batch || meta.batch || meta.academicYear || currentMarksheetMeta?.academicYear || '',
+        sem: s.sem || (s.semester ? `Semester ${s.semester}` : '') || meta.sem || (meta.semester ? `Semester ${meta.semester}` : '') || (currentMarksheetMeta?.semester ? `Semester ${currentMarksheetMeta.semester}` : '') || ''
+      };
+    });
+  }, [students, allRegisteredStudents, currentMarksheetMeta]);
+
+  // Multi-attribute filter: dep, yr, batch, sem and search query
   const filteredStudents = useMemo(() => {
-    if (!searchQuery.trim()) return students;
-    const q = searchQuery.toLowerCase().trim();
-    return students.filter(
-      (s) => s.name?.toLowerCase().includes(q) || s.rollNo?.toLowerCase().includes(q)
-    );
-  }, [students, searchQuery]);
+    return studentsWithMeta.filter((s) => {
+      // Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchSearch = String(s.name || '').toLowerCase().includes(q) || String(s.rollNo || '').toLowerCase().includes(q);
+        if (!matchSearch) return false;
+      }
+
+      // Department filter
+      if (filterDept && filterDept !== 'All') {
+        const d = (s.department || '').toLowerCase().trim();
+        const target = filterDept.toLowerCase().trim();
+        if (d !== target && !d.includes(target) && !target.includes(d)) return false;
+      }
+
+      // Year filter
+      if (filterYear && filterYear !== 'All') {
+        const romanYearMap = { 'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', '1': '1', '2': '2', '3': '3', '4': '4' };
+        const y = String(s.year || '').toLowerCase().trim();
+        const target = filterYear.toLowerCase().trim();
+        const normY = romanYearMap[y.replace(/year/g, '').replace(/[^a-z0-9]/g, '')] || y.replace(/\D/g, '') || y;
+        const normT = romanYearMap[target.replace(/year/g, '').replace(/[^a-z0-9]/g, '')] || target.replace(/\D/g, '') || target;
+        if (normY !== normT && !y.includes(target) && !target.includes(y)) return false;
+      }
+
+      // Batch filter
+      if (filterBatch && filterBatch !== 'All') {
+        const b = String(s.batch || '').toLowerCase().trim();
+        const target = filterBatch.toLowerCase().trim();
+        if (b !== target && !b.includes(target)) return false;
+      }
+
+      // Semester filter
+      if (filterSem && filterSem !== 'All') {
+        const sVal = String(s.sem || s.semester || '').toLowerCase().trim();
+        const target = filterSem.toLowerCase().trim();
+        const numS = sVal.replace(/[^0-9]/g, '');
+        const numT = target.replace(/[^0-9]/g, '');
+        if (numS && numT && numS === numT) {
+          // match
+        } else if (!sVal.includes(target) && !target.includes(sVal)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [studentsWithMeta, searchQuery, filterDept, filterYear, filterBatch, filterSem]);
 
   const stats = useMemo(() => {
     let totalScore = 0, count = 0, absentCount = 0, passCount = 0, highest = -1, lowest = 9999;
-    students.forEach((s) => {
+    filteredStudents.forEach((s) => {
       let m = null;
       if (componentId === "all" || componentId === "consolidated") {
         m = s.consolidated;
@@ -229,7 +389,7 @@ export default function StaffInternalMarks({ staffUser }) {
       }
     });
     return {
-      total: students.length,
+      total: filteredStudents.length,
       appeared: count,
       absent: absentCount,
       passCount,
@@ -238,7 +398,7 @@ export default function StaffInternalMarks({ staffUser }) {
       highest: highest === -1 ? "-" : highest,
       lowest: lowest === 9999 ? "-" : lowest,
     };
-  }, [students, componentId, currentPass]);
+  }, [filteredStudents, componentId, currentPass]);
 
   // -- Toast helper ----------------------------------------------------
   const toast = useCallback((msg, isError = false) => {
@@ -276,6 +436,12 @@ export default function StaffInternalMarks({ staffUser }) {
         setHodApproval(json.data.hodApproval || null);
         setPrincipalApproval(json.data.principalApproval || null);
         setMdApproval(json.data.mdApproval || null);
+        setCurrentMarksheetMeta({
+          department: json.data.department || "",
+          year: json.data.year || "",
+          semester: json.data.semester || "",
+          academicYear: json.data.academicYear || ""
+        });
         if (json.data.maxMarks) {
           const loadedMax = { ...DEFAULT_MAX_CONFIG, ...json.data.maxMarks };
           setMaxMarksConfig(loadedMax);
@@ -304,9 +470,9 @@ export default function StaffInternalMarks({ staffUser }) {
         setLoading(false);
       }
     }
-  }, [effectiveStaffId, toast]);
+  }, [effectiveStaffId, toast, filterDept, filterYear]);
 
-  // Load available staff subjects on mount
+  // Load available staff subjects, all students, and departments on mount
   useEffect(() => {
     // Clear legacy dummy CS2001 from storage
     try {
@@ -318,6 +484,25 @@ export default function StaffInternalMarks({ staffUser }) {
       }
     } catch { }
 
+    // Fetch registered students and departments for filtering
+    fetch(`${API}/students`)
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setAllRegisteredStudents(res.data);
+        }
+      })
+      .catch(() => { });
+
+    fetch(`${API}/departments`)
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setAdminDepartments(res.data);
+        }
+      })
+      .catch(() => { });
+
     Promise.all([
       fetch(`${API}/classes/staff/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
       fetch(`${API}/classes`).then(r => r.json()).catch(() => null),
@@ -327,34 +512,51 @@ export default function StaffInternalMarks({ staffUser }) {
     ]).then(([staffClsData, allClassesData, subjectsData, asgtsData, marksData]) => {
       const subs = [];
       const seen = new Set();
-      const legacyExclusions = new Set(['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76']);
+      const allSubjects = subjectsData?.data || (Array.isArray(subjectsData) ? subjectsData : []);
+      const officialSubjectCodes = new Set(allSubjects.map(s => (s.code || '').toUpperCase().trim()));
+      const legacyExclusions = new Set(['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004']);
 
       const addSub = (code, name) => {
         const c = (code || "").trim().toUpperCase();
-        if (c && c.length >= 3 && !seen.has(c) && !legacyExclusions.has(c)) {
-          seen.add(c);
-          subs.push({ code: c, name: (name && name !== 'Course' && name !== c) ? name : c });
-        }
+        if (!c || c.length < 3 || seen.has(c)) return;
+        // If it's a legacy test subject and NOT an official admin subject, exclude it
+        if (legacyExclusions.has(c) && !officialSubjectCodes.has(c)) return;
+        seen.add(c);
+        subs.push({ code: c, name: (name && name !== 'Course' && name !== c) ? name : c });
       };
 
-      // 1. Staff classes
+      // 1. Official subjects from admin (highest priority)
+      allSubjects
+        .filter(s => {
+          if (!s.code) return false;
+          if (!effectiveStaffId && !staffUser?.name) return true;
+          const matchFaculty = s.faculty && (
+            s.faculty.trim().toLowerCase() === effectiveStaffId.trim().toLowerCase() ||
+            s.faculty.trim().toLowerCase() === (staffUser?.name || '').trim().toLowerCase()
+          );
+          const matchDept = s.department && staffUser?.department && (
+            s.department.trim().toLowerCase() === staffUser.department.trim().toLowerCase()
+          );
+          return matchFaculty || matchDept || !s.faculty;
+        })
+        .forEach(s => addSub(s.code, s.name));
+
+      // 2. Staff's own classes
       const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
       staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
 
-      // 2. All active classes in database
+      // 3. Filter all classes to only those assigned to this staff
       const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
-      allClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+      allClasses
+        .filter(c => c.staffId && c.staffId.trim().toLowerCase() === effectiveStaffId.trim().toLowerCase())
+        .forEach(c => addSub(c.code || c.classCode, c.name || c.className));
 
-      // 3. Official subjects in database
-      const allSubjects = subjectsData?.data || (Array.isArray(subjectsData) ? subjectsData : []);
-      allSubjects.forEach(s => addSub(s.code, s.name));
-
-      // 4. Assignments
+      // 4. Staff's own assignments
       if (asgtsData?.success && Array.isArray(asgtsData.data)) {
         asgtsData.data.forEach(a => addSub(a.subjectCode, a.subjectName || a.title));
       }
 
-      // 5. Existing marks
+      // 5. Staff's existing internal marks records (only if official or non-legacy)
       if (marksData?.success && Array.isArray(marksData.data)) {
         marksData.data.forEach(m => addSub(m.subjectCode, m.subjectName));
       }
@@ -630,7 +832,7 @@ export default function StaffInternalMarks({ staffUser }) {
     }
   };
 
-  // -- Marks Download Handler (Subject-wise, Department-wise, Year-wise) --
+  // -- Marks Download Handler (Subject-wise, Department-wise, Year-wise, Batch-wise, Sem-wise) --
   const handleDownloadMarks = async (type = 'subject') => {
     setIsExporting(true);
     try {
@@ -646,7 +848,7 @@ export default function StaffInternalMarks({ staffUser }) {
         marksheetsToExport = [{
           subjectCode,
           subjectName,
-          department: staffUser?.department || '',
+          department: staffUser?.department || filterDept || '',
           students
         }];
         filename = `Internal_Marks_${subjectCode}_${new Date().toISOString().slice(0, 10)}`;
@@ -658,7 +860,14 @@ export default function StaffInternalMarks({ staffUser }) {
         } else if (type === 'year') {
           queryUrl += `year=${encodeURIComponent(downloadYear)}&semester=${encodeURIComponent(downloadSemester)}`;
           filename = `Internal_Marks_${downloadYear.replace(/\s+/g, '_')}_Sem${downloadSemester}_${new Date().toISOString().slice(0, 10)}`;
+        } else if (type === 'batch') {
+          queryUrl += `batch=${encodeURIComponent(downloadBatch)}`;
+          filename = `Internal_Marks_Batch_${downloadBatch.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`;
+        } else if (type === 'semester') {
+          queryUrl += `semester=${encodeURIComponent(downloadSemester)}`;
+          filename = `Internal_Marks_Sem_${downloadSemester}_${new Date().toISOString().slice(0, 10)}`;
         }
+
         const res = await fetch(queryUrl);
         const json = await res.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
@@ -670,24 +879,54 @@ export default function StaffInternalMarks({ staffUser }) {
         }
       }
 
-      // Generate comprehensive CSV with order: Internal 1, Internal 2, Model, Semester, Seminar, Project
-      let csv = `Department,Subject Code,Subject Name,Semester,S.NO,Roll No,Student Name,Internal 1,Internal 2,Model,Semester,Seminar,Project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
+      // Prepare structured rows for Export
+      const exportRows = [];
       marksheetsToExport.forEach(ms => {
         (ms.students || []).forEach((s, idx) => {
           const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
           const it2 = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
-          csv += `"${ms.department || ''}","${ms.subjectCode || ''}","${ms.subjectName || ''}",${ms.semester || 1},${idx + 1},"${s.rollNo}","${s.name}",${it1},${it2},${s.model ?? "-"},${s.semester ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
+          exportRows.push({
+            'Department': ms.department || '',
+            'Subject Code': ms.subjectCode || '',
+            'Subject Name': ms.subjectName || '',
+            'Semester': ms.semester || 1,
+            'S.NO': idx + 1,
+            'Roll No': s.rollNo,
+            'Student Name': s.name,
+            'Internal 1': it1,
+            'Internal 2': it2,
+            'Model': s.model ?? "-",
+            'Semester Exam': s.semester ?? "-",
+            'Seminar': s.seminar ?? "-",
+            'Project': s.project ?? "-",
+            'ST 1': s.st1 ?? "-",
+            'ST 2': s.st2 ?? "-",
+            'ST 3': s.st3 ?? "-",
+            'ST 4': s.st4 ?? "-",
+            'Assignment 1': s.assignment1 ?? "-",
+            'Assignment 2': s.assignment2 ?? "-",
+            'Assignment 3': s.assignment3 ?? "-",
+            'Assignment 4': s.assignment4 ?? "-",
+            'Final CIA': s.consolidated ?? "-"
+          });
         });
       });
 
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${filename}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (downloadFormat === 'excel') {
+        const XLSX = await getSheetJS();
+        if (XLSX && exportRows.length > 0) {
+          const ws = XLSX.utils.json_to_sheet(exportRows);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Marks');
+          XLSX.writeFile(wb, `${filename}.xlsx`);
+        } else {
+          // Fallback to CSV
+          downloadMarksAsCsv(exportRows, filename);
+        }
+      } else {
+        downloadMarksAsCsv(exportRows, filename);
+      }
+
       toast(`Marks downloaded successfully (${type}-wise)!`);
       setShowDownloadModal(false);
     } catch (err) {
@@ -695,6 +934,23 @@ export default function StaffInternalMarks({ staffUser }) {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const downloadMarksAsCsv = (rows, filename) => {
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    let csv = headers.join(',') + '\n';
+    rows.forEach(r => {
+      csv += headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(',') + '\n';
+    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${filename}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // -- Lock / Unlock ---------------------------------------------------
@@ -795,13 +1051,44 @@ export default function StaffInternalMarks({ staffUser }) {
   };
 
   // -- Add student -----------------------------------------------------
-  const handleAddStudent = (e) => {
+  const handleAddStudent = async (e) => {
     e.preventDefault();
     if (!newRollNo.trim() || !newStudentName.trim()) return;
-    const exists = students.some((s) => s.rollNo === newRollNo.trim().toUpperCase());
+    const cleanRoll = newRollNo.trim().toUpperCase();
+    const cleanName = newStudentName.trim();
+    const exists = students.some((s) => (s.rollNo || '').toUpperCase() === cleanRoll);
     if (exists) { toast("Student with this roll number already exists.", true); return; }
-    setStudents((prev) => [...prev, { rollNo: newRollNo.trim().toUpperCase(), name: newStudentName.trim() }]);
+    const newStudentObj = {
+      rollNo: cleanRoll,
+      name: cleanName,
+      st1: null, st2: null, st3: null, st4: null,
+      it1: null, it2: null, cia1: null, cia2: null,
+      model: null, seminar: null, project: null,
+      assignment1: null, assignment2: null, assignment3: null, assignment4: null,
+      assignment: null, attendance: null, consolidated: null
+    };
+    const nextStudents = [...students, newStudentObj];
+    setStudents(nextStudents);
     setNewRollNo(""); setNewStudentName(""); setShowAddStudent(false);
+    toast(`Added student ${cleanName} (${cleanRoll})`);
+
+    // Auto-persist immediately to backend marksheet
+    if (subjectCode) {
+      try {
+        await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/save`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subjectName: subjectName || subjectCode,
+            students: nextStudents,
+            maxMarks: maxMarksConfig,
+            passMarks: passMarksConfig
+          })
+        });
+      } catch (err) {
+        console.warn("Auto-save new student error:", err);
+      }
+    }
   };
 
   // -- Export CSV with all register columns ---------------------------
@@ -1024,14 +1311,26 @@ export default function StaffInternalMarks({ staffUser }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          {/* Download Marks (Subject / Dept / Year) */}
+          {/* Bulk Upload Marks via Excel Button (Super Admin format) */}
           <button
+            type="button"
+            onClick={() => setShowBulkUploadMarksModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-xs font-bold text-emerald-700 shadow-xs transition-all cursor-pointer"
+            title="Bulk upload marks spreadsheet (.xlsx, .xls, .csv)"
+          >
+            <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Bulk Upload Marks</span>
+          </button>
+
+          {/* Download Marks (Dep / Yr / Batch / Sem) */}
+          <button
+            type="button"
             onClick={() => setShowDownloadModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 shadow-xs transition-all cursor-pointer"
-            title="Download marks subject-wise, department-wise, or year-wise"
+            title="Download marks by Department, Year, Batch, or Semester"
           >
             <Download className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Download Marks (Subject / Dept / Year)</span>
+            <span>Download Data (Dep/Yr/Batch/Sem)</span>
           </button>
 
           {subjectCode && (
@@ -1103,10 +1402,10 @@ export default function StaffInternalMarks({ staffUser }) {
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-extrabold uppercase text-slate-400">Current Status:</span>
               <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full border ${approvalStatus === 'Approved'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : approvalStatus === 'Rejected'
-                    ? 'bg-rose-50 text-rose-700 border-rose-200'
-                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : approvalStatus === 'Rejected'
+                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
                 }`}>
                 {approvalStatus}
               </span>
@@ -1129,10 +1428,10 @@ export default function StaffInternalMarks({ staffUser }) {
 
             {/* Step 2: HOD */}
             <div className={`p-3 rounded-xl border ${hodApproval?.status === 'Approved'
-                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
-                : approvalStatus === 'Pending HOD'
-                  ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+              : approvalStatus === 'Pending HOD'
+                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                : 'bg-slate-50 border-slate-200 text-slate-600'
               }`}>
               <div className="flex items-center justify-between text-[11px] font-extrabold">
                 <span>2. HOD Review</span>
@@ -1160,10 +1459,10 @@ export default function StaffInternalMarks({ staffUser }) {
 
             {/* Step 3: Principal */}
             <div className={`p-3 rounded-xl border ${principalApproval?.status === 'Approved'
-                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
-                : approvalStatus === 'Pending Principal'
-                  ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+              : approvalStatus === 'Pending Principal'
+                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                : 'bg-slate-50 border-slate-200 text-slate-600'
               }`}>
               <div className="flex items-center justify-between text-[11px] font-extrabold">
                 <span>3. Principal Approval</span>
@@ -1191,10 +1490,10 @@ export default function StaffInternalMarks({ staffUser }) {
 
             {/* Step 4: Managing Director */}
             <div className={`p-3 rounded-xl border ${mdApproval?.status === 'Approved'
-                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
-                : approvalStatus === 'Pending MD'
-                  ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+              : approvalStatus === 'Pending MD'
+                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
+                : 'bg-slate-50 border-slate-200 text-slate-600'
               }`}>
               <div className="flex items-center justify-between text-[11px] font-extrabold">
                 <span>4. Managing Director (MD)</span>
@@ -1296,8 +1595,8 @@ export default function StaffInternalMarks({ staffUser }) {
       {(successMsg || errorMsg) && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95">
           <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border pointer-events-auto ${errorMsg
-              ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
-              : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
+            ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
+            : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
             }`}>
             {errorMsg ? (
               <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
@@ -1324,6 +1623,18 @@ export default function StaffInternalMarks({ staffUser }) {
               )}
             </label>
             <div className="flex items-center gap-2">
+              {subjectCode && (
+                <button
+                  type="button"
+                  onClick={() => fetchMarksheet(subjectCode)}
+                  disabled={loading}
+                  title="Reload students enrolled in this class from the database (picks up newly added students)"
+                  className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                  Sync Class Students
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowCustomInput(!showCustomInput)}
@@ -1391,8 +1702,8 @@ export default function StaffInternalMarks({ staffUser }) {
                       handleLoadSubject(sub.code);
                     }}
                     className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
-                        ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 scale-[1.02]"
-                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 scale-[1.02]"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
                       }`}
                   >
                     <span>{sub.code}</span>
@@ -1408,16 +1719,116 @@ export default function StaffInternalMarks({ staffUser }) {
 
         {subjectCode && (
           <>
-            {/* Search */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search by student name or roll number..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
+            {/* Multi-Filter Bar: Department, Year, Batch, Semester & Search */}
+            <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/80 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Filter Students List</span>
+                  {(filterDept !== 'All' || filterYear !== 'All' || filterBatch !== 'All' || filterSem !== 'All' || searchQuery) && (
+                    <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                      Filters Active
+                    </span>
+                  )}
+                </div>
+                {(filterDept !== 'All' || filterYear !== 'All' || filterBatch !== 'All' || filterSem !== 'All' || searchQuery) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterDept('All');
+                      setFilterYear('All');
+                      setFilterBatch('All');
+                      setFilterSem('All');
+                      setSearchQuery('');
+                    }}
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <X className="w-3 h-3" /> Reset Filters
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Department Filter */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                    Department (Dep)
+                  </label>
+                  <select
+                    value={filterDept}
+                    onChange={(e) => setFilterDept(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+                  >
+                    <option value="All">All Departments</option>
+                    {departmentsList.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Year Filter */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                    Year (Yr)
+                  </label>
+                  <select
+                    value={filterYear}
+                    onChange={(e) => setFilterYear(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+                  >
+                    <option value="All">All Years</option>
+                    {yearsList.map(yr => (
+                      <option key={yr} value={yr}>{yr}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Batch Filter */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                    Batch
+                  </label>
+                  <select
+                    value={filterBatch}
+                    onChange={(e) => setFilterBatch(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+                  >
+                    <option value="All">All Batches</option>
+                    {batchesList.map(batch => (
+                      <option key={batch} value={batch}>{batch}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Semester Filter */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                    Semester (Sem)
+                  </label>
+                  <select
+                    value={filterSem}
+                    onChange={(e) => setFilterSem(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+                  >
+                    <option value="All">All Semesters</option>
+                    {semestersList.map(sem => (
+                      <option key={sem} value={sem}>{sem}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative pt-1">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-[calc(50%+2px)] -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by student name or roll number..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+                />
+              </div>
             </div>
 
             {/* Assessment Tabs with Live Max & Pass Marks Display */}
@@ -1591,8 +2002,8 @@ export default function StaffInternalMarks({ staffUser }) {
                               value={it1Val !== null && it1Val !== undefined ? it1Val : ""}
                               onChange={(e) => handleCellChange(s.rollNo, 'it1', e.target.value)}
                               className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${it1Val === "AB" || it1Val === "A"
-                                  ? "bg-amber-100 text-amber-900 border-amber-300"
-                                  : "border-slate-200 bg-white text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                ? "bg-amber-100 text-amber-900 border-amber-300"
+                                : "border-slate-200 bg-white text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                                 } disabled:bg-slate-100 disabled:cursor-not-allowed`}
                               placeholder="-"
                             />
@@ -1604,8 +2015,8 @@ export default function StaffInternalMarks({ staffUser }) {
                               value={it2Val !== null && it2Val !== undefined ? it2Val : ""}
                               onChange={(e) => handleCellChange(s.rollNo, 'it2', e.target.value)}
                               className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${it2Val === "AB" || it2Val === "A"
-                                  ? "bg-amber-100 text-amber-900 border-amber-300"
-                                  : "border-slate-200 bg-white text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                ? "bg-amber-100 text-amber-900 border-amber-300"
+                                : "border-slate-200 bg-white text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                                 } disabled:bg-slate-100 disabled:cursor-not-allowed`}
                               placeholder="-"
                             />
@@ -1663,8 +2074,8 @@ export default function StaffInternalMarks({ staffUser }) {
                                 value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
                                 onChange={(e) => handleCellChange(s.rollNo, f, e.target.value)}
                                 className={`w-12 text-center py-1 px-1 rounded-md text-xs font-bold border transition-all ${s[f] === "AB" || s[f] === "A"
-                                    ? "bg-amber-100 text-amber-900 border-amber-300"
-                                    : "border-slate-200 bg-white text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                                  : "border-slate-200 bg-white text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                   } disabled:bg-slate-100 disabled:cursor-not-allowed`}
                                 placeholder="-"
                               />
@@ -2183,7 +2594,25 @@ export default function StaffInternalMarks({ staffUser }) {
         </ModalPortal>
       )}
 
-      {/* Download Filtered Marks Modal (Subject-wise, Department-wise, Year-wise) */}
+      {/* Bulk Upload Marks Modal (Exact match to Super Admin format) */}
+      {showBulkUploadMarksModal && (
+        <ExcelMarksUploadModal
+          isOpen={showBulkUploadMarksModal}
+          onClose={() => setShowBulkUploadMarksModal(false)}
+          staffUser={staffUser}
+          currentSubjectCode={subjectCode}
+          currentSubjectName={subjectName}
+          currentDepartment={staffUser?.department || filterDept || 'Computer Science'}
+          currentSemester={filterSem !== 'All' ? Number(filterSem) : 1}
+          enrolledStudents={students}
+          onSuccess={() => {
+            fetchStudents(subjectCode);
+            fetchStaffSubjects();
+          }}
+        />
+      )}
+
+      {/* Download Filtered Marks Modal (Subject-wise, Department-wise, Year-wise, Batch-wise, Sem-wise) */}
       {showDownloadModal && (
         <ModalPortal isOpen={showDownloadModal} onClose={() => !isExporting && setShowDownloadModal(false)}>
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-7 max-w-lg w-full animate-in fade-in zoom-in-95 text-left my-auto">
@@ -2194,7 +2623,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-base">Download Internal Marks</h3>
-                  <p className="text-xs text-slate-500 font-medium">Export official marks registers in CSV/Excel format</p>
+                  <p className="text-xs text-slate-500 font-medium">Export official marks registers in Excel (.xlsx) or CSV format</p>
                 </div>
               </div>
               <button
@@ -2207,19 +2636,21 @@ export default function StaffInternalMarks({ staffUser }) {
             </div>
 
             {/* Filter Mode Selector */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl my-4 text-xs font-bold">
+            <div className="grid grid-cols-5 gap-1 p-1 bg-slate-100 rounded-xl my-4 text-xs font-bold">
               {[
-                { id: 'subject', label: 'Subject-wise' },
-                { id: 'department', label: 'Department-wise' },
-                { id: 'year', label: 'Year-wise' }
+                { id: 'department', label: 'Dept' },
+                { id: 'year', label: 'Year' },
+                { id: 'batch', label: 'Batch' },
+                { id: 'semester', label: 'Sem' },
+                { id: 'subject', label: 'Subject' }
               ].map(tab => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setDownloadFilterType(tab.id)}
-                  className={`py-2 px-3 rounded-lg transition-all text-center cursor-pointer ${downloadFilterType === tab.id
-                      ? 'bg-white text-indigo-700 shadow-xs font-black'
-                      : 'text-slate-600 hover:text-slate-900'
+                  className={`py-2 px-1.5 rounded-lg transition-all text-center cursor-pointer text-[11px] ${downloadFilterType === tab.id
+                    ? 'bg-white text-indigo-700 shadow-xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
                     }`}
                 >
                   {tab.label}
@@ -2240,7 +2671,7 @@ export default function StaffInternalMarks({ staffUser }) {
                   </p>
                   {!subjectCode && (
                     <div className="text-xs text-rose-600 font-semibold mt-1">
-                      ⚠️ Please select or load a subject first, or switch to Department/Year-wise download.
+                      ⚠️ Please select or load a subject first, or switch to Department/Batch/Year-wise download.
                     </div>
                   )}
                 </div>
@@ -2263,7 +2694,7 @@ export default function StaffInternalMarks({ staffUser }) {
                     </select>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-500">
-                    Exports marksheets for <b>all subjects and classes</b> registered under the selected department.
+                    Exports marksheets for <b>all subjects and classes</b> registered under {downloadDept}.
                   </div>
                 </div>
               )}
@@ -2283,6 +2714,7 @@ export default function StaffInternalMarks({ staffUser }) {
                         <option value="I Year">I Year (First Year)</option>
                         <option value="II Year">II Year (Second Year)</option>
                         <option value="III Year">III Year (Third Year)</option>
+                        <option value="IV Year">IV Year (Fourth Year)</option>
                       </select>
                     </div>
                     <div>
@@ -2305,6 +2737,82 @@ export default function StaffInternalMarks({ staffUser }) {
                   </div>
                 </div>
               )}
+
+              {downloadFilterType === 'batch' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      Choose Student Batch
+                    </label>
+                    <select
+                      value={downloadBatch}
+                      onChange={(e) => setDownloadBatch(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    >
+                      <option value="2021-2025">Batch 2021-2025</option>
+                      <option value="2022-2026">Batch 2022-2026</option>
+                      <option value="2023-2027">Batch 2023-2027</option>
+                      <option value="2024-2028">Batch 2024-2028</option>
+                    </select>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-500">
+                    Exports marks for all students admitted in <b>Batch {downloadBatch}</b> across all academic records.
+                  </div>
+                </div>
+              )}
+
+              {downloadFilterType === 'semester' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      Choose Semester
+                    </label>
+                    <select
+                      value={downloadSemester}
+                      onChange={(e) => setDownloadSemester(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    >
+                      {[1, 2, 3, 4, 5, 6].map(s => (
+                        <option key={s} value={String(s)}>Semester {s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-500">
+                    Exports internal marks for all courses taught in <b>Semester {downloadSemester}</b>.
+                  </div>
+                </div>
+              )}
+
+              {/* File format */}
+              <div>
+                <label className="block text-[11px] font-extrabold text-slate-600 uppercase mb-1.5">
+                  File Format:
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                    <input
+                      type="radio"
+                      name="marksDownloadFormat"
+                      value="excel"
+                      checked={downloadFormat === 'excel'}
+                      onChange={() => setDownloadFormat('excel')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Microsoft Excel (.xlsx)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                    <input
+                      type="radio"
+                      name="marksDownloadFormat"
+                      value="csv"
+                      checked={downloadFormat === 'csv'}
+                      onChange={() => setDownloadFormat('csv')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Comma Separated (.csv)</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             {/* Modal Actions */}
@@ -2331,7 +2839,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 ) : (
                   <>
                     <Download className="w-4 h-4" />
-                    <span>Download {downloadFilterType === 'subject' ? 'Subject CSV' : downloadFilterType === 'department' ? 'Dept CSV' : 'Year CSV'}</span>
+                    <span>Download {downloadFilterType === 'subject' ? 'Subject' : downloadFilterType === 'department' ? 'Dept' : downloadFilterType === 'batch' ? 'Batch' : downloadFilterType === 'semester' ? 'Sem' : 'Year'} {downloadFormat === 'excel' ? 'Excel' : 'CSV'}</span>
                   </>
                 )}
               </button>

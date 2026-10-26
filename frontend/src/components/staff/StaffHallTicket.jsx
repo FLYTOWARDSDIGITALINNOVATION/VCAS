@@ -2360,7 +2360,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                       </select>
                     </div>
 
-                    {/* Semester Dropdown (Selectable: Sem 1 to 8 all available) */}
+                    {/* Semester Dropdown (Selectable: Sem 1 to 6) */}
                     <div className="lg:col-span-2">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
                         Semester
@@ -2370,7 +2370,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                         onChange={(e) => handleDeptOrSemChange(planFilterDept, Number(e.target.value))}
                         className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        {availableSemesters.map(s => (
+                        {availableSemesters.filter(s => Number(s) <= 6).map(s => (
                           <option key={s} value={s}>Sem {s}</option>
                         ))}
                       </select>

@@ -2333,7 +2333,6 @@ export default function CourseSubjectManagement({ user }) {
                     <option value={3}>3 Years (6 Semesters - B.A. / B.Sc / B.Com / BBA / BCA)</option>
                     <option value={2}>2 Years (4 Semesters - M.A. / M.Sc / M.Com / MCA)</option>
                     <option value={1}>1 Year (2 Semesters - PG Diploma / Certificate)</option>
-                    <option value={4}>4 Years (8 Semesters - NEP Honors Degree)</option>
                   </select>
                 </div>
               </div>

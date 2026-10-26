@@ -703,7 +703,6 @@ export default function DepartmentManagement() {
                     >
                       <option value={3}>3 Years (6 Semesters - UG)</option>
                       <option value={2}>2 Years (4 Semesters - PG)</option>
-                      <option value={4}>4 Years (8 Semesters - Honors)</option>
                     </select>
                   </div>
                   <div>

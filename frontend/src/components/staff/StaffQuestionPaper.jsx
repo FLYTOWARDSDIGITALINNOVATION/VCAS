@@ -379,7 +379,7 @@ export default function StaffQuestionPaper({ staffUser }) {
             <div>
               <label className="block text-slate-700 font-bold mb-1">Semester</label>
               <select value={current.semester} onChange={e => updateField("semester", Number(e.target.value))} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer">
-                {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Semester {s}</option>)}
+                {[1,2,3,4,5,6].map(s => <option key={s} value={s}>Semester {s}</option>)}
               </select>
             </div>
             <div>

@@ -11,11 +11,16 @@ const {
   getStudentInternalMarks,
   submitMarksheetForApproval,
   approveMarksheetStage,
-  getFilteredInternalMarks
+  getFilteredInternalMarks,
+  bulkSaveInternalMarks,
+  deleteMarksheet
 } = require("../controllers/internalMarksController");
 
-// GET  /api/internal-marks/export/filtered               - filter marks by subject, dept, year for download
+// GET  /api/internal-marks/export/filtered               - filter marks by subject, dept, year, batch, sem for download
 router.get("/export/filtered",                     getFilteredInternalMarks);
+
+// POST /api/internal-marks/bulk                          - bulk save student marks via Excel import
+router.post("/bulk",                               bulkSaveInternalMarks);
 
 // GET  /api/internal-marks                              - get all marksheets for Admin & Super-Admin
 router.get("/",                                   getAllInternalMarks);
@@ -46,5 +51,8 @@ router.patch("/:staffId/:subjectCode/max-marks",  updateMaxMarks);
 
 // PATCH /api/internal-marks/:staffId/:subjectCode/lock  - lock/unlock
 router.patch("/:staffId/:subjectCode/lock",       toggleLock);
+
+// DELETE /api/internal-marks/:subjectCode               - delete marksheet by subjectCode
+router.delete("/:subjectCode",                    deleteMarksheet);
 
 module.exports = router;

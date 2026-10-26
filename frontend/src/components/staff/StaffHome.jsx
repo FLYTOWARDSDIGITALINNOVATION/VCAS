@@ -177,7 +177,7 @@ export default function StaffHome({ staffUser, onNavigate }) {
     { label: 'Internal Marks', icon: FileSpreadsheet, bg: 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700', navTarget: 'Internal Marks' },
     { label: 'New Assignment', icon: BookMarked, bg: 'bg-purple-50 hover:bg-purple-100 text-purple-700', navTarget: 'Assignments' },
     { label: 'View Timetable', icon: Calendar, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Timetable' },
-    { label: 'Task Allocation', icon: CheckSquare, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Task Allocation' },
+    { label: 'Tasks', icon: CheckSquare, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Tasks' },
     { label: 'Apply Leave', icon: UserCheck, bg: 'bg-teal-50 hover:bg-teal-100 text-teal-700', navTarget: 'Leave' }
   ];
 

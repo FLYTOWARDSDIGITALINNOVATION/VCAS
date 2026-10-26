@@ -148,6 +148,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Assignments':          return <StaffAssignments staffUser={staffUser} />;
       case 'Question Papers':      return <StaffQuestionPaper staffUser={staffUser} />;
       case 'Course Plan':          return <StaffCoursePlan staffUser={staffUser} />;
+      case 'Tasks':
       case 'Task Allocation':
       case 'Staff Tasks':          return <StaffTaskAllocation staffUser={staffUser} />;
       case 'Fee Structure':
@@ -195,7 +196,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
     { name: 'Attendance', icon: CheckSquare },
     { name: 'My Classes', icon: BookOpen },
     { name: 'Student', icon: GraduationCap },
-    ...(isHodUser ? [{ name: 'Task Allocation', icon: CheckSquare }] : [])
+    { name: 'Tasks', icon: CheckSquare }
   ];
 
   // Office Staff: Dashboard + restricted finance section + profile only
@@ -387,7 +388,10 @@ export default function StaffDashboard({ staffUser, onLogout }) {
               <div className="space-y-1">
                 {section.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = activeNav === item.name || (item.name === 'Leave Management' && activeNav === 'Leave');
+                  const isActive = activeNav === item.name || 
+                    (item.name === 'Leave Management' && activeNav === 'Leave') ||
+                    (item.name === 'Tasks' && (activeNav === 'Task Allocation' || activeNav === 'Staff Tasks')) ||
+                    (item.name === 'Task Allocation' && activeNav === 'Tasks');
                   
                   if (isCollapsed) {
                     return (

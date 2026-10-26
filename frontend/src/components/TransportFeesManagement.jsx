@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../apiConfig';
-import { Bus, Save, User, CreditCard, Clock, AlertCircle, Search, Gauge, Fuel } from 'lucide-react';
+import { Bus, Save, User, CreditCard, Clock, AlertCircle, Search, Gauge, Fuel, Download, Printer } from 'lucide-react';
 
 export default function TransportFeesManagement({ 
   entryFormData, 
@@ -93,11 +93,133 @@ export default function TransportFeesManagement({
       (r.routeStop && r.routeStop.toLowerCase().includes(term)) ||
       (r.status && r.status.toLowerCase().includes(term))
     );
-    const matchesDept = tableDeptFilter === 'All' || String(r.course || '').toLowerCase().includes(tableDeptFilter.toLowerCase());
+    let matchesDept = true;
+    if (tableDeptFilter !== 'All') {
+      const fDept = tableDeptFilter.toLowerCase().trim();
+      const rCourse = String(r.course || '').toLowerCase().trim();
+      const rDept = String(r.department || '').toLowerCase().trim();
+
+      const isCommerceFilter = fDept.includes('commerce') || fDept === 'b.com' || fDept === 'c';
+      const isCSFilter = fDept.includes('computer') || fDept === 'cs' || fDept.includes('science');
+
+      const isCommerceStudent = rDept.includes('commerce') || rCourse.includes('commerce') || rDept.includes('b.com') || rCourse.includes('b.com');
+      const isCSStudent = (rDept.includes('computer') || rCourse.includes('computer') || rDept.includes('cs') || rCourse.includes('cs')) && !isCommerceStudent;
+
+      if (isCommerceFilter) {
+        matchesDept = isCommerceStudent;
+      } else if (isCSFilter) {
+        matchesDept = isCSStudent;
+      } else {
+        matchesDept = rDept.includes(fDept) || rCourse.includes(fDept) || (fDept.length >= 4 && (fDept.includes(rDept) || fDept.includes(rCourse)));
+      }
+    }
     const matchesYear = tableYearFilter === 'All' || String(r.year || '').toLowerCase() === tableYearFilter.toLowerCase();
     const matchesBatch = tableBatchFilter === 'All' || String(r.batch || r.academicYear || '').toLowerCase().includes(tableBatchFilter.toLowerCase());
     return matchesSearch && matchesDept && matchesYear && matchesBatch;
   });
+
+  const handleDownloadReceipt = (r) => {
+    if (!r) return;
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('Please allow popups to download or print the transport fee bill receipt.');
+      return;
+    }
+    const studentName = r.name || 'Student';
+    const rollNo = r.rollNo || r.id || 'N/A';
+    const dept = r.course || r.department || 'Degree';
+    const totalFee = Number(r.totalFee) || (Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0) || 15000;
+    const paidFee = Number(r.paidFee) || totalFee;
+    const pendingFee = Number(r.pendingFee) || Math.max(0, totalFee - paidFee);
+    const receiptNo = 'REC-TRP-' + (r.id ? String(r.id).replace(/\D/g, '').slice(-4) : Math.floor(1000 + Math.random() * 9000));
+    const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Transport Fee Bill - ${studentName} (${rollNo})</title>
+          <style>
+            @page { size: A4; margin: 15mm; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; margin: 0; padding: 20px; }
+            .receipt-box { border: 2px solid #0f172a; border-radius: 12px; padding: 24px; max-width: 720px; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
+            .college-title { font-size: 18px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; margin: 0; }
+            .college-sub { font-size: 12px; font-weight: 700; color: #475569; margin: 2px 0 0 0; }
+            .badge { display: inline-block; background: #047857; color: white; font-size: 11px; font-weight: 800; padding: 3px 12px; border-radius: 9999px; margin-top: 8px; letter-spacing: 0.5px; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 12px; margin-bottom: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; }
+            .meta-item span { color: #64748b; font-weight: 500; }
+            .meta-item strong { color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px; }
+            th { background: #0f172a; color: white; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; }
+            td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+            .total-row td { font-weight: bold; background: #f1f5f9; }
+            .paid-row td { font-weight: bold; color: #047857; background: #ecfdf5; }
+            .due-row td { font-weight: bold; color: #b91c1c; background: #fef2f2; }
+            .footer-sign { display: flex; justify-content: space-between; margin-top: 36px; padding-top: 12px; }
+            .sign-box { text-align: center; min-width: 160px; }
+            .sign-line { border-top: 1px dashed #0f172a; margin-top: 40px; padding-top: 4px; font-size: 11px; font-weight: bold; color: #475569; }
+            .note { text-align: center; font-size: 10px; color: #94a3b8; font-style: italic; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-box">
+            <div class="header">
+              <h1 class="college-title">VIVEKANANDA COLLEGE OF ARTS AND SCIENCE</h1>
+              <p class="college-sub">Vellalankulam, Sivakasi • Official Fee Receipt</p>
+              <div class="badge">TRANSPORT FEE OFFICIAL RECEIPT</div>
+            </div>
+            <div class="meta-grid">
+              <div class="meta-item"><span>Receipt No:</span> <strong>${receiptNo}</strong></div>
+              <div class="meta-item"><span>Payment Date:</span> <strong>${payDate}</strong></div>
+              <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
+              <div class="meta-item"><span>Roll / ID No:</span> <strong>${rollNo}</strong></div>
+              <div class="meta-item"><span>Driver:</span> <strong>${r.driverName || 'Designated Driver'}</strong></div>
+              <div class="meta-item"><span>Status:</span> <strong>${pendingFee === 0 ? 'Fully Paid' : 'Pending'}</strong></div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 10%;">S.No</th>
+                  <th>Particulars</th>
+                  <th style="text-align: right; width: 25%;">Amount (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="text-align: center;">1</td>
+                  <td><strong>College Bus Transport Fee</strong></td>
+                  <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
+                </tr>
+                <tr class="total-row">
+                  <td colspan="2" style="text-align: right;">Total Assessed:</td>
+                  <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
+                </tr>
+                <tr class="paid-row">
+                  <td colspan="2" style="text-align: right;">Amount Paid:</td>
+                  <td style="text-align: right;">₹${paidFee.toLocaleString('en-IN')}</td>
+                </tr>
+                <tr class="due-row">
+                  <td colspan="2" style="text-align: right;">Balance Outstanding:</td>
+                  <td style="text-align: right;">₹${pendingFee.toLocaleString('en-IN')}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="footer-sign">
+              <div class="sign-box"><div class="sign-line">Student Signature</div></div>
+              <div class="sign-box">
+                <div style="font-size: 11px; font-weight: bold; color: #047857; margin-bottom: 4px;">✓ VERIFIED & RECORDED</div>
+                <div class="sign-line">Transport In-Charge</div>
+              </div>
+            </div>
+            <div class="note">Computer-generated official receipt issued by Vivekananda College of Arts & Science Finance System.</div>
+          </div>
+          <script>window.onload = function() { window.print(); };</script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
 
   return (
     <div className="space-y-6">
@@ -346,15 +468,15 @@ export default function TransportFeesManagement({
             </div>
 
             <div className="pt-2">
-              <label className="block text-slate-700 font-bold mb-1">
-                Due Date <span className="text-rose-500">*</span>
+              <label className="block text-slate-700 font-bold mb-1 flex items-center justify-between sm:w-64">
+                <span>Due Date</span>
+                <span className="text-[10px] text-slate-400 font-normal">Optional</span>
               </label>
               <input
                 type="date"
                 value={entryFormData.dueDate || ''}
                 onChange={(e) => setEntryFormData({...entryFormData, dueDate: e.target.value})}
                 className="w-full sm:w-64 p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
-                required
               />
             </div>
           </div>
@@ -612,7 +734,7 @@ export default function TransportFeesManagement({
             >
               <option value="All">All Depts</option>
               {adminDepartments.map(d => (
-                <option key={d._id || d.code || d.name} value={d.code || d.name}>
+                <option key={d._id || d.code || d.name} value={d.name}>
                   {d.name} {d.code ? `(${d.code})` : ''}
                 </option>
               ))}
@@ -673,6 +795,7 @@ export default function TransportFeesManagement({
                   <th className="py-3 px-3 text-right">Balance Due</th>
                   <th className="py-3 px-3 text-center">Status</th>
                   <th className="py-3 px-3">Payment Date</th>
+                  <th className="py-3 px-3 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
@@ -739,6 +862,17 @@ export default function TransportFeesManagement({
                       </td>
                       <td className="py-3 px-3 text-slate-500 text-[11px]">
                         {r.lastPaymentDate || r.dueDate || 'Recent'}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadReceipt(r)}
+                          className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border border-emerald-200 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto transition-all cursor-pointer shadow-2xs"
+                          title="Download / Print Bill"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Bill</span>
+                        </button>
                       </td>
                     </tr>
                   );
