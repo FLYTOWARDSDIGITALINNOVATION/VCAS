@@ -60,6 +60,7 @@ import FeeManagement from './FeeManagement';
 import TCManagement from './TCManagement';
 import BonafideManagement from './BonafideManagement';
 import ExpenseManagement from './ExpenseManagement';
+import DriverManagement from './DriverManagement';
 
 function formatTimeAgo(dateInput) {
   if (!dateInput) return 'Recently';
@@ -705,6 +706,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   };
 
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
+  const isAdminUser = user?.role === 'Admin' || user?.role === 'Super Admin' || user?.isSuperAdmin === true;
   const isFinanceOrOffice = user?.role === 'Accountant' || 
     user?.role === 'Office Staff' || 
     user?.designation === 'Accountant' || 
@@ -713,6 +715,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   // Fees visibility is enabled for Super Admin alone among admins, plus Accountant and Office Staff
   const canViewFees = isSuperAdmin || isFinanceOrOffice || user?.canViewFees === true;
+  const canManageDrivers = isSuperAdmin || isAdminUser || isFinanceOrOffice || user?.role === 'Office Staff' || user?.role === 'Accountant';
 
   // Nav categories
   const navSections = [
@@ -758,8 +761,17 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         }
       ]
     }] : []),
+    ...(canManageDrivers ? [{
+      title: '',
+      items: [
+        {
+          name: 'Driver Management',
+          icon: Receipt
+        }
+      ]
+    }] : []),
     ...(!isFinanceOrOffice ? [{
-      title: 'HR',
+      title: '',
       items: [
         { name: 'Leave Management', icon: UserCheck }
       ]
@@ -1381,6 +1393,30 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                 <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
                 <p className="text-xs text-slate-500 leading-relaxed">
                   Expenditure records and budget allocations are restricted to <strong>Super Admin</strong>, <strong>Accountant</strong> and <strong>Office Staff</strong> personnel only.
+                </p>
+                <button
+                  onClick={() => setActiveNav('Dashboard')}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            </main>
+          )
+        ) : activeNav === 'Driver Management' ? (
+          canManageDrivers ? (
+            <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
+              <DriverManagement user={user} />
+            </main>
+          ) : (
+            <main className="flex-1 p-6 flex items-center justify-center">
+              <div className="max-w-md bg-white border border-rose-200 rounded-3xl p-8 text-center shadow-lg space-y-4">
+                <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+                  <ShieldCheck className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Driver records are restricted to <strong>Super Admin</strong>, <strong>Admin</strong>, <strong>Accountant</strong> and <strong>Office Staff</strong> personnel only.
                 </p>
                 <button
                   onClick={() => setActiveNav('Dashboard')}

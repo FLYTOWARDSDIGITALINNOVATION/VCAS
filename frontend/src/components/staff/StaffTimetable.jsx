@@ -102,6 +102,8 @@ export default function StaffTimetable({ staffUser }) {
   const [slotModalError, setSlotModalError] = useState('');
   const [toastMsg, setToastMsg] = useState('');
 
+  const currentStaffId = staffUser?.staffId || staffUser?.employeeId || '';
+
   const [slotForm, setSlotForm] = useState({
     day: 'Monday',
     slot: 1,
@@ -112,7 +114,8 @@ export default function StaffTimetable({ staffUser }) {
     type: 'theory',
     color: 'blue',
     isContinuousLab: false,
-    continuousHours: 3
+    continuousHours: 3,
+    staffId: currentStaffId
   });
 
   const showToast = (msg) => {
@@ -127,7 +130,6 @@ export default function StaffTimetable({ staffUser }) {
                 staffUser?.isHod === true ||
                 staffUser?.canAllocateTasks === true;
 
-  const currentStaffId = staffUser?.staffId || staffUser?.employeeId || '';
   const [selectedStaffId, setSelectedStaffId] = useState(currentStaffId);
   const [departmentStaffList, setDepartmentStaffList] = useState([]);
 
@@ -160,19 +162,27 @@ export default function StaffTimetable({ staffUser }) {
 
   // Fetch all staff members from department so normal staff & HOD can view department timetables
   useEffect(() => {
-    fetch(`${API_BASE}/api/staff`)
+    fetch(`${API_BASE}/staff`)
       .then(r => r.json())
       .then(data => {
-        if (data.success && Array.isArray(data.staff)) {
+        const rows = Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.staff)
+            ? data.staff
+            : [];
+
+        if (rows.length > 0) {
           const myDept = (staffUser?.department || '').trim().toLowerCase();
-          const deptStaff = data.staff.filter(s => {
-            const sDept = (s.department || '').trim().toLowerCase();
+          const deptStaff = rows.filter(s => {
+            const sDept = (s?.department || '').trim().toLowerCase();
             return !myDept || sDept === myDept || sDept.includes(myDept) || myDept.includes(sDept);
           });
-          setDepartmentStaffList(deptStaff.length > 0 ? deptStaff : data.staff);
+          setDepartmentStaffList(deptStaff.length > 0 ? deptStaff : rows);
+        } else {
+          setDepartmentStaffList([]);
         }
       })
-      .catch(() => {});
+      .catch(() => setDepartmentStaffList([]));
   }, [staffUser?.department]);
 
   useEffect(() => {
@@ -204,7 +214,8 @@ export default function StaffTimetable({ staffUser }) {
         type: (existing.type || 'theory').toLowerCase(),
         color: (existing.color || (existing.type === 'lab' ? 'emerald' : 'blue')).toLowerCase(),
         isContinuousLab: Boolean(existing.isContinuousLab || existing.type === 'lab'),
-        continuousHours: matching.length > 0 ? matching.length : (Number(existing.labHours) || 3)
+        continuousHours: matching.length > 0 ? matching.length : (Number(existing.labHours) || 3),
+        staffId: selectedStaffId || currentStaffId
       });
     } else {
       // Default to first class if available
@@ -220,7 +231,8 @@ export default function StaffTimetable({ staffUser }) {
         type: isLab ? 'lab' : 'theory',
         color: isLab ? 'emerald' : 'blue',
         isContinuousLab: isLab,
-        continuousHours: firstClass?.labHours || 3
+        continuousHours: firstClass?.labHours || 3,
+        staffId: selectedStaffId || currentStaffId
       });
     }
     setIsSlotModalOpen(true);
@@ -264,6 +276,32 @@ export default function StaffTimetable({ staffUser }) {
     }
     return null;
   }, [isSlotModalOpen, schedule, slotForm.day, slotForm.slot, slotForm.code]);
+
+  const roomConflictWarning = useMemo(() => {
+    if (!isSlotModalOpen || !slotForm.room) return null;
+    const targetRoom = (slotForm.room || '').trim().toLowerCase();
+    if (!targetRoom) return null;
+
+    for (const day of DAYS) {
+      const daySlots = schedule[day] || {};
+      for (const periodKey of Object.keys(daySlots)) {
+        const occupied = daySlots[periodKey];
+        if (!occupied || !occupied.room) continue;
+        if (day === slotForm.day && String(periodKey) === String(slotForm.slot)) continue;
+        if (occupied.room.trim().toLowerCase() === targetRoom) {
+          return {
+            room: slotForm.room,
+            facultyName: occupied.staffName || occupied.faculty || 'Another faculty',
+            code: occupied.code,
+            name: occupied.name,
+            day,
+            slot: periodKey
+          };
+        }
+      }
+    }
+    return null;
+  }, [isSlotModalOpen, schedule, slotForm.day, slotForm.slot, slotForm.room]);
 
   // Save slot to database
   const handleSaveSlot = async (e) => {
@@ -327,7 +365,8 @@ export default function StaffTimetable({ staffUser }) {
         }
       };
 
-      const targetStaffId = selectedStaffId || staffUser.staffId;
+      const targetStaffId = slotForm.staffId || selectedStaffId || staffUser.staffId;
+      if (targetStaffId) setSelectedStaffId(targetStaffId);
       const res = await fetch(`${API_BASE}/timetable/staff/${targetStaffId}/slot`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -350,11 +389,11 @@ export default function StaffTimetable({ staffUser }) {
         } catch (_) {}
       }
 
-      const slotMsg = continuousSlots.length > 1
-        ? `Assigned ${payload.slotData.code} to Continuous Lab Periods ${continuousSlots.join(', ')} on ${slotForm.day} (${continuousSlots.length} Continuous Hours)!`
+      const slotMsg = parsedPeriods.length > 1
+        ? `Assigned ${payload.slotData.code} to Continuous Periods ${parsedPeriods.join(', ')} on ${slotForm.day} (${parsedPeriods.length} Hours)!`
         : `Assigned ${payload.slotData.code} to Period ${slotForm.slot} on ${slotForm.day}!`;
 
-      showToast(slotMsg);
+      showToast(data.warning ? `${slotMsg} ${data.warning}` : slotMsg);
       setIsSlotModalOpen(false);
       if (data.schedule) setSchedule(data.schedule);
       fetchData(targetStaffId);
@@ -371,7 +410,8 @@ export default function StaffTimetable({ staffUser }) {
     if (!window.confirm(`Clear Period ${slot} on ${day}?`)) return;
 
     try {
-      const targetStaffId = selectedStaffId || staffUser.staffId;
+      const targetStaffId = slotForm.staffId || selectedStaffId || staffUser.staffId;
+      if (targetStaffId) setSelectedStaffId(targetStaffId);
       const res = await fetch(`${API_BASE}/timetable/staff/${targetStaffId}/slot/${day}/${slot}`, {
         method: 'DELETE'
       });
@@ -828,7 +868,7 @@ export default function StaffTimetable({ staffUser }) {
       {/* ============================================================ */}
       {isSlotModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 sm:p-7 max-w-md w-full space-y-5 animate-in zoom-in-95">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 sm:p-7 max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -855,7 +895,7 @@ export default function StaffTimetable({ staffUser }) {
               </div>
             )}
 
-            <form onSubmit={handleSaveSlot} className="space-y-4">
+            <form onSubmit={handleSaveSlot} className="space-y-4 overflow-y-auto pr-1 flex-1 mt-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Day</label>
@@ -925,6 +965,27 @@ export default function StaffTimetable({ staffUser }) {
                   💡 Periods are scheduled continuously (1, 2, 3..) on {slotForm.day} and not scattered across other days.
                 </p>
               </div>
+
+              {isHod && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Assign To Staff</label>
+                  <select
+                    value={slotForm.staffId || selectedStaffId || currentStaffId}
+                    onChange={(e) => {
+                      const nextStaffId = e.target.value;
+                      setSlotForm(prev => ({ ...prev, staffId: nextStaffId }));
+                      setSelectedStaffId(nextStaffId);
+                    }}
+                    className="w-full bg-indigo-50/60 border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-indigo-900 focus:outline-none focus:border-indigo-600"
+                  >
+                    {departmentStaffList.map(staff => (
+                      <option key={staff.staffId || staff.employeeId || staff._id} value={staff.staffId || staff.employeeId || staff._id}>
+                        {staff.name} ({staff.staffId || staff.employeeId || staff._id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Class Quick Selection */}
               {classes.length > 0 && (
@@ -1086,13 +1147,15 @@ export default function StaffTimetable({ staffUser }) {
               )}
 
               {/* Period Conflict Warning */}
-              {staffPeriodConflict && (
+              {(staffPeriodConflict || roomConflictWarning) && (
                 <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 text-xs shadow-xs animate-in fade-in">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
-                    <strong className="font-bold">⚠️ Warning: Period Already Allocated!</strong>
+                    <strong className="font-bold">⚠️ Warning: Allocation Conflict!</strong>
                     <p className="mt-0.5 text-amber-800">
-                      Period {slotForm.slot} on {slotForm.day} is already allocated to <strong>{staffPeriodConflict.code}</strong> ({staffPeriodConflict.name}). Saving will overwrite and re-allocate this period.
+                      {roomConflictWarning
+                        ? `Room "${roomConflictWarning.room}" is already allocated on ${roomConflictWarning.day} Period ${roomConflictWarning.slot} to ${roomConflictWarning.facultyName} for ${roomConflictWarning.code}.`
+                        : `Period ${slotForm.slot} on ${slotForm.day} is already allocated to ${staffPeriodConflict.code} (${staffPeriodConflict.name}). Saving will overwrite and re-allocate this period.`}
                     </p>
                   </div>
                 </div>

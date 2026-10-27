@@ -102,6 +102,8 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
+  const [selectedYear, setSelectedYear] = useState('All Years');
+  const [selectedSemester, setSelectedSemester] = useState('All Semesters');
   const [selectedBatch, setSelectedBatch] = useState('');
   const [selectedFeeStatus, setSelectedFeeStatus] = useState('All Statuses');
   const [selectedRows, setSelectedRows] = useState([]);
@@ -295,6 +297,24 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     return Array.from(bSet).sort().reverse();
   }, [students]);
 
+  const uniqueYears = useMemo(() => {
+    const ySet = new Set();
+    students.forEach(s => {
+      const y = (s.year || '').trim();
+      if (y) ySet.add(y);
+    });
+    return Array.from(ySet).sort((a, b) => Number(String(a).match(/\d+/)?.[0] || 0) - Number(String(b).match(/\d+/)?.[0] || 0));
+  }, [students]);
+
+  const uniqueSemesters = useMemo(() => {
+    const sSet = new Set();
+    students.forEach(s => {
+      const sem = (s.sem || s.semester || '').trim();
+      if (sem) sSet.add(sem);
+    });
+    return Array.from(sSet).sort((a, b) => (Number(String(a).match(/\d+/)?.[0] || 0) - Number(String(b).match(/\d+/)?.[0] || 0)));
+  }, [students]);
+
   // Filter students based on search, department, batch and dropdowns
   const filteredStudents = students.filter(student => {
     const term = (searchTerm || '').toLowerCase().trim();
@@ -327,6 +347,15 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       return false;
     })();
     const matchesFee = !canViewFees || selectedFeeStatus === 'All Statuses' || student.feeStatus === selectedFeeStatus;
+
+    const matchesYear = selectedYear === 'All Years' ||
+      String(student.year || '').trim().toLowerCase() === selectedYear.toLowerCase() ||
+      String(student.year || '').trim().toLowerCase().includes(selectedYear.toLowerCase());
+
+    const studentSem = String(student.sem || student.semester || '').trim();
+    const matchesSemester = selectedSemester === 'All Semesters' ||
+      studentSem.toLowerCase() === selectedSemester.toLowerCase() ||
+      studentSem.toLowerCase().includes(selectedSemester.toLowerCase().replace('semester', 'sem'));
 
     const sBatch = (student.batch || '').replace('–', '-').trim().toLowerCase();
     const selBatch = (selectedBatch || '').replace('–', '-').trim().toLowerCase();
@@ -366,7 +395,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       matchesSubject = hasEnrolledSub || inClass || matchesDeptOfSub;
     }
 
-    return matchesSearch && matchesDept && matchesFee && matchesSubject && matchesBatch;
+    return matchesSearch && matchesDept && matchesFee && matchesSubject && matchesBatch && matchesYear && matchesSemester;
   });
 
 
@@ -1190,6 +1219,30 @@ Unauthorized reproduction or distribution is strictly prohibited.
               )}
             </select>
 
+            {/* Year Dropdown Filter */}
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10"
+            >
+              <option value="All Years">All Years</option>
+              {uniqueYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+
+            {/* Semesters Filter */}
+            <select
+              value={selectedSemester}
+              onChange={(e) => setSelectedSemester(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10"
+            >
+              <option value="All Semesters">All Semesters</option>
+              {uniqueSemesters.map(sem => (
+                <option key={sem} value={sem}>{sem}</option>
+              ))}
+            </select>
+
             {/* Subjects Filter (Replaces Courses with Real Subjects from DB) */}
             <select
               value={selectedSubject}
@@ -1204,17 +1257,6 @@ Unauthorized reproduction or distribution is strictly prohibited.
                     {sub.code ? `${sub.code} - ${sub.name}` : sub.name}
                   </option>
                 ))}
-            </select>
-
-            {/* Semesters Filter */}
-            <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10">
-              <option value="All Semesters">All Semesters</option>
-              <option value="1st Sem">1st Sem</option>
-              <option value="2nd Sem">2nd Sem</option>
-              <option value="3rd Sem">3rd Sem</option>
-              <option value="4th Sem">4th Sem</option>
-              <option value="5th Sem">5th Sem</option>
-              <option value="6th Sem">6th Sem</option>
             </select>
 
             {/* Fee Statuses Filter (Accountant & Office Staff Only) */}

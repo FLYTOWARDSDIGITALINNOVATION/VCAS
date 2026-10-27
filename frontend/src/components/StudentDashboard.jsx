@@ -269,8 +269,17 @@ export default function StudentDashboard({ student, onLogout }) {
       }
 
       // 2. Process Internal Marks
-      if (marksRes && marksRes.success && Array.isArray(marksRes.marksheets)) {
-        setMarksData(marksRes.marksheets);
+      const marksList = Array.isArray(marksRes?.marksheets)
+        ? marksRes.marksheets
+        : Array.isArray(marksRes?.data)
+          ? marksRes.data
+          : Array.isArray(marksRes)
+            ? marksRes
+            : [];
+      if (marksRes && marksRes.success && marksList.length > 0) {
+        setMarksData(marksList);
+      } else if (marksRes && marksRes.success && marksList.length === 0) {
+        setMarksData([]);
       }
 
       // 3. Process Assignments

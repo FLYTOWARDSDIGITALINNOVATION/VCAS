@@ -102,12 +102,13 @@ export default function CourseSubjectManagement({ user }) {
   // Fetch real data from backend API
   const fetchCoursesAndSubjects = async () => {
     try {
-      const [resCourses, resSubjects, resStaff, resStudents, resDepts] = await Promise.allSettled([
+      const [resCourses, resSubjects, resStaff, resStudents, resDepts, resClasses] = await Promise.allSettled([
         fetch(`${API_BASE}/courses`),
         fetch(`${API_BASE}/subjects`),
         fetch(`${API_BASE}/staff`),
         fetch(`${API_BASE}/students`),
-        fetch(`${API_BASE}/departments`)
+        fetch(`${API_BASE}/departments`),
+        fetch(`${API_BASE}/classes`).catch(() => null)
       ]);
 
       let realDepts = [];
@@ -128,10 +129,17 @@ export default function CourseSubjectManagement({ user }) {
         }
       }
 
+      let clean = [];
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const sData = await resSubjects.value.json();
-        if (sData.success && Array.isArray(sData.data)) {
-          const clean = sData.data
+        const subjectRows = Array.isArray(sData?.data)
+          ? sData.data
+          : Array.isArray(sData?.subjects)
+            ? sData.subjects
+            : [];
+
+        if (subjectRows.length > 0) {
+          clean = subjectRows
             .filter(s => Boolean(s.code) && s.code !== 'CS101')
             .map(s => {
               if (Array.isArray(s.units) && s.units.some(u => u && u.title && u.title.includes('Foundational Principles'))) {
@@ -139,10 +147,45 @@ export default function CourseSubjectManagement({ user }) {
               }
               return s;
             });
-          setSubjectsList(clean);
-          try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean)); } catch (_) {}
         }
       }
+
+      if (resClasses.status === 'fulfilled' && resClasses.value && resClasses.value.ok) {
+        const cData = await resClasses.value.json();
+        const classList = cData?.classes || cData?.data || (Array.isArray(cData) ? cData : []);
+        const seen = new Set(clean.map(s => (s.code || '').trim().toUpperCase()));
+        classList.forEach(cls => {
+          const code = (cls.code || cls.classCode || '').trim().toUpperCase();
+          if (!code || seen.has(code)) return;
+          seen.add(code);
+          clean.push({
+            code,
+            name: cls.name || cls.className || code,
+            department: cls.dept || cls.department || 'General',
+            year: Number(cls.year) || 1,
+            sem: cls.semester ? `Sem ${cls.semester}` : 'Sem 1',
+            credits: Number(cls.credits) || 3,
+            type: Number(cls.labHours) > 0 ? 'Practical / Lab' : 'Theory',
+            faculty: cls.staffName || 'Unassigned',
+            theoryHours: Number(cls.theoryHours) || 3,
+            labHours: Number(cls.labHours) || 0,
+            hours: Number(cls.labHours) > 0 ? `${Number(cls.theoryHours) || 3}h Theory + ${Number(cls.labHours) || 0}h Continuous Lab` : `${Number(cls.theoryHours) || 3} hrs/wk`,
+            isContinuousLab: Boolean(cls.isContinuousLab || Number(cls.labHours) > 0)
+          });
+        });
+      }
+
+      if (clean.length === 0) {
+        try {
+          const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+          if (Array.isArray(cached) && cached.length > 0) {
+            clean = cached.filter(s => Boolean(s.code) && s.code !== 'CS101');
+          }
+        } catch (_) {}
+      }
+
+      setSubjectsList(clean);
+      try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean)); } catch (_) {}
 
       if (resStudents.status === 'fulfilled' && resStudents.value.ok) {
         const stuData = await resStudents.value.json();
@@ -163,10 +206,6 @@ export default function CourseSubjectManagement({ user }) {
   };
 
   React.useEffect(() => {
-    try {
-      localStorage.removeItem('vcas_subjects_cache');
-      localStorage.removeItem('vcas_programs_cache');
-    } catch (_) {}
     fetchCoursesAndSubjects();
   }, []);
 
@@ -579,11 +618,15 @@ export default function CourseSubjectManagement({ user }) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
-      }).then(r => r.json()).then(data => {
+      }).then(r => r.json()).then(async (data) => {
         if (data.success && data.data) {
           setSubjectsList(prev => prev.map(s => (s.code === updated.code) ? data.data : s));
         }
-      }).catch(err => console.error('Error updating subject in backend:', err));
+        await fetchCoursesAndSubjects();
+      }).catch(async (err) => {
+        console.error('Error updating subject in backend:', err);
+        await fetchCoursesAndSubjects();
+      });
 
     } else {
       // Create new
@@ -621,7 +664,7 @@ export default function CourseSubjectManagement({ user }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSubj)
-      }).then(r => r.json()).then(data => {
+      }).then(r => r.json()).then(async (data) => {
         if (data.success && data.data) {
           setSubjectsList(prev => {
             const next = prev.map(s => s.code === newSubj.code ? data.data : s);
@@ -629,7 +672,11 @@ export default function CourseSubjectManagement({ user }) {
             return next;
           });
         }
-      }).catch(err => console.error('Error creating subject in backend:', err));
+        await fetchCoursesAndSubjects();
+      }).catch(async (err) => {
+        console.error('Error creating subject in backend:', err);
+        await fetchCoursesAndSubjects();
+      });
     }
   };
 
@@ -664,7 +711,12 @@ export default function CourseSubjectManagement({ user }) {
       // Sync with MongoDB backend
       fetch(`${API_BASE}/subjects/${targetId}`, {
         method: 'DELETE'
-      }).catch(err => console.error('Error deleting subject in backend:', err));
+      }).then(async () => {
+        await fetchCoursesAndSubjects();
+      }).catch(async (err) => {
+        console.error('Error deleting subject in backend:', err);
+        await fetchCoursesAndSubjects();
+      });
 
       setDeletingSubject(null);
     }

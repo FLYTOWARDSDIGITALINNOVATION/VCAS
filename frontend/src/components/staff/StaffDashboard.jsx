@@ -25,6 +25,7 @@ import StaffTaskAllocation from './StaffTaskAllocation';
 import StaffCoursePlan from './StaffCoursePlan';
 import BonafideManagement from '../BonafideManagement';
 import TCManagement from '../TCManagement';
+import DriverManagement from '../DriverManagement';
 import CollegeLogo from '../CollegeLogo';
 
 const NAV_SECTIONS = [
@@ -155,6 +156,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Fees':                 return <FeeStructureView user={staffUser} />;
       case 'Expenses':
       case 'Expense':              return <ExpenseManagement user={staffUser} />;
+      case 'Driver Management':    return <DriverManagement user={staffUser} />;
       case 'Student Attendance':   return <StaffAttendance staffUser={staffUser} isReadOnly={true} />;
       case 'Bonafide Certificate':
       case 'Bonafide':             return <BonafideManagement user={staffUser} />;
@@ -207,6 +209,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       items: [
         { name: 'Fee Structure', icon: IndianRupee },
         { name: 'Expenses', icon: Receipt },
+        { name: 'Driver Management', icon: Receipt },
         { name: 'Student Attendance', icon: CheckSquare },
         { name: 'Transfer Certificate', icon: FileOutput }
       ]

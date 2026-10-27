@@ -116,6 +116,43 @@ export default function StudentProfileView({
 
   const tabs = ['Overview', 'Attendance', ...(canViewFees ? ['Fees'] : []), 'Examination', 'Assignments', 'Documents'];
 
+  const subjectCodes = (() => {
+    const values = [];
+    const entries = Array.isArray(student?.subjects) ? student.subjects : [];
+    entries.forEach(item => {
+      const code = typeof item === 'string' ? item : (item?.code || item?.subjectCode || '');
+      if (code && !values.includes(code)) values.push(code);
+    });
+    const extras = [
+      student?.subjectCode,
+      student?.subjectCodes,
+      student?.assignedSubjectCode,
+      student?.currentSubjectCode,
+      student?.subject?.code,
+      student?.courseCode,
+      student?.examSubjectCode
+    ];
+    extras.forEach(value => {
+      if (value && typeof value === 'string') {
+        const split = value.split(/[|,;]+/).map(s => s.trim()).filter(Boolean);
+        split.forEach(code => {
+          if (!values.includes(code)) values.push(code);
+        });
+      }
+    });
+    if (Array.isArray(student?.subjectsList)) {
+      student.subjectsList.forEach(item => {
+        const code = typeof item === 'string' ? item : (item?.code || item?.subjectCode || '');
+        if (code && !values.includes(code)) values.push(code);
+      });
+    }
+    return values;
+  })();
+
+  const arrearCount = Number(student?.totalArrearsTillLastSem || student?.totalArrears || student?.arrearsYetToBeCleared || student?.backlogs || 0);
+  const clearedArrears = Number(student?.arrearsClearedThisSem || student?.arrearsCleared || 0);
+  const pendingArrears = Math.max(0, arrearCount - clearedArrears);
+
   // State for fetched tab records
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
@@ -181,7 +218,13 @@ export default function StudentProfileView({
         fetch(`${API_BASE}/exams`).then(r => r.json()).catch(() => ({ exams: [] }))
       ]).then(([marksData, examsData]) => {
         // Process marks
-        const sheets = marksData.data || (Array.isArray(marksData) ? marksData : []);
+        const sheets = Array.isArray(marksData?.data)
+          ? marksData.data
+          : Array.isArray(marksData?.marksheets)
+            ? marksData.marksheets
+            : Array.isArray(marksData)
+              ? marksData
+              : [];
         const matchedMarks = [];
         sheets.forEach(sheet => {
           const list = Array.isArray(sheet.students) ? sheet.students : [];
@@ -381,6 +424,34 @@ export default function StudentProfileView({
             <span className="text-xl font-extrabold text-slate-900">{studentData.rank}</span>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Department</p>
+            <p className="mt-2 text-sm font-extrabold text-slate-900">{studentData.department}</p>
+          </div>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Year / Semester</p>
+            <p className="mt-2 text-sm font-extrabold text-slate-900">{studentData.year} • {studentData.sem}</p>
+          </div>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Arrears</p>
+            <p className="mt-2 text-sm font-extrabold text-rose-600">{pendingArrears} pending / {arrearCount} total</p>
+          </div>
+        </div>
+
+        {subjectCodes.length > 0 && (
+          <div className="mt-4 bg-indigo-50/60 border border-indigo-200 rounded-2xl p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Subject Codes</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {subjectCodes.map(code => (
+                <span key={code} className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold border border-indigo-200 bg-white text-indigo-700">
+                  {code}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* SUB TABS NAVIGATION */}

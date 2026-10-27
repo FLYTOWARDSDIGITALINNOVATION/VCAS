@@ -118,6 +118,8 @@ exports.updateSlot = async (req, res) => {
       currentSchedule[day] = {};
     }
 
+    let roomConflictWarning = null;
+
     if (slotData && slotData.code) {
       const slotObj = {
         code: (slotData.code || '').trim().toUpperCase(),
@@ -169,7 +171,6 @@ exports.updateSlot = async (req, res) => {
       });
 
       // Check if room/hall is already occupied by someone else at this day and period
-      let roomConflictWarning = null;
       if (slotObj.room) {
         try {
           const others = await Timetable.find({ staffId: { $ne: staffId.trim() } });

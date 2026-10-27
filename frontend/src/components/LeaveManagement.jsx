@@ -54,7 +54,7 @@ export default function LeaveManagement() {
   });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('Pending HOD');
   const [selectedDept, setSelectedDept] = useState('All Departments');
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [toastMsg, setToastMsg] = useState('');
@@ -514,7 +514,7 @@ export default function LeaveManagement() {
 
         {/* Multi-Tier Status Filter */}
         <div className="flex flex-wrap items-center gap-1.5">
-          {['All', 'Pending HOD', 'Pending Principal', 'Pending MD', 'Approved', 'Rejected'].map((status) => (
+          {['Pending HOD', 'Pending Principal', 'Pending MD', 'Approved', 'Rejected'].map((status) => (
             <button
               key={status}
               onClick={() => setSelectedStatus(status)}
