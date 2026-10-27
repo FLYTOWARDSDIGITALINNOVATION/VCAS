@@ -1051,60 +1051,86 @@ export default function StudentProfileView({
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-[11px] min-w-[1100px]">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                      <th className="py-3 px-4 rounded-l-xl">Subject</th>
-                      <th className="py-3 px-4 text-center">CIA 1</th>
-                      <th className="py-3 px-4 text-center">CIA 2</th>
-                      <th className="py-3 px-4 text-center">Model Exam</th>
-                      <th className="py-3 px-4 text-center">Assignment</th>
-                      <th className="py-3 px-4 text-center">Attendance</th>
-                      <th className="py-3 px-4 text-center font-black">Consolidated Total</th>
-                      <th className="py-3 px-4 text-center rounded-r-xl">Status</th>
+                      <th className="py-3 px-4 rounded-l-xl min-w-[180px]">Subject</th>
+                      <th className="py-3 px-2 text-center">ST 1</th>
+                      <th className="py-3 px-2 text-center">ST 2</th>
+                      <th className="py-3 px-2 text-center">ST 3</th>
+                      <th className="py-3 px-2 text-center">ST 4</th>
+                      <th className="py-3 px-2 text-center">Internal 1</th>
+                      <th className="py-3 px-2 text-center">Internal 2</th>
+                      <th className="py-3 px-2 text-center">Model</th>
+                      <th className="py-3 px-2 text-center">Semester</th>
+                      <th className="py-3 px-2 text-center">Seminar</th>
+                      <th className="py-3 px-2 text-center">Project</th>
+                      <th className="py-3 px-2 text-center">A1</th>
+                      <th className="py-3 px-2 text-center">A2</th>
+                      <th className="py-3 px-2 text-center">A3</th>
+                      <th className="py-3 px-2 text-center">A4</th>
+                      <th className="py-3 px-3 text-center font-black text-blue-900">Final CIA</th>
+                      <th className="py-3 px-3 text-center rounded-r-xl">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {marksRecords.map((rec, idx) => {
-                      const m = rec.marks;
-                      const max = rec.maxMarks;
-                      const isPass = (m.consolidated || 0) >= (rec.passMarks?.consolidated || 10);
+                      const m = rec.marks || {};
+                      const max = rec.maxMarks || {};
+                      const it1Value = m.it1 !== null && m.it1 !== undefined ? m.it1 : m.cia1;
+                      const it2Value = m.it2 !== null && m.it2 !== undefined ? m.it2 : m.cia2;
+                      const cellValue = (value) => value !== null && value !== undefined && String(value).trim() !== '' ? value : '—';
+                      const isPass = (m.consolidated ?? 0) >= (rec.passMarks?.consolidated || 10);
+
                       return (
-                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors align-top">
                           <td className="py-3.5 px-4 font-bold text-slate-900">
                             <div>{rec.subjectName}</div>
                             <span className="text-[10px] font-mono text-slate-400 font-normal">{rec.subjectCode} • {rec.staffName}</span>
                           </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-semibold">
-                            {m.cia1 !== null && m.cia1 !== undefined ? `${m.cia1}/${max.cia1 || 50}` : '—'}
+                          {['st1', 'st2', 'st3', 'st4'].map((field) => (
+                            <td key={`${idx}-${field}`} className="py-3.5 px-2 text-center font-mono font-semibold text-slate-700">
+                              {cellValue(m[field])}
+                            </td>
+                          ))}
+                          <td className="py-3.5 px-2 text-center font-mono font-semibold text-slate-700">
+                            {cellValue(it1Value)}
                           </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-semibold">
-                            {m.cia2 !== null && m.cia2 !== undefined ? `${m.cia2}/${max.cia2 || 50}` : '—'}
+                          <td className="py-3.5 px-2 text-center font-mono font-semibold text-slate-700">
+                            {cellValue(it2Value)}
                           </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-semibold">
-                            {m.model !== null && m.model !== undefined ? `${m.model}/${max.model || 75}` : '—'}
+                          <td className="py-3.5 px-2 text-center font-mono font-semibold text-slate-700">
+                            {cellValue(m.model)}
                           </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-semibold">
-                            {m.assignment !== null && m.assignment !== undefined ? `${m.assignment}/${max.assignment || 25}` : '—'}
+                          <td className="py-3.5 px-2 text-center font-mono font-semibold text-slate-700">
+                            {cellValue(m.semester)}
                           </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-semibold">
-                            {m.attendance !== null && m.attendance !== undefined ? `${m.attendance}/${max.attendance || 5}` : '—'}
+                          <td className="py-3.5 px-2 text-center font-mono font-semibold text-slate-700">
+                            {cellValue(m.seminar)}
                           </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-black text-blue-900 text-sm">
+                          <td className="py-3.5 px-2 text-center font-mono font-semibold text-slate-700">
+                            {cellValue(m.project)}
+                          </td>
+                          {['assignment1', 'assignment2', 'assignment3', 'assignment4'].map((field) => (
+                            <td key={`${idx}-${field}`} className="py-3.5 px-2 text-center font-mono font-semibold text-slate-700">
+                              {cellValue(m[field])}
+                            </td>
+                          ))}
+                          <td className="py-3.5 px-3 text-center font-mono font-black text-blue-900 text-sm">
                             {m.consolidated !== null && m.consolidated !== undefined ? `${m.consolidated}/${max.consolidated || 25}` : '—'}
                           </td>
-                          <td className="py-3.5 px-4 text-center">
+                          <td className="py-3.5 px-3 text-center">
                             {m.consolidated !== null && m.consolidated !== undefined ? (
                               <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                                isPass 
-                                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                                isPass
+                                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                                   : 'bg-rose-100 text-rose-700 border border-rose-200'
                               }`}>
                                 {isPass ? <Check className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
                                 {isPass ? 'Passed' : 'Needs Retake'}
                               </span>
                             ) : (
-                              <span className="text-slate-400 text-xs italic">Pending Evaluation</span>
+                              <span className="text-slate-400 text-xs italic">Pending</span>
                             )}
                           </td>
                         </tr>

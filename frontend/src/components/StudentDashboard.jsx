@@ -2057,8 +2057,13 @@ CONTACT:
                             { name: 'Internal 1', val: m.it1 ?? m.cia1, max: max.it1 || max.cia1 || 25, pass: pass.it1 || pass.cia1 || 10 },
                             { name: 'Internal 2', val: m.it2 ?? m.cia2, max: max.it2 || max.cia2 || 25, pass: pass.it2 || pass.cia2 || 10 },
                             { name: 'Model', val: m.model, max: max.model || 75, pass: pass.model || 30 },
+                            { name: 'Semester', val: m.semester, max: max.semester || 100, pass: pass.semester || 40 },
                             { name: 'Seminar', val: m.seminar, max: max.seminar || 10, pass: pass.seminar || 4 },
                             { name: 'Project', val: m.project, max: max.project || 20, pass: pass.project || 8 },
+                            { name: 'Assignment 1', val: m.assignment1, max: max.assignment1 || 5, pass: pass.assignment1 || 2 },
+                            { name: 'Assignment 2', val: m.assignment2, max: max.assignment2 || 5, pass: pass.assignment2 || 2 },
+                            { name: 'Assignment 3', val: m.assignment3, max: max.assignment3 || 5, pass: pass.assignment3 || 2 },
+                            { name: 'Assignment 4', val: m.assignment4, max: max.assignment4 || 5, pass: pass.assignment4 || 2 },
                             { name: 'Consolidated', val: m.consolidated, max: max.consolidated || 25, pass: pass.consolidated || 10, isHighlight: true }
                           ];
 
@@ -2090,7 +2095,7 @@ CONTACT:
                               </div>
 
                               {/* Scores Grid */}
-                              <div className="p-4 grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2.5 text-center">
+                              <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-2.5 text-center">
                                 {scoreList.map((sc, sIdx) => {
                                   const hasScore = sc.val !== null && sc.val !== undefined && sc.val !== '';
                                   const isNum = !isNaN(Number(sc.val));

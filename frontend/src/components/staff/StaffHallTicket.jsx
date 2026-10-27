@@ -146,10 +146,15 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   // Arrear Section state
   const [activeHallTab, setActiveHallTab] = useState('regular'); // 'regular' | 'arrear'
   const [arrearStudents, setArrearStudents] = useState([]);
+  const [arrearOptionStudents, setArrearOptionStudents] = useState([]);
   const [loadingArrear, setLoadingArrear] = useState(false);
   const [arrearDept, setArrearDept] = useState(staffUser?.department || '');
+  const [arrearYear, setArrearYear] = useState('All Years');
+  const [arrearSemester, setArrearSemester] = useState('All Semesters');
+  const [arrearBatch, setArrearBatch] = useState('All Batches');
+  const [arrearSubject, setArrearSubject] = useState('All Subjects');
   const [arrearSearch, setArrearSearch] = useState('');
-
+  const [selectedArrearStudent, setSelectedArrearStudent] = useState(null);
 
   const [hallsList, setHallsList] = useState(() => {
     try {
@@ -184,6 +189,128 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     }
   });
   const [catalogSubjects, setCatalogSubjects] = useState([]);
+
+  const getStudentArrearList = (student) => {
+    if (!student) return [];
+    const rawSubjects = Array.isArray(student.arrearSubjects) ? student.arrearSubjects : [];
+    if (rawSubjects.length > 0) {
+      return rawSubjects
+        .map(item => ({
+          code: String(item.code || item.subjectCode || item.subject || '').trim(),
+          name: String(item.name || item.subjectName || 'Arrear Subject').trim() || 'Arrear Subject'
+        }))
+        .filter(item => item.code || item.name);
+    }
+
+    const total = Number(student.arrearsYetToBeCleared || student.totalArrearsTillLastSem || student.totalArrears || 0) || 0;
+    if (!total) return [];
+
+    const subjectPool = (catalogSubjects || []).filter(subject => {
+      const subjectDept = String(subject.department || '').trim();
+      const studentDept = String(student.department || '').trim();
+      const deptMatch = !subjectDept || !studentDept || subjectDept.toLowerCase() === studentDept.toLowerCase();
+      const subjectYear = String(subject.year || '').trim();
+      const studentYear = String(student.year || '').trim();
+      const yearMatch = !subjectYear || !studentYear || subjectYear.toLowerCase() === studentYear.toLowerCase() || String(subjectYear).replace(/\D/g, '') === String(studentYear).replace(/\D/g, '');
+      return deptMatch && yearMatch;
+    });
+
+    const fallback = subjectPool.length > 0 ? subjectPool : [{ code: 'AR01', name: 'Arrear Subject 1' }];
+
+    return Array.from({ length: Math.max(1, total) }, (_, idx) => {
+      const source = fallback[idx % fallback.length] || fallback[0];
+      return {
+        code: source.code || `AR${String(idx + 1).padStart(2, '0')}`,
+        name: source.name || `Arrear Subject ${idx + 1}`
+      };
+    }).slice(0, total);
+  };
+
+  const arrearYearOptions = useMemo(() => {
+    const values = new Set(['All Years']);
+    [...arrearStudents, ...arrearOptionStudents].forEach(student => {
+      const year = String(student.year || student.currentYear || '').trim();
+      if (year) values.add(year);
+    });
+    return Array.from(values);
+  }, [arrearStudents, arrearOptionStudents]);
+
+  const arrearBatchOptions = useMemo(() => {
+    const values = new Set(['All Batches']);
+    [...arrearStudents, ...arrearOptionStudents].forEach(student => {
+      const batch = String(student.batch || '').trim();
+      if (batch) values.add(batch);
+    });
+    return Array.from(values);
+  }, [arrearStudents, arrearOptionStudents]);
+
+  const arrearSubjectOptions = useMemo(() => {
+    const subjectMap = new Map();
+    [...arrearStudents, ...arrearOptionStudents].forEach(student => {
+      getStudentArrearList(student).forEach(item => {
+        const code = String(item.code || '').trim();
+        if (!code) return;
+        const name = String(item.name || '').trim();
+        const key = code.toUpperCase();
+        if (!subjectMap.has(key)) {
+          subjectMap.set(key, { value: key, label: name ? `${code} - ${name}` : code });
+        }
+      });
+    });
+
+    (catalogSubjects || []).forEach(subject => {
+      const code = String(subject.code || '').trim();
+      if (!code) return;
+      const name = String(subject.name || '').trim();
+      const key = code.toUpperCase();
+      if (!subjectMap.has(key)) {
+        subjectMap.set(key, { value: key, label: name ? `${code} - ${name}` : code });
+      }
+    });
+
+    const items = Array.from(subjectMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+    return [{ value: 'All Subjects', label: 'All Subjects' }, ...items];
+  }, [arrearStudents, arrearOptionStudents, catalogSubjects]);
+
+  const filteredArrearStudents = useMemo(() => {
+    const query = arrearSearch.trim().toLowerCase();
+    return arrearStudents.filter(student => {
+      const deptOk = !arrearDept || !student.department || student.department.toLowerCase() === arrearDept.toLowerCase();
+      const yearOk = arrearYear === 'All Years' || String(student.year || '').trim().toLowerCase() === arrearYear.toLowerCase();
+      const semesterText = String(student.semester || student.sem || '').trim();
+      const semOk = arrearSemester === 'All Semesters' || String(arrearSemester).replace(/\D/g, '') === String(semesterText).replace(/\D/g, '');
+      const batchOk = arrearBatch === 'All Batches' || String(student.batch || '').trim() === arrearBatch;
+      const subjectList = getStudentArrearList(student);
+      const subjectOk = arrearSubject === 'All Subjects' || subjectList.some(item => {
+        const code = String(item.code || '').trim().toUpperCase();
+        const name = String(item.name || '').trim().toLowerCase();
+        const selected = String(arrearSubject || '').trim().toUpperCase();
+        return code === selected || name.includes(selected.toLowerCase());
+      });
+      const matchesSearch = !query || [
+        student.name,
+        student.regNo,
+        student.rollNo,
+        student.department,
+        student.batch,
+        student.year,
+        ...subjectList.map(item => `${item.code} ${item.name}`)
+      ].join(' ').toLowerCase().includes(query);
+
+      return deptOk && yearOk && semOk && batchOk && subjectOk && matchesSearch;
+    });
+  }, [arrearStudents, arrearDept, arrearYear, arrearSemester, arrearBatch, arrearSubject, arrearSearch]);
+
+  useEffect(() => {
+    if (!filteredArrearStudents.length) {
+      setSelectedArrearStudent(null);
+      return;
+    }
+
+    if (!selectedArrearStudent || !filteredArrearStudents.some(student => (student._id || student.regNo || student.rollNo) === (selectedArrearStudent._id || selectedArrearStudent.regNo || selectedArrearStudent.rollNo))) {
+      setSelectedArrearStudent(filteredArrearStudents[0]);
+    }
+  }, [filteredArrearStudents, selectedArrearStudent]);
   const [newSubCode, setNewSubCode] = useState('');
   const [customSubCode, setCustomSubCode] = useState('');
   const [newSubName, setNewSubName] = useState('');
@@ -3552,61 +3679,178 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             </div>
 
             {/* Filters */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search by name, reg no, subject..."
-                  value={arrearSearch}
-                  onChange={e => setArrearSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-xs font-medium border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                />
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+                <div className="relative xl:col-span-2">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, reg no, subject..."
+                    value={arrearSearch}
+                    onChange={e => setArrearSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs font-medium border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                  />
+                </div>
+
+                <select
+                  value={arrearDept}
+                  onChange={e => setArrearDept(e.target.value)}
+                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
+                >
+                  <option value="">All Departments</option>
+                  {availableDepts.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+
+                <select
+                  value={arrearYear}
+                  onChange={e => setArrearYear(e.target.value)}
+                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
+                >
+                  {arrearYearOptions.map(value => (
+                    <option key={value} value={value}>{value === 'All Years' ? 'All Years' : value}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={arrearSemester}
+                  onChange={e => setArrearSemester(e.target.value)}
+                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
+                >
+                  <option value="All Semesters">All Semesters</option>
+                  {ALL_SEMESTERS.map(sem => <option key={sem} value={String(sem)}>{sem}</option>)}
+                </select>
+
+                <select
+                  value={arrearBatch}
+                  onChange={e => setArrearBatch(e.target.value)}
+                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
+                >
+                  {arrearBatchOptions.map(value => (
+                    <option key={value} value={value}>{value === 'All Batches' ? 'All Batches' : value}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={arrearSubject}
+                  onChange={e => setArrearSubject(e.target.value)}
+                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
+                >
+                  {arrearSubjectOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </div>
-              <select
-                value={arrearDept}
-                onChange={e => setArrearDept(e.target.value)}
-                className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none min-w-[160px]"
-              >
-                <option value="">All Departments</option>
-                {availableDepts.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-              <button
-                onClick={async () => {
-                  setLoadingArrear(true);
-                  try {
-                    const url = arrearDept
-                      ? `${API_BASE}/students?department=${encodeURIComponent(arrearDept)}`
-                      : `${API_BASE}/students`;
-                    const res = await fetch(url);
-                    const data = await res.json();
-                    const list = data.success ? (data.students || data.data || []) : [];
-                    const withArrears = list.filter(s =>
-                      (s.arrearsYetToBeCleared && s.arrearsYetToBeCleared !== '0' && s.arrearsYetToBeCleared !== '') ||
-                      (s.totalArrearsTillLastSem && s.totalArrearsTillLastSem !== '0' && s.totalArrearsTillLastSem !== '')
-                    );
-                    setArrearStudents(withArrears);
-                  } catch (e) {
-                    alert('Failed to fetch students: ' + e.message);
-                  } finally {
-                    setLoadingArrear(false);
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-500/20 transition-all"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingArrear ? 'animate-spin' : ''}`} />
-                Load Arrear List
-              </button>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  {filteredArrearStudents.length} student(s) matched
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setArrearDept('');
+                      setArrearYear('All Years');
+                      setArrearSemester('All Semesters');
+                      setArrearBatch('All Batches');
+                      setArrearSubject('All Subjects');
+                      setArrearSearch('');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 hover:bg-slate-50"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Reset
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setLoadingArrear(true);
+                      try {
+                        const url = arrearDept
+                          ? `${API_BASE}/students?department=${encodeURIComponent(arrearDept)}`
+                          : `${API_BASE}/students`;
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        const list = data.success ? (data.students || data.data || []) : [];
+                        setArrearOptionStudents(list);
+                        const withArrears = list.filter(s =>
+                          (Number(s.arrearsYetToBeCleared || 0) > 0) ||
+                          (Number(s.totalArrearsTillLastSem || 0) > 0) ||
+                          (Number(s.totalArrears || 0) > 0)
+                        );
+                        setArrearStudents(withArrears);
+                        setSelectedArrearStudent(null);
+                      } catch (e) {
+                        alert('Failed to fetch students: ' + e.message);
+                      } finally {
+                        setLoadingArrear(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-500/20 transition-all"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingArrear ? 'animate-spin' : ''}`} />
+                    Load Arrear List
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {selectedArrearStudent && (
+              <div className="bg-gradient-to-r from-rose-50 via-white to-amber-50 border border-rose-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-rose-600">Selected Student</p>
+                    <h3 className="text-lg font-black text-slate-900">{selectedArrearStudent.name}</h3>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Reg No: <span className="font-bold text-slate-700">{selectedArrearStudent.regNo || selectedArrearStudent.rollNo || '—'}</span>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">Dept: {selectedArrearStudent.department || '—'}</span>
+                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">Year: {selectedArrearStudent.year || '—'}</span>
+                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">Sem: {selectedArrearStudent.semester || selectedArrearStudent.sem || '—'}</span>
+                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">Batch: {selectedArrearStudent.batch || '—'}</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid md:grid-cols-4 gap-3">
+                  <div className="rounded-xl bg-white border border-slate-200 p-3">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Arrears</div>
+                    <div className="mt-1 text-xl font-black text-rose-600">{Number(selectedArrearStudent.totalArrearsTillLastSem || selectedArrearStudent.totalArrears || 0)}</div>
+                  </div>
+                  <div className="rounded-xl bg-white border border-slate-200 p-3">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Cleared</div>
+                    <div className="mt-1 text-xl font-black text-emerald-600">{Number(selectedArrearStudent.arrearsClearedThisSem || 0)}</div>
+                  </div>
+                  <div className="rounded-xl bg-white border border-slate-200 p-3">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Pending</div>
+                    <div className="mt-1 text-xl font-black text-amber-600">{Number(selectedArrearStudent.arrearsYetToBeCleared || Math.max(0, (Number(selectedArrearStudent.totalArrearsTillLastSem || selectedArrearStudent.totalArrears || 0) - Number(selectedArrearStudent.arrearsClearedThisSem || 0))))}</div>
+                  </div>
+                  <div className="rounded-xl bg-white border border-slate-200 p-3">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Arrear Subjects</div>
+                    <div className="mt-1 text-xl font-black text-indigo-600">{getStudentArrearList(selectedArrearStudent).length}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Subject Breakdown</p>
+                  <div className="flex flex-wrap gap-2">
+                    {getStudentArrearList(selectedArrearStudent).length > 0 ? getStudentArrearList(selectedArrearStudent).map((subject, idx) => (
+                      <div key={`${subject.code}-${idx}`} className="rounded-xl bg-white border border-rose-200 px-3 py-2 min-w-[170px]">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-rose-600">{subject.code || `AR${idx + 1}`}</div>
+                        <div className="mt-1 text-xs font-bold text-slate-800">{subject.name || 'Arrear Subject'}</div>
+                      </div>
+                    )) : (
+                      <div className="text-xs font-semibold text-slate-500">No subject details available for this student.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Arrear Table */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <p className="text-xs font-black text-slate-700 uppercase tracking-wider">Arrear Students — All Subjects</p>
-                <span className="text-[11px] font-semibold text-slate-400">{arrearStudents.filter(s => {
-                  const q = arrearSearch.toLowerCase();
-                  return !q || s.name?.toLowerCase().includes(q) || s.regNo?.toLowerCase().includes(q);
-                }).length} records</span>
+                <span className="text-[11px] font-semibold text-slate-400">{filteredArrearStudents.length} records</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
@@ -3616,18 +3860,15 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                       <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Reg No</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Student Name</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Department</th>
+                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">Year</th>
                       <th className="px-3 py-2.5 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">Sem</th>
                       <th className="px-3 py-2.5 text-center text-[10px] font-black text-rose-600 uppercase tracking-wider">Total Arrears</th>
-                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">Cleared</th>
                       <th className="px-3 py-2.5 text-center text-[10px] font-black text-amber-600 uppercase tracking-wider">Yet to Clear</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Arrear Subjects</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {arrearStudents.filter(s => {
-                      const q = arrearSearch.toLowerCase();
-                      return !q || s.name?.toLowerCase().includes(q) || s.regNo?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q);
-                    }).length === 0 ? (
+                    {filteredArrearStudents.length === 0 ? (
                       <tr>
                         <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
                           {loadingArrear ? (
@@ -3639,33 +3880,32 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                             <>
                               <Award className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                               <p className="font-semibold text-slate-500">No arrear students found</p>
-                              <p className="text-[11px] mt-1">Click "Load Arrear List" to fetch students with pending arrears</p>
+                              <p className="text-[11px] mt-1">Try changing the filters or click "Load Arrear List" again.</p>
                             </>
                           )}
                         </td>
                       </tr>
                     ) : (
-                      arrearStudents.filter(s => {
-                        const q = arrearSearch.toLowerCase();
-                        return !q || s.name?.toLowerCase().includes(q) || s.regNo?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q);
-                      }).map((s, idx) => {
-                        const totalArrears = Number(s.totalArrearsTillLastSem) || 0;
-                        const cleared = Number(s.arrearsClearedThisSem) || 0;
-                        const yetToClear = Number(s.arrearsYetToBeCleared) || (totalArrears - cleared);
-                        // Build subject list from arrearsYetToBeCleared count (placeholder since subjects stored separately)
-                        const subjectList = s.arrearSubjects || [];
+                      filteredArrearStudents.map((s, idx) => {
+                        const totalArrears = Number(s.totalArrearsTillLastSem || s.totalArrears || 0);
+                        const cleared = Number(s.arrearsClearedThisSem || 0);
+                        const yetToClear = Number(s.arrearsYetToBeCleared || Math.max(0, totalArrears - cleared));
+                        const subjectList = getStudentArrearList(s);
+                        const isSelected = (selectedArrearStudent && (selectedArrearStudent._id || selectedArrearStudent.regNo || selectedArrearStudent.rollNo) === (s._id || s.regNo || s.rollNo));
                         return (
-                          <tr key={s._id || idx} className="border-b border-slate-100 hover:bg-rose-50/30 transition-colors">
+                          <tr
+                            key={s._id || idx}
+                            onClick={() => setSelectedArrearStudent(s)}
+                            className={`border-b border-slate-100 transition-colors cursor-pointer ${isSelected ? 'bg-rose-50/70' : 'hover:bg-rose-50/30'}`}
+                          >
                             <td className="px-3 py-2.5 font-bold text-slate-500">{idx + 1}</td>
                             <td className="px-3 py-2.5 font-mono font-bold text-blue-700">{s.regNo || s.rollNo || '—'}</td>
                             <td className="px-3 py-2.5 font-bold text-slate-900">{s.name}</td>
                             <td className="px-3 py-2.5 text-slate-600 font-medium">{s.department || '—'}</td>
-                            <td className="px-3 py-2.5 text-center text-slate-600 font-semibold">{s.semester || s.currentSemester || '—'}</td>
+                            <td className="px-3 py-2.5 text-center text-slate-600 font-semibold">{s.year || '—'}</td>
+                            <td className="px-3 py-2.5 text-center text-slate-600 font-semibold">{s.semester || s.sem || '—'}</td>
                             <td className="px-3 py-2.5 text-center">
                               <span className="px-2 py-0.5 bg-rose-100 text-rose-700 font-black rounded-full text-[10px]">{totalArrears}</span>
-                            </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-black rounded-full text-[10px]">{cleared}</span>
                             </td>
                             <td className="px-3 py-2.5 text-center">
                               <span className={`px-2 py-0.5 font-black rounded-full text-[10px] ${yetToClear > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{yetToClear}</span>
@@ -3673,17 +3913,16 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                             <td className="px-3 py-2.5">
                               {subjectList.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
-                                  {subjectList.map((sub, si) => (
-                                    <span key={si} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-semibold">
-                                      <span className="font-mono font-black">{sub.code}</span>
+                                  {subjectList.slice(0, 4).map((sub, si) => (
+                                    <span key={`${sub.code || 'x'}-${si}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-semibold">
+                                      <span className="font-mono font-black">{sub.code || `AR${si + 1}`}</span>
                                       {sub.name && <span className="text-rose-500">— {sub.name}</span>}
                                     </span>
                                   ))}
+                                  {subjectList.length > 4 && <span className="text-[10px] font-bold text-slate-500">+{subjectList.length - 4} more</span>}
                                 </div>
                               ) : (
-                                <span className="text-slate-400 text-[10px] italic">
-                                  {yetToClear > 0 ? `${yetToClear} paper${yetToClear > 1 ? 's' : ''} pending (details in student profile)` : 'No pending arrears'}
-                                </span>
+                                <span className="text-slate-400 text-[10px] italic">No subject details</span>
                               )}
                             </td>
                           </tr>
