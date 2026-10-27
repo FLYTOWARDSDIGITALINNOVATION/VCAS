@@ -52,7 +52,9 @@ const INITIAL_EXAMS = [];
 const INITIAL_STUDENT_MARKS = [];
 
 export default function ExaminationManagement({ user }) {
-  const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
+  const currentUser = user || JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin || currentUser?.role === 'SuperAdmin' || currentUser?.role === 'superadmin';
+  const isAdminUser = currentUser?.role === 'Admin' || currentUser?.role === 'admin';
   // Tabs: 'schedules', 'hall-tickets', 'internal-marks', 'results', 'seating'
   const [activeTab, setActiveTab] = useState('schedules');
 
@@ -2998,7 +3000,15 @@ export default function ExaminationManagement({ user }) {
               <button
                 onClick={() => {
                   setIsMarksLocked(!isMarksLocked);
-                  showToast(isMarksLocked ? 'Marks unlocked for editing.' : 'Marks successfully locked and frozen for CoE evaluation!');
+                  showToast(
+                    isMarksLocked
+                      ? 'Marks unlocked for editing.'
+                      : isSuperAdmin
+                        ? 'Marks approved and finalized by MD.'
+                        : isAdminUser
+                          ? 'Marks submitted to MD for approval.'
+                          : 'Marks successfully locked and frozen for CoE evaluation!'
+                  );
                 }}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-2 font-bold text-xs rounded-xl transition-all border cursor-pointer ${isMarksLocked
                     ? 'bg-amber-50 text-amber-700 border-amber-200'
@@ -3006,7 +3016,15 @@ export default function ExaminationManagement({ user }) {
                   }`}
               >
                 {isMarksLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                <span>{isMarksLocked ? 'Unlock Marks' : 'Lock & Submit to CoE'}</span>
+                <span>
+                  {isMarksLocked
+                    ? 'Unlock Marks'
+                    : isSuperAdmin
+                      ? 'Approve'
+                      : isAdminUser
+                        ? 'Submit to MD'
+                        : 'Lock & Submit to CoE'}
+                </span>
               </button>
             </div>
           </div>

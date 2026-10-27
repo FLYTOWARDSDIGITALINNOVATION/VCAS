@@ -111,24 +111,6 @@ export default function CourseSubjectManagement({ user }) {
         fetch(`${API_BASE}/classes`).catch(() => null)
       ]);
 
-      let realDepts = [];
-      if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
-        const dData = await resDepts.value.json();
-        if (dData.success && Array.isArray(dData.data)) {
-          realDepts = dData.data;
-          setDepartmentsList(dData.data);
-        }
-      }
-
-      if (resCourses.status === 'fulfilled' && resCourses.value.ok) {
-        const cData = await resCourses.value.json();
-        if (cData.success && Array.isArray(cData.data)) {
-          const list = cData.data.filter(c => Boolean(c.code));
-          setProgramsList(list);
-          try { localStorage.setItem('vcas_programs_cache', JSON.stringify(list)); } catch (_) {}
-        }
-      }
-
       let clean = [];
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const sData = await resSubjects.value.json();
@@ -186,6 +168,52 @@ export default function CourseSubjectManagement({ user }) {
 
       setSubjectsList(clean);
       try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean)); } catch (_) {}
+
+      let realDepts = [];
+      if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
+        const dData = await resDepts.value.json();
+        if (dData.success && Array.isArray(dData.data)) {
+          realDepts = dData.data;
+          const deptRows = realDepts.map((dept) => {
+            const deptName = (dept?.name || '').trim();
+            const deptCode = (dept?.code || '').trim().toUpperCase();
+            const deptMatches = clean.filter((subj) => {
+              const subjectDepartment = (subj?.department || '').trim();
+              return subjectDepartment && (
+                subjectDepartment.toLowerCase() === deptName.toLowerCase() ||
+                subjectDepartment.toUpperCase() === deptCode ||
+                (deptName && subjectDepartment.toLowerCase().includes(deptName.toLowerCase()))
+              );
+            });
+
+            const existingEntries = Array.isArray(dept?.coursesList) ? dept.coursesList : [];
+            const mergedEntries = [...existingEntries];
+            deptMatches.forEach((subj) => {
+              const code = (subj?.code || '').trim().toUpperCase();
+              if (!code) return;
+              if (!mergedEntries.some(item => (item?.code || '').trim().toUpperCase() === code)) {
+                mergedEntries.push({
+                  code,
+                  name: subj.name || code,
+                  title: subj.name || code,
+                  handledStaff: subj.faculty || '',
+                  credits: Number(subj.credits) || 3,
+                  year: Number(subj.year) || 1,
+                  sem: subj.sem || 'Sem 1'
+                });
+              }
+            });
+
+            return {
+              ...dept,
+              coursesList: mergedEntries,
+              courseCount: mergedEntries.length
+            };
+          });
+          setDepartmentsList(deptRows);
+          realDepts = deptRows;
+        }
+      }
 
       if (resStudents.status === 'fulfilled' && resStudents.value.ok) {
         const stuData = await resStudents.value.json();
@@ -320,6 +348,27 @@ export default function CourseSubjectManagement({ user }) {
     const unique = Array.from(new Set(list));
     return unique.length > 0 ? unique : getKnownDepartments();
   }, [departmentsList]);
+
+  const getUniqueSubjectCode = (departmentName, yearValue, existingCodes = []) => {
+    const deptObj = departmentsList.find(d => d.name === departmentName || d.code === departmentName);
+    const prefix = (deptObj?.code || (String(departmentName || '').split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3) || 'CS')).trim().toUpperCase();
+    const year = Number(yearValue) || 1;
+    const base = `${prefix}${year}01`;
+    const valid = new Set((existingCodes || []).map(code => String(code || '').trim().toUpperCase()).filter(Boolean));
+    if (!valid.has(base)) return base;
+
+    let counter = 2;
+    let candidate = `${prefix}${year}${String(counter).padStart(2, '0')}`;
+    while (valid.has(candidate)) {
+      counter += 1;
+      candidate = `${prefix}${year}${String(counter).padStart(2, '0')}`;
+    }
+    return candidate;
+  };
+
+  const getSubjectListKey = (subj, index) => (
+    subj?._id || subj?.id || subj?.code || `${subj?.department || 'dept'}-${subj?.name || 'subject'}-${index}`
+  );
 
   // Form State for Subject Add / Edit
   const [subjectForm, setSubjectForm] = useState({
@@ -495,14 +544,14 @@ export default function CourseSubjectManagement({ user }) {
   const handleOpenAddSubject = (defaultSem) => {
     const initialDept = selectedDept !== 'All Departments' ? selectedDept : (realDepartmentNames[0] || 'Computer Science');
     const deptObj = departmentsList.find(d => d.name === initialDept);
-    const prefix = deptObj?.code || (initialDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'CS';
     const initialYear = selectedYear !== 'ALL' ? Number(selectedYear) : 1;
     const semValue = (typeof defaultSem === 'string' && defaultSem.trim())
       ? defaultSem.trim()
       : (selectedSem !== 'All Semesters' ? selectedSem : `Sem ${initialYear * 2 - 1}`);
+    const nextCode = getUniqueSubjectCode(initialDept, initialYear, subjectsList.map(s => s.code));
 
     setSubjectForm({
-      code: `${prefix}${initialYear}01`,
+      code: nextCode,
       name: '',
       department: initialDept,
       year: initialYear,
@@ -525,12 +574,8 @@ export default function CourseSubjectManagement({ user }) {
 
   const handleSubjectDeptChange = (newDept) => {
     const deptObj = departmentsList.find(d => d.name === newDept);
-    const prefix = deptObj?.code || (newDept.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3)) || 'CS';
-    let newCode = subjectForm.code;
-    if (!editingSubject) {
-      const year = subjectForm.year || 1;
-      newCode = `${prefix}${year}01`;
-    }
+    const currentYear = subjectForm.year || 1;
+    const newCode = editingSubject ? subjectForm.code : getUniqueSubjectCode(newDept, currentYear, subjectsList.map(s => s.code));
 
     setSubjectForm(prev => ({
       ...prev,
@@ -549,7 +594,7 @@ export default function CourseSubjectManagement({ user }) {
       ...prev,
       year: yearNum,
       sem: `Sem ${yearNum * 2 - 1}`,
-      code: editingSubject ? prev.code : `${prefix}${yearNum}01`
+      code: editingSubject ? prev.code : getUniqueSubjectCode(prev.department || subjectForm.department, yearNum, subjectsList.map(s => s.code))
     }));
   };
 
@@ -580,13 +625,20 @@ export default function CourseSubjectManagement({ user }) {
     e.preventDefault();
     const errors = {};
     if (!subjectForm.name.trim()) errors.name = 'Subject name is required';
-    if (!subjectForm.code.trim()) {
-      subjectForm.code = `SUB-${Date.now().toString(36).toUpperCase()}`;
-    }
+    const sanitizedCode = String(subjectForm.code || '').trim();
+    const nextCode = sanitizedCode || getUniqueSubjectCode(subjectForm.department, subjectForm.year, subjectsList.map(s => s.code));
+    const normalizedForm = {
+      ...subjectForm,
+      code: nextCode,
+      department: (subjectForm.department || '').trim() || 'Computer Science'
+    };
+    if (!normalizedForm.name.trim()) errors.name = 'Subject name is required';
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
+
+    setSubjectForm(normalizedForm);
 
     if (editingSubject) {
       // Update
@@ -597,8 +649,8 @@ export default function CourseSubjectManagement({ user }) {
 
       const updated = {
         ...editingSubject,
-        ...subjectForm,
-        code: subjectForm.code.trim().toUpperCase(),
+        ...normalizedForm,
+        code: normalizedForm.code.trim().toUpperCase(),
         theoryHours: tHours,
         labHours: lHours,
         hours: computedHours,
@@ -639,8 +691,8 @@ export default function CourseSubjectManagement({ user }) {
 
       const newSubj = {
         id: Date.now(),
-        ...subjectForm,
-        code: subjectForm.code.trim().toUpperCase(),
+        ...normalizedForm,
+        code: normalizedForm.code.trim().toUpperCase(),
         sem: semStr,
         theoryHours: tHours,
         labHours: lHours,
@@ -664,8 +716,12 @@ export default function CourseSubjectManagement({ user }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSubj)
-      }).then(r => r.json()).then(async (data) => {
-        if (data.success && data.data) {
+      }).then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success) {
+          throw new Error(data.message || `Request failed with status ${r.status}`);
+        }
+        if (data.data) {
           setSubjectsList(prev => {
             const next = prev.map(s => s.code === newSubj.code ? data.data : s);
             try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(next)); } catch (_) {}
@@ -675,6 +731,7 @@ export default function CourseSubjectManagement({ user }) {
         await fetchCoursesAndSubjects();
       }).catch(async (err) => {
         console.error('Error creating subject in backend:', err);
+        showToast(err.message || 'Failed to create subject. Please check the subject code and department.', true);
         await fetchCoursesAndSubjects();
       });
     }
@@ -1220,9 +1277,9 @@ export default function CourseSubjectManagement({ user }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                   {filteredSubjects.length > 0 ? (
-                    filteredSubjects.map((subj) => (
+                    filteredSubjects.map((subj, index) => (
                       <tr 
-                        key={subj.id}
+                        key={getSubjectListKey(subj, index)}
                         onClick={() => setViewingSubject(subj)}
                         className="hover:bg-blue-50/40 transition-colors group cursor-pointer"
                       >
@@ -1407,9 +1464,9 @@ export default function CourseSubjectManagement({ user }) {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredSubjects.map(subj => (
+              {filteredSubjects.map((subj, index) => (
                 <div 
-                  key={subj.id} 
+                  key={getSubjectListKey(subj, index)} 
                   onClick={() => setViewingSubject(subj)}
                   className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4 cursor-pointer group"
                 >

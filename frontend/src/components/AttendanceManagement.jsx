@@ -79,6 +79,13 @@ export default function AttendanceManagement({ user }) {
 
   // Filter for Date-specific Attendance: 'ALL', 'Present', 'Absent', 'Late', 'On Duty'
   const [dateStatusFilter, setDateStatusFilter] = useState('ALL');
+  const effectiveStatusFilter = isFinanceOrOffice ? 'Absent' : dateStatusFilter;
+
+  React.useEffect(() => {
+    if (isFinanceOrOffice) {
+      setDateStatusFilter('Absent');
+    }
+  }, [isFinanceOrOffice]);
 
   // Students & Staff Data State - Live Backend Only
   const [students, setStudents] = useState([]);
@@ -493,21 +500,21 @@ export default function AttendanceManagement({ user }) {
       const matchesDept = filterDept === 'All Departments' || s.department === filterDept;
 
       let matchesStatus = true;
-      if (dateStatusFilter === 'Present') {
+      if (effectiveStatusFilter === 'Present') {
         matchesStatus = s.dayStatus === 'Present';
-      } else if (dateStatusFilter === 'Absent') {
+      } else if (effectiveStatusFilter === 'Absent') {
         matchesStatus = s.dayStatus === 'Absent';
-      } else if (dateStatusFilter === 'Late') {
+      } else if (effectiveStatusFilter === 'Late') {
         matchesStatus = s.dayStatus === 'Late';
-      } else if (dateStatusFilter === 'On Duty') {
+      } else if (effectiveStatusFilter === 'On Duty') {
         matchesStatus = s.dayStatus === 'On Duty';
-      } else if (dateStatusFilter === 'Not Marked') {
+      } else if (effectiveStatusFilter === 'Not Marked') {
         matchesStatus = s.dayStatus === 'Not Marked';
       }
 
       return matchesSearch && matchesDept && matchesStatus;
     });
-  }, [students, selectedDate, searchQuery, filterDept, dateStatusFilter, dbSessions]);
+  }, [students, selectedDate, searchQuery, filterDept, effectiveStatusFilter, dbSessions]);
 
   // Daily Date Tally Summary
   const dateTally = useMemo(() => {
@@ -1046,7 +1053,7 @@ export default function AttendanceManagement({ user }) {
                 {formatReadableDate(selectedDate)}
               </h2>
               <p className="text-xs text-slate-300 mt-0.5">
-                Viewing {dateStatusFilter === 'ALL' ? 'all student records' : `${dateStatusFilter} students`} for this date.
+                Viewing {isFinanceOrOffice ? 'absent students only' : (effectiveStatusFilter === 'ALL' ? 'all student records' : `${effectiveStatusFilter} students`)} for this date.
               </p>
             </div>
 

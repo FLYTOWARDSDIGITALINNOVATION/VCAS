@@ -209,6 +209,28 @@ export default function StudentProfileView({
     }
   }, [activeTab, student]);
 
+  const formatExamHallList = (hallValue) => {
+    const rawList = Array.isArray(hallValue)
+      ? hallValue
+      : typeof hallValue === 'string'
+        ? hallValue.split(/[;,|]/)
+        : [];
+
+    const uniqueHalls = Array.from(new Set(
+      rawList
+        .map(item => String(item || '').trim())
+        .filter(Boolean)
+        .map(item => item.replace(/^(Hall\s+|hall\s+)/i, '').trim())
+        .filter(Boolean)
+    ));
+
+    if (!uniqueHalls.length) return 'Hall allocation pending';
+
+    const displayHalls = uniqueHalls.slice(0, 3);
+    const remaining = uniqueHalls.length - displayHalls.length;
+    return `${displayHalls.join(', ')}${remaining > 0 ? ` + ${remaining} more` : ''}`;
+  };
+
   // 2. Fetch Real Examination / Marks Records for this Student
   useEffect(() => {
     if (activeTab === 'Examination') {
@@ -227,6 +249,12 @@ export default function StudentProfileView({
               : [];
         const matchedMarks = [];
         sheets.forEach(sheet => {
+          const approvalStatus = (sheet?.approvalStatus || '').toString().trim();
+          const currentApprovalStage = (sheet?.currentApprovalStage || '').toString().trim();
+          const isApproved = approvalStatus.toLowerCase() === 'approved' || currentApprovalStage.toLowerCase() === 'completed';
+
+          if (!isApproved) return;
+
           const list = Array.isArray(sheet.students) ? sheet.students : [];
           const studentEntry = list.find(s => isMatchingStudent(s.rollNo, s.name));
           if (studentEntry) {
@@ -247,9 +275,23 @@ export default function StudentProfileView({
         const allExams = examsData.exams || (Array.isArray(examsData) ? examsData : (examsData.data || []));
         const filteredExams = allExams.filter(e => {
           if (!e.department || e.department === 'All Departments') return true;
-          return e.department.toLowerCase() === (student?.department || '').toLowerCase();
+          return (e.department || '').toLowerCase() === (student?.department || '').toLowerCase();
+        }).map(ex => ({
+          ...ex,
+          hall: formatExamHallList(ex.hall || ex.halls || ex.venue || ex.room || ex.location),
+          _dedupeKey: `${ex.date || ''}|${ex.time || ''}|${ex.title || ex.examName || ''}|${ex.subjectName || ''}|${ex.subjectCode || ''}`
+        }));
+
+        const uniqueExams = [];
+        const seen = new Set();
+        filteredExams.forEach(ex => {
+          if (!seen.has(ex._dedupeKey)) {
+            seen.add(ex._dedupeKey);
+            uniqueExams.push(ex);
+          }
         });
-        setScheduledExams(filteredExams);
+
+        setScheduledExams(uniqueExams);
       }).finally(() => setExamsLoading(false));
     }
   }, [activeTab, student]);
@@ -1157,16 +1199,18 @@ export default function StudentProfileView({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {scheduledExams.map((ex, idx) => (
-                  <div key={idx} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 text-xs">{ex.title || ex.examName}</span>
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 font-bold rounded text-[10px]">{ex.subjectCode}</span>
+                  <div key={`${ex.date}-${ex.time}-${ex.title || ex.examName}-${idx}`} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-900 text-xs">{ex.title || ex.examName || 'Semester Examination'}</span>
+                      {ex.subjectCode && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 font-bold rounded text-[10px]">{ex.subjectCode}</span>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-600">{ex.subjectName}</p>
-                    <div className="flex items-center gap-3 text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
-                      <span>📅 {ex.date}</span>
-                      <span>⏰ {ex.time}</span>
-                      {ex.hall && <span>📍 {ex.hall}</span>}
+                    <p className="text-xs text-slate-600">{ex.subjectName || ex.name || 'Examination'}</p>
+                    <div className="flex items-center gap-3 text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 flex-wrap">
+                      <span>📅 {ex.date || 'Date not assigned'}</span>
+                      <span>⏰ {ex.time || 'Time not assigned'}</span>
+                      <span>📍 {ex.hall || 'Hall allocation pending'}</span>
                     </div>
                   </div>
                 ))}

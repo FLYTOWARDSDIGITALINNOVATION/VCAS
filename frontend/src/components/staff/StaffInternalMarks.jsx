@@ -176,16 +176,27 @@ export default function StaffInternalMarks({ staffUser }) {
   const [downloadFormat, setDownloadFormat] = useState('excel'); // 'excel' | 'csv'
   const [isExporting, setIsExporting] = useState(false);
 
-  const isHod = staffUser?.designation?.toUpperCase()?.includes('HOD') ||
-    staffUser?.role?.toUpperCase()?.includes('HOD') ||
-    staffUser?.role?.toUpperCase()?.includes('ADMIN') ||
+  const normalizeRole = (value) => String(value || '').toUpperCase().replace(/[^A-Z]/g, '');
+
+  const roleKey = normalizeRole(staffUser?.role);
+  const designationKey = normalizeRole(staffUser?.designation);
+
+  const isAdminUser = roleKey.includes('ADMIN') && !roleKey.includes('SUPERADMIN');
+  const isSuperAdminUser = roleKey.includes('SUPERADMIN') ||
+    roleKey.includes('SUPERADMINISTRATOR') ||
+    roleKey.includes('MANAGINGDIRECTOR') ||
+    roleKey.includes('MD') ||
+    designationKey.includes('MANAGINGDIRECTOR') ||
+    designationKey.includes('MD');
+
+  const isHod = roleKey.includes('HOD') ||
+    designationKey.includes('HOD') ||
+    roleKey.includes('HEADOFDEPARTMENT') ||
+    designationKey.includes('HEADOFDEPARTMENT') ||
     staffUser?.isHod === true;
-  const isPrincipal = staffUser?.role?.toUpperCase()?.includes('PRINCIPAL') ||
-    staffUser?.designation?.toUpperCase()?.includes('PRINCIPAL') ||
-    staffUser?.role?.toUpperCase()?.includes('ADMIN');
-  const isMD = staffUser?.role?.toUpperCase()?.includes('SUPERADMIN') ||
-    staffUser?.role?.toUpperCase()?.includes('MD') ||
-    staffUser?.designation?.toUpperCase()?.includes('MD');
+  const isPrincipal = roleKey.includes('PRINCIPAL') ||
+    designationKey.includes('PRINCIPAL');
+  const isMD = isSuperAdminUser;
 
   // Configurable Max & Pass Marks per component
   const [maxMarksConfig, setMaxMarksConfig] = useState({ ...DEFAULT_MAX_CONFIG });
@@ -472,6 +483,95 @@ export default function StaffInternalMarks({ staffUser }) {
     }
   }, [effectiveStaffId, toast, filterDept, filterYear]);
 
+  const fetchStaffSubjects = useCallback(async () => {
+    try {
+      const [staffClsData, allClassesData, subjectsData, asgtsData, marksData] = await Promise.all([
+        fetch(`${API}/classes/staff/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+        fetch(`${API}/classes`).then(r => r.json()).catch(() => null),
+        fetch(`${API}/subjects`).then(r => r.json()).catch(() => null),
+        fetch(`${API}/assignments/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+        fetch(`${API}/internal-marks/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+      ]);
+
+      const subs = [];
+      const seen = new Set();
+      const allSubjects = subjectsData?.data || (Array.isArray(subjectsData) ? subjectsData : []);
+      const officialSubjectCodes = new Set(allSubjects.map(s => (s.code || '').toUpperCase().trim()));
+      const legacyExclusions = new Set(['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004']);
+      const roleKey = String(staffUser?.role || '').toUpperCase();
+      const designationKey = String(staffUser?.designation || '').toUpperCase();
+      const isHodUser = staffUser?.isHod === true || roleKey.includes('HOD') || designationKey.includes('HOD');
+      const isPrincipalOrAdmin = roleKey.includes('PRINCIPAL') || roleKey.includes('ADMIN') || designationKey.includes('PRINCIPAL') || designationKey.includes('ADMIN');
+
+      const addSub = (code, name) => {
+        const c = (code || '').trim().toUpperCase();
+        if (!c || c.length < 3 || seen.has(c)) return;
+        if (legacyExclusions.has(c) && !officialSubjectCodes.has(c)) return;
+        seen.add(c);
+        subs.push({ code: c, name: (name && name !== 'Course' && name !== c) ? name : c });
+      };
+
+      allSubjects
+        .filter(s => {
+          if (!s.code) return false;
+          if (!effectiveStaffId && !staffUser?.name) return true;
+
+          const facultyName = (s.faculty || '').trim().toLowerCase();
+          const staffName = (staffUser?.name || '').trim().toLowerCase();
+          const staffIdLower = String(effectiveStaffId || '').trim().toLowerCase();
+          const subjectDept = (s.department || '').trim().toLowerCase();
+          const userDept = (staffUser?.department || '').trim().toLowerCase();
+
+          const matchFaculty = facultyName && (
+            facultyName === staffIdLower ||
+            facultyName === staffName ||
+            facultyName.includes(staffName)
+          );
+          const matchDept = subjectDept && userDept && subjectDept === userDept;
+
+          if (isHodUser || isPrincipalOrAdmin || !userDept) {
+            return true;
+          }
+
+          return matchFaculty || matchDept || !s.faculty;
+        })
+        .forEach(s => addSub(s.code, s.name));
+
+      const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
+      staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+
+      const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
+      allClasses
+        .filter(c => c.staffId && c.staffId.trim().toLowerCase() === String(effectiveStaffId || '').trim().toLowerCase())
+        .forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+
+      if (asgtsData?.success && Array.isArray(asgtsData.data)) {
+        asgtsData.data.forEach(a => addSub(a.subjectCode, a.subjectName || a.title));
+      }
+
+      if (marksData?.success && Array.isArray(marksData.data)) {
+        marksData.data.forEach(m => addSub(m.subjectCode, m.subjectName));
+      }
+
+      setStaffSubjects(subs);
+
+      if (subs.length > 0) {
+        const stored = localStorage.getItem('vcas_internal_subject');
+        const match = subs.find(s => s.code === stored || s.code === subjectCode);
+        const target = match ? match.code : subs[0].code;
+        const targetName = match ? match.name : subs[0].name;
+        setSubjectCode(target);
+        setSearchInput(target);
+        setSubjectName(targetName);
+        if (!subjectCode || subjectCode !== target) {
+          fetchMarksheet(target);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh staff subjects:', error);
+    }
+  }, [effectiveStaffId, staffUser, subjectCode, fetchMarksheet]);
+
   // Load available staff subjects, all students, and departments on mount
   useEffect(() => {
     // Clear legacy dummy CS2001 from storage
@@ -503,79 +603,8 @@ export default function StaffInternalMarks({ staffUser }) {
       })
       .catch(() => { });
 
-    Promise.all([
-      fetch(`${API}/classes/staff/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
-      fetch(`${API}/classes`).then(r => r.json()).catch(() => null),
-      fetch(`${API}/subjects`).then(r => r.json()).catch(() => null),
-      fetch(`${API}/assignments/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
-      fetch(`${API}/internal-marks/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
-    ]).then(([staffClsData, allClassesData, subjectsData, asgtsData, marksData]) => {
-      const subs = [];
-      const seen = new Set();
-      const allSubjects = subjectsData?.data || (Array.isArray(subjectsData) ? subjectsData : []);
-      const officialSubjectCodes = new Set(allSubjects.map(s => (s.code || '').toUpperCase().trim()));
-      const legacyExclusions = new Set(['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004']);
-
-      const addSub = (code, name) => {
-        const c = (code || "").trim().toUpperCase();
-        if (!c || c.length < 3 || seen.has(c)) return;
-        // If it's a legacy test subject and NOT an official admin subject, exclude it
-        if (legacyExclusions.has(c) && !officialSubjectCodes.has(c)) return;
-        seen.add(c);
-        subs.push({ code: c, name: (name && name !== 'Course' && name !== c) ? name : c });
-      };
-
-      // 1. Official subjects from admin (highest priority)
-      allSubjects
-        .filter(s => {
-          if (!s.code) return false;
-          if (!effectiveStaffId && !staffUser?.name) return true;
-          const matchFaculty = s.faculty && (
-            s.faculty.trim().toLowerCase() === effectiveStaffId.trim().toLowerCase() ||
-            s.faculty.trim().toLowerCase() === (staffUser?.name || '').trim().toLowerCase()
-          );
-          const matchDept = s.department && staffUser?.department && (
-            s.department.trim().toLowerCase() === staffUser.department.trim().toLowerCase()
-          );
-          return matchFaculty || matchDept || !s.faculty;
-        })
-        .forEach(s => addSub(s.code, s.name));
-
-      // 2. Staff's own classes
-      const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
-      staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
-
-      // 3. Filter all classes to only those assigned to this staff
-      const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
-      allClasses
-        .filter(c => c.staffId && c.staffId.trim().toLowerCase() === effectiveStaffId.trim().toLowerCase())
-        .forEach(c => addSub(c.code || c.classCode, c.name || c.className));
-
-      // 4. Staff's own assignments
-      if (asgtsData?.success && Array.isArray(asgtsData.data)) {
-        asgtsData.data.forEach(a => addSub(a.subjectCode, a.subjectName || a.title));
-      }
-
-      // 5. Staff's existing internal marks records (only if official or non-legacy)
-      if (marksData?.success && Array.isArray(marksData.data)) {
-        marksData.data.forEach(m => addSub(m.subjectCode, m.subjectName));
-      }
-
-      setStaffSubjects(subs);
-
-      // Auto-load first real subject if none or invalid currently selected
-      if (subs.length > 0) {
-        const stored = localStorage.getItem('vcas_internal_subject');
-        const match = subs.find(s => s.code === stored || s.code === subjectCode);
-        const target = match ? match.code : subs[0].code;
-        const targetName = match ? match.name : subs[0].name;
-        setSubjectCode(target);
-        setSearchInput(target);
-        setSubjectName(targetName);
-        fetchMarksheet(target);
-      }
-    });
-  }, [effectiveStaffId, fetchMarksheet]);
+    fetchStaffSubjects();
+  }, [fetchStaffSubjects]);
 
   // Always load initial/stored subject on mount
   useEffect(() => {
@@ -987,10 +1016,10 @@ export default function StaffInternalMarks({ staffUser }) {
       const json = await res.json();
       if (json.success) {
         setIsLocked(json.data?.isLocked ?? true);
-        toast("Marks register locked & submitted to CoE!");
+        toast("Marks register locked & submitted to MD!");
         setShowFreezeModal(false);
       } else {
-        toast(json.message || "Failed to submit marks to CoE.", true);
+        toast(json.message || "Failed to submit marks to MD.", true);
       }
     } catch {
       toast("Server error while freezing marks.", true);
@@ -1361,15 +1390,15 @@ export default function StaffInternalMarks({ staffUser }) {
                 <Download className="w-3.5 h-3.5 text-slate-500" /> Export CSV
               </button>
 
-              {(!isLocked || approvalStatus === 'Draft' || approvalStatus === 'Rejected') && (
+              {!isHod && !isPrincipal && !isMD && (!isLocked || approvalStatus === 'Draft' || approvalStatus === 'Rejected') && (
                 <button
                   onClick={handleSubmitForApproval}
                   disabled={isSubmittingApproval || students.length === 0}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
-                  title="Submit marksheet for official HOD approval"
+                  title="Submit marksheet to the HOD"
                 >
                   {isSubmittingApproval ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  <span>Submit for HOD Approval</span>
+                  <span>Submit to HOD</span>
                 </button>
               )}
 
@@ -1377,7 +1406,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 onClick={handleToggleLock}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${isLocked ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300" : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20"}`}
               >
-                {isLocked ? <><Unlock className="w-3.5 h-3.5" /> Unlock Marks</> : <><Lock className="w-3.5 h-3.5" /> Freeze & Submit to CoE</>}
+                {isLocked ? <><Unlock className="w-3.5 h-3.5" /> Unlock Marks</> : <><Lock className="w-3.5 h-3.5" /> Submit to MD</>}
               </button>
             </>
           )}
@@ -1542,13 +1571,13 @@ export default function StaffInternalMarks({ staffUser }) {
                     onClick={() => handleStageApprovalAction('HOD', 'Approved')}
                     className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
                   >
-                    ✓ HOD Recommend & Pass to Principal
+                    ✓ Submit to Principal
                   </button>
                 </>
               )}
 
-              {/* Principal Action Buttons */}
-              {isPrincipal && approvalStatus === 'Pending Principal' && (
+              {/* Principal / Admin Action Buttons */}
+              {(isPrincipal || isAdminUser) && approvalStatus === 'Pending Principal' && (
                 <>
                   <button
                     disabled={isProcessingStage}
@@ -1562,13 +1591,13 @@ export default function StaffInternalMarks({ staffUser }) {
                     onClick={() => handleStageApprovalAction('Principal', 'Approved')}
                     className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
                   >
-                    ✓ Principal Approve & Forward to MD
+                    ✓ Submit to MD
                   </button>
                 </>
               )}
 
-              {/* MD Action Buttons */}
-              {isMD && approvalStatus === 'Pending MD' && (
+              {/* MD / Super Admin Action Buttons */}
+              {(isMD || isSuperAdminUser) && approvalStatus === 'Pending MD' && (
                 <>
                   <button
                     disabled={isProcessingStage}
@@ -1582,7 +1611,7 @@ export default function StaffInternalMarks({ staffUser }) {
                     onClick={() => handleStageApprovalAction('MD', 'Approved')}
                     className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
                   >
-                    ★ Final MD Approval & Sign
+                    Approved
                   </button>
                 </>
               )}
@@ -2523,7 +2552,7 @@ export default function StaffInternalMarks({ staffUser }) {
         </div>
       )}
 
-      {/* Freeze & Submit to CoE Centered Confirmation Modal */}
+      {/* Submit to MD Centered Confirmation Modal */}
       {showFreezeModal && (
         <ModalPortal isOpen={showFreezeModal} onClose={() => !isFreezing && setShowFreezeModal(false)}>
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-7 max-w-md w-full animate-in fade-in zoom-in-95 text-left my-auto">
@@ -2533,7 +2562,7 @@ export default function StaffInternalMarks({ staffUser }) {
                   <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Freeze & Submit to CoE</h3>
+                  <h3 className="font-extrabold text-slate-900 text-base">Submit to MD</h3>
                   <p className="text-xs text-slate-500 font-medium">Finalize internal assessment marks</p>
                 </div>
               </div>
@@ -2558,7 +2587,7 @@ export default function StaffInternalMarks({ staffUser }) {
               </div>
 
               <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs text-amber-900 font-medium leading-relaxed">
-                <span className="font-bold">Notice:</span> Freezing will automatically save all internal marks and submit them directly to the <b>Office of Controller of Examinations (CoE)</b>. After submission, marks editing will be locked.
+                <span className="font-bold">Notice:</span> Submitting will automatically save all internal marks and forward them to the <b>Managing Director (MD)</b>. After submission, marks editing will be locked.
               </div>
             </div>
 
@@ -2580,7 +2609,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 {isFreezing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Submitting to CoE...</span>
+                    <span>Submitting to MD...</span>
                   </>
                 ) : (
                   <>

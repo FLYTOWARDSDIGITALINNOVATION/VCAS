@@ -95,7 +95,8 @@ function normalizeStudent(s) {
   };
 }
 
-export default function StudentsPage({ user, canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.role === 'Super Admin' || user?.isSuperAdmin) }) {
+export default function StudentsPage({ user, canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.role === 'Super Admin' || user?.isSuperAdmin), readOnly = false }) {
+  const isReadOnlyMode = Boolean(readOnly || user?.role === 'HOD' || user?.role === 'Staff' || user?.role === 'Faculty' || user?.designation === 'HOD' || user?.designation === 'Staff' || user?.designation === 'Faculty' || user?.designation?.toUpperCase()?.includes('HOD'));
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
   const [credentialModalStudent, setCredentialModalStudent] = useState(null);
   const [copiedStudentCred, setCopiedStudentCred] = useState(false);
@@ -315,6 +316,39 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     return Array.from(sSet).sort((a, b) => (Number(String(a).match(/\d+/)?.[0] || 0) - Number(String(b).match(/\d+/)?.[0] || 0)));
   }, [students]);
 
+  const normalizeFilterText = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9&\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const matchesDepartmentFilter = (student) => {
+    if (!selectedDept || selectedDept === 'All Departments') return true;
+
+    const filter = normalizeFilterText(selectedDept);
+    const candidates = [
+      student.department,
+      student.course,
+      student.courseAdmitted,
+      student.dept,
+      student.programme,
+      student.specialization
+    ].map(normalizeFilterText).filter(Boolean);
+
+    if (!candidates.length) return false;
+
+    return candidates.some(value => {
+      if (!value || value === 'all') return false;
+      if (value === filter) return true;
+      if (value.includes(filter) || filter.includes(value)) return true;
+
+      const filterWords = filter.split(' ').filter(Boolean);
+      const valueWords = value.split(' ').filter(Boolean);
+
+      if (filterWords.length > 1) {
+        return filterWords.every(word => valueWords.includes(word) || value.includes(word));
+      }
+
+      return value.includes(filter) || filter.includes(value);
+    });
+  };
+
   // Filter students based on search, department, batch and dropdowns
   const filteredStudents = students.filter(student => {
     const term = (searchTerm || '').toLowerCase().trim();
@@ -331,21 +365,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
       String(student.department || '').toLowerCase().includes(term)
     );
 
-    const matchesDept = (() => {
-      if (selectedDept === 'All Departments') return true;
-      const sDept = (student.department || '').toLowerCase().trim();
-      const sCourse = (student.course || '').toLowerCase().trim();
-      const filter = selectedDept.toLowerCase().trim();
-      // exact match first
-      if (sDept === filter || sCourse === filter) return true;
-      // fuzzy: filter value contained in dept/course or vice versa
-      if (sDept.includes(filter) || sCourse.includes(filter)) return true;
-      // specific known mappings
-      if (filter === 'commerce' && (sDept.includes('com') || sCourse.includes('b.com') || sCourse.includes('m.com'))) return true;
-      if (filter === 'computer science' && (sDept.includes('computer') || sCourse.includes('computer') || sCourse.includes('b.sc') || sDept.includes('cs'))) return true;
-      if (filter.length > 2 && (sDept.includes(filter.substring(0, 4)) || sCourse.includes(filter.substring(0, 4)))) return true;
-      return false;
-    })();
+    const matchesDept = matchesDepartmentFilter(student);
     const matchesFee = !canViewFees || selectedFeeStatus === 'All Statuses' || student.feeStatus === selectedFeeStatus;
 
     const matchesYear = selectedYear === 'All Years' ||
@@ -1001,9 +1021,9 @@ Unauthorized reproduction or distribution is strictly prohibited.
         onBack={() => setSelectedStudentProfile(null)}
         user={user}
         canViewFees={canViewFees}
-        onDownloadCredentials={handleDownloadStudentCredentials}
-        onPrintCredentials={handlePrintStudentCredentials}
-        onEdit={(stu) => {
+        onDownloadCredentials={!isReadOnlyMode ? handleDownloadStudentCredentials : undefined}
+        onPrintCredentials={!isReadOnlyMode ? handlePrintStudentCredentials : undefined}
+        onEdit={!isReadOnlyMode ? (stu) => {
           setSelectedStudentProfile(null);
           setEditingStudent({
             ...stu,
@@ -1014,7 +1034,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
             admNo: stu.admNo || stu.admissionNo || '',
             sem: stu.sem || stu.semester || '1st Sem'
           });
-        }}
+        } : undefined}
       />
     );
   }
@@ -1051,41 +1071,51 @@ Unauthorized reproduction or distribution is strictly prohibited.
         </div>
 
         <div className="flex items-center gap-3">
-          {isSuperAdmin && (
-            <div className="flex items-center gap-2">
+          {!isReadOnlyMode && (
+            <>
+              {isSuperAdmin && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleQuickExport('aadhaar_only')}
+                    className="hidden lg:inline-flex px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-xs border border-emerald-200 shadow-xs items-center gap-1.5 transition-all cursor-pointer"
+                    title="Download Aadhaar numbers with student identification"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>⚡ Aadhaar Only</span>
+                  </button>
+                  <button
+                    onClick={() => setShowExportModal(true)}
+                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                    title="Download specific individual fields or configure custom export"
+                  >
+                    <Download className="w-4 h-4 text-white" />
+                    <span>Download / Export Fields</span>
+                  </button>
+                </div>
+              )}
               <button
-                onClick={() => handleQuickExport('aadhaar_only')}
-                className="hidden lg:inline-flex px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-xs border border-emerald-200 shadow-xs items-center gap-1.5 transition-all cursor-pointer"
-                title="Download Aadhaar numbers with student identification"
+                onClick={() => setShowExcelUploadModal(true)}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                title="Directly upload Excel spreadsheet (.xlsx, .xls, .csv) with student records"
               >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>⚡ Aadhaar Only</span>
+                <FileSpreadsheet className="w-4 h-4 text-white" />
+                <span>Upload Excel</span>
               </button>
               <button
-                onClick={() => setShowExportModal(true)}
-                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-500/20 flex items-center gap-2 transition-all cursor-pointer"
-                title="Download specific individual fields or configure custom export"
+                onClick={() => setShowAddWizard(true)}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
               >
-                <Download className="w-4 h-4 text-white" />
-                <span>Download / Export Fields</span>
+                <Plus className="w-4 h-4" />
+                Add Student
               </button>
-            </div>
+            </>
           )}
-          <button
-            onClick={() => setShowExcelUploadModal(true)}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-500/20 flex items-center gap-2 transition-all cursor-pointer"
-            title="Directly upload Excel spreadsheet (.xlsx, .xls, .csv) with student records"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-white" />
-            <span>Upload Excel</span>
-          </button>
-          <button
-            onClick={() => setShowAddWizard(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Add Student
-          </button>
+          {isReadOnlyMode && (
+            <span className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-slate-600 text-xs font-bold">
+              <Eye className="w-4 h-4" />
+              View Mode
+            </span>
+          )}
         </div>
       </div>
 
@@ -1380,7 +1410,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
               {/* Action Buttons */}
               <td className="py-3.5 px-5 text-right whitespace-nowrap">
                 <div className="flex items-center justify-end gap-1">
-                  {isSuperAdmin && (
+                  {!isReadOnlyMode && isSuperAdmin && (
                     <>
                       <button
                         onClick={(e) => {
@@ -1411,31 +1441,35 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   >
                     <Eye className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingStudent({
-                        ...student,
-                        _originalId: student._id || student.studentId || student.id,
-                        _originalStudentId: student.studentId || student.id,
-                        id: student.studentId || student.id,
-                        studentId: student.studentId || student.id,
-                        admNo: student.admNo || student.admissionNo || '',
-                        sem: student.sem || student.semester || '1st Sem'
-                      });
-                    }}
-                    title="Edit Student"
-                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteModalStudent(student)}
-                    title="Delete Student"
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {!isReadOnlyMode && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingStudent({
+                          ...student,
+                          _originalId: student._id || student.studentId || student.id,
+                          _originalStudentId: student.studentId || student.id,
+                          id: student.studentId || student.id,
+                          studentId: student.studentId || student.id,
+                          admNo: student.admNo || student.admissionNo || '',
+                          sem: student.sem || student.semester || '1st Sem'
+                        });
+                      }}
+                      title="Edit Student"
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  )}
+                  {!isReadOnlyMode && (
+                    <button
+                      onClick={() => setDeleteModalStudent(student)}
+                      title="Delete Student"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>

@@ -88,7 +88,6 @@ export default function TransportFeesManagement({
       (r.rollNo && r.rollNo.toLowerCase().includes(term)) ||
       (r.id && r.id.toLowerCase().includes(term)) ||
       (r.course && r.course.toLowerCase().includes(term)) ||
-      (r.driverName && r.driverName.toLowerCase().includes(term)) ||
       (r.vehicleNo && r.vehicleNo.toLowerCase().includes(term)) ||
       (r.routeStop && r.routeStop.toLowerCase().includes(term)) ||
       (r.status && r.status.toLowerCase().includes(term))
@@ -174,8 +173,7 @@ export default function TransportFeesManagement({
               <div class="meta-item"><span>Payment Date:</span> <strong>${payDate}</strong></div>
               <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
               <div class="meta-item"><span>Roll / ID No:</span> <strong>${rollNo}</strong></div>
-              <div class="meta-item"><span>Driver:</span> <strong>${r.driverName || 'Designated Driver'}</strong></div>
-              <div class="meta-item"><span>Status:</span> <strong>${pendingFee === 0 ? 'Fully Paid' : 'Pending'}</strong></div>
+                <div class="meta-item"><span>Status:</span> <strong>${pendingFee === 0 ? 'Fully Paid' : 'Pending'}</strong></div>
             </div>
             <table>
               <thead>
@@ -383,102 +381,17 @@ export default function TransportFeesManagement({
 
           </div>
 
-          {/* ROW 2: MANDATORY TRANSPORT DETAILS (Driver Name, Daily Petrol, Mileage, Vehicle No, Route/Stop) */}
-          <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-emerald-900 flex items-center gap-1.5">
-                <Bus className="w-4 h-4 text-emerald-600" />
-                Transport Fleet, Driver & Operational Mileage
-              </span>
-              <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">
-                Driver Name, Daily Petrol & Mileage Required
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Route / Stop <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={entryFormData.routeStop || ''}
-                  onChange={(e) => setEntryFormData({...entryFormData, routeStop: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-emerald-500 focus:outline-none shadow-2xs"
-                  placeholder="e.g., Central Station - Gate 2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Transport Vehicle / No. <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={entryFormData.vehicleNo || ''}
-                  onChange={(e) => setEntryFormData({...entryFormData, vehicleNo: e.target.value.toUpperCase()})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-emerald-500 focus:outline-none shadow-2xs uppercase font-mono"
-                  placeholder="e.g., TN-09-CB-4412"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Driver Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={entryFormData.driverName || ''}
-                  onChange={(e) => setEntryFormData({...entryFormData, driverName: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none shadow-2xs"
-                  placeholder="e.g., M. Selvam (98402 11001)"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Daily Petrol <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={entryFormData.dailyPetrol || ''}
-                  onChange={(e) => setEntryFormData({...entryFormData, dailyPetrol: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none shadow-2xs"
-                  placeholder="e.g., 18 Litres (₹1,840)"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Mileage <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={entryFormData.mileage || ''}
-                  onChange={(e) => setEntryFormData({...entryFormData, mileage: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none shadow-2xs"
-                  placeholder="e.g., 12.5 km/l"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <label className="block text-slate-700 font-bold mb-1 flex items-center justify-between sm:w-64">
-                <span>Due Date</span>
-                <span className="text-[10px] text-slate-400 font-normal">Optional</span>
-              </label>
-              <input
-                type="date"
-                value={entryFormData.dueDate || ''}
-                onChange={(e) => setEntryFormData({...entryFormData, dueDate: e.target.value})}
-                className="w-full sm:w-64 p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
-              />
-            </div>
+          <div className="pt-2">
+            <label className="block text-slate-700 font-bold mb-1 flex items-center justify-between sm:w-64">
+              <span>Due Date</span>
+              <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+            </label>
+            <input
+              type="date"
+              value={entryFormData.dueDate || ''}
+              onChange={(e) => setEntryFormData({...entryFormData, dueDate: e.target.value})}
+              className="w-full sm:w-64 p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
+            />
           </div>
 
           {/* ROW 3: Base Amount, Fine, Paid Amount, Balance */}
@@ -699,7 +612,7 @@ export default function TransportFeesManagement({
               </span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Live list of all students with transport collections recorded, with driver details, daily petrol, and mileage.
+              Live list of all students with transport collections recorded, route details, fuel usage, and mileage.
             </p>
           </div>
 
@@ -709,7 +622,7 @@ export default function TransportFeesManagement({
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search student, driver, bus..."
+                placeholder="Search student, route, or vehicle..."
                 value={tableSearchTerm}
                 onChange={(e) => setTableSearchTerm(e.target.value)}
                 className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none transition-all shadow-2xs"
@@ -785,7 +698,6 @@ export default function TransportFeesManagement({
                   <th className="py-3 px-3">Student Name</th>
                   <th className="py-3 px-3">Roll No</th>
                   <th className="py-3 px-3">Course</th>
-                  <th className="py-3 px-3">Driver Name</th>
                   <th className="py-3 px-3">Daily Petrol</th>
                   <th className="py-3 px-3">Mileage</th>
                   <th className="py-3 px-3 text-right">Base Amount</th>
@@ -821,9 +733,6 @@ export default function TransportFeesManagement({
                       </td>
                       <td className="py-3 px-3 font-semibold text-slate-700">{r.rollNo || r.id}</td>
                       <td className="py-3 px-3 text-slate-600">{r.course || 'Degree'}</td>
-                      <td className="py-3 px-3 font-medium text-slate-800">
-                        {r.driverName || 'M. Selvam'}
-                      </td>
                       <td className="py-3 px-3">
                         <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold text-[11px] border border-emerald-200/60">
                           {r.dailyPetrol || '18 L / day'}

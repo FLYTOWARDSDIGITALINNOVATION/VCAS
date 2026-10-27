@@ -369,39 +369,36 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   useEffect(() => {
     const fetchMetaAndDepartments = async () => {
       try {
-        let depts = [];
+        let realDepts = [];
 
-        // 1. Fetch real departments from /api/departments
+        // Prefer exact departments stored in the database. Ignore stale hall-ticket metadata
+        // so the HOD department dropdown matches the real added departments only.
         try {
           const deptRes = await fetch(`${API_BASE}/departments`);
           const deptData = await deptRes.json();
           if (deptData.success && Array.isArray(deptData.data)) {
-            const list = deptData.data.map(d => d.name?.trim()).filter(Boolean);
-            depts.push(...list);
+            realDepts = deptData.data
+              .map(d => d.name?.trim())
+              .filter(Boolean);
           }
         } catch (e) {
           console.warn('Error fetching departments:', e);
         }
 
-        // 2. Fetch metadata from /api/hall-tickets/meta
+        // 2. Fetch metadata from /api/hall-tickets/meta only for non-department metadata/sections
         try {
           const metaRes = await fetch(`${API_BASE}/hall-tickets/meta`);
           const metaData = await metaRes.json();
-          if (metaData.success) {
-            if (metaData.departments?.length > 0) {
-              depts.push(...metaData.departments);
-            }
-            if (metaData.sections?.length > 0) {
-              setAvailableSections(metaData.sections);
-            }
+          if (metaData.success && metaData.sections?.length > 0) {
+            setAvailableSections(metaData.sections);
           }
         } catch (e) {
           console.warn('Error fetching hall-tickets meta:', e);
         }
 
-        // Deduplicate departments
-        const uniqueDepts = Array.from(new Set(depts.filter(Boolean)));
-        const finalDepts = uniqueDepts.length > 0 ? uniqueDepts : DEFAULT_DEPTS;
+        const finalDepts = realDepts.length > 0
+          ? Array.from(new Set(realDepts))
+          : DEFAULT_DEPTS;
 
         setAvailableDepts(finalDepts);
         setAvailableSemesters(ALL_SEMESTERS);

@@ -94,7 +94,7 @@ const listAssignments = async (req, res) => {
 const createAssignment = async (req, res) => {
   try {
     const staffId = req.params.staffId || req.body.staffId || "ADMIN";
-    const { staffName, subjectCode, subjectName, department, semester, academicYear,
+    const { staffName, subjectCode, subjectName, department, batch, year, semester, academicYear,
             title, description, dueDate, totalMarks, dueTime, weightage, type, category, projectPhase,
             attachmentName, attachmentData, attachmentSize, attachmentType } = req.body;
 
@@ -108,8 +108,10 @@ const createAssignment = async (req, res) => {
       subjectCode: (subjectCode || "").trim().toUpperCase(),
       subjectName: subjectName || "",
       department: department || "",
+      batch: batch || "",
+      year: year || "",
       semester: semester ? Number(semester) : 1,
-      academicYear: academicYear || "",
+      academicYear: academicYear || year || "",
       title: title.trim(),
       description: description || "",
       dueDate,
@@ -156,7 +158,7 @@ const updateAssignment = async (req, res) => {
     const query = { _id: targetId };
     if (staffId && id) query.staffId = staffId;
 
-    const { subjectCode, subjectName, title, description, dueDate, totalMarks, status, department, semester, academicYear, staffName, category, projectPhase,
+    const { subjectCode, subjectName, title, description, dueDate, totalMarks, status, department, batch, year, semester, academicYear, staffName, category, projectPhase,
             attachmentName, attachmentData, attachmentSize, attachmentType } = req.body;
     const assignment = await Assignment.findOne(query);
     if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found." });
@@ -171,8 +173,11 @@ const updateAssignment = async (req, res) => {
     if (projectPhase !== undefined) assignment.projectPhase = projectPhase;
     if (status)                    assignment.status       = status;
     if (department)                assignment.department   = department;
+    if (batch !== undefined)       assignment.batch        = batch || "";
+    if (year !== undefined)        assignment.year         = year || "";
     if (semester)                  assignment.semester     = Number(semester);
     if (academicYear)              assignment.academicYear = academicYear;
+    if (!assignment.academicYear && assignment.year) assignment.academicYear = assignment.year;
     if (staffName)                 assignment.staffName    = staffName;
 
     if (attachmentName !== undefined) assignment.attachmentName = attachmentName;

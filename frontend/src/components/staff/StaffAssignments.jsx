@@ -34,8 +34,15 @@ export default function StaffAssignments({ staffUser }) {
   const staffId = staffUser?.staffId || staffUser?.employeeId || "";
 
   const [assignments, setAssignments]     = useState([]);
+  const [subjectCatalog, setSubjectCatalog] = useState([]);
+  const [departmentCatalog, setDepartmentCatalog] = useState([]);
+  const [batchCatalog, setBatchCatalog] = useState([]);
+  const [yearCatalog, setYearCatalog] = useState([]);
   const [loading, setLoading]             = useState(true);
   const [filterSubject, setFilterSubject] = useState("ALL");
+  const [filterDepartment, setFilterDepartment] = useState("ALL");
+  const [filterBatch, setFilterBatch] = useState("ALL");
+  const [filterYear, setFilterYear] = useState("ALL");
   const [filterStatus, setFilterStatus]   = useState("ALL");
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [showModal, setShowModal]         = useState(false);
@@ -65,6 +72,9 @@ export default function StaffAssignments({ staffUser }) {
   const [newProjectPhase, setNewProjectPhase] = useState("Phase 1 - Topic & Problem Statement");
   const [newSubjectCode, setNewSubjectCode]   = useState("");
   const [newSubjectName, setNewSubjectName]   = useState("");
+  const [newDepartment, setNewDepartment]     = useState(staffUser?.department || "");
+  const [newBatch, setNewBatch]             = useState(staffUser?.batch || "");
+  const [newYear, setNewYear]               = useState(staffUser?.year || staffUser?.academicYear || "");
   const [newDueDate, setNewDueDate]           = useState("");
   const [newMarks, setNewMarks]               = useState("");
   const [newDescription, setNewDescription]   = useState("");
@@ -98,16 +108,118 @@ export default function StaffAssignments({ staffUser }) {
 
   useEffect(() => { fetchAssignments(); }, [staffId]);
 
+  useEffect(() => {
+    const loadCatalogs = async () => {
+      try {
+        const [subjectsRes, studentsRes, deptsRes] = await Promise.all([
+          fetch(`${API}/subjects`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
+          fetch(`${API}/students`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
+          fetch(`${API}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] }))
+        ]);
+
+        const subjectList = Array.isArray(subjectsRes?.data) ? subjectsRes.data : [];
+        const studentList = Array.isArray(studentsRes?.data) ? studentsRes.data : [];
+        const deptList = Array.isArray(deptsRes?.data) ? deptsRes.data : [];
+
+        setSubjectCatalog(subjectList);
+        setDepartmentCatalog([
+          ...new Set([
+            ...deptList.map(d => d?.name || d).filter(Boolean),
+            ...studentList.map(s => s?.department).filter(Boolean),
+            ...(staffUser?.department ? [staffUser.department] : [])
+          ])
+        ].sort());
+
+        setBatchCatalog([
+          ...new Set([
+            ...studentList.map(s => s?.batch).filter(Boolean),
+            ...(staffUser?.batch ? [staffUser.batch] : [])
+          ])
+        ].sort());
+
+        setYearCatalog([
+          ...new Set([
+            ...studentList.map(s => s?.year).filter(Boolean),
+            ...(staffUser?.year ? [staffUser.year] : []),
+            ...(staffUser?.academicYear ? [staffUser.academicYear] : [])
+          ])
+        ].sort());
+      } catch {
+        setSubjectCatalog([]);
+        setDepartmentCatalog(staffUser?.department ? [staffUser.department] : []);
+        setBatchCatalog(staffUser?.batch ? [staffUser.batch] : []);
+        setYearCatalog(staffUser?.year || staffUser?.academicYear ? [staffUser.year || staffUser.academicYear] : []);
+      }
+    };
+
+    loadCatalogs();
+  }, [staffUser?.department, staffUser?.batch, staffUser?.year, staffUser?.academicYear]);
+
   const toast = (msg, isError = false) => {
     if (isError) { setErrorMsg(msg); setSuccessMsg(""); }
     else         { setSuccessMsg(msg); setErrorMsg(""); }
     setTimeout(() => { setSuccessMsg(""); setErrorMsg(""); }, 4000);
   };
 
-  const subjects = [...new Set(assignments.map((a) => a.subjectCode))].filter(Boolean);
+  const subjectOptions = useMemo(() => {
+    const list = [];
+    const added = new Set();
+    const catalogEntries = Array.isArray(subjectCatalog) ? subjectCatalog : [];
+    catalogEntries.forEach((subject) => {
+      const code = String(subject?.code || subject?.subjectCode || '').trim();
+      const name = String(subject?.name || subject?.subjectName || code || 'General').trim();
+      const value = code || name;
+      if (!value) return;
+      if (added.has(value)) return;
+      added.add(value);
+      list.push({ value, label: code ? `${code} - ${name}` : name });
+    });
+
+    assignments.forEach((a) => {
+      const code = String(a.subjectCode || '').trim();
+      const name = String(a.subjectName || code || 'General').trim();
+      const value = code || name;
+      if (!value || added.has(value)) return;
+      added.add(value);
+      list.push({ value, label: code ? `${code} - ${name}` : name });
+    });
+
+    return list;
+  }, [assignments, subjectCatalog]);
+
+  const departmentsList = useMemo(() => {
+    const values = [
+      ...(departmentCatalog || []),
+      ...(assignments.map((a) => a.department).filter(Boolean)),
+      ...(staffUser?.department ? [staffUser.department] : [])
+    ];
+    return [...new Set(values)].sort();
+  }, [assignments, departmentCatalog, staffUser?.department]);
+
+  const batchesList = useMemo(() => {
+    const values = [
+      ...(batchCatalog || []),
+      ...(assignments.map((a) => a.batch).filter(Boolean)),
+      ...(staffUser?.batch ? [staffUser.batch] : [])
+    ];
+    return [...new Set(values)].sort();
+  }, [assignments, batchCatalog, staffUser?.batch]);
+
+  const yearsList = useMemo(() => {
+    const values = [
+      ...(yearCatalog || []),
+      ...(assignments.map((a) => a.academicYear || a.year).filter(Boolean)),
+      ...(staffUser?.academicYear ? [staffUser.academicYear] : []),
+      ...(staffUser?.year ? [staffUser.year] : [])
+    ];
+    return [...new Set(values)].sort();
+  }, [assignments, yearCatalog, staffUser?.academicYear, staffUser?.year]);
 
   const filteredAssignments = assignments.filter((item) => {
-    if (filterSubject !== "ALL" && item.subjectCode !== filterSubject) return false;
+    if (filterSubject !== "ALL" && !(item.subjectCode === filterSubject || item.subjectName === filterSubject || (item.subjectCode || item.subjectName) === filterSubject)) return false;
+    if (filterDepartment !== "ALL" && item.department !== filterDepartment) return false;
+    if (filterBatch !== "ALL" && (item.batch || staffUser?.batch) !== filterBatch) return false;
+    if (filterYear !== "ALL" && (item.academicYear || item.year || staffUser?.academicYear || staffUser?.year) !== filterYear) return false;
     if (filterStatus  !== "ALL" && item.status      !== filterStatus)  return false;
     if (filterCategory === "Project" && item.category !== "Project") return false;
     if (filterCategory === "Regular" && item.category === "Project") return false;
@@ -220,6 +332,9 @@ export default function StaffAssignments({ staffUser }) {
     setNewCategory(presetCategory);
     setNewProjectPhase("Phase 1 - Topic & Problem Statement");
     setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
+    setNewDepartment(staffUser?.department || departmentCatalog[0] || "");
+    setNewBatch(staffUser?.batch || batchCatalog[0] || "");
+    setNewYear(staffUser?.year || staffUser?.academicYear || yearCatalog[0] || "");
     setNewDescription(""); setNewDueDate(""); 
     setNewMarks(presetCategory === "Project" ? "50" : "20");
     setAttachmentName(""); setAttachmentData(""); setAttachmentSize(""); setAttachmentType("");
@@ -235,6 +350,9 @@ export default function StaffAssignments({ staffUser }) {
     setNewTitle(asgt.title || "");
     setNewSubjectCode(asgt.subjectCode || "");
     setNewSubjectName(asgt.subjectName || "");
+    setNewDepartment(asgt.department || staffUser?.department || departmentCatalog[0] || "");
+    setNewBatch(asgt.batch || staffUser?.batch || batchCatalog[0] || "");
+    setNewYear(asgt.year || asgt.academicYear || staffUser?.year || staffUser?.academicYear || yearCatalog[0] || "");
     setNewDueDate(asgt.dueDate || "");
     setNewMarks(String(asgt.totalMarks || (asgt.category === "Project" ? "50" : "20")));
     setNewDescription(asgt.description || "");
@@ -252,6 +370,9 @@ export default function StaffAssignments({ staffUser }) {
     setNewCategory("Regular");
     setNewProjectPhase("Phase 1 - Topic & Problem Statement");
     setNewTitle(""); setNewSubjectCode(""); setNewSubjectName("");
+    setNewDepartment(staffUser?.department || departmentCatalog[0] || "");
+    setNewBatch(staffUser?.batch || batchCatalog[0] || "");
+    setNewYear(staffUser?.year || staffUser?.academicYear || yearCatalog[0] || "");
     setNewDescription(""); setNewDueDate(""); setNewMarks("");
     setAttachmentName(""); setAttachmentData(""); setAttachmentSize(""); setAttachmentType("");
   };
@@ -268,7 +389,10 @@ export default function StaffAssignments({ staffUser }) {
           staffName:   staffUser?.name || "",
           subjectCode: newSubjectCode.trim().toUpperCase(),
           subjectName: newSubjectName.trim(),
-          department:  staffUser?.department || "",
+          department:  newDepartment || staffUser?.department || "",
+          batch:       newBatch || "",
+          year:        newYear || "",
+          academicYear: newYear || "",
           title:       newTitle.trim(),
           description: newDescription.trim(),
           dueDate:     newDueDate,
@@ -307,6 +431,10 @@ export default function StaffAssignments({ staffUser }) {
         body:    JSON.stringify({
           subjectCode: newSubjectCode.trim().toUpperCase(),
           subjectName: newSubjectName.trim(),
+          department:  newDepartment || "",
+          batch:       newBatch || "",
+          year:        newYear || "",
+          academicYear: newYear || "",
           title:       newTitle.trim(),
           description: newDescription.trim(),
           dueDate:     newDueDate,
@@ -637,10 +765,24 @@ export default function StaffAssignments({ staffUser }) {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none min-w-[180px]">
             <option value="ALL">All Subjects</option>
-            {subjects.map((code) => (<option key={code} value={code}>{code}</option>))}
+            {subjectOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none min-w-[160px]">
+            <option value="ALL">All Departments</option>
+            {departmentsList.map((dept) => (<option key={dept} value={dept}>{dept}</option>))}
+          </select>
+          <select value={filterBatch} onChange={(e) => setFilterBatch(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none min-w-[140px]">
+            <option value="ALL">All Batches</option>
+            {batchesList.map((batch) => (<option key={batch} value={batch}>{batch}</option>))}
+          </select>
+          <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none min-w-[140px]">
+            <option value="ALL">All Years</option>
+            {yearsList.map((year) => (<option key={year} value={year}>{year}</option>))}
           </select>
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none">
             <option value="ALL">All Statuses</option>
@@ -855,18 +997,66 @@ export default function StaffAssignments({ staffUser }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name</label>
+                  <select
+                    value={newSubjectName}
+                    onChange={(e) => {
+                      const chosen = e.target.value;
+                      const found = subjectCatalog.find((sub) => (sub?.name || sub?.subjectName) === chosen || (sub?.code || sub?.subjectCode) === chosen);
+                      setNewSubjectName(chosen);
+                      setNewSubjectCode(found ? (found.code || found.subjectCode || "") : newSubjectCode);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">Select Subject</option>
+                    {subjectCatalog.length > 0 ? subjectCatalog.map((sub) => (
+                      <option key={sub?._id || sub?.code || sub?.name} value={sub?.name || sub?.subjectName || sub?.code || ''}>
+                        {(sub?.code || sub?.subjectCode || '') + (sub?.name || sub?.subjectName ? ` - ${sub.name || sub.subjectName}` : '')}
+                      </option>
+                    )) : (newSubjectName ? <option value={newSubjectName}>{newSubjectName}</option> : null)}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
                   <input type="text" placeholder="e.g., CS401 (optional)" value={newSubjectCode} onChange={(e) => setNewSubjectCode(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name</label>
-                  <input type="text" placeholder="e.g., Data Structures" value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
+                  <select value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    <option value="">Select Department</option>
+                    {departmentsList.map((dept) => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Batch</label>
+                  <select value={newBatch} onChange={(e) => setNewBatch(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    <option value="">Select Batch</option>
+                    {batchesList.map((batch) => (
+                      <option key={batch} value={batch}>{batch}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assignment Title *</label>
-                <input type="text" required placeholder="e.g., Unit 3 Case Study & Lab Exercise" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Year</label>
+                  <select value={newYear} onChange={(e) => setNewYear(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    <option value="">Select Year</option>
+                    {yearsList.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Assignment Title *</label>
+                  <input type="text" required placeholder="e.g., Unit 3 Case Study" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

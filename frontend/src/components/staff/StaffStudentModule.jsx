@@ -55,6 +55,20 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
     staffUser?.canViewFees === true
   );
 
+  const isReadOnlyStudentAccess = Boolean(
+    staffUser?.isHod === true ||
+    staffUser?.role === 'HOD' ||
+    staffUser?.role === 'Staff' ||
+    staffUser?.role === 'Faculty' ||
+    staffUser?.designation === 'HOD' ||
+    staffUser?.designation === 'Staff' ||
+    staffUser?.designation === 'Faculty' ||
+    staffUser?.designation?.toUpperCase()?.includes('HOD') ||
+    staffUser?.canAllocateTasks === true
+  );
+
+  const canManageStudents = !isReadOnlyStudentAccess;
+
   // Sub-tabs: 'directory' | 'add'
   const [activeTab, setActiveTab] = useState('directory');
 
@@ -252,6 +266,12 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isReadOnlyStudentAccess && activeTab === 'add') {
+      setActiveTab('directory');
+    }
+  }, [isReadOnlyStudentAccess, activeTab]);
 
   useEffect(() => {
     fetchStudents();
@@ -633,11 +653,16 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
         </div>
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setActiveTab(activeTab === 'add' ? 'directory' : 'add')}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all cursor-pointer"
+            onClick={() => !isReadOnlyStudentAccess && setActiveTab(activeTab === 'add' ? 'directory' : 'add')}
+            disabled={isReadOnlyStudentAccess}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-all ${
+              isReadOnlyStudentAccess
+                ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+            }`}
           >
-            {activeTab === 'add' ? <Users className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
-            <span>{activeTab === 'add' ? 'Browse Directory' : '+ Add New Student'}</span>
+            {isReadOnlyStudentAccess ? <Eye className="w-3.5 h-3.5" /> : activeTab === 'add' ? <Users className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
+            <span>{isReadOnlyStudentAccess ? 'View Only Access' : (activeTab === 'add' ? 'Browse Directory' : '+ Add New Student')}</span>
           </button>
         </div>
       </div>
@@ -694,17 +719,19 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
           <span>Student Directory &amp; Slips ({filteredStudents.length})</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('add')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'add'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>Add New Student (All Statutory Fields)</span>
-        </button>
+        {!isReadOnlyStudentAccess && (
+          <button
+            onClick={() => setActiveTab('add')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'add'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add New Student (All Statutory Fields)</span>
+          </button>
+        )}
       </div>
 
       {/* ───────────────────────────────────────────────────────────────── */}
@@ -803,14 +830,16 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                            <button
-                              onClick={() => handleOpenAssignModal(st)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer border border-indigo-200"
-                              title="Assign Subjects / Classes"
-                            >
-                              <BookOpen className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Subjects</span>
-                            </button>
+                            {!isReadOnlyStudentAccess && (
+                              <button
+                                onClick={() => handleOpenAssignModal(st)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer border border-indigo-200"
+                                title="Assign Subjects / Classes"
+                              >
+                                <BookOpen className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Subjects</span>
+                              </button>
+                            )}
                             {onNavigate && (
                               <button
                                 onClick={() => onNavigate('Attendance')}
@@ -835,20 +864,24 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              onClick={() => setEditingStudent({ ...st })}
-                              className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                              title="Edit Student"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteStudent(st._id, st.name)}
-                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                              title="Delete Record"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {!isReadOnlyStudentAccess && (
+                              <button
+                                onClick={() => setEditingStudent({ ...st })}
+                                className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                                title="Edit Student"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {!isReadOnlyStudentAccess && (
+                              <button
+                                onClick={() => handleDeleteStudent(st._id, st.name)}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                title="Delete Record"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

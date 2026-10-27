@@ -506,6 +506,9 @@ const getStudentInternalMarks = async (req, res) => {
     const processedSubjectCodes = new Set();
 
     marksheets.forEach(ms => {
+      const isApprovedForStudent = (ms.approvalStatus || '').toLowerCase() === 'approved' || (ms.currentApprovalStage || '').toLowerCase() === 'completed';
+      if (!isApprovedForStudent) return;
+
       const stRec = (ms.students || []).find(s => {
         const sr = (s.rollNo || '').toLowerCase();
         const srg = (s.regNo || '').toLowerCase();
@@ -547,6 +550,7 @@ const getStudentInternalMarks = async (req, res) => {
             cia1: marks.cia1 ?? null,
             cia2: marks.cia2 ?? null,
             model: marks.model ?? null,
+            semester: marks.semester ?? null,
             seminar: marks.seminar ?? null,
             project: marks.project ?? null,
             assignment1: marks.assignment1 ?? null,
@@ -593,6 +597,7 @@ const getStudentInternalMarks = async (req, res) => {
               cia1: null,
               cia2: null,
               model: null,
+              semester: null,
               seminar: null,
               project: null,
               assignment1: null,

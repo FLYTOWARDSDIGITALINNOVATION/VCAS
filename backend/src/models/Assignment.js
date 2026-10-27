@@ -21,6 +21,8 @@ const assignmentSchema = new mongoose.Schema({
   subjectCode:  { type: String, default: "" },
   subjectName:  { type: String, default: "" },
   department:   { type: String, default: "" },
+  batch:        { type: String, default: "" },
+  year:         { type: String, default: "" },
   semester:     { type: Number, default: 1 },
   academicYear: { type: String, default: "" },
   title:        { type: String, required: true },

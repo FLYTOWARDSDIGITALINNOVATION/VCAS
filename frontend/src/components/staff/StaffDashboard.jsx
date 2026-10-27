@@ -19,7 +19,7 @@ import StaffProfile from './StaffProfile';
 import StaffQuestionPaper from './StaffQuestionPaper';
 import StaffHallTicket from './StaffHallTicket';
 import StaffStudentEntry from './StaffStudentEntry';
-import StaffStudentModule from './StaffStudentModule';
+import StudentsPage from '../StudentsPage';
 import StaffExamSchedule from './StaffExamSchedule';
 import StaffTaskAllocation from './StaffTaskAllocation';
 import StaffCoursePlan from './StaffCoursePlan';
@@ -135,7 +135,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Dashboard':            return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
       case 'Student':
       case 'Student Module':
-      case 'Student Entry':        return <StaffStudentModule staffUser={staffUser} onNavigate={setActiveNav} />;
+      case 'Student Entry':        return <StudentsPage user={staffUser} readOnly={true} />;
       case 'My Classes':           return <StaffMyClasses staffUser={staffUser} />;
       case 'Attendance':           return <StaffAttendance staffUser={staffUser} />;
       case 'Internal Marks':       return <StaffInternalMarks staffUser={staffUser} />;

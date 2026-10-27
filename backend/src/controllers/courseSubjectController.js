@@ -140,6 +140,72 @@ exports.getSubjects = async (req, res) => {
   }
 };
 
+const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const syncDepartmentCourseList = async (subjectDoc) => {
+  try {
+    if (!subjectDoc || !subjectDoc.department) return;
+
+    const deptName = String(subjectDoc.department).trim();
+    const deptCode = String(subjectDoc.code || '').trim().toUpperCase();
+    if (!deptName || !deptCode) return;
+
+    const matchingDepartments = await Department.find({
+      $or: [
+        { name: { $regex: `^${escapeRegExp(deptName)}$`, $options: 'i' } },
+        { name: { $regex: escapeRegExp(deptName), $options: 'i' } },
+        { code: deptName.toUpperCase() },
+        { code: deptName }
+      ]
+    });
+
+    if (!matchingDepartments.length) return;
+
+    const courseEntry = {
+      sNo: 1,
+      code: deptCode,
+      name: (subjectDoc.name || '').trim(),
+      title: (subjectDoc.name || '').trim(),
+      handledStaff: (subjectDoc.faculty || '').trim(),
+      appearedCount: 0,
+      passCount: 0,
+      passPercentage: 0,
+      reappearCount: '-',
+      credits: Number(subjectDoc.credits) || 3,
+      year: Number(subjectDoc.year) || 1,
+      sem: subjectDoc.sem || 'Sem 1'
+    };
+
+    for (const department of matchingDepartments) {
+      const currentList = Array.isArray(department.coursesList) ? department.coursesList : [];
+      const existingIndex = currentList.findIndex(item => String(item?.code || '').trim().toUpperCase() === deptCode);
+      const nextList = [...currentList];
+
+      if (existingIndex >= 0) {
+        nextList[existingIndex] = {
+          ...currentList[existingIndex],
+          ...courseEntry,
+          code: deptCode,
+          name: courseEntry.name,
+          title: courseEntry.title,
+          handledStaff: courseEntry.handledStaff,
+          year: Number(subjectDoc.year) || currentList[existingIndex].year || 1,
+          sem: subjectDoc.sem || currentList[existingIndex].sem || 'Sem 1',
+          credits: Number(subjectDoc.credits) || currentList[existingIndex].credits || 3
+        };
+      } else {
+        nextList.push({ ...courseEntry, sNo: nextList.length + 1 });
+      }
+
+      department.coursesList = nextList;
+      department.courseCount = nextList.length;
+      await department.save();
+    }
+  } catch (error) {
+    console.error('Error syncing subject into department course list:', error);
+  }
+};
+
 // Helper: Automatically create Exam Schedule and Hall Ticket allocations when subject hours are configured
 const autoGenerateExamAndHallTickets = async (subjectDoc) => {
   try {
@@ -372,6 +438,7 @@ exports.createSubject = async (req, res) => {
 
     // Automatically sync subject to Class and assigned Staff
     await syncSubjectToClass(subject);
+    await syncDepartmentCourseList(subject);
 
     // Automatically schedule weekly timetable (with continuous lab hours)
     try {
@@ -437,6 +504,7 @@ exports.updateSubject = async (req, res) => {
 
     // Automatically sync subject to Class and assigned Staff
     await syncSubjectToClass(subject);
+    await syncDepartmentCourseList(subject);
 
     // Automatically update weekly timetable schedule
     try {
@@ -492,6 +560,17 @@ exports.deleteSubject = async (req, res) => {
           }
         }
       }
+    ).catch(() => {});
+
+    await Department.updateMany(
+      {},
+      [
+        {
+          $set: {
+            courseCount: { $size: '$coursesList' }
+          }
+        }
+      ]
     ).catch(() => {});
 
     // 2. Remove from Exam schedule collections

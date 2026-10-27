@@ -76,26 +76,21 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
   useEffect(() => {
     const fetchDepts = async () => {
       try {
-        let depts = [];
+        let realDepts = [];
         try {
           const deptRes = await fetch(`${API_BASE}/departments`);
           const deptData = await deptRes.json();
           if (deptData.success && Array.isArray(deptData.data)) {
-            const list = deptData.data.map(d => d.name?.trim()).filter(Boolean);
-            depts.push(...list);
+            realDepts = deptData.data
+              .map(d => d.name?.trim())
+              .filter(Boolean);
           }
         } catch (_) {}
 
-        try {
-          const metaRes = await fetch(`${API_BASE}/hall-tickets/meta`);
-          const metaData = await metaRes.json();
-          if (metaData.success && metaData.departments?.length > 0) {
-            depts.push(...metaData.departments);
-          }
-        } catch (_) {}
+        const finalDepts = realDepts.length > 0
+          ? Array.from(new Set(realDepts))
+          : DEFAULT_DEPTS;
 
-        const uniqueDepts = Array.from(new Set(depts.filter(Boolean)));
-        const finalDepts = uniqueDepts.length > 0 ? uniqueDepts : DEFAULT_DEPTS;
         setAvailableDepts(finalDepts);
 
         if (!selectedDept || !finalDepts.includes(selectedDept)) {

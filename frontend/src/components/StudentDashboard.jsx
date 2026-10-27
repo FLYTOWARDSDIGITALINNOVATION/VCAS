@@ -276,9 +276,15 @@ export default function StudentDashboard({ student, onLogout }) {
           : Array.isArray(marksRes)
             ? marksRes
             : [];
-      if (marksRes && marksRes.success && marksList.length > 0) {
-        setMarksData(marksList);
-      } else if (marksRes && marksRes.success && marksList.length === 0) {
+      const approvedMarksList = marksList.filter((item) => {
+        const status = (item?.approvalStatus || item?.status || '').toString().trim();
+        const stage = (item?.currentApprovalStage || '').toString().trim();
+        return status.toLowerCase() === 'approved' || stage.toLowerCase() === 'completed';
+      });
+
+      if (marksRes && marksRes.success && approvedMarksList.length > 0) {
+        setMarksData(approvedMarksList);
+      } else if (marksRes && marksRes.success) {
         setMarksData([]);
       }
 
