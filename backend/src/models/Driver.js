@@ -61,14 +61,6 @@ const driverSchema = new mongoose.Schema({
     default: '',
     trim: true
   },
-  aadharDocument: {
-    type: String,
-    default: ''
-  },
-  panDocument: {
-    type: String,
-    default: ''
-  },
   drivingLicenseDocument: {
     type: String,
     default: ''

@@ -82,6 +82,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     upiId: '',
     accountHolderName: '',
     paymentDate: new Date().toISOString().split('T')[0],
+    receiptNo: '',
     referenceNo: '',
     balance: '0'
   };
@@ -89,6 +90,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   const [entryFormData, setEntryFormData] = useState(emptyEntryForm);
   const [adminDepartments, setAdminDepartments] = useState([]);
   const [editingFeeRecord, setEditingFeeRecord] = useState(null);
+  const [editingRowId, setEditingRowId] = useState(null);
+  const [inlineEditState, setInlineEditState] = useState({});
 
   // Fetch only admin-added departments
   useEffect(() => {
@@ -124,6 +127,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     amount: '',
     feeType: 'Exam Fees',
     paymentMethod: 'UPI / Online',
+    receiptNo: '',
     referenceNo: '',
     remarks: ''
   });
@@ -223,9 +227,25 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
             const key = String(rec.rollNo || rec.id || rec.name || '').trim().toLowerCase();
             if (!key) return;
             const existing = mergedMap.get(key);
-            mergedMap.set(key, existing
-              ? { ...existing, ...rec, feeBreakdown: rec.feeBreakdown || existing.feeBreakdown, mongoId: existing.mongoId || rec.mongoId }
-              : rec);
+
+            if (existing) {
+              mergedMap.set(key, {
+                ...existing,
+                ...rec,
+                id: existing.id || rec.id,
+                mongoId: existing.mongoId || rec.mongoId,
+                rollNo: existing.rollNo || rec.rollNo,
+                name: existing.name || rec.name,
+                department: existing.department || rec.department,
+                course: existing.course || rec.course,
+                batch: existing.batch || rec.batch,
+                academicYear: existing.academicYear || rec.academicYear,
+                year: existing.year || rec.year,
+                feeBreakdown: rec.feeBreakdown || existing.feeBreakdown,
+              });
+            } else {
+              mergedMap.set(key, rec);
+            }
           });
 
           const finalRecords = Array.from(mergedMap.values());
@@ -301,6 +321,26 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
   const formatINR = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
 
+  const getFeeState = (record) => {
+    const breakdown = record?.feeBreakdown || {};
+    const totalBreakdown = Number(breakdown.tuition?.total || 0) + Number(breakdown.exam?.total || 0) + Number(breakdown.transport?.total || 0);
+    const paidBreakdown = Number(breakdown.tuition?.paid || 0) + Number(breakdown.exam?.paid || 0) + Number(breakdown.transport?.paid || 0);
+    const total = Number(record?.totalFee || totalBreakdown || 0);
+    const paid = Number(record?.paidFee || paidBreakdown || 0);
+    const pending = Math.max(0, total - paid);
+    const normalizedStatus = String(record?.status || '').toLowerCase();
+
+    if (normalizedStatus === 'pending') {
+      return { total, paid: 0, pending: total };
+    }
+
+    if (normalizedStatus === 'paid') {
+      return { total, paid: total, pending: 0 };
+    }
+
+    return { total, paid, pending };
+  };
+
   const formatCurrencyL = (val) => {
     if (!val || val === 0) return '₹0';
     if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
@@ -324,39 +364,72 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   const handleEditFeeRecord = (row) => {
     if (!row) return;
 
-    setEditingFeeRecord(row);
-    setViewMode('form');
-    setActiveTab(row.feeType || 'Exam Fees');
-    setEntryFormData({
-      ...emptyEntryForm,
-      studentName: row.name || '',
-      studentId: row.id || row.rollNo || '',
+    const rowId = row._id || row.id || row.rollNo || row.name;
+    setEditingRowId(rowId);
+    setInlineEditState({
+      rowId,
+      name: row.name || '',
+      id: row.id || row.rollNo || '',
       rollNo: row.rollNo || row.id || '',
       course: row.course || '',
       department: row.department || row.course || '',
-      year: String(row.year || 'I'),
-      batch: row.batch || row.academicYear || '2025-2028',
-      academicYear: row.academicYear || row.batch || '2025 - 2026',
-      feeType: row.feeType || 'Exam Fees',
-      routeStop: row.routeStop || '',
-      vehicleNo: row.vehicleNo || '',
-      driverName: row.driverName || '',
-      dailyPetrol: row.dailyPetrol || '',
-      mileage: row.mileage || '',
-      amount: String(Number(row.totalFee || row.amount || 0)),
-      uniformFee: String(Number(row.uniformFee || 0)),
-      bookFee: String(Number(row.bookFee || 0)),
+      tuition: Number(row.feeBreakdown?.tuition?.paid || row.paidFee || 0),
+      exam: Number(row.feeBreakdown?.exam?.paid || 0),
+      transport: Number(row.feeBreakdown?.transport?.paid || 0),
       dueDate: row.dueDate || '',
-      fine: String(Number(row.fine || 0)),
-      totalAmount: String(Number(row.totalFee || 0)),
-      paymentMode: row.paymentMode || 'UPI',
-      upiId: row.upiId || '',
-      accountHolderName: row.accountHolderName || '',
-      paymentDate: row.lastPaymentDate || new Date().toISOString().split('T')[0],
-      referenceNo: row.referenceNo || row.paymentRef || '',
-      paidAmount: String(Number(row.paidFee || 0)),
-      balance: String(Number(row.pendingFee || 0))
+      status: row.status || 'Pending'
     });
+  };
+
+  const handleInlineEditChange = (field, value) => {
+    setInlineEditState(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleInlineEditSave = () => {
+    if (!inlineEditState.rowId) return;
+
+    const targetRowId = inlineEditState.rowId;
+    const updatedRecords = feeRecords.map(rec => {
+      const recKey = rec._id || rec.id || rec.rollNo || rec.name;
+      if (recKey !== targetRowId) return rec;
+
+      const tuitionPaid = Number(inlineEditState.tuition || 0);
+      const examPaid = Number(inlineEditState.exam || 0);
+      const transportPaid = Number(inlineEditState.transport || 0);
+      const totalPaid = tuitionPaid + examPaid + transportPaid;
+      const rawStatus = String(inlineEditState.status || '').toLowerCase();
+      const nextStatus = rawStatus === 'paid' ? 'Paid' : rawStatus === 'pending' ? 'Pending' : (totalPaid > 0 ? 'Pending' : 'Paid');
+      const effectivePaid = nextStatus === 'Pending' ? 0 : totalPaid;
+      const effectivePending = nextStatus === 'Pending' ? totalPaid : 0;
+
+      return {
+        ...rec,
+        name: inlineEditState.name || rec.name,
+        id: inlineEditState.id || rec.id || inlineEditState.rollNo || rec.rollNo,
+        rollNo: inlineEditState.rollNo || rec.rollNo || inlineEditState.id || rec.id,
+        course: inlineEditState.course || rec.course || rec.department || 'UG Program',
+        department: inlineEditState.department || rec.department || rec.course || 'UG Program',
+        paidFee: effectivePaid,
+        paidFeeDisplay: formatINR(effectivePaid),
+        totalFee: totalPaid,
+        totalFeeDisplay: formatINR(totalPaid),
+        pendingFee: effectivePending,
+        pendingFeeDisplay: effectivePending > 0 ? formatINR(effectivePending) : '₹0',
+        dueDate: inlineEditState.dueDate || rec.dueDate || '',
+        status: nextStatus,
+        feeBreakdown: {
+          tuition: { total: tuitionPaid, paid: nextStatus === 'Pending' ? 0 : tuitionPaid, pending: nextStatus === 'Pending' ? tuitionPaid : 0 },
+          exam: { total: examPaid, paid: nextStatus === 'Pending' ? 0 : examPaid, pending: nextStatus === 'Pending' ? examPaid : 0 },
+          transport: { total: transportPaid, paid: nextStatus === 'Pending' ? 0 : transportPaid, pending: nextStatus === 'Pending' ? transportPaid : 0 }
+        }
+      };
+    });
+
+    setFeeRecords(updatedRecords);
+    localStorage.setItem('vcas_real_fee_records', JSON.stringify(updatedRecords));
+    setEditingRowId(null);
+    setInlineEditState({});
+    showToast('Student fee record updated');
   };
 
   // Form Submission -> Persists entry to feeRecords, localStorage & MongoDB backend, then Triggers Confirmation Modal
@@ -372,11 +445,16 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       : totalAmount;
     const pendingAmount = Math.max(0, totalAmount - paidAmount);
     const feeStatus = pendingAmount === 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
-    const feeTypeName = entryFormData.feeType || activeTab || 'Tuition Fees';
+    const activeFeeType = activeTab && ['Tuition Fees', 'Exam Fees', 'Transport Fees'].includes(activeTab)
+      ? activeTab
+      : (entryFormData.feeType || 'Tuition Fees');
+    const feeTypeName = activeFeeType;
+    setEntryFormData(prev => ({ ...prev, feeType: feeTypeName }));
     const rollNo = (entryFormData.rollNo || '').trim();
     const studentName = (entryFormData.studentName || '').trim();
     const department = entryFormData.department || entryFormData.course || 'UG Program';
     const course = entryFormData.course || department;
+    const generatedReceiptNo = (entryFormData.receiptNo || `REC-2026-${String(rollNo || studentName || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`).trim();
     const txnRef = entryFormData.referenceNo || 'TXN' + Math.floor(1000000000 + Math.random() * 9000000000);
     const payDate = entryFormData.paymentDate || entryFormData.dueDate || new Date().toISOString().split('T')[0];
     const feeKey = feeTypeName.toLowerCase().includes('exam') ? 'exam' : feeTypeName.toLowerCase().includes('transport') ? 'transport' : 'tuition';
@@ -416,6 +494,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           dueDate: entryFormData.dueDate || rec.dueDate || '',
           lastPaymentDate: payDate,
           paymentMode: entryFormData.paymentMode || rec.paymentMode || 'Online / UPI',
+          receiptNo: entryFormData.receiptNo || rec.receiptNo || generatedReceiptNo,
           paymentRef: txnRef,
           referenceNo: txnRef,
           feeBreakdown: {
@@ -453,7 +532,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               },
               lastPaymentDate: payDate,
               paymentMode: entryFormData.paymentMode || 'Online / UPI',
-              referenceNo: txnRef
+              referenceNo: txnRef,
+              receiptNo: generatedReceiptNo
             })
           });
         }
@@ -519,6 +599,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           status: newStatus,
           lastPaymentDate: payDate,
           paymentMode: entryFormData.paymentMode || rec.paymentMode || 'Online / UPI',
+          receiptNo: entryFormData.receiptNo || rec.receiptNo || generatedReceiptNo,
           paymentRef: entryFormData.referenceNo || rec.paymentRef || txnRef,
           referenceNo: entryFormData.referenceNo || rec.referenceNo || txnRef,
           feeBreakdown: nextBreakdown,
@@ -569,6 +650,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         paymentMode: entryFormData.paymentMode || 'Online / UPI',
         upiId: entryFormData.upiId || '',
         accountHolderName: entryFormData.accountHolderName || '',
+        receiptNo: entryFormData.receiptNo || generatedReceiptNo,
         paymentRef: txnRef,
         referenceNo: txnRef,
         feeBreakdown: {
@@ -643,7 +725,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
             feeBreakdown: studentBreakdown,
             lastPaymentDate: payDate,
             paymentMode: entryFormData.paymentMode || 'Online / UPI',
-            referenceNo: txnRef
+            referenceNo: txnRef,
+            receiptNo: generatedReceiptNo
           })
         });
       }
@@ -672,8 +755,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       studentId: student ? student.id : '',
       amount: student && student.pendingFee > 0 ? student.pendingFee : '',
       feeType: student ? student.feeType : 'Exam Fees',
-      paymentMethod: 'UPI / Online',
-      referenceNo: 'PAY' + Math.floor(100000 + Math.random() * 900000),
+      paymentMethod: student?.paymentMode || 'UPI / Online',
+      receiptNo: student?.receiptNo || `REC-2026-${String(student?.id || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`,
+      referenceNo: student?.paymentRef || student?.referenceNo || `TXN${Math.floor(1000000000 + Math.random() * 9000000000)}`,
       remarks: ''
     });
   };
@@ -688,31 +772,59 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       return;
     }
 
+    const existingStudent = feeRecords.find(rec => rec.id === targetStudentId) || null;
+    const today = new Date().toISOString().split('T')[0];
+    const generatedReceiptNo = (payFormData.receiptNo || existingStudent?.receiptNo || `REC-2026-${String(targetStudentId || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`).trim();
+    const generatedRefNo = (payFormData.referenceNo || existingStudent?.paymentRef || existingStudent?.referenceNo || `TXN${Math.floor(1000000000 + Math.random() * 9000000000)}`).trim();
+
     const nextRecords = feeRecords.map(rec => {
       if (rec.id === targetStudentId) {
-        const newPaid = rec.paidFee + amountNum;
-        const newPending = Math.max(0, rec.totalFee - newPaid);
+        const newPaid = (Number(rec.paidFee) || 0) + amountNum;
+        const newPending = Math.max(0, (Number(rec.totalFee) || 0) - newPaid);
         const newStatus = newPending === 0 ? 'Paid' : 'Pending';
-        
+
         try {
           const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
           savedPayments[targetStudentId] = {
+            ...savedPayments[targetStudentId],
             paid: newPaid,
-            status: newStatus
+            pending: newPending,
+            status: newStatus,
+            date: today,
+            receiptNo: generatedReceiptNo,
+            referenceNo: generatedRefNo,
+            paymentMode: payFormData.paymentMethod || rec.paymentMode || 'UPI / Online',
+            department: rec.department || existingStudent?.department || '',
+            feeType: payFormData.feeType || rec.feeType || 'Exam Fees'
           };
           localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
-          
+
           if (rec.mongoId) {
             fetch(`${API_BASE}/students/${rec.mongoId}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ feeStatus: newStatus })
+              body: JSON.stringify({
+                feeStatus: newStatus,
+                paidFee: newPaid,
+                pendingFee: newPending,
+                lastPaymentDate: today,
+                paymentMode: payFormData.paymentMethod || rec.paymentMode || 'UPI / Online',
+                referenceNo: generatedRefNo,
+                department: rec.department || existingStudent?.department || ''
+              })
             }).catch(console.error);
           }
         } catch (err) {}
 
         return {
           ...rec,
+          department: rec.department || existingStudent?.department || '',
+          feeType: payFormData.feeType || rec.feeType || 'Exam Fees',
+          paymentMode: payFormData.paymentMethod || rec.paymentMode || 'UPI / Online',
+          paymentRef: generatedRefNo,
+          referenceNo: generatedRefNo,
+          receiptNo: generatedReceiptNo,
+          lastPaymentDate: today,
           paidFee: newPaid,
           paidFeeDisplay: `₹${(newPaid / 1000).toFixed(0)}K`,
           pendingFee: newPending,
@@ -790,7 +902,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       return;
     }
 
-    const receiptNo = `REC-2026-${String(studentRec.id || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
+    const receiptNo = studentRec.receiptNo || `REC-2026-${String(studentRec.id || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
     const studentName = studentRec.name || 'Student';
     const rollNo = studentRec.rollNo || studentRec.id || '—';
     const dept = studentRec.department || studentRec.course || '—';
@@ -800,7 +912,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     const paidFee = Number(studentRec.paidFee) || 0;
     const pendingFee = Math.max(0, totalFee - paidFee);
     const payMode = studentRec.paymentMode || 'Online / UPI';
-    const txnRef = studentRec.paymentRef || studentRec.referenceNo || '';
+    const txnRef = studentRec.paymentRef || studentRec.referenceNo || studentRec.transactionRef || '';
     const payDate = studentRec.lastPaymentDate || new Date().toLocaleDateString('en-IN');
     const breakdown = studentRec.feeBreakdown || {
       tuition: { total: 0, paid: 0, pending: 0 },
@@ -1392,6 +1504,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                   <tr className="border-b border-slate-200 bg-slate-50/50 text-[11px] font-bold text-slate-500 tracking-wider uppercase">
                     <th className="py-3.5 px-5">STUDENT</th>
                     <th className="py-3.5 px-5">COURSE</th>
+                    <th className="py-3.5 px-5">TUITION</th>
+                    <th className="py-3.5 px-5">EXAM</th>
+                    <th className="py-3.5 px-5">TRANSPORT</th>
                     <th className="py-3.5 px-5">FEE TYPE</th>
                     <th className="py-3.5 px-5">TOTAL FEE</th>
                     <th className="py-3.5 px-5">PAID</th>
@@ -1403,132 +1518,212 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
                   {filteredRecords.length > 0 ? (
-                    filteredRecords.map((row, idx) => (
-                      <tr key={row._id || row.id || row.rollNo || idx} className="hover:bg-slate-50/80 transition-all">
-                        {/* Student Info */}
-                        <td className="py-4 px-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-slate-200/90 text-slate-600 font-bold flex items-center justify-center text-xs shrink-0 border border-slate-300/50">
-                              {row.avatar}
+                    filteredRecords.map((row, idx) => {
+                      const rowKey = row._id || row.id || row.rollNo || idx;
+                      const isEditing = editingRowId === rowKey;
+
+                      return isEditing ? (
+                        <tr key={rowKey} className="bg-amber-50/60">
+                          <td colSpan="12" className="p-4">
+                            <div className="rounded-2xl border border-amber-200 bg-white p-4 shadow-xs">
+                              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 mb-4">
+                                <input
+                                  value={inlineEditState.name || ''}
+                                  onChange={(e) => handleInlineEditChange('name', e.target.value)}
+                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                  placeholder="Student name"
+                                />
+                                <input
+                                  value={inlineEditState.rollNo || ''}
+                                  onChange={(e) => handleInlineEditChange('rollNo', e.target.value)}
+                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                  placeholder="Roll no"
+                                />
+                                <input
+                                  value={inlineEditState.course || ''}
+                                  onChange={(e) => handleInlineEditChange('course', e.target.value)}
+                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                  placeholder="Course"
+                                />
+                                <input
+                                  type="number"
+                                  value={inlineEditState.tuition || 0}
+                                  onChange={(e) => handleInlineEditChange('tuition', Number(e.target.value))}
+                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                  placeholder="Tuition"
+                                />
+                                <input
+                                  type="number"
+                                  value={inlineEditState.exam || 0}
+                                  onChange={(e) => handleInlineEditChange('exam', Number(e.target.value))}
+                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                  placeholder="Exam"
+                                />
+                                <input
+                                  type="number"
+                                  value={inlineEditState.transport || 0}
+                                  onChange={(e) => handleInlineEditChange('transport', Number(e.target.value))}
+                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                  placeholder="Transport"
+                                />
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingRowId(null)}
+                                  className="px-3 py-2 text-[11px] font-bold border border-slate-200 rounded-xl text-slate-700 bg-white hover:bg-slate-100"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleInlineEditSave}
+                                  className="px-3 py-2 text-[11px] font-bold rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm"
+                                >
+                                  Save Update
+                                </button>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-bold text-slate-900 leading-tight">{row.name}</p>
-                              <p className="text-[11px] text-slate-400 font-medium">{row.id}</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={rowKey} className="hover:bg-slate-50/80 transition-all">
+                          {/* Student Info */}
+                          <td className="py-4 px-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full bg-slate-200/90 text-slate-600 font-bold flex items-center justify-center text-xs shrink-0 border border-slate-300/50">
+                                {row.avatar}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-900 leading-tight">{row.name}</p>
+                                <p className="text-[11px] text-slate-400 font-medium">{row.id}</p>
+                              </div>
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Course */}
-                        <td className="py-4 px-5 text-slate-800 font-medium">
-                          {row.course}
-                        </td>
+                          {/* Course */}
+                          <td className="py-4 px-5 text-slate-800 font-medium">
+                            {row.course}
+                          </td>
 
-                        {/* Fee Type */}
-                        <td className="py-4 px-5">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 select-none">
-                            {row.feeType}
-                          </span>
-                        </td>
+                          {/* Tuition */}
+                          <td className="py-4 px-5 font-bold text-amber-600">
+                            {formatINR(Number(row.feeBreakdown?.tuition?.paid || 0))}
+                          </td>
 
-                        {/* Total Fee */}
-                        <td className="py-4 px-5 font-bold text-slate-900">
-                          {row.totalFeeDisplay}
-                        </td>
+                          {/* Exam */}
+                          <td className="py-4 px-5 font-bold text-violet-600">
+                            {formatINR(Number(row.feeBreakdown?.exam?.paid || 0))}
+                          </td>
 
-                        {/* Paid */}
-                        <td className="py-4 px-5 font-bold text-emerald-600">
-                          {row.paidFeeDisplay}
-                        </td>
+                          {/* Transport */}
+                          <td className="py-4 px-5 font-bold text-emerald-600">
+                            {formatINR(Number(row.feeBreakdown?.transport?.paid || 0))}
+                          </td>
 
-                        {/* Pending */}
-                        <td className="py-4 px-5 font-bold text-rose-500">
-                          {row.pendingFeeDisplay}
-                        </td>
+                          {/* Fee Type */}
+                          <td className="py-4 px-5">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 select-none">
+                              {row.feeType}
+                            </span>
+                          </td>
 
-                        {/* Due Date */}
-                        <td className="py-4 px-5 text-slate-500 font-medium">
-                          {row.dueDate || '-'}
-                        </td>
+                          {/* Total Fee */}
+                          <td className="py-4 px-5 font-bold text-slate-900">
+                            {formatINR(getFeeState(row).total)}
+                          </td>
 
-                        {/* Status Pill */}
-                        <td className="py-4 px-5">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleFeeStatus(row.id)}
-                            title="Click to mark as Paid or Pending"
-                            className="cursor-pointer transition-transform active:scale-95"
-                          >
-                            {row.status === 'Paid' ? (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100">
-                                ✓ Paid
-                              </span>
-                            ) : row.status === 'Pending' ? (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100">
-                                ⏳ Pending
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100">
-                                Overdue
-                              </span>
-                            )}
-                          </button>
-                        </td>
+                          {/* Paid */}
+                          <td className="py-4 px-5 font-bold text-emerald-600">
+                            {formatINR(getFeeState(row).paid)}
+                          </td>
 
-                        {/* Actions */}
-                        <td className="py-4 px-5">
-                          <div className="flex items-center justify-center gap-3 text-slate-400">
-                            {/* Eye icon */}
-                            <button 
-                              onClick={() => setSelectedStudentForView(row)}
-                              title="View Fee Details"
-                              className="hover:text-slate-700 transition-colors p-1"
+                          {/* Pending */}
+                          <td className="py-4 px-5 font-bold text-rose-500">
+                            {formatINR(getFeeState(row).pending)}
+                          </td>
+
+                          {/* Due Date */}
+                          <td className="py-4 px-5 text-slate-500 font-medium">
+                            {row.dueDate || '-'}
+                          </td>
+
+                          {/* Status Pill */}
+                          <td className="py-4 px-5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFeeStatus(row.id)}
+                              title="Click to mark as Paid or Pending"
+                              className="cursor-pointer transition-transform active:scale-95"
                             >
-                              <Eye className="w-4 h-4" />
+                              {row.status === 'Paid' ? (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100">
+                                  ✓ Paid
+                                </span>
+                              ) : row.status === 'Pending' ? (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100">
+                                  ⏳ Pending
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100">
+                                  Overdue
+                                </span>
+                              )}
                             </button>
+                          </td>
 
-                            {/* Edit Button */}
-                            <button 
-                              onClick={() => handleEditFeeRecord(row)}
-                              title="Edit Fee Record"
-                              className="px-2.5 py-1 text-[11px] font-semibold border border-amber-200 text-amber-700 rounded-md hover:bg-amber-50 transition-all shadow-2xs"
-                            >
-                              Edit
-                            </button>
+                          {/* Actions */}
+                          <td className="py-4 px-5">
+                            <div className="flex items-center justify-center gap-3 text-slate-400">
+                              <button 
+                                onClick={() => setSelectedStudentForView(row)}
+                                title="View Fee Details"
+                                className="hover:text-slate-700 transition-colors p-1"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
 
-                            {/* Pay Button */}
-                            <button 
-                              onClick={() => {
-                                handleOpenPayModal(row);
-                                setShowRecordModal(true);
-                              }}
-                              className="px-2.5 py-1 text-[11px] font-semibold border border-slate-200 text-slate-700 rounded-md hover:bg-slate-100 transition-all shadow-2xs"
-                            >
-                              Pay
-                            </button>
+                              <button 
+                                onClick={() => handleEditFeeRecord(row)}
+                                title="Edit Fee Record"
+                                className="px-2.5 py-1 text-[11px] font-semibold border border-amber-200 text-amber-700 rounded-md hover:bg-amber-50 transition-all shadow-2xs"
+                              >
+                                Edit
+                              </button>
 
-                            {/* Download & Print Bill Buttons */}
-                            <button 
-                              onClick={() => handleDownloadReceipt(row)}
-                              title="Download Official Bill (PDF/Print)"
-                              className="hover:text-blue-600 text-slate-500 transition-colors p-1 cursor-pointer"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
+                              <button 
+                                onClick={() => {
+                                  handleOpenPayModal(row);
+                                  setShowRecordModal(true);
+                                }}
+                                className="px-2.5 py-1 text-[11px] font-semibold border border-slate-200 text-slate-700 rounded-md hover:bg-slate-100 transition-all shadow-2xs"
+                              >
+                                Pay
+                              </button>
 
-                            <button 
-                              onClick={() => setSelectedReceiptStudent(row)}
-                              title="View & Print Receipt"
-                              className="hover:text-slate-700 transition-colors p-1 cursor-pointer"
-                            >
-                              <Printer className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                              <button 
+                                onClick={() => handleDownloadReceipt(row)}
+                                title="Download Official Bill (PDF/Print)"
+                                className="hover:text-blue-600 text-slate-500 transition-colors p-1 cursor-pointer"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+
+                              <button 
+                                onClick={() => setSelectedReceiptStudent(row)}
+                                title="View & Print Receipt"
+                                className="hover:text-slate-700 transition-colors p-1 cursor-pointer"
+                              >
+                                <Printer className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
-                      <td colSpan="9" className="py-8 text-center text-slate-400 text-xs font-medium">
+                      <td colSpan="12" className="py-8 text-center text-slate-400 text-xs font-medium">
                         No fee records found matching your filters.
                       </td>
                     </tr>
@@ -1743,6 +1938,16 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-500"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Receipt No.</label>
+                <input
+                  type="text"
+                  value={payFormData.receiptNo}
+                  onChange={(e) => setPayFormData({ ...payFormData, receiptNo: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-500"
+                />
               </div>
 
               {/* Submit Buttons */}

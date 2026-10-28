@@ -19,8 +19,6 @@ exports.createDriver = async (req, res) => {
       address,
       aadharNumber,
       panNumber,
-      aadharDocument,
-      panDocument,
       drivingLicenseDocument,
       status
     } = req.body;
@@ -43,8 +41,6 @@ exports.createDriver = async (req, res) => {
       address: normalizeString(address),
       aadharNumber: normalizeString(aadharNumber),
       panNumber: normalizeString(panNumber),
-      aadharDocument: normalizeString(aadharDocument),
-      panDocument: normalizeString(panDocument),
       drivingLicenseDocument: normalizeString(drivingLicenseDocument),
       status: status || 'Active'
     });
@@ -66,8 +62,6 @@ exports.updateDriver = async (req, res) => {
     if (updateData.address !== undefined) updateData.address = normalizeString(updateData.address);
     if (updateData.aadharNumber !== undefined) updateData.aadharNumber = normalizeString(updateData.aadharNumber);
     if (updateData.panNumber !== undefined) updateData.panNumber = normalizeString(updateData.panNumber);
-    if (updateData.aadharDocument !== undefined) updateData.aadharDocument = normalizeString(updateData.aadharDocument);
-    if (updateData.panDocument !== undefined) updateData.panDocument = normalizeString(updateData.panDocument);
     if (updateData.drivingLicenseDocument !== undefined) updateData.drivingLicenseDocument = normalizeString(updateData.drivingLicenseDocument);
     if (updateData.status) updateData.status = updateData.status;
 

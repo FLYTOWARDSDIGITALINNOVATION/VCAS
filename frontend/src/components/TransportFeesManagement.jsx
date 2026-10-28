@@ -162,7 +162,8 @@ export default function TransportFeesManagement({
     const totalFee = Number(r.totalFee) || (Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0) || 15000;
     const paidFee = Number(r.paidFee) || totalFee;
     const pendingFee = Number(r.pendingFee) || Math.max(0, totalFee - paidFee);
-    const receiptNo = 'REC-TRP-' + (r.id ? String(r.id).replace(/\D/g, '').slice(-4) : Math.floor(1000 + Math.random() * 9000));
+    const receiptNo = r.receiptNo || 'REC-TRP-' + (r.id ? String(r.id).replace(/\D/g, '').slice(-4) : Math.floor(1000 + Math.random() * 9000));
+    const txnRef = r.referenceNo || r.paymentRef || r.transactionRef || '';
     const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
     const breakdown = r.feeBreakdown || {
       tuition: { total: 0, paid: 0, pending: 0 },
@@ -212,10 +213,11 @@ export default function TransportFeesManagement({
             </div>
             <div class="meta-grid">
               <div class="meta-item"><span>Receipt No:</span> <strong>${receiptNo}</strong></div>
+              <div class="meta-item"><span>Transaction Ref:</span> <strong>${txnRef || '—'}</strong></div>
               <div class="meta-item"><span>Payment Date:</span> <strong>${payDate}</strong></div>
               <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
               <div class="meta-item"><span>Roll / ID No:</span> <strong>${rollNo}</strong></div>
-                <div class="meta-item"><span>Status:</span> <strong>${pendingFee === 0 ? 'Fully Paid' : 'Pending'}</strong></div>
+              <div class="meta-item"><span>Status:</span> <strong>${pendingFee === 0 ? 'Fully Paid' : 'Pending'}</strong></div>
             </div>
             <table>
               <thead>
@@ -602,6 +604,30 @@ export default function TransportFeesManagement({
                 onChange={(e) => setEntryFormData({...entryFormData, paymentDate: e.target.value})}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-slate-700 font-bold mb-1.5">Receipt No.</label>
+              <input
+                type="text"
+                value={entryFormData.receiptNo || ''}
+                onChange={(e) => setEntryFormData({ ...entryFormData, receiptNo: e.target.value })}
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                placeholder="REC-TRP-1001"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-bold mb-1.5">Transaction Ref No.</label>
+              <input
+                type="text"
+                value={entryFormData.referenceNo || ''}
+                onChange={(e) => setEntryFormData({ ...entryFormData, referenceNo: e.target.value })}
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
+                placeholder="TXN1234567890"
               />
             </div>
           </div>
