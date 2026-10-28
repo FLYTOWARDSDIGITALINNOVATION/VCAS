@@ -138,11 +138,15 @@ export default function FeeStructureView({ user }) {
       return {};
     }
   })();
-  const userRole = currentUser?.role || 'Super Admin';
-  // Strictly prevent Accountant and Office Staff from having edit options in fee structure & scholarships
-  const isSuperAdminOrAdmin = ['Super Admin', 'Admin', 'super admin', 'admin'].includes(userRole);
-  const isRestrictedRole = ['Accountant', 'Office Staff', 'accountant', 'office staff'].includes(userRole);
-  const canEdit = isSuperAdminOrAdmin && !isRestrictedRole;
+
+  const effectiveRole = (currentUser?.role || currentUser?.designation || 'Super Admin')
+    .toString()
+    .trim();
+  const normalizedRole = effectiveRole.toLowerCase();
+  const isSuperAdminOrAdmin = ['super admin', 'admin'].includes(normalizedRole);
+  const isFinanceRole = ['accountant', 'office staff'].includes(normalizedRole);
+  const canEdit = isSuperAdminOrAdmin || isFinanceRole;
+  const userRole = effectiveRole;
 
   // Live Synchronized Fee Structure State
   const [clusters, setClusters] = useState(UG_FEE_STRUCTURE);
@@ -227,10 +231,10 @@ export default function FeeStructureView({ user }) {
     };
   }, []);
 
-  // Open Edit Modal with cloned state (restricted for Accountant and Office Staff)
+  // Open Edit Modal with cloned state for all authorized finance/admin roles
   const handleOpenEdit = () => {
     if (!canEdit) {
-      alert('Access Restricted: Accountant and Office Staff do not have edit options for fee structure and scholarships.');
+      alert('Access Restricted: only authorized admin/finance roles can edit the fee structure and scholarships.');
       return;
     }
     setEditClusters(JSON.parse(JSON.stringify(clusters)));

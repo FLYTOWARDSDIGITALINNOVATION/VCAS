@@ -31,6 +31,28 @@ export default function TuitionFeesManagement({
       .catch(err => console.warn('Could not fetch admin departments in tuition fees:', err));
   }, []);
 
+  const normalizeDeptText = (value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+
+  const getCourseCodeFromDepartment = (selectedDepartment) => {
+    const departmentValue = String(selectedDepartment || '').trim();
+    if (!departmentValue) return 'B.Com';
+
+    const normalized = normalizeDeptText(departmentValue);
+    if (normalized.includes('computer') || normalized.includes('cs')) return 'CS';
+    if (normalized.includes('ai')) return 'AI';
+    if (normalized.includes('cfs') || normalized.includes('forensic')) return 'CFS';
+    if (normalized.includes('bba')) return 'BBA';
+    if (normalized.includes('commerce')) return 'B.Com';
+
+    const matchedDept = (adminDepartments || []).find(d => {
+      const code = String(d.code || '').trim();
+      const name = String(d.name || '').trim();
+      return normalizeDeptText(code) === normalized || normalizeDeptText(name) === normalized;
+    });
+
+    return matchedDept?.code || departmentValue;
+  };
+
   // Auto-calculate fee based on department, component, and scholarship slab
   const handleCalculateFee = (selectedCourse, component, concession) => {
     const isTech = ['CS', 'AI', 'CFS'].includes(selectedCourse);
@@ -63,6 +85,7 @@ export default function TuitionFeesManagement({
     setEntryFormData(prev => ({
       ...prev,
       course: selectedCourse,
+      department: prev.department || selectedCourse,
       amount: String(total),
       totalAmount: String(grandTotal),
       paidAmount: prev.paidAmount !== undefined ? prev.paidAmount : String(grandTotal),
@@ -71,7 +94,13 @@ export default function TuitionFeesManagement({
   };
 
   const onCourseChange = (e) => {
-    const course = e.target.value;
+    const department = e.target.value;
+    const course = getCourseCodeFromDepartment(department);
+    setEntryFormData(prev => ({
+      ...prev,
+      course,
+      department
+    }));
     handleCalculateFee(course, feeComponent, concessionCategory);
   };
 
@@ -103,11 +132,15 @@ export default function TuitionFeesManagement({
     );
 
     if (found) {
-      const deptStr = found.course || found.department || 'B.Com';
-      const cleanDept = deptStr.includes('CS') || deptStr.includes('Computer Science') ? 'CS' :
-        deptStr.includes('AI') ? 'AI' :
-        deptStr.includes('CFS') || deptStr.includes('Forensic') ? 'CFS' :
-        deptStr.includes('BBA') ? 'BBA' : 'B.Com';
+      const rawDept = found.department || found.course || 'B.Com';
+      const matchingDepartment = (adminDepartments || []).find(d => {
+        const deptName = String(d.name || '').trim();
+        const deptCode = String(d.code || '').trim();
+        const candidate = String(rawDept || '').trim();
+        return normalizeDeptText(deptName) === normalizeDeptText(candidate) || normalizeDeptText(deptCode) === normalizeDeptText(candidate);
+      });
+      const departmentValue = matchingDepartment ? (matchingDepartment.code || matchingDepartment.name) : rawDept;
+      const selectedCourseCode = getCourseCodeFromDepartment(departmentValue);
 
       const regFee = 7000;
       const baseSemFee = 10000;
@@ -121,7 +154,8 @@ export default function TuitionFeesManagement({
         ...prev,
         studentName: found.name,
         rollNo: found.rollNo || found.id,
-        course: cleanDept,
+        course: selectedCourseCode,
+        department: departmentValue,
         academicYear: found.academicYear || prev.academicYear || '2025 - 2026',
         amount: String(calcAmt),
         totalAmount: String(totalPayable),
@@ -198,6 +232,16 @@ export default function TuitionFeesManagement({
     const pendingFee = Number(r.pendingFee) || Math.max(0, totalFee - paidFee);
     const receiptNo = 'REC-TUI-' + (r.id ? String(r.id).replace(/\D/g, '').slice(-4) : Math.floor(1000 + Math.random() * 9000));
     const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
+    const breakdown = r.feeBreakdown || {
+      tuition: { total: 0, paid: 0, pending: 0 },
+      exam: { total: 0, paid: 0, pending: 0 },
+      transport: { total: 0, paid: 0, pending: 0 }
+    };
+    const breakdownRows = [
+      ['Tuition Fees', Number(breakdown.tuition?.paid || 0)],
+      ['Exam Fees', Number(breakdown.exam?.paid || 0)],
+      ['Transport Fees', Number(breakdown.transport?.paid || 0)]
+    ];
 
     printWin.document.write(`
       <!DOCTYPE html>
@@ -251,11 +295,13 @@ export default function TuitionFeesManagement({
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style="text-align: center;">1</td>
-                  <td><strong>Tuition Fee Collection</strong></td>
-                  <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
-                </tr>
+                ${breakdownRows.map(([label, value], index) => `
+                  <tr>
+                    <td style="text-align: center;">${index + 1}</td>
+                    <td><strong>${label}</strong></td>
+                    <td style="text-align: right;">₹${Number(value || 0).toLocaleString('en-IN')}</td>
+                  </tr>
+                `).join('')}
                 <tr class="total-row">
                   <td colspan="2" style="text-align: right;">Total Assessed:</td>
                   <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
@@ -401,7 +447,7 @@ export default function TuitionFeesManagement({
                   Department <span className="text-rose-500">*</span>
                 </label>
                 <select
-                  value={entryFormData.course}
+                  value={entryFormData.department || entryFormData.course || ''}
                   onChange={onCourseChange}
                   className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                   required

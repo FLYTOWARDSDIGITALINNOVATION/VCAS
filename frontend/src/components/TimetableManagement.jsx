@@ -33,24 +33,26 @@ import ModalPortal from './ModalPortal';
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const DEFAULT_FACULTY_PERIODS = [
-  { slot: 1, time: '09:30 – 10:30 AM' },
-  { slot: 2, time: '10:30 – 11:30 AM' },
-  { slot: 3, time: '11:45 AM – 12:45 PM' },
-  { slot: 4, time: '01:30 – 02:30 PM' },
-  { slot: 5, time: '02:30 – 03:30 PM' },
+  { slot: 1, time: '09:30 AM - 10:30 AM' },
+  { slot: 2, time: '10:30 AM - 11:20 AM' },
+  { slot: 3, time: '11:30 AM - 12:20 PM' },
+  { slot: 4, time: '12:20 PM - 01:00 PM' },
+  { slot: 5, time: '01:30 PM - 02:15 PM' },
+  { slot: 6, time: '02:15 PM - 03:00 PM' },
 ];
 
 const DEFAULT_CLASS_PERIODS = [
-  { slot: 1, time: '09:30 – 10:30 AM' },
-  { slot: 2, time: '10:30 – 11:30 AM' },
-  { slot: 3, time: '11:45 AM – 12:45 PM' },
-  { slot: 4, time: '01:30 – 02:30 PM' },
-  { slot: 5, time: '02:30 – 03:30 PM' },
+  { slot: 1, time: '09:30 AM - 10:30 AM' },
+  { slot: 2, time: '10:30 AM - 11:20 AM' },
+  { slot: 3, time: '11:30 AM - 12:20 PM' },
+  { slot: 4, time: '12:20 PM - 01:00 PM' },
+  { slot: 5, time: '01:30 PM - 02:15 PM' },
+  { slot: 6, time: '02:15 PM - 03:00 PM' },
 ];
 
 const DEFAULT_BREAK_TIMINGS = {
-  tea: '11:30 – 11:45 AM (15m)',
-  lunch: '12:45 – 01:30 PM (45m)'
+  tea: '11:20 AM - 11:30 AM (Break)',
+  lunch: '01:00 PM - 01:30 PM (Lunch)'
 };
 
 const FACULTY_PERIODS = DEFAULT_FACULTY_PERIODS;

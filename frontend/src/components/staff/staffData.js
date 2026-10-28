@@ -2,16 +2,14 @@ export const STAFF_REGISTRY = [];
 export const SUBJECTS = {};
 export const STUDENTS = {};
 export const SLOT_TIMES = [
-  { slot: 1, time: '8:30 – 9:20 AM' },
-  { slot: 2, time: '9:20 – 10:10 AM' },
-  { slot: 3, time: '10:10 – 11:00 AM' },
-  { slot: 'B', time: '11:00 – 11:15 AM', isBreak: true, label: 'Break' },
-  { slot: 4, time: '11:15 AM – 12:05 PM' },
-  { slot: 5, time: '12:05 – 12:55 PM' },
-  { slot: 'L', time: '12:55 – 1:45 PM', isBreak: true, label: 'Lunch' },
-  { slot: 6, time: '1:45 – 2:35 PM' },
-  { slot: 7, time: '2:35 – 3:25 PM' },
-  { slot: 8, time: '3:25 – 4:15 PM' },
+  { slot: 1, time: '09:30 AM - 10:30 AM' },
+  { slot: 2, time: '10:30 AM - 11:20 AM' },
+  { slot: 'B', time: '11:20 AM - 11:30 AM', isBreak: true, label: 'Break' },
+  { slot: 3, time: '11:30 AM - 12:20 PM' },
+  { slot: 4, time: '12:20 PM - 01:00 PM' },
+  { slot: 'L', time: '01:00 PM - 01:30 PM', isBreak: true, label: 'Lunch' },
+  { slot: 5, time: '01:30 PM - 02:15 PM' },
+  { slot: 6, time: '02:15 PM - 03:00 PM' },
 ];
 
 export const TIMETABLE = {};

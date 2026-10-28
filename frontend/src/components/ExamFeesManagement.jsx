@@ -29,6 +29,28 @@ export default function ExamFeesManagement({
       .catch(err => console.warn('Could not fetch admin departments in exam fees:', err));
   }, []);
 
+  const normalizeDeptText = (value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+
+  const getCourseCodeFromDepartment = (selectedDepartment) => {
+    const departmentValue = String(selectedDepartment || '').trim();
+    if (!departmentValue) return 'B.Com';
+
+    const normalized = normalizeDeptText(departmentValue);
+    if (normalized.includes('computer') || normalized.includes('cs')) return 'CS';
+    if (normalized.includes('ai')) return 'AI';
+    if (normalized.includes('cfs') || normalized.includes('forensic')) return 'CFS';
+    if (normalized.includes('bba')) return 'BBA';
+    if (normalized.includes('commerce')) return 'B.Com';
+
+    const matchedDept = (adminDepartments || []).find(d => {
+      const code = String(d.code || '').trim();
+      const name = String(d.name || '').trim();
+      return normalizeDeptText(code) === normalized || normalizeDeptText(name) === normalized;
+    });
+
+    return matchedDept?.code || departmentValue;
+  };
+
   // Auto-fill student details from dropdown
   const handleStudentSelect = (selectedKey) => {
     if (!selectedKey) {
@@ -45,6 +67,15 @@ export default function ExamFeesManagement({
     );
 
     if (found) {
+      const rawDept = found.department || found.course || 'B.Com';
+      const matchingDepartment = (adminDepartments || []).find(d => {
+        const deptName = String(d.name || '').trim();
+        const deptCode = String(d.code || '').trim();
+        const candidate = String(rawDept || '').trim();
+        return normalizeDeptText(deptName) === normalizeDeptText(candidate) || normalizeDeptText(deptCode) === normalizeDeptText(candidate);
+      });
+      const departmentValue = matchingDepartment ? (matchingDepartment.name || matchingDepartment.code || rawDept) : rawDept;
+      const courseValue = getCourseCodeFromDepartment(departmentValue);
       const baseAmt = parseFloat(entryFormData.amount) || 5000;
       const fineAmt = parseFloat(entryFormData.fine) || 0;
       const total = baseAmt + fineAmt;
@@ -53,7 +84,8 @@ export default function ExamFeesManagement({
         ...prev,
         studentName: found.name,
         rollNo: found.rollNo || found.id,
-        course: found.course || prev.course || 'B.Com',
+        course: courseValue,
+        department: departmentValue,
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
         amount: prev.amount || '5000',
         totalAmount: String(total),
@@ -130,6 +162,16 @@ export default function ExamFeesManagement({
     const pendingFee = Number(r.pendingFee) || Math.max(0, totalFee - paidFee);
     const receiptNo = 'REC-EXAM-' + (r.id ? String(r.id).replace(/\D/g, '').slice(-4) : Math.floor(1000 + Math.random() * 9000));
     const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
+    const breakdown = r.feeBreakdown || {
+      tuition: { total: 0, paid: 0, pending: 0 },
+      exam: { total: 0, paid: 0, pending: 0 },
+      transport: { total: 0, paid: 0, pending: 0 }
+    };
+    const breakdownRows = [
+      ['Tuition Fees', Number(breakdown.tuition?.paid || 0)],
+      ['Exam Fees', Number(breakdown.exam?.paid || 0)],
+      ['Transport Fees', Number(breakdown.transport?.paid || 0)]
+    ];
 
     printWin.document.write(`
       <!DOCTYPE html>
@@ -183,11 +225,13 @@ export default function ExamFeesManagement({
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style="text-align: center;">1</td>
-                  <td><strong>Semester Examination Fee</strong></td>
-                  <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
-                </tr>
+                ${breakdownRows.map(([label, value], index) => `
+                  <tr>
+                    <td style="text-align: center;">${index + 1}</td>
+                    <td><strong>${label}</strong></td>
+                    <td style="text-align: right;">₹${Number(value || 0).toLocaleString('en-IN')}</td>
+                  </tr>
+                `).join('')}
                 <tr class="total-row">
                   <td colspan="2" style="text-align: right;">Total Assessed:</td>
                   <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
@@ -329,15 +373,22 @@ export default function ExamFeesManagement({
                 Department <span className="text-rose-500">*</span>
               </label>
               <select
-                value={entryFormData.course}
-                onChange={(e) => setEntryFormData({...entryFormData, course: e.target.value})}
+                value={entryFormData.department || entryFormData.course || ''}
+                onChange={(e) => {
+                  const nextDepartment = e.target.value;
+                  setEntryFormData({
+                    ...entryFormData,
+                    department: nextDepartment,
+                    course: getCourseCodeFromDepartment(nextDepartment)
+                  });
+                }}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               >
                 <option value="">Select dept...</option>
                 {adminDepartments.length > 0 ? (
                   adminDepartments.map((dept) => {
-                    const val = dept.code || dept.name;
+                    const val = dept.name || dept.code || dept._id || '';
                     return (
                       <option key={dept._id || val} value={val}>
                         {dept.name} {dept.code ? `(${dept.code})` : ''}
@@ -345,7 +396,7 @@ export default function ExamFeesManagement({
                     );
                   })
                 ) : (
-                  <option value={entryFormData.course || 'B.Com'}>{entryFormData.course || 'B.Com'}</option>
+                  <option value={entryFormData.department || entryFormData.course || 'B.Com'}>{entryFormData.department || entryFormData.course || 'B.Com'}</option>
                 )}
               </select>
             </div>

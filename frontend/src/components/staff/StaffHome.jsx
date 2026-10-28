@@ -51,7 +51,14 @@ export default function StaffHome({ staffUser, onNavigate }) {
   const todayClasses = useMemo(() => {
     const slots = dbTimetable[today] || {};
     const classesList = [];
-    const slotTimes = { 1: '8:30 AM', 2: '9:20 AM', 3: '10:10 AM', 4: '11:15 AM', 5: '12:05 PM', 6: '1:45 PM', 7: '2:35 PM', 8: '3:25 PM' };
+    const slotTimes = {
+      1: '09:30 AM',
+      2: '10:30 AM',
+      3: '11:30 AM',
+      4: '12:20 PM',
+      5: '01:30 PM',
+      6: '02:15 PM'
+    };
     Object.entries(slots).forEach(([slot, cls]) => {
       if (cls && cls.code) {
         classesList.push({ ...cls, slot: Number(slot), time: slotTimes[slot] || `Period ${slot}` });

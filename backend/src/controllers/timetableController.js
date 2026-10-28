@@ -290,14 +290,12 @@ exports.getStudentTimetable = async (req, res) => {
 
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const slotTimes = {
-      1: '8:30 – 9:20 AM',
-      2: '9:20 – 10:10 AM',
-      3: '10:10 – 11:00 AM',
-      4: '11:15 AM – 12:05 PM',
-      5: '12:05 – 12:55 PM',
-      6: '1:45 – 2:35 PM',
-      7: '2:35 – 3:25 PM',
-      8: '3:25 – 4:15 PM'
+      1: '09:30 – 10:30 AM',
+      2: '10:30 – 11:20 AM',
+      3: '11:30 AM – 12:20 PM',
+      4: '12:20 – 01:00 PM',
+      5: '01:30 – 02:15 PM',
+      6: '02:15 – 03:00 PM'
     };
 
     const studentSchedule = {

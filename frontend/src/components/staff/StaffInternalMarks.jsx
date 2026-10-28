@@ -141,6 +141,7 @@ export default function StaffInternalMarks({ staffUser }) {
   const [filterYear, setFilterYear] = useState("All");
   const [filterBatch, setFilterBatch] = useState("All");
   const [filterSem, setFilterSem] = useState("All");
+  const [filterSubject, setFilterSubject] = useState("All");
   const [allRegisteredStudents, setAllRegisteredStudents] = useState([]);
   const [adminDepartments, setAdminDepartments] = useState([]);
   const [currentMarksheetMeta, setCurrentMarksheetMeta] = useState({});
@@ -371,9 +372,18 @@ export default function StaffInternalMarks({ staffUser }) {
         }
       }
 
+      // Subject filter
+      if (filterSubject && filterSubject !== 'All') {
+        const subjectValue = String(s.subjectCode || s.subject || subjectCode || '').toLowerCase().trim();
+        const target = filterSubject.toLowerCase().trim();
+        if (!subjectValue || (subjectValue !== target && !subjectValue.includes(target) && !target.includes(subjectValue))) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [studentsWithMeta, searchQuery, filterDept, filterYear, filterBatch, filterSem]);
+  }, [studentsWithMeta, searchQuery, filterDept, filterYear, filterBatch, filterSem, filterSubject, subjectCode]);
 
   const stats = useMemo(() => {
     let totalScore = 0, count = 0, absentCount = 0, passCount = 0, highest = -1, lowest = 9999;
@@ -435,6 +445,7 @@ export default function StaffInternalMarks({ staffUser }) {
         setIsLocked(json.data.isLocked || false);
         setSubjectName(json.data.subjectName || "");
         setSubjectCode(canonicalCode);
+        setFilterSubject(canonicalCode);
         setSearchInput(canonicalCode);
         try {
           localStorage.setItem('vcas_internal_subject', canonicalCode);
@@ -618,6 +629,7 @@ export default function StaffInternalMarks({ staffUser }) {
     const target = (codeToLoad !== undefined ? codeToLoad : searchInput).trim().toUpperCase();
     if (!target) return;
     setSubjectCode(target);
+    setFilterSubject(target);
     setSearchInput(target);
     fetchMarksheet(target);
   };
@@ -1413,213 +1425,6 @@ export default function StaffInternalMarks({ staffUser }) {
         </div>
       </div>
 
-      {/* Multi-Tier Approval Stepper Banner (Staff Entry -> HOD -> Principal -> MD) */}
-      {subjectCode && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-indigo-600" />
-              <div>
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">
-                  Official Verification & Approval Pipeline
-                </h4>
-                <p className="text-[11px] text-slate-500">
-                  Strict Order: <b className="text-indigo-600">Staff In-Charge ➔ HOD Review ➔ Principal Approval ➔ MD Endorsement</b>
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase text-slate-400">Current Status:</span>
-              <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full border ${approvalStatus === 'Approved'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : approvalStatus === 'Rejected'
-                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                }`}>
-                {approvalStatus}
-              </span>
-            </div>
-          </div>
-
-          {/* Stepper Pipeline */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 my-4">
-            {/* Step 1: Staff */}
-            <div className={`p-3 rounded-xl border ${students.length > 0 ? 'bg-blue-50/60 border-blue-200 text-blue-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-              <div className="flex items-center justify-between text-[11px] font-extrabold">
-                <span>1. Staff In-Charge</span>
-                {students.length > 0 ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Clock className="w-3.5 h-3.5 text-slate-400" />}
-              </div>
-              <div className="text-[10px] text-slate-500 mt-1 truncate">{staffName || "Staff Entry"}</div>
-              <div className="text-[10px] font-bold text-blue-700 mt-0.5">
-                {isLocked || approvalStatus !== 'Draft' ? 'Marks Finalized' : 'Marks Entry Draft'}
-              </div>
-            </div>
-
-            {/* Step 2: HOD */}
-            <div className={`p-3 rounded-xl border ${hodApproval?.status === 'Approved'
-              ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
-              : approvalStatus === 'Pending HOD'
-                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                : 'bg-slate-50 border-slate-200 text-slate-600'
-              }`}>
-              <div className="flex items-center justify-between text-[11px] font-extrabold">
-                <span>2. HOD Review</span>
-                {hodApproval?.status === 'Approved' ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                ) : approvalStatus === 'Pending HOD' ? (
-                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                ) : (
-                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                )}
-              </div>
-              <div className="text-[10px] text-slate-500 mt-1 truncate">{hodApproval?.approvedBy || "Department HOD"}</div>
-              <div className="text-[10px] font-bold mt-0.5">
-                {hodApproval?.status === 'Approved' ? (
-                  <span className="text-emerald-700">✓ Recommended</span>
-                ) : hodApproval?.status === 'Rejected' ? (
-                  <span className="text-rose-700">✕ Rejected</span>
-                ) : approvalStatus === 'Pending HOD' ? (
-                  <span className="text-amber-700">Awaiting HOD</span>
-                ) : (
-                  <span className="text-slate-400">Queue Stage 1</span>
-                )}
-              </div>
-            </div>
-
-            {/* Step 3: Principal */}
-            <div className={`p-3 rounded-xl border ${principalApproval?.status === 'Approved'
-              ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
-              : approvalStatus === 'Pending Principal'
-                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                : 'bg-slate-50 border-slate-200 text-slate-600'
-              }`}>
-              <div className="flex items-center justify-between text-[11px] font-extrabold">
-                <span>3. Principal Approval</span>
-                {principalApproval?.status === 'Approved' ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                ) : approvalStatus === 'Pending Principal' ? (
-                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                ) : (
-                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                )}
-              </div>
-              <div className="text-[10px] text-slate-500 mt-1 truncate">{principalApproval?.approvedBy || "College Principal"}</div>
-              <div className="text-[10px] font-bold mt-0.5">
-                {principalApproval?.status === 'Approved' ? (
-                  <span className="text-emerald-700">✓ Approved</span>
-                ) : principalApproval?.status === 'Rejected' ? (
-                  <span className="text-rose-700">✕ Rejected</span>
-                ) : approvalStatus === 'Pending Principal' ? (
-                  <span className="text-amber-700">Awaiting Principal</span>
-                ) : (
-                  <span className="text-slate-400">Queue Stage 2</span>
-                )}
-              </div>
-            </div>
-
-            {/* Step 4: Managing Director */}
-            <div className={`p-3 rounded-xl border ${mdApproval?.status === 'Approved'
-              ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
-              : approvalStatus === 'Pending MD'
-                ? 'bg-amber-50/60 border-amber-200 text-amber-950 ring-2 ring-amber-300'
-                : 'bg-slate-50 border-slate-200 text-slate-600'
-              }`}>
-              <div className="flex items-center justify-between text-[11px] font-extrabold">
-                <span>4. Managing Director (MD)</span>
-                {mdApproval?.status === 'Approved' ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                ) : approvalStatus === 'Pending MD' ? (
-                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                ) : (
-                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                )}
-              </div>
-              <div className="text-[10px] text-slate-500 mt-1 truncate">{mdApproval?.approvedBy || "Managing Director"}</div>
-              <div className="text-[10px] font-bold mt-0.5">
-                {mdApproval?.status === 'Approved' ? (
-                  <span className="text-emerald-700">✓ Fully Endorsed</span>
-                ) : mdApproval?.status === 'Rejected' ? (
-                  <span className="text-rose-700">✕ Rejected</span>
-                ) : approvalStatus === 'Pending MD' ? (
-                  <span className="text-amber-700">Awaiting MD</span>
-                ) : (
-                  <span className="text-slate-400">Final Stage</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Contextual Action Bar for HOD, Principal, and MD */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-            <div className="text-[11px] text-slate-500">
-              Role Permission Detected: <b className="text-slate-800">{isMD ? 'Managing Director' : isPrincipal ? 'Principal' : isHod ? 'Head of Department (HOD)' : 'Staff In-Charge'}</b>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* HOD Action Buttons */}
-              {isHod && approvalStatus === 'Pending HOD' && (
-                <>
-                  <button
-                    disabled={isProcessingStage}
-                    onClick={() => handleStageApprovalAction('HOD', 'Rejected')}
-                    className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Reject to Staff
-                  </button>
-                  <button
-                    disabled={isProcessingStage}
-                    onClick={() => handleStageApprovalAction('HOD', 'Approved')}
-                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                  >
-                    ✓ Submit to Principal
-                  </button>
-                </>
-              )}
-
-              {/* Principal / Admin Action Buttons */}
-              {(isPrincipal || isAdminUser) && approvalStatus === 'Pending Principal' && (
-                <>
-                  <button
-                    disabled={isProcessingStage}
-                    onClick={() => handleStageApprovalAction('Principal', 'Rejected')}
-                    className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Reject
-                  </button>
-                  <button
-                    disabled={isProcessingStage}
-                    onClick={() => handleStageApprovalAction('Principal', 'Approved')}
-                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                  >
-                    ✓ Submit to MD
-                  </button>
-                </>
-              )}
-
-              {/* MD / Super Admin Action Buttons */}
-              {(isMD || isSuperAdminUser) && approvalStatus === 'Pending MD' && (
-                <>
-                  <button
-                    disabled={isProcessingStage}
-                    onClick={() => handleStageApprovalAction('MD', 'Rejected')}
-                    className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Reject
-                  </button>
-                  <button
-                    disabled={isProcessingStage}
-                    onClick={() => handleStageApprovalAction('MD', 'Approved')}
-                    className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                  >
-                    Approved
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Centered Notifications Popup */}
       {(successMsg || errorMsg) && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95">
@@ -1754,13 +1559,13 @@ export default function StaffInternalMarks({ staffUser }) {
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                   <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
                   <span>Filter Students List</span>
-                  {(filterDept !== 'All' || filterYear !== 'All' || filterBatch !== 'All' || filterSem !== 'All' || searchQuery) && (
+                  {(filterDept !== 'All' || filterYear !== 'All' || filterBatch !== 'All' || filterSem !== 'All' || filterSubject !== 'All' || searchQuery) && (
                     <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
                       Filters Active
                     </span>
                   )}
                 </div>
-                {(filterDept !== 'All' || filterYear !== 'All' || filterBatch !== 'All' || filterSem !== 'All' || searchQuery) && (
+                {(filterDept !== 'All' || filterYear !== 'All' || filterBatch !== 'All' || filterSem !== 'All' || filterSubject !== 'All' || searchQuery) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1768,6 +1573,7 @@ export default function StaffInternalMarks({ staffUser }) {
                       setFilterYear('All');
                       setFilterBatch('All');
                       setFilterSem('All');
+                      setFilterSubject('All');
                       setSearchQuery('');
                     }}
                     className="text-[11px] font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1 cursor-pointer transition-colors"
@@ -1777,7 +1583,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 {/* Department Filter */}
                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
@@ -1842,6 +1648,23 @@ export default function StaffInternalMarks({ staffUser }) {
                     <option value="All">All Semesters</option>
                     {semestersList.map(sem => (
                       <option key={sem} value={sem}>{sem}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Subject Filter */}
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                    Subject
+                  </label>
+                  <select
+                    value={filterSubject}
+                    onChange={(e) => setFilterSubject(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+                  >
+                    <option value="All">All Subjects</option>
+                    {dropdownSubjects.map(sub => (
+                      <option key={sub.code} value={sub.code}>{sub.code}{sub.name && sub.name !== sub.code ? ` — ${sub.name}` : ''}</option>
                     ))}
                   </select>
                 </div>
@@ -2366,42 +2189,6 @@ export default function StaffInternalMarks({ staffUser }) {
                   </tbody>
                 </table>
               )}
-            </div>
-
-            {/* Official Signature Verification Strip matching physical sheet */}
-            <div className="p-4 bg-slate-50/80 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs font-bold text-slate-700">
-              <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs">
-                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-xs truncate">
-                  {staffName || "P. KALARANI"}
-                </div>
-                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[9px] text-slate-500 font-extrabold mt-1 truncate">
-                  STAFF IN-CHARGE
-                </div>
-              </div>
-              <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs">
-                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-xs truncate">
-                  {hodApproval?.approvedBy || (isLocked ? "Dr. Meenakshi C" : "Pending HOD")}
-                </div>
-                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[9px] text-slate-500 font-extrabold mt-1 truncate">
-                  HOD APPROVAL
-                </div>
-              </div>
-              <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs">
-                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-xs truncate">
-                  {principalApproval?.approvedBy || (isLocked && hodApproval?.status === 'Approved' ? "Dr. K. Sundararajan" : "Pending Principal")}
-                </div>
-                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[9px] text-slate-500 font-extrabold mt-1 truncate">
-                  PRINCIPAL
-                </div>
-              </div>
-              <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-2xs">
-                <div className="h-7 flex items-end justify-center font-serif italic text-blue-700 font-bold text-xs truncate">
-                  {mdApproval?.approvedBy || (approvalStatus === 'Approved' ? "Managing Director" : "Pending MD")}
-                </div>
-                <div className="border-t border-slate-300 pt-1 uppercase tracking-wider text-[9px] text-slate-500 font-extrabold mt-1 truncate">
-                  MANAGING DIRECTOR (MD)
-                </div>
-              </div>
             </div>
 
             {/* Bottom Bar */}

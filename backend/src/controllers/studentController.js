@@ -228,6 +228,17 @@ exports.createStudent = async (req, res) => {
       email: (body.email || '').toLowerCase().trim(),
       attendance: Number(body.attendance) >= 0 ? Number(body.attendance) : 100,
       feeStatus: body.feeStatus || 'Pending',
+      totalFee: Number(body.totalFee) || 0,
+      paidFee: Number(body.paidFee) || 0,
+      pendingFee: Number(body.pendingFee) || 0,
+      feeBreakdown: body.feeBreakdown || {
+        tuition: { total: 0, paid: 0, pending: 0 },
+        exam: { total: 0, paid: 0, pending: 0 },
+        transport: { total: 0, paid: 0, pending: 0 }
+      },
+      lastPaymentDate: body.lastPaymentDate || '',
+      paymentMode: body.paymentMode || '',
+      referenceNo: body.referenceNo || '',
       status: body.status || 'Active',
       gender: body.gender || 'Male',
       dob: studentDob,
@@ -376,6 +387,15 @@ exports.updateStudent = async (req, res) => {
     if (updates.attendance !== undefined && updates.attendance !== null && updates.attendance !== '') {
       student.attendance = Math.min(100, Math.max(0, Number(updates.attendance)));
     }
+
+    // Fee summary & breakdown
+    if (updates.totalFee !== undefined) student.totalFee = Number(updates.totalFee) || 0;
+    if (updates.paidFee !== undefined) student.paidFee = Number(updates.paidFee) || 0;
+    if (updates.pendingFee !== undefined) student.pendingFee = Number(updates.pendingFee) || 0;
+    if (updates.feeBreakdown !== undefined) student.feeBreakdown = updates.feeBreakdown;
+    if (updates.lastPaymentDate !== undefined) student.lastPaymentDate = updates.lastPaymentDate || '';
+    if (updates.paymentMode !== undefined) student.paymentMode = updates.paymentMode || '';
+    if (updates.referenceNo !== undefined) student.referenceNo = updates.referenceNo || '';
 
     // Statuses
     if (updates.feeStatus) student.feeStatus = updates.feeStatus;

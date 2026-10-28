@@ -733,14 +733,14 @@ export default function StaffAttendance({ staffUser }) {
                   onChange={(e) => setSessionSlot(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                 >
-                  <option value="8:30 AM">Period 1 (8:30 AM – 9:20 AM)</option>
-                  <option value="9:20 AM">Period 2 (9:20 AM – 10:10 AM)</option>
-                  <option value="10:10 AM">Period 3 (10:10 AM – 11:00 AM)</option>
-                  <option value="11:15 AM">Period 4 (11:15 AM – 12:05 PM)</option>
-                  <option value="12:05 PM">Period 5 (12:05 PM – 12:55 PM)</option>
-                  <option value="1:45 PM">Period 6 (1:45 PM – 2:35 PM)</option>
-                  <option value="2:35 PM">Period 7 (2:35 PM – 3:25 PM)</option>
-                  <option value="3:25 PM">Period 8 (3:25 PM – 4:15 PM)</option>
+                  <option value="9:30 AM">Period 1 (09:30 AM - 10:30 AM)</option>
+                  <option value="10:30 AM">Period 2 (10:30 AM - 11:20 AM)</option>
+                  <option value="11:20 AM">Break (11:20 AM - 11:30 AM)</option>
+                  <option value="11:30 AM">Period 3 (11:30 AM - 12:20 PM)</option>
+                  <option value="12:20 PM">Period 4 (12:20 PM - 01:00 PM)</option>
+                  <option value="1:00 PM">Lunch (01:00 PM - 01:30 PM)</option>
+                  <option value="1:30 PM">Period 5 (01:30 PM - 02:15 PM)</option>
+                  <option value="2:15 PM">Period 6 (02:15 PM - 03:00 PM)</option>
                 </select>
               </div>
             </div>

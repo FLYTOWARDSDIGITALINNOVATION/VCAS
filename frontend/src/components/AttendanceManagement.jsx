@@ -63,11 +63,15 @@ function getLocalDateString() {
 
 export default function AttendanceManagement({ user }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
-  const isFinanceOrOffice = user?.role === 'Accountant' || 
-    user?.role === 'Office Staff' || 
-    user?.designation === 'Accountant' || 
+  const isFinanceOrOffice = Boolean(
+    user?.role === 'Accountant' ||
+    user?.role === 'Office Staff' ||
+    user?.designation === 'Accountant' ||
     user?.designation === 'Office Staff' ||
-    (user?.department && (user?.department.toLowerCase().includes('account') || user?.department.toLowerCase().includes('office')));
+    user?.canViewFees === true ||
+    (user?.department && (user?.department.toLowerCase().includes('account') || user?.department.toLowerCase().includes('office')))
+  );
+  const onlyShowAbsentStudents = isFinanceOrOffice && !isSuperAdmin;
 
   // Navigation Tabs: 'daily-log', 'roll-call', 'student-register', 'staff-attendance', 'leaves'
   const [activeTab, setActiveTab] = useState('daily-log');
@@ -79,13 +83,20 @@ export default function AttendanceManagement({ user }) {
 
   // Filter for Date-specific Attendance: 'ALL', 'Present', 'Absent', 'Late', 'On Duty'
   const [dateStatusFilter, setDateStatusFilter] = useState('ALL');
-  const effectiveStatusFilter = isFinanceOrOffice ? 'Absent' : dateStatusFilter;
+  const effectiveStatusFilter = onlyShowAbsentStudents ? 'Absent' : dateStatusFilter;
 
   React.useEffect(() => {
-    if (isFinanceOrOffice) {
+    if (onlyShowAbsentStudents) {
       setDateStatusFilter('Absent');
+      setActiveTab('daily-log');
     }
-  }, [isFinanceOrOffice]);
+  }, [onlyShowAbsentStudents]);
+
+  React.useEffect(() => {
+    if (onlyShowAbsentStudents && (activeTab === 'roll-call' || activeTab === 'staff-attendance')) {
+      setActiveTab('daily-log');
+    }
+  }, [activeTab, onlyShowAbsentStudents]);
 
   // Students & Staff Data State - Live Backend Only
   const [students, setStudents] = useState([]);
@@ -115,7 +126,11 @@ export default function AttendanceManagement({ user }) {
           const deptNames = d.data.map(dept => dept.name).filter(Boolean);
           setAvailableDepartments(deptNames);
           if (deptNames.length > 0) {
-            setRollDept(prev => (prev && deptNames.includes(prev)) ? prev : deptNames[0]);
+            setRollDept(prev => {
+              if (prev === 'All Departments') return prev;
+              if (prev && deptNames.includes(prev)) return prev;
+              return isSuperAdmin ? 'All Departments' : deptNames[0];
+            });
           }
         }
       }
@@ -330,12 +345,26 @@ export default function AttendanceManagement({ user }) {
   const [rollYear, setRollYear] = useState(1);
   const [rollSem, setRollSem] = useState('Sem 1');
   const [rollSubject, setRollSubject] = useState('');
-  const [rollPeriod, setRollPeriod] = useState('Period 1 (09:00 AM - 10:00 AM)');
+  const [rollPeriod, setRollPeriod] = useState('Period 1 (09:30 AM - 10:30 AM)');
   const [classTopic, setClassTopic] = useState('');
+
+  const buildSessionCode = React.useCallback((dept = rollDept, year = rollYear, sem = rollSem) => {
+    const base = (dept || 'CS').trim();
+    const deptCode = base.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'CS';
+    const sessionYear = Number(year) || 1;
+    const semLabel = (sem || 'Sem 1').toString().replace(/[^0-9]/g, '') || '1';
+    return `${deptCode}${sessionYear}${semLabel}`;
+  }, [rollDept, rollYear, rollSem]);
+
+  React.useEffect(() => {
+    if (!rollSubject) {
+      setRollSubject(buildSessionCode());
+    }
+  }, [buildSessionCode, rollSubject]);
 
   // Restore any saved session statuses for roll call
   React.useEffect(() => {
-    const code = (rollSubject || '').split(' ')[0].trim().toUpperCase();
+    const code = (rollSubject || buildSessionCode()).split(' ')[0].trim().toUpperCase();
     const existing = dbSessions.find(s =>
       s.date === selectedDate &&
       s.classCode === code
@@ -351,7 +380,7 @@ export default function AttendanceManagement({ user }) {
         return s;
       }));
     }
-  }, [selectedDate, rollSubject, dbSessions]);
+  }, [selectedDate, rollSubject, dbSessions, buildSessionCode]);
 
   // Student Register Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -500,7 +529,9 @@ export default function AttendanceManagement({ user }) {
       const matchesDept = filterDept === 'All Departments' || s.department === filterDept;
 
       let matchesStatus = true;
-      if (effectiveStatusFilter === 'Present') {
+      if (onlyShowAbsentStudents) {
+        matchesStatus = s.dayStatus === 'Absent';
+      } else if (effectiveStatusFilter === 'Present') {
         matchesStatus = s.dayStatus === 'Present';
       } else if (effectiveStatusFilter === 'Absent') {
         matchesStatus = s.dayStatus === 'Absent';
@@ -545,12 +576,14 @@ export default function AttendanceManagement({ user }) {
   // Handlers for Roll Call & Actions
   // -------------------------------------------------------------
   const rollCallStudents = useMemo(() => {
+    const allDepartmentsSelected = !rollDept || rollDept === 'All Departments';
     const cleanDept = (rollDept || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     return students.filter(s => {
       const sDept = (s.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const matchDept = sDept === cleanDept || 
+      const matchDept = allDepartmentsSelected ||
+        sDept === cleanDept ||
         (cleanDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
-        (cleanDept && sDept.includes(cleanDept)) || 
+        (cleanDept && sDept.includes(cleanDept)) ||
         (sDept && cleanDept.includes(sDept));
       const matchYear = Number(s.year) === Number(rollYear);
       return matchDept && matchYear;
@@ -604,12 +637,14 @@ export default function AttendanceManagement({ user }) {
   };
 
   const handleMarkAll = (status) => {
+    const allDepartmentsSelected = !rollDept || rollDept === 'All Departments';
     const cleanDept = (rollDept || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     setStudents(prev => prev.map(s => {
       const sDept = (s.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const matchDept = sDept === cleanDept || 
+      const matchDept = allDepartmentsSelected ||
+        sDept === cleanDept ||
         (cleanDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
-        (cleanDept && sDept.includes(cleanDept)) || 
+        (cleanDept && sDept.includes(cleanDept)) ||
         (sDept && cleanDept.includes(sDept));
       if (matchDept && Number(s.year) === Number(rollYear)) {
         return { ...s, status };
@@ -621,7 +656,7 @@ export default function AttendanceManagement({ user }) {
 
   const handleSubmitRollCall = async () => {
     try {
-      const code = (rollSubject || '').split(' ')[0].trim().toUpperCase();
+      const code = ((rollSubject || buildSessionCode()).split(' ')[0].trim().toUpperCase()) || buildSessionCode();
       const records = rollCallStudents.map(s => ({
         rollNo: s.rollNo,
         name: s.name,
@@ -632,7 +667,7 @@ export default function AttendanceManagement({ user }) {
         staffId: 'ADMIN',
         staffName: 'Academic Administrator',
         classCode: code,
-        className: rollSubject || (rollDept + ' - Year ' + rollYear + ' (' + rollSem + ')'),
+        className: rollSubject || `${rollDept || 'Department'} - Year ${rollYear} (${rollSem})`,
         date: selectedDate,
         slot: rollPeriod,
         records
@@ -655,12 +690,12 @@ export default function AttendanceManagement({ user }) {
           }
           return [data.session, ...prev];
         });
-        showToast(`Attendance for ${rollSubject} saved successfully.`);
+        showToast(`Attendance for ${payload.className} saved successfully.`);
       } else {
-        showToast(`Attendance for ${rollSubject} saved.`);
+        showToast(`Attendance for ${payload.className} saved.`);
       }
     } catch (err) {
-      showToast(`Attendance for ${rollSubject} recorded locally.`);
+      showToast(`Attendance for ${rollSubject || buildSessionCode()} recorded locally.`);
     }
   };
 
@@ -1082,17 +1117,19 @@ export default function AttendanceManagement({ user }) {
               <span>Daily Attendees List ({dailyDateAttendees.length})</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('roll-call')}
-              className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'roll-call'
-                  ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
-                  : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
-              }`}
-            >
-              <CheckSquare className="w-4 h-4" />
-              <span>Mark Roll Call</span>
-            </button>
+            {!onlyShowAbsentStudents && (
+              <button
+                onClick={() => setActiveTab('roll-call')}
+                className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'roll-call'
+                    ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
+                }`}
+              >
+                <CheckSquare className="w-4 h-4" />
+                <span>Mark Roll Call</span>
+              </button>
+            )}
 
             <button
               onClick={() => setActiveTab('student-register')}
@@ -1290,6 +1327,7 @@ export default function AttendanceManagement({ user }) {
                       onChange={(e) => setRollDept(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                     >
+                      <option value="All Departments">All Departments</option>
                       {availableDepartments.length === 0 ? (
                         <option value="">No departments added yet</option>
                       ) : (
@@ -1324,10 +1362,14 @@ export default function AttendanceManagement({ user }) {
                       onChange={(e) => setRollPeriod(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                     >
-                      <option value="Period 1 (09:00 AM - 10:00 AM)">Period 1 (09:00 AM - 10:00 AM)</option>
-                      <option value="Period 2 (10:00 AM - 11:00 AM)">Period 2 (10:00 AM - 11:00 AM)</option>
-                      <option value="Period 3 (11:15 AM - 12:15 PM)">Period 3 (11:15 AM - 12:15 PM)</option>
-                      <option value="Period 4 (01:15 PM - 02:15 PM)">Period 4 (01:15 PM - 02:15 PM)</option>
+                      <option value="Period 1 (09:30 AM - 10:30 AM)">Period 1 (09:30 AM - 10:30 AM)</option>
+                      <option value="Period 2 (10:30 AM - 11:20 AM)">Period 2 (10:30 AM - 11:20 AM)</option>
+                      <option value="Break (11:20 AM - 11:30 AM)">Break (11:20 AM - 11:30 AM)</option>
+                      <option value="Period 3 (11:30 AM - 12:20 PM)">Period 3 (11:30 AM - 12:20 PM)</option>
+                      <option value="Period 4 (12:20 PM - 01:00 PM)">Period 4 (12:20 PM - 01:00 PM)</option>
+                      <option value="Lunch (01:00 PM - 01:30 PM)">Lunch (01:00 PM - 01:30 PM)</option>
+                      <option value="Period 5 (01:30 PM - 02:15 PM)">Period 5 (01:30 PM - 02:15 PM)</option>
+                      <option value="Period 6 (02:15 PM - 03:00 PM)">Period 6 (02:15 PM - 03:00 PM)</option>
                     </select>
                   </div>
                 </div>

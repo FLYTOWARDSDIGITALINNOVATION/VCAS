@@ -98,6 +98,38 @@ const studentSchema = new mongoose.Schema({
     default: 'Pending',
     trim: true
   },
+  totalFee: {
+    type: Number,
+    default: 0
+  },
+  paidFee: {
+    type: Number,
+    default: 0
+  },
+  pendingFee: {
+    type: Number,
+    default: 0
+  },
+  feeBreakdown: {
+    type: Object,
+    default: {
+      tuition: { total: 0, paid: 0, pending: 0 },
+      exam: { total: 0, paid: 0, pending: 0 },
+      transport: { total: 0, paid: 0, pending: 0 }
+    }
+  },
+  lastPaymentDate: {
+    type: String,
+    default: ''
+  },
+  paymentMode: {
+    type: String,
+    default: ''
+  },
+  referenceNo: {
+    type: String,
+    default: ''
+  },
   status: {
     type: String,
     default: 'Active',

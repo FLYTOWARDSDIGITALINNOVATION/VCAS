@@ -147,14 +147,7 @@ exports.updateFeeStructure = async (req, res) => {
   try {
     const { clusters, scholarships, academicYear, updatedBy, updatedRole } = req.body;
 
-    // Accountant and Office Staff are not allowed to edit the fee structure or scholarships
-    if (['Accountant', 'Office Staff', 'accountant', 'office staff'].includes(updatedRole)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: Accountant and Office Staff are not permitted to modify the scholarship and fee structure.'
-      });
-    }
-
+    // Shared fee structure should be visible and editable across admin + finance roles.
     let feeDoc = await FeeStructure.findOne().sort({ updatedAt: -1 });
 
     const updateData = {
