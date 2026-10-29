@@ -28,6 +28,7 @@ const studentMarkSchema = new mongoose.Schema({
   // Legacy / Consolidated fields
   assignment:   { type: mongoose.Schema.Types.Mixed, default: null },
   attendance:   { type: mongoose.Schema.Types.Mixed, default: null },
+  grade:        { type: mongoose.Schema.Types.Mixed, default: null },
   consolidated: { type: mongoose.Schema.Types.Mixed, default: null },
 }, { _id: false, strict: false });
 
@@ -89,6 +90,7 @@ const internalMarksSchema = new mongoose.Schema({
     assignment4:  { type: Number, default: 5 },
     assignment:   { type: Number, default: 20 },
     attendance:   { type: Number, default: 5 },
+    grade:        { type: Number, default: 100 },
     consolidated: { type: Number, default: 25 },
   },
   passMarks: {
@@ -109,6 +111,7 @@ const internalMarksSchema = new mongoose.Schema({
     assignment4:  { type: Number, default: 2 },
     assignment:   { type: Number, default: 8 },
     attendance:   { type: Number, default: 2 },
+    grade:        { type: Number, default: 40 },
     consolidated: { type: Number, default: 10 },
   },
   students:     [studentMarkSchema],

@@ -143,9 +143,11 @@ export default function FeeStructureView({ user }) {
     .toString()
     .trim();
   const normalizedRole = effectiveRole.toLowerCase();
-  const isSuperAdminOrAdmin = ['super admin', 'admin'].includes(normalizedRole);
-  const isFinanceRole = ['accountant', 'office staff'].includes(normalizedRole);
-  const canEdit = isSuperAdminOrAdmin || isFinanceRole;
+  const isSuperAdminRole = currentUser?.isSuperAdmin === true ||
+    ['super admin', 'superadmin', 'super-admin', 'super administrator', 'superadministrator'].includes(normalizedRole) ||
+    normalizedRole.includes('superadmin') ||
+    normalizedRole.includes('super admin');
+  const canEdit = isSuperAdminRole;
   const userRole = effectiveRole;
 
   // Live Synchronized Fee Structure State
@@ -234,7 +236,7 @@ export default function FeeStructureView({ user }) {
   // Open Edit Modal with cloned state for all authorized finance/admin roles
   const handleOpenEdit = () => {
     if (!canEdit) {
-      alert('Access Restricted: only authorized admin/finance roles can edit the fee structure and scholarships.');
+      alert('Access Restricted: only the Super Admin can edit the Fee Structure and Scholarship matrix.');
       return;
     }
     setEditClusters(JSON.parse(JSON.stringify(clusters)));

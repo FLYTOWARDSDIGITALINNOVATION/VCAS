@@ -70,6 +70,7 @@ export const DEFAULT_MAX_CONFIG = {
   assignment4: 5,
   assignment: 20,
   attendance: 5,
+  grade: 100,
   consolidated: 25,
 };
 
@@ -92,6 +93,7 @@ export const DEFAULT_PASS_CONFIG = {
   assignment4: 2,
   assignment: 8,
   attendance: 2,
+  grade: 40,
   consolidated: 10,
 };
 
@@ -105,6 +107,7 @@ export const ASSESSMENT_COMPONENTS = [
   { id: "project", label: "Project (Project Work)", shortLabel: "Project", defaultMax: 20, defaultPass: 8 },
   { id: "st", label: "Snap Tests (ST 1 - 4)", shortLabel: "Snap Tests (ST1-4)", defaultMax: 20, defaultPass: 8 },
   { id: "assignment", label: "Assignments (1 to 4)", shortLabel: "Assignments (1-4)", defaultMax: 5, defaultPass: 2 },
+  { id: "grade", label: "Grade (Overall Grade)", shortLabel: "Grade", defaultMax: 100, defaultPass: 40 },
   { id: "consolidated", label: "Consolidated Internal Marks", shortLabel: "Final CIA Summary", defaultMax: 25, defaultPass: 10 },
 ];
 
@@ -178,6 +181,14 @@ export default function StaffInternalMarks({ staffUser }) {
   const [isExporting, setIsExporting] = useState(false);
 
   const normalizeRole = (value) => String(value || '').toUpperCase().replace(/[^A-Z]/g, '');
+  const looksLikeHod = (value) => {
+    const normalized = normalizeRole(value);
+    return normalized.includes('HOD') ||
+      normalized.includes('HEADOFDEPARTMENT') ||
+      (normalized.includes('HEAD') && normalized.includes('DEPARTMENT')) ||
+      normalized.includes('HEADOFDEPT') ||
+      normalized.includes('DEPARTMENTHEAD');
+  };
 
   const roleKey = normalizeRole(staffUser?.role);
   const designationKey = normalizeRole(staffUser?.designation);
@@ -190,10 +201,8 @@ export default function StaffInternalMarks({ staffUser }) {
     designationKey.includes('MANAGINGDIRECTOR') ||
     designationKey.includes('MD');
 
-  const isHod = roleKey.includes('HOD') ||
-    designationKey.includes('HOD') ||
-    roleKey.includes('HEADOFDEPARTMENT') ||
-    designationKey.includes('HEADOFDEPARTMENT') ||
+  const isHod = looksLikeHod(staffUser?.role) ||
+    looksLikeHod(staffUser?.designation) ||
     staffUser?.isHod === true;
   const isPrincipal = roleKey.includes('PRINCIPAL') ||
     designationKey.includes('PRINCIPAL');
@@ -225,6 +234,7 @@ export default function StaffInternalMarks({ staffUser }) {
     if (componentId === "st") return maxMarksConfig.st1 || 20;
     if (componentId === "it") return maxMarksConfig.it1 || 25;
     if (componentId === "assignment") return maxMarksConfig.assignment1 || 5;
+    if (componentId === "grade") return 100;
     return maxMarksConfig[componentId] ?? activeComp.defaultMax;
   }, [componentId, maxMarksConfig, activeComp]);
 
@@ -233,6 +243,7 @@ export default function StaffInternalMarks({ staffUser }) {
     if (componentId === "st") return passMarksConfig.st1 || 8;
     if (componentId === "it") return passMarksConfig.it1 || 10;
     if (componentId === "assignment") return passMarksConfig.assignment1 || 2;
+    if (componentId === "grade") return passMarksConfig.grade || 75;
     return passMarksConfig[componentId] ?? activeComp.defaultPass;
   }, [componentId, passMarksConfig, activeComp]);
 
@@ -508,7 +519,15 @@ export default function StaffInternalMarks({ staffUser }) {
       const legacyExclusions = new Set(['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004']);
       const roleKey = String(staffUser?.role || '').toUpperCase();
       const designationKey = String(staffUser?.designation || '').toUpperCase();
-      const isHodUser = staffUser?.isHod === true || roleKey.includes('HOD') || designationKey.includes('HOD');
+      const looksLikeHodUser = (value) => {
+        const normalized = String(value || '').toUpperCase();
+        return normalized.includes('HOD') ||
+          normalized.includes('HEAD OF DEPARTMENT') ||
+          normalized.includes('HEADOFDEPARTMENT') ||
+          (normalized.includes('HEAD') && normalized.includes('DEPARTMENT')) ||
+          normalized.includes('DEPARTMENT HEAD');
+      };
+      const isHodUser = staffUser?.isHod === true || looksLikeHodUser(staffUser?.role) || looksLikeHodUser(staffUser?.designation);
       const isPrincipalOrAdmin = roleKey.includes('PRINCIPAL') || roleKey.includes('ADMIN') || designationKey.includes('PRINCIPAL') || designationKey.includes('ADMIN');
 
       const addSub = (code, name) => {
@@ -666,6 +685,34 @@ export default function StaffInternalMarks({ staffUser }) {
     return Math.min(consMax, total);
   };
 
+  const calculateStudentGrade = (student, config = maxMarksConfig) => {
+    if (student?.grade !== null && student?.grade !== undefined && String(student.grade).trim() !== "") {
+      return String(student.grade).trim().toUpperCase();
+    }
+
+    const consolidated = Number(student?.consolidated ?? 0);
+    if (!Number.isFinite(consolidated) || consolidated <= 0) return "-";
+
+    const maxValue = Math.max(1, Number(config?.consolidated) || 25);
+    const percentage = (consolidated / maxValue) * 100;
+
+    const gradeThresholds = [
+      ["A+", 95],
+      ["A", 85],
+      ["B+", 75],
+      ["B", 65],
+      ["C", 55],
+      ["D", 45],
+      ["F", 0]
+    ];
+
+    for (const [grade, threshold] of gradeThresholds) {
+      if (percentage >= threshold) return grade;
+    }
+
+    return "F";
+  };
+
   // -- Save marks ------------------------------------------------------
   const handleSave = async () => {
     if (!subjectCode) return;
@@ -724,6 +771,8 @@ export default function StaffInternalMarks({ staffUser }) {
       return;
     }
 
+    const gradeThresholdMap = { "A+": 95, A: 85, "B+": 75, B: 65, C: 55, D: 45, F: 0 };
+
     const validatedMax = {
       ...tempMaxConfig,
       st1: Math.max(1, Number(tempMaxConfig.st1) || 20),
@@ -735,6 +784,7 @@ export default function StaffInternalMarks({ staffUser }) {
       cia1: Math.max(1, Number(tempMaxConfig.cia1) || 50),
       cia2: Math.max(1, Number(tempMaxConfig.cia2) || 50),
       model: Math.max(1, Number(tempMaxConfig.model) || 75),
+      semester: Math.max(1, Number(tempMaxConfig.semester) || 100),
       seminar: Math.max(1, Number(tempMaxConfig.seminar) || 10),
       project: Math.max(1, Number(tempMaxConfig.project) || 20),
       assignment1: Math.max(1, Number(tempMaxConfig.assignment1) || 5),
@@ -743,9 +793,11 @@ export default function StaffInternalMarks({ staffUser }) {
       assignment4: Math.max(1, Number(tempMaxConfig.assignment4) || 5),
       assignment: Math.max(1, Number(tempMaxConfig.assignment) || 20),
       attendance: Math.max(1, Number(tempMaxConfig.attendance) || 5),
+      grade: Math.max(1, Number(tempMaxConfig.grade) || 100),
       consolidated: Math.max(1, Number(tempMaxConfig.consolidated) || 25),
     };
 
+    const rawGradePass = String(tempPassConfig.grade || "B").trim().toUpperCase();
     const validatedPass = {
       ...tempPassConfig,
       st1: Math.min(validatedMax.st1, Math.max(0, Number(tempPassConfig.st1) || 8)),
@@ -757,6 +809,7 @@ export default function StaffInternalMarks({ staffUser }) {
       cia1: Math.min(validatedMax.cia1, Math.max(0, Number(tempPassConfig.cia1) || 20)),
       cia2: Math.min(validatedMax.cia2, Math.max(0, Number(tempPassConfig.cia2) || 20)),
       model: Math.min(validatedMax.model, Math.max(0, Number(tempPassConfig.model) || 30)),
+      semester: Math.min(validatedMax.semester, Math.max(0, Number(tempPassConfig.semester) || 40)),
       seminar: Math.min(validatedMax.seminar, Math.max(0, Number(tempPassConfig.seminar) || 4)),
       project: Math.min(validatedMax.project, Math.max(0, Number(tempPassConfig.project) || 8)),
       assignment1: Math.min(validatedMax.assignment1, Math.max(0, Number(tempPassConfig.assignment1) || 2)),
@@ -765,15 +818,17 @@ export default function StaffInternalMarks({ staffUser }) {
       assignment4: Math.min(validatedMax.assignment4, Math.max(0, Number(tempPassConfig.assignment4) || 2)),
       assignment: Math.min(validatedMax.assignment, Math.max(0, Number(tempPassConfig.assignment) || 8)),
       attendance: Math.min(validatedMax.attendance, Math.max(0, Number(tempPassConfig.attendance) || 2)),
+      grade: gradeThresholdMap[rawGradePass] ?? 65,
       consolidated: Math.min(validatedMax.consolidated, Math.max(0, Number(tempPassConfig.consolidated) || 10)),
     };
 
     setSavingCriteria(true);
     try {
-      const updatedStudents = students.map((s) => ({
-        ...s,
-        consolidated: calculateConsolidated(s, validatedMax),
-      }));
+      const updatedStudents = students.map((s) => {
+        const updated = { ...s, consolidated: calculateConsolidated(s, validatedMax), grade: null };
+        updated.grade = calculateStudentGrade(updated, validatedMax);
+        return updated;
+      });
 
       setMaxMarksConfig(validatedMax);
       setPassMarksConfig(validatedPass);
@@ -923,6 +978,7 @@ export default function StaffInternalMarks({ staffUser }) {
         (ms.students || []).forEach((s, idx) => {
           const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
           const it2 = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
+              const grade = calculateStudentGrade(s, ms.maxMarks || maxMarksConfig);
           exportRows.push({
             'Department': ms.department || '',
             'Subject Code': ms.subjectCode || '',
@@ -945,7 +1001,8 @@ export default function StaffInternalMarks({ staffUser }) {
             'Assignment 2': s.assignment2 ?? "-",
             'Assignment 3': s.assignment3 ?? "-",
             'Assignment 4': s.assignment4 ?? "-",
-            'Final CIA': s.consolidated ?? "-"
+            'Final CIA': s.consolidated ?? "-",
+            'Grade': grade
           });
         });
       });
@@ -1037,7 +1094,7 @@ export default function StaffInternalMarks({ staffUser }) {
     }
   };
 
-  // -- Generic Cell Change (supports numbers, decimals, "AB", "-") -----
+  // -- Generic Cell Change (supports numbers, decimals, letter grades like A/B, "AB", "-") -----
   const handleCellChange = (rollNo, field, val) => {
     if (isLocked) return;
     setErrorMsg("");
@@ -1049,6 +1106,17 @@ export default function StaffInternalMarks({ staffUser }) {
 
     const strVal = String(val).trim();
     const upper = strVal.toUpperCase();
+
+    if (field === "grade") {
+      const validGrades = ["A+", "A", "B+", "B", "C", "D", "F", "AB", "ABS", "-", "NA"];
+      if (validGrades.includes(upper)) {
+        updateStudentCell(rollNo, field, upper === "ABS" ? "AB" : upper === "NA" ? "AB" : upper);
+        return;
+      }
+      setErrorMsg("Grade must be one of A+, A, B+, B, C, D, F, AB.");
+      return;
+    }
+
     if (upper === "A" || upper === "AB" || upper === "ABS") {
       updateStudentCell(rollNo, field, "AB");
       return;
@@ -1083,6 +1151,9 @@ export default function StaffInternalMarks({ staffUser }) {
         if (field === "cia2") updated.it2 = value;
 
         updated.consolidated = calculateConsolidated(updated, maxMarksConfig);
+        if (field !== "grade") {
+          updated.grade = calculateStudentGrade({ ...updated, grade: null }, maxMarksConfig);
+        }
         return updated;
       })
     );
@@ -1103,7 +1174,7 @@ export default function StaffInternalMarks({ staffUser }) {
       it1: null, it2: null, cia1: null, cia2: null,
       model: null, seminar: null, project: null,
       assignment1: null, assignment2: null, assignment3: null, assignment4: null,
-      assignment: null, attendance: null, consolidated: null
+      assignment: null, attendance: null, grade: null, consolidated: null
     };
     const nextStudents = [...students, newStudentObj];
     setStudents(nextStudents);
@@ -1131,11 +1202,12 @@ export default function StaffInternalMarks({ staffUser }) {
 
   // -- Export CSV with all register columns ---------------------------
   const handleExport = () => {
-    let csv = `S.NO,Roll No,Student Name,Internal 1,Internal 2,Model,Semester,Seminar,Project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA\n`;
+    let csv = `S.NO,Roll No,Student Name,Internal 1,Internal 2,Model,Semester,Seminar,Project,ST 1,ST 2,ST 3,ST 4,Assignment 1,Assignment 2,Assignment 3,Assignment 4,Final CIA,Grade\n`;
     students.forEach((s, idx) => {
       const it1 = s.it1 !== null && s.it1 !== undefined ? s.it1 : (s.cia1 ?? "-");
       const it2 = s.it2 !== null && s.it2 !== undefined ? s.it2 : (s.cia2 ?? "-");
-      csv += `${idx + 1},"${s.rollNo}","${s.name}",${it1},${it2},${s.model ?? "-"},${s.semester ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"}\n`;
+      const grade = calculateStudentGrade(s, maxMarksConfig);
+      csv += `${idx + 1},"${s.rollNo}","${s.name}",${it1},${it2},${s.model ?? "-"},${s.semester ?? "-"},${s.seminar ?? "-"},${s.project ?? "-"},${s.st1 ?? "-"},${s.st2 ?? "-"},${s.st3 ?? "-"},${s.st4 ?? "-"},${s.assignment1 ?? "-"},${s.assignment2 ?? "-"},${s.assignment3 ?? "-"},${s.assignment4 ?? "-"},${s.consolidated ?? "-"},"${grade}"\n`;
     });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -1325,6 +1397,10 @@ export default function StaffInternalMarks({ staffUser }) {
     setShowConfigModal(true);
   };
 
+  const canSubmitToHod = Boolean(subjectCode) && !isHod && !isPrincipal && !isMD;
+  const canSubmitToPrincipal = Boolean(subjectCode) && isHod && !isPrincipal && !isMD;
+  const canUnlockMarks = Boolean(subjectCode) && isLocked && (canSubmitToHod || canSubmitToPrincipal);
+
   return (
     <div className="p-5 sm:p-7 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -1368,7 +1444,7 @@ export default function StaffInternalMarks({ staffUser }) {
             title="Download marks by Department, Year, Batch, or Semester"
           >
             <Download className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Download Data (Dep/Yr/Batch/Sem)</span>
+            <span>Download</span>
           </button>
 
           {subjectCode && (
@@ -1399,7 +1475,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 <Download className="w-3.5 h-3.5 text-slate-500" /> Export CSV
               </button>
 
-              {!isHod && !isPrincipal && !isMD && (!isLocked || approvalStatus === 'Draft' || approvalStatus === 'Rejected') && (
+              {canSubmitToHod && (
                 <button
                   onClick={handleSubmitForApproval}
                   disabled={isSubmittingApproval || students.length === 0}
@@ -1411,12 +1487,30 @@ export default function StaffInternalMarks({ staffUser }) {
                 </button>
               )}
 
-              <button
-                onClick={handleToggleLock}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${isLocked ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300" : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20"}`}
-              >
-                {isLocked ? <><Unlock className="w-3.5 h-3.5" /> Unlock Marks</> : <><Lock className="w-3.5 h-3.5" /> Submit to MD</>}
-              </button>
+              {canSubmitToPrincipal && (
+                <button
+                  onClick={() => handleStageApprovalAction('HOD', 'Approved')}
+                  disabled={isProcessingStage || students.length === 0}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                  title="Forward the approved marksheet to the Principal"
+                >
+                  {isProcessingStage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>Submit to the Principal</span>
+                </button>
+              )}
+
+              {canUnlockMarks && (
+                <button
+                  type="button"
+                  onClick={handleToggleLock}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 shadow-xs transition-all cursor-pointer"
+                  title="Unlock marks for editing and resubmission"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>Unlock for Editing</span>
+                </button>
+              )}
+
             </>
           )}
         </div>
@@ -1711,6 +1805,9 @@ export default function StaffInternalMarks({ staffUser }) {
                       <th rowSpan={2} className="px-3 py-2 text-center bg-blue-100/80 text-blue-950 font-black min-w-[85px]">
                         FINAL CIA
                       </th>
+                      <th rowSpan={2} className="px-3 py-2 text-center bg-emerald-100/80 text-emerald-950 font-black min-w-[80px]">
+                        GRADE
+                      </th>
                     </tr>
                     <tr className="bg-slate-50 text-slate-700 font-extrabold uppercase text-[10px] border-b border-slate-300">
                       <th className="px-2 py-1.5 text-center border-r border-slate-300 bg-indigo-50 text-indigo-900">Internal 1</th>
@@ -1729,6 +1826,10 @@ export default function StaffInternalMarks({ staffUser }) {
                     {filteredStudents.map((s, idx) => {
                       const it1Val = s.it1 !== null && s.it1 !== undefined ? s.it1 : s.cia1;
                       const it2Val = s.it2 !== null && s.it2 !== undefined ? s.it2 : s.cia2;
+                      const overallGrade = calculateStudentGrade(s, maxMarksConfig);
+                      const gradeStyle = overallGrade === "A+" || overallGrade === "A" || overallGrade === "B+" || overallGrade === "B"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : overallGrade === "C" ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-rose-50 text-rose-700 border border-rose-200";
                       return (
                         <tr key={s.rollNo} className="hover:bg-blue-50/40 transition-colors">
                           <td className="px-2 py-2 text-center font-bold text-slate-500 border-r border-slate-200">{idx + 1}</td>
@@ -1842,12 +1943,17 @@ export default function StaffInternalMarks({ staffUser }) {
                               {s.consolidated ?? "-"}
                             </span>
                           </td>
+                          <td className="px-2 py-2 text-center bg-emerald-50/30 font-black text-xs text-emerald-900">
+                            <span className={`px-2.5 py-1 rounded-lg font-extrabold ${gradeStyle}`}>
+                              {overallGrade}
+                            </span>
+                          </td>
                         </tr>
                       );
                     })}
                     {filteredStudents.length === 0 && (
                       <tr>
-                        <td colSpan={16} className="py-12 text-center text-slate-500 text-xs">
+                        <td colSpan={18} className="py-12 text-center text-slate-500 text-xs">
                           <p className="font-bold text-slate-800 text-sm">No students in marksheet for {subjectCode}</p>
                           <p className="text-slate-400 mt-1">Use "Add Student" above to populate the student list.</p>
                         </td>
@@ -2038,6 +2144,7 @@ export default function StaffInternalMarks({ staffUser }) {
                       const isAbsent = current === "A" || current === "AB";
                       const isNum = typeof current === "number";
                       const isPassed = isNum && current >= currentPass;
+                      const isGradeField = componentId === "grade";
                       return (
                         <tr key={s.rollNo} className="hover:bg-slate-50/80 transition-colors">
                           <td className="px-5 py-3 text-slate-400">{idx + 1}</td>
@@ -2050,10 +2157,10 @@ export default function StaffInternalMarks({ staffUser }) {
                                 disabled={isLocked}
                                 value={current !== undefined && current !== null ? current : ""}
                                 onChange={(e) => handleCellChange(s.rollNo, componentId, e.target.value)}
-                                className={`w-16 text-center py-1 px-2 rounded-xl text-xs font-extrabold border transition-all ${isLocked ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed" : isAbsent ? "bg-amber-50 text-amber-700 border-amber-300" : isNum && !isPassed ? "bg-rose-50 text-rose-700 border-rose-300" : "bg-slate-50 text-slate-900 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"}`}
-                                placeholder={`0-${currentMax}`}
+                                className={`w-16 text-center py-1 px-2 rounded-xl text-xs font-extrabold border transition-all ${isLocked ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed" : isAbsent ? "bg-amber-50 text-amber-700 border-amber-300" : isGradeField ? "bg-slate-50 text-slate-900 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" : isNum && !isPassed ? "bg-rose-50 text-rose-700 border-rose-300" : "bg-slate-50 text-slate-900 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"}`}
+                                placeholder={isGradeField ? "A/B" : `0-${currentMax}`}
                               />
-                              {!isLocked && (
+                              {!isLocked && !isGradeField && (
                                 <button
                                   onClick={() => handleCellChange(s.rollNo, componentId, isAbsent ? 0 : "AB")}
                                   className={`p-1 rounded-lg text-[10px] font-bold border transition-all ${isAbsent ? "bg-amber-100 text-amber-800 border-amber-300" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100 border-transparent cursor-pointer"}`}
@@ -2065,6 +2172,10 @@ export default function StaffInternalMarks({ staffUser }) {
                           <td className="px-5 py-3 text-center">
                             {isAbsent ? (
                               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">ABSENT</span>
+                            ) : isGradeField ? (
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${current && ["A+", "A", "B+", "B", "C", "D", "F"].includes(String(current).toUpperCase()) ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "text-slate-300"}`}>
+                                {current ? String(current).toUpperCase() : "-"}
+                              </span>
                             ) : isNum ? (
                               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${isPassed ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
                                 {isPassed ? "PASS" : "FAIL"}
@@ -2126,18 +2237,21 @@ export default function StaffInternalMarks({ staffUser }) {
 
               <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                 {[
-                  { id: "st1", name: "Snap Test 1 (ST 1)", defaultM: 20, defaultP: 8 },
-                  { id: "st2", name: "Snap Test 2 (ST 2)", defaultM: 20, defaultP: 8 },
-                  { id: "st3", name: "Snap Test 3 (ST 3)", defaultM: 20, defaultP: 8 },
-                  { id: "st4", name: "Snap Test 4 (ST 4)", defaultM: 20, defaultP: 8 },
-                  { id: "it1", name: "Internal Test 1 (IT 1)", defaultM: 25, defaultP: 10 },
-                  { id: "it2", name: "Internal Test 2 (IT 2)", defaultM: 25, defaultP: 10 },
-                  { id: "model", name: "Model Examination", defaultM: 75, defaultP: 30 },
-                  { id: "project", name: "Project / Seminar", defaultM: 20, defaultP: 8 },
+                  { id: "it1", name: "Internal 1", defaultM: 25, defaultP: 10 },
+                  { id: "it2", name: "Internal 2", defaultM: 25, defaultP: 10 },
+                  { id: "model", name: "Model", defaultM: 75, defaultP: 30 },
+                  { id: "semester", name: "Semester", defaultM: 100, defaultP: 40 },
+                  { id: "seminar", name: "Seminar", defaultM: 10, defaultP: 4 },
+                  { id: "project", name: "Project", defaultM: 20, defaultP: 8 },
+                  { id: "st1", name: "Snap Test 1", defaultM: 20, defaultP: 8 },
+                  { id: "st2", name: "Snap Test 2", defaultM: 20, defaultP: 8 },
+                  { id: "st3", name: "Snap Test 3", defaultM: 20, defaultP: 8 },
+                  { id: "st4", name: "Snap Test 4", defaultM: 20, defaultP: 8 },
                   { id: "assignment1", name: "Assignment 1", defaultM: 5, defaultP: 2 },
                   { id: "assignment2", name: "Assignment 2", defaultM: 5, defaultP: 2 },
                   { id: "assignment3", name: "Assignment 3", defaultM: 5, defaultP: 2 },
                   { id: "assignment4", name: "Assignment 4", defaultM: 5, defaultP: 2 },
+                  { id: "grade", name: "Grade", defaultM: 100, defaultP: "B" },
                   { id: "consolidated", name: "Consolidated Final CIA", defaultM: 25, defaultP: 10 },
                 ].map((item) => (
                   <div key={item.id} className="p-3 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-2">
@@ -2159,20 +2273,37 @@ export default function StaffInternalMarks({ staffUser }) {
                           onChange={(e) => setTempMaxConfig({ ...tempMaxConfig, [item.id]: e.target.value })}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                           placeholder={String(item.defaultM)}
+                          readOnly={item.id === "grade" && false}
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Minimum Pass Marks</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max={tempMaxConfig[item.id] || item.defaultM}
-                          required
-                          value={tempPassConfig[item.id] ?? item.defaultP}
-                          onChange={(e) => setTempPassConfig({ ...tempPassConfig, [item.id]: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                          placeholder={String(item.defaultP)}
-                        />
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">{item.id === "grade" ? "Pass Grade" : "Minimum Pass Marks"}</label>
+                        {item.id === "grade" ? (
+                          <select
+                            value={String(tempPassConfig[item.id] ?? item.defaultP).toUpperCase()}
+                            onChange={(e) => setTempPassConfig({ ...tempPassConfig, [item.id]: e.target.value })}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          >
+                            <option value="A+">A+</option>
+                            <option value="A">A</option>
+                            <option value="B+">B+</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                            <option value="F">F</option>
+                          </select>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            max={tempMaxConfig[item.id] || item.defaultM}
+                            required
+                            value={tempPassConfig[item.id] ?? item.defaultP}
+                            onChange={(e) => setTempPassConfig({ ...tempPassConfig, [item.id]: e.target.value })}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            placeholder={String(item.defaultP)}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>

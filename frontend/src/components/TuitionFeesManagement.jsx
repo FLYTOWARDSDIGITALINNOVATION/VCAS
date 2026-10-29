@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../apiConfig';
+import { getCollegeLogoHtml } from './CollegeLogo';
 import { FileText, Save, Info, Award, Building2, CheckCircle2, Sparkles, User, CreditCard, Clock, AlertCircle, Search, Download, Printer } from 'lucide-react';
 
 export default function TuitionFeesManagement({ 
@@ -165,10 +166,28 @@ export default function TuitionFeesManagement({
     }
   };
 
+  const matchesFeeSection = (record, sectionKey) => {
+    if (!record) return false;
+    const feeType = String(record.feeType || '').toLowerCase();
+    const breakdown = record.feeBreakdown || {};
+
+    if (sectionKey === 'tuition') {
+      return !feeType || feeType.includes('tuition') || feeType.includes('semester') || !!breakdown.tuition || record.baseAmount !== undefined || record.uniformFee !== undefined || record.bookFee !== undefined;
+    }
+
+    if (sectionKey === 'exam') {
+      return feeType.includes('exam') || !!breakdown.exam || record.examFee !== undefined || record.examAmount !== undefined;
+    }
+
+    if (sectionKey === 'transport') {
+      return feeType.includes('transport') || !!breakdown.transport || record.routeStop !== undefined || record.vehicleNo !== undefined || record.driverName !== undefined;
+    }
+
+    return false;
+  };
+
   // Filter tuition fee records to list added students
-  const tuitionRecords = (recordsList || []).filter(r => 
-    !r.feeType || (r.feeType || '').toLowerCase().includes('tuition')
-  );
+  const tuitionRecords = (recordsList || []).filter(r => matchesFeeSection(r, 'tuition'));
 
   // Filtered student options based on search query
   const filteredStudentOptions = (studentOptions || []).filter(s => {
@@ -227,22 +246,19 @@ export default function TuitionFeesManagement({
     const studentName = r.name || 'Student';
     const rollNo = r.rollNo || r.id || 'N/A';
     const dept = r.course || r.department || 'Undergraduate';
-    const totalFee = Number(r.totalFee) || (Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0) || 25000;
-    const paidFee = Number(r.paidFee) || totalFee;
-    const pendingFee = Number(r.pendingFee) || Math.max(0, totalFee - paidFee);
-    const receiptNo = r.receiptNo || 'REC-TUI-' + (r.id ? String(r.id).replace(/\D/g, '').slice(-4) : Math.floor(1000 + Math.random() * 9000));
-    const txnRef = r.referenceNo || r.paymentRef || r.transactionRef || '';
-    const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
     const breakdown = r.feeBreakdown || {
       tuition: { total: 0, paid: 0, pending: 0 },
       exam: { total: 0, paid: 0, pending: 0 },
       transport: { total: 0, paid: 0, pending: 0 }
     };
-    const breakdownRows = [
-      ['Tuition Fees', Number(breakdown.tuition?.paid || 0)],
-      ['Exam Fees', Number(breakdown.exam?.paid || 0)],
-      ['Transport Fees', Number(breakdown.transport?.paid || 0)]
-    ];
+    const feeSection = breakdown.tuition || { total: Number(r.totalFee) || 0, paid: Number(r.paidFee) || 0, pending: Number(r.pendingFee) || 0 };
+    const totalFee = Number(feeSection.total || r.totalFee || 0);
+    const paidFee = Number(feeSection.paid || r.paidFee || totalFee);
+    const pendingFee = Number(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee));
+    const receiptNo = r.receiptNo || '';
+    const txnRef = r.referenceNo || r.paymentRef || r.transactionRef || '';
+    const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
+    const breakdownRows = [[`Tuition Fees`, Number(paidFee || 0)]];
 
     printWin.document.write(`
       <!DOCTYPE html>
@@ -275,13 +291,14 @@ export default function TuitionFeesManagement({
         <body>
           <div class="receipt-box">
             <div class="header">
+              ${getCollegeLogoHtml(44)}
               <h1 class="college-title">VIVEKANANDA COLLEGE OF ARTS AND SCIENCE</h1>
               <p class="college-sub">Vellalankulam, Sivakasi • Official Fee Receipt</p>
               <div class="badge">TUITION FEE OFFICIAL RECEIPT</div>
             </div>
             <div class="meta-grid">
               <div class="meta-item"><span>Receipt No:</span> <strong>${receiptNo}</strong></div>
-              <div class="meta-item"><span>Transaction Ref:</span> <strong>${txnRef || '—'}</strong></div>
+              <div class="meta-item"><span>Transaction Ref:</span> <strong>${txnRef}</strong></div>
               <div class="meta-item"><span>Payment Date:</span> <strong>${payDate}</strong></div>
               <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
               <div class="meta-item"><span>Roll / ID No:</span> <strong>${rollNo}</strong></div>
@@ -1036,13 +1053,15 @@ export default function TuitionFeesManagement({
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {searchedTuitionRecords.map((r, i) => {
+                  const sectionKey = 'tuition';
+                  const sectionBreakdown = r.feeBreakdown?.[sectionKey] || {};
                   const fineVal = Number(r.fine) || 0;
                   const uniVal = Number(r.uniformFee) || 0;
                   const bkVal = Number(r.bookFee) || 0;
-                  const totalVal = Number(r.totalFee) || (Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0);
+                  const totalVal = Number(sectionBreakdown.total ?? r.totalFee ?? ((Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0)) ?? 0);
+                  const paidVal = Number(sectionBreakdown.paid ?? r.paidFee ?? 0);
+                  const pendVal = Number(sectionBreakdown.pending ?? r.pendingFee ?? Math.max(0, totalVal - paidVal));
                   const baseVal = r.baseAmount !== undefined ? Number(r.baseAmount) : Math.max(0, totalVal - uniVal - bkVal - fineVal);
-                  const paidVal = Number(r.paidFee) || 0;
-                  const pendVal = Number(r.pendingFee) || Math.max(0, totalVal - paidVal);
 
                   return (
                     <tr key={i} className="hover:bg-blue-50/40 transition-colors">

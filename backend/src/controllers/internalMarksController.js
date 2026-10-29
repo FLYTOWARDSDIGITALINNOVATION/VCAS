@@ -20,6 +20,7 @@ const DEFAULT_MAX_MARKS = {
   assignment4: 5,
   assignment: 20,
   attendance: 5,
+  grade: 100,
   consolidated: 25,
 };
 
@@ -40,6 +41,7 @@ const DEFAULT_PASS_MARKS = {
   assignment4: 2,
   assignment: 8,
   attendance: 2,
+  grade: 40,
   consolidated: 10,
 };
 
@@ -280,6 +282,7 @@ const saveMarksheet = async (req, res) => {
         assignment4: Number(maxMarks.assignment4) > 0 ? Number(maxMarks.assignment4) : 5,
         assignment: Number(maxMarks.assignment) > 0 ? Number(maxMarks.assignment) : 20,
         attendance: Number(maxMarks.attendance) > 0 ? Number(maxMarks.attendance) : 5,
+        grade: Number(maxMarks.grade) > 0 ? Number(maxMarks.grade) : 100,
         consolidated: Number(maxMarks.consolidated) > 0 ? Number(maxMarks.consolidated) : 25,
       };
     }
@@ -303,6 +306,7 @@ const saveMarksheet = async (req, res) => {
         assignment4: Number(passMarks.assignment4) >= 0 ? Number(passMarks.assignment4) : 2,
         assignment: Number(passMarks.assignment) >= 0 ? Number(passMarks.assignment) : 8,
         attendance: Number(passMarks.attendance) >= 0 ? Number(passMarks.attendance) : 2,
+        grade: Number(passMarks.grade) >= 0 ? Number(passMarks.grade) : 40,
         consolidated: Number(passMarks.consolidated) >= 0 ? Number(passMarks.consolidated) : 10,
       };
     }
@@ -350,6 +354,7 @@ const updateMaxMarks = async (req, res) => {
         assignment4: Number(maxMarks?.assignment4) > 0 ? Number(maxMarks.assignment4) : 5,
         assignment: Number(maxMarks?.assignment) > 0 ? Number(maxMarks.assignment) : 20,
         attendance: Number(maxMarks?.attendance) > 0 ? Number(maxMarks.attendance) : 5,
+        grade: Number(maxMarks?.grade) > 0 ? Number(maxMarks.grade) : 100,
         consolidated: Number(maxMarks?.consolidated) > 0 ? Number(maxMarks.consolidated) : 25,
       };
     }
@@ -372,6 +377,7 @@ const updateMaxMarks = async (req, res) => {
         assignment4: Number(passMarks?.assignment4) >= 0 ? Number(passMarks.assignment4) : 2,
         assignment: Number(passMarks?.assignment) >= 0 ? Number(passMarks.assignment) : 8,
         attendance: Number(passMarks?.attendance) >= 0 ? Number(passMarks.attendance) : 2,
+        grade: Number(passMarks?.grade) >= 0 ? Number(passMarks.grade) : 40,
         consolidated: Number(passMarks?.consolidated) >= 0 ? Number(passMarks.consolidated) : 10,
       };
     }

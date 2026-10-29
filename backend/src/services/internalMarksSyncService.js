@@ -102,16 +102,16 @@ async function syncSubjectAssignmentMarksToInternal(staffId, subjectCode) {
         semester: assignments[0].semester || (classDoc ? classDoc.semester : 1),
         academicYear: assignments[0].academicYear || (classDoc ? classDoc.academicYear : "2025-2026"),
         students: [],
-        maxMarks: { cia1: 50, cia2: 50, model: 75, assignment: 20, attendance: 5, consolidated: 25 },
-        passMarks: { cia1: 20, cia2: 20, model: 30, assignment: 8, attendance: 2, consolidated: 10 }
+        maxMarks: { cia1: 50, cia2: 50, model: 75, assignment: 20, attendance: 5, grade: 100, consolidated: 25 },
+        passMarks: { cia1: 20, cia2: 20, model: 30, assignment: 8, attendance: 2, grade: 40, consolidated: 10 }
       });
     }
 
     if (!markDoc.maxMarks) {
-      markDoc.maxMarks = { cia1: 50, cia2: 50, model: 75, assignment: 20, attendance: 5, consolidated: 25 };
+      markDoc.maxMarks = { cia1: 50, cia2: 50, model: 75, assignment: 20, attendance: 5, grade: 100, consolidated: 25 };
     }
     if (!markDoc.passMarks) {
-      markDoc.passMarks = { cia1: 20, cia2: 20, model: 30, assignment: 8, attendance: 2, consolidated: 10 };
+      markDoc.passMarks = { cia1: 20, cia2: 20, model: 30, assignment: 8, attendance: 2, grade: 40, consolidated: 10 };
     }
 
     const internalAsgMax = Number(markDoc.maxMarks.assignment) || 20;
