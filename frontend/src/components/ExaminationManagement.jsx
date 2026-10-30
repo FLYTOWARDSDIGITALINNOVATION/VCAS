@@ -357,36 +357,38 @@ export default function ExaminationManagement({ user }) {
           regNo: st.regNo || st.admissionNo || st.admNo || st.studentId || roll,
           name: st.name || st.fullName || 'Student',
           department: effectiveDept,
+          batch: st.batch || st.academicYear || '',
           originalDepartment: rawDept,
           feeStatus: rawFeeStatus,
           year: (st.year && st.year <= 3) ? st.year : (st.sem?.includes('1') || st.sem?.includes('2') ? 1 : (st.sem?.includes('3') || st.sem?.includes('4') ? 2 : 3)),
           sem: st.sem || st.semester || 'Sem 1',
           attendance: attNum,
           feeCleared: isFeeCleared,
-          st1: 16,
-          st2: 15,
-          st3: 18,
-          st4: 17,
-          it1: 21,
-          it2: 22,
-          cia1: 42,
-          cia2: 45,
-          model: 68,
-          project: 18,
-          assignment1: 5,
-          assignment2: 5,
-          assignment3: 4,
-          assignment4: 5,
-          assignment: 9,
-          ciaTotal: 22,
-          eseMarks: 65,
-          totalMarks: 87,
-          grade: 'A+',
-          gradePoint: 9,
+          st1: null,
+          st2: null,
+          st3: null,
+          st4: null,
+          it1: null,
+          it2: null,
+          cia1: null,
+          cia2: null,
+          model: null,
+          seminar: null,
+          project: null,
+          assignment1: null,
+          assignment2: null,
+          assignment3: null,
+          assignment4: null,
+          assignment: null,
+          ciaTotal: '-',
+          eseMarks: null,
+          totalMarks: null,
+          grade: '-',
+          gradePoint: null,
           status: statusStr,
-          result: 'PASS',
-          sgpa: 8.8,
-          cgpa: Number(st.cgpa || 8.5)
+          result: '-',
+          sgpa: Number(st.sgpa || 0),
+          cgpa: Number(st.cgpa || 0)
         });
       });
 
@@ -398,27 +400,39 @@ export default function ExaminationManagement({ user }) {
             if (!roll || !studentMap.has(roll)) return;
             const existing = studentMap.get(roll);
 
-            const st1Val = stMark.st1 !== null && stMark.st1 !== undefined ? stMark.st1 : (existing.st1 ?? 16);
-            const st2Val = stMark.st2 !== null && stMark.st2 !== undefined ? stMark.st2 : (existing.st2 ?? 15);
-            const st3Val = stMark.st3 !== null && stMark.st3 !== undefined ? stMark.st3 : (existing.st3 ?? 18);
-            const st4Val = stMark.st4 !== null && stMark.st4 !== undefined ? stMark.st4 : (existing.st4 ?? 17);
-            const it1Val = stMark.it1 !== null && stMark.it1 !== undefined ? stMark.it1 : (typeof stMark.cia1 === 'number' ? stMark.cia1 : (existing.it1 || 21));
-            const it2Val = stMark.it2 !== null && stMark.it2 !== undefined ? stMark.it2 : (typeof stMark.cia2 === 'number' ? stMark.cia2 : (existing.it2 || 22));
-            const modelVal = stMark.model !== null && stMark.model !== undefined ? stMark.model : (existing.model ?? 65);
-            const projectVal = stMark.project !== null && stMark.project !== undefined ? stMark.project : (existing.project ?? 18);
-            const a1Val = stMark.assignment1 !== null && stMark.assignment1 !== undefined ? stMark.assignment1 : 5;
-            const a2Val = stMark.assignment2 !== null && stMark.assignment2 !== undefined ? stMark.assignment2 : 5;
-            const a3Val = stMark.assignment3 !== null && stMark.assignment3 !== undefined ? stMark.assignment3 : 4;
-            const a4Val = stMark.assignment4 !== null && stMark.assignment4 !== undefined ? stMark.assignment4 : 5;
-            const assignVal = typeof stMark.assignment === 'number' ? stMark.assignment : (existing.assignment || 8);
-            const ciaTot = typeof stMark.consolidated === 'number' && stMark.consolidated > 0
-              ? Math.min(25, stMark.consolidated)
-              : Math.min(25, Math.round(((Number(it1Val) || 0) + (Number(it2Val) || 0)) * 0.25 + (assignVal * 0.5)));
+            // Use actual staff marks — null if not entered (no hardcoded fallbacks)
+            const st1Val = (stMark.st1 !== null && stMark.st1 !== undefined) ? stMark.st1 : existing.st1;
+            const st2Val = (stMark.st2 !== null && stMark.st2 !== undefined) ? stMark.st2 : existing.st2;
+            const st3Val = (stMark.st3 !== null && stMark.st3 !== undefined) ? stMark.st3 : existing.st3;
+            const st4Val = (stMark.st4 !== null && stMark.st4 !== undefined) ? stMark.st4 : existing.st4;
+            const it1Val = (stMark.it1 !== null && stMark.it1 !== undefined) ? stMark.it1 : ((stMark.cia1 !== null && stMark.cia1 !== undefined) ? stMark.cia1 : existing.it1);
+            const it2Val = (stMark.it2 !== null && stMark.it2 !== undefined) ? stMark.it2 : ((stMark.cia2 !== null && stMark.cia2 !== undefined) ? stMark.cia2 : existing.it2);
+            const modelVal = (stMark.model !== null && stMark.model !== undefined) ? stMark.model : existing.model;
+            const seminarVal = (stMark.seminar !== null && stMark.seminar !== undefined) ? stMark.seminar : existing.seminar;
+            const projectVal = (stMark.project !== null && stMark.project !== undefined) ? stMark.project : existing.project;
+            const a1Val = (stMark.assignment1 !== null && stMark.assignment1 !== undefined) ? stMark.assignment1 : existing.assignment1;
+            const a2Val = (stMark.assignment2 !== null && stMark.assignment2 !== undefined) ? stMark.assignment2 : existing.assignment2;
+            const a3Val = (stMark.assignment3 !== null && stMark.assignment3 !== undefined) ? stMark.assignment3 : existing.assignment3;
+            const a4Val = (stMark.assignment4 !== null && stMark.assignment4 !== undefined) ? stMark.assignment4 : existing.assignment4;
+            const assignVal = (stMark.assignment !== null && stMark.assignment !== undefined) ? stMark.assignment : existing.assignment;
 
-            const ese = typeof stMark.ese === 'number' ? Math.min(75, stMark.ese) : (typeof stMark.eseMarks === 'number' ? Math.min(75, stMark.eseMarks) : 65);
-            const total = ciaTot + ese;
-            const grade = total >= 90 ? 'O' : total >= 80 ? 'A+' : total >= 70 ? 'A' : total >= 60 ? 'B+' : total >= 50 ? 'B' : 'U';
-            const gradePoint = total >= 90 ? 10 : total >= 80 ? 9 : total >= 70 ? 8 : total >= 60 ? 7 : total >= 50 ? 6 : 0;
+            // CIA consolidated: use stored value if available, else calculate from actual marks only
+            const numIt1 = typeof it1Val === 'number' ? it1Val : 0;
+            const numIt2 = typeof it2Val === 'number' ? it2Val : 0;
+            const numAsg = (typeof assignVal === 'number') ? assignVal : (
+              (typeof a1Val === 'number' ? a1Val : 0) + (typeof a2Val === 'number' ? a2Val : 0) +
+              (typeof a3Val === 'number' ? a3Val : 0) + (typeof a4Val === 'number' ? a4Val : 0)
+            );
+            const ciaTot = (typeof stMark.consolidated === 'number' && stMark.consolidated > 0)
+              ? Math.min(25, stMark.consolidated)
+              : (numIt1 > 0 || numIt2 > 0 || numAsg > 0
+                ? Math.min(25, Math.round(((numIt1 + numIt2) / 50) * 10 + (typeof modelVal === 'number' ? (modelVal / 75) * 10 : 0) + Math.min(5, (numAsg / 20) * 5)))
+                : '-');
+
+            const ese = typeof stMark.ese === 'number' ? Math.min(75, stMark.ese) : (typeof stMark.eseMarks === 'number' ? Math.min(75, stMark.eseMarks) : existing.eseMarks);
+            const total = (typeof ciaTot === 'number' && typeof ese === 'number') ? ciaTot + ese : null;
+            const grade = total !== null ? (total >= 90 ? 'O' : total >= 80 ? 'A+' : total >= 70 ? 'A' : total >= 60 ? 'B+' : total >= 50 ? 'B' : 'U') : '-';
+            const gradePoint = total !== null ? (total >= 90 ? 10 : total >= 80 ? 9 : total >= 70 ? 8 : total >= 60 ? 7 : total >= 50 ? 6 : 0) : null;
             const isFeeCleared = existing.feeCleared;
             const isEligible = existing.attendance >= 75 && isFeeCleared;
             const statusStr = isEligible
@@ -437,6 +451,7 @@ export default function ExaminationManagement({ user }) {
               cia1: it1Val,
               cia2: it2Val,
               model: modelVal,
+              seminar: seminarVal,
               project: projectVal,
               assignment1: a1Val,
               assignment2: a2Val,
@@ -449,7 +464,7 @@ export default function ExaminationManagement({ user }) {
               grade,
               gradePoint,
               status: statusStr,
-              result: total >= 50 ? 'PASS' : 'FAIL',
+              result: total !== null ? (total >= 50 ? 'PASS' : 'FAIL') : '-',
               uploadedByStaff: sheet.staffName || sheet.staffId || 'Faculty',
               subjectCode: sheet.subjectCode,
               subjectName: sheet.subjectName
@@ -1242,7 +1257,23 @@ export default function ExaminationManagement({ user }) {
     });
   }, [examsList, searchQuery, selectedDept, selectedScheduleSem, selectedType]);
 
-  // Filtered Students for Hall Tickets / Results
+  // Internal Marks tab filter state
+  const [marksFilterDept, setMarksFilterDept] = useState('All');
+  const [marksFilterSem, setMarksFilterSem] = useState('All');
+  const [marksFilterYear, setMarksFilterYear] = useState('All');
+  const [marksFilterSubject, setMarksFilterSubject] = useState('All');
+  const [marksFilterBatch, setMarksFilterBatch] = useState('All');
+  const [marksSearchQuery, setMarksSearchQuery] = useState('');
+
+  // Unique batches from internalMarksheets
+  const availableBatches = useMemo(() => {
+    const set = new Set();
+    internalMarksheets.forEach(ms => { if (ms.academicYear) set.add(ms.academicYear); });
+    studentMarksList.forEach(s => { if (s.batch) set.add(s.batch); });
+    return Array.from(set).sort();
+  }, [internalMarksheets, studentMarksList]);
+
+  // Filtered Students for Hall Tickets / Results (no marks filter)
   const filteredStudents = useMemo(() => {
     return studentMarksList.filter(s => {
       const q = (searchQuery || '').toLowerCase().trim();
@@ -1264,6 +1295,103 @@ export default function ExaminationManagement({ user }) {
       return matchesSearch && matchesDept;
     });
   }, [studentMarksList, searchQuery, selectedDept]);
+
+  // Filtered marks rows for the internal-marks admin tab
+  // Built from internalMarksheets (per-sheet, per-student) with filter support
+  const filteredInternalMarksRows = useMemo(() => {
+    const rows = [];
+    internalMarksheets.forEach(ms => {
+      // Dept filter
+      if (marksFilterDept !== 'All') {
+        const msDept = (ms.department || '').toLowerCase();
+        const fDept = marksFilterDept.toLowerCase();
+        if (!msDept.includes(fDept) && !fDept.includes(msDept)) return;
+      }
+      // Sem filter
+      if (marksFilterSem !== 'All') {
+        const msSem = String(ms.semester || '');
+        const fSem = String(marksFilterSem);
+        if (msSem !== fSem) return;
+      }
+      // Year filter
+      if (marksFilterYear !== 'All') {
+        const msYear = String(ms.year || '');
+        const fYear = marksFilterYear.toLowerCase();
+        if (!msYear.toLowerCase().includes(fYear)) return;
+      }
+      // Subject filter
+      if (marksFilterSubject !== 'All') {
+        const msSub = (ms.subjectCode || '').toUpperCase();
+        if (msSub !== marksFilterSubject.toUpperCase()) return;
+      }
+      // Batch filter — handled per student below
+      (ms.students || []).forEach(stMark => {
+        const q = marksSearchQuery.toLowerCase().trim();
+        const matchesSearch = !q || (
+          String(stMark.name || '').toLowerCase().includes(q) ||
+          String(stMark.rollNo || '').toLowerCase().includes(q)
+        );
+        if (!matchesSearch) return;
+        // Batch filter via studentMarksList lookup
+        if (marksFilterBatch !== 'All') {
+          const stInfo = studentMarksList.find(s => (s.rollNo || '').toUpperCase() === (stMark.rollNo || '').toUpperCase());
+          if (!stInfo || !String(stInfo.batch || '').toLowerCase().includes(marksFilterBatch.toLowerCase())) return;
+        }
+
+        const it1Val = stMark.it1 !== null && stMark.it1 !== undefined ? stMark.it1 : (stMark.cia1 !== null && stMark.cia1 !== undefined ? stMark.cia1 : null);
+        const it2Val = stMark.it2 !== null && stMark.it2 !== undefined ? stMark.it2 : (stMark.cia2 !== null && stMark.cia2 !== undefined ? stMark.cia2 : null);
+        const ciaTot = (stMark.consolidated !== null && stMark.consolidated !== undefined)
+          ? stMark.consolidated
+          : (stMark.ciaTotal !== null && stMark.ciaTotal !== undefined ? stMark.ciaTotal : '-');
+        const finalGrade = stMark.grade || (stMark.consolidated ? (stMark.consolidated >= 23 ? 'A+' : stMark.consolidated >= 20 ? 'A' : stMark.consolidated >= 17 ? 'B+' : stMark.consolidated >= 14 ? 'B' : stMark.consolidated >= 10 ? 'C' : 'F') : '-');
+
+        rows.push({
+          ...stMark,
+          id: stMark._id || `${ms.subjectCode}-${stMark.rollNo}`,
+          marksheetId: ms._id,
+          subjectCode: ms.subjectCode,
+          subjectName: ms.subjectName,
+          department: ms.department,
+          marksheetSemester: ms.semester,
+          academicYear: ms.academicYear,
+          staffName: ms.staffName,
+          currentApprovalStage: ms.currentApprovalStage,
+          approvalStatus: ms.approvalStatus,
+          it1: it1Val,
+          it2: it2Val,
+          cia1: it1Val,
+          cia2: it2Val,
+          model: stMark.model !== null && stMark.model !== undefined ? stMark.model : null,
+          semester: stMark.semester !== null && stMark.semester !== undefined ? stMark.semester : null,
+          seminar: stMark.seminar !== null && stMark.seminar !== undefined ? stMark.seminar : null,
+          project: stMark.project !== null && stMark.project !== undefined ? stMark.project : null,
+          st1: stMark.st1 !== null && stMark.st1 !== undefined ? stMark.st1 : null,
+          st2: stMark.st2 !== null && stMark.st2 !== undefined ? stMark.st2 : null,
+          st3: stMark.st3 !== null && stMark.st3 !== undefined ? stMark.st3 : null,
+          st4: stMark.st4 !== null && stMark.st4 !== undefined ? stMark.st4 : null,
+          assignment1: stMark.assignment1 !== null && stMark.assignment1 !== undefined ? stMark.assignment1 : null,
+          assignment2: stMark.assignment2 !== null && stMark.assignment2 !== undefined ? stMark.assignment2 : null,
+          assignment3: stMark.assignment3 !== null && stMark.assignment3 !== undefined ? stMark.assignment3 : null,
+          assignment4: stMark.assignment4 !== null && stMark.assignment4 !== undefined ? stMark.assignment4 : null,
+          ciaTotal: ciaTot,
+          grade: finalGrade,
+        });
+      });
+    });
+
+    if (internalMarksheets.length === 0) {
+      studentMarksList.forEach(s => {
+        if (marksFilterDept !== 'All' && s.department !== marksFilterDept) return;
+        if (marksFilterYear !== 'All' && String(s.year) !== marksFilterYear.replace(/\D/g, '')) return;
+        if (marksFilterBatch !== 'All' && !String(s.batch || '').toLowerCase().includes(marksFilterBatch.toLowerCase())) return;
+        const q = marksSearchQuery.toLowerCase().trim();
+        if (q && !String(s.name || '').toLowerCase().includes(q) && !String(s.rollNo || '').toLowerCase().includes(q)) return;
+        rows.push(s);
+      });
+    }
+
+    return rows;
+  }, [internalMarksheets, studentMarksList, marksFilterDept, marksFilterSem, marksFilterYear, marksFilterSubject, marksFilterBatch, marksSearchQuery]);
 
   // Stats Counters
   const totalEligible = useMemo(() => {
@@ -1880,21 +2008,37 @@ export default function ExaminationManagement({ user }) {
 
   // Update Student CIA Marks dynamically across official register fields
   const handleUpdateMarks = (id, field, value) => {
-    setStudentMarksList(prev => prev.map(s => {
-      if (s.id === id) {
-        let parsedVal = value;
-        const upper = String(value).toUpperCase().trim();
-        if (upper === 'AB' || upper === 'A') {
-          parsedVal = 'AB';
-        } else if (upper === '-') {
-          parsedVal = '-';
-        } else if (value === '' || value === null || value === undefined) {
-          parsedVal = null;
-        } else {
-          const n = Number(value);
-          parsedVal = !isNaN(n) ? n : value;
-        }
+    let parsedVal = value;
+    const upper = String(value).toUpperCase().trim();
+    if (upper === 'AB' || upper === 'A') {
+      parsedVal = 'AB';
+    } else if (upper === '-') {
+      parsedVal = '-';
+    } else if (value === '' || value === null || value === undefined) {
+      parsedVal = null;
+    } else {
+      const n = Number(value);
+      parsedVal = !isNaN(n) ? n : value;
+    }
 
+    setInternalMarksheets(prevSheets => prevSheets.map(ms => {
+      const updatedStudents = (ms.students || []).map(st => {
+        const studentKey = st._id || `${ms.subjectCode}-${st.rollNo}`;
+        if (st._id === id || studentKey === id || st.rollNo === id) {
+          const upd = { ...st, [field]: parsedVal };
+          if (field === 'it1') upd.cia1 = parsedVal;
+          if (field === 'it2') upd.cia2 = parsedVal;
+          if (field === 'cia1') upd.it1 = parsedVal;
+          if (field === 'cia2') upd.it2 = parsedVal;
+          return upd;
+        }
+        return st;
+      });
+      return { ...ms, students: updatedStudents };
+    }));
+
+    setStudentMarksList(prev => prev.map(s => {
+      if (s.id === id || s.rollNo === id) {
         const updated = { ...s, [field]: parsedVal };
         if (field === 'it1') updated.cia1 = parsedVal;
         if (field === 'it2') updated.cia2 = parsedVal;
@@ -2987,13 +3131,14 @@ export default function ExaminationManagement({ user }) {
       {/* ========================================================================= */}
       {activeTab === 'internal-marks' && (
         <div className="space-y-5">
+          {/* Header */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 VIVEKANANDA COLLEGE OF ARTS AND SCIENCE • VELLALANKULAM - 627 856
               </div>
-              <h3 className="font-extrabold text-sm text-slate-900 mt-0.5">Continuous Internal Assessment (CIA) & Register Marks Entry</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Official College Register: INTERNAL (Internal 1, Internal 2) | MODEL | SEMESTER | SEMINAR | PROJECT | SNAP TEST (ST 1-4) | ASSIGNMENT (1-4)</p>
+              <h3 className="font-extrabold text-sm text-slate-900 mt-0.5">Continuous Internal Assessment (CIA) — Submitted Marks Register</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Viewing marks submitted by HOD. Use filters to narrow by department, semester, year, subject, or batch.</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -3029,6 +3174,99 @@ export default function ExaminationManagement({ user }) {
             </div>
           </div>
 
+          {/* ── Filter Bar ── */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs">
+            <div className="flex flex-wrap gap-3 items-end">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[160px]">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={marksSearchQuery}
+                  onChange={e => setMarksSearchQuery(e.target.value)}
+                  placeholder="Search roll no / name..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                />
+              </div>
+              {/* Department */}
+              <div className="min-w-[150px]">
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Department</label>
+                <select
+                  value={marksFilterDept}
+                  onChange={e => setMarksFilterDept(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="All">All Departments</option>
+                  {availableDepartments.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              {/* Semester */}
+              <div className="min-w-[110px]">
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Semester</label>
+                <select
+                  value={marksFilterSem}
+                  onChange={e => setMarksFilterSem(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="All">All Sems</option>
+                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>Sem {n}</option>)}
+                </select>
+              </div>
+              {/* Year */}
+              <div className="min-w-[110px]">
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Year</label>
+                <select
+                  value={marksFilterYear}
+                  onChange={e => setMarksFilterYear(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="All">All Years</option>
+                  <option value="I Year">I Year</option>
+                  <option value="II Year">II Year</option>
+                  <option value="III Year">III Year</option>
+                </select>
+              </div>
+              {/* Subject */}
+              <div className="min-w-[150px]">
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Subject</label>
+                <select
+                  value={marksFilterSubject}
+                  onChange={e => setMarksFilterSubject(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="All">All Subjects</option>
+                  {Array.from(new Set(internalMarksheets.map(ms => ms.subjectCode).filter(Boolean))).sort().map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Batch */}
+              <div className="min-w-[130px]">
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Batch</label>
+                <select
+                  value={marksFilterBatch}
+                  onChange={e => setMarksFilterBatch(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="All">All Batches</option>
+                  {availableBatches.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              {/* Reset */}
+              <button
+                onClick={() => { setMarksFilterDept('All'); setMarksFilterSem('All'); setMarksFilterYear('All'); setMarksFilterSubject('All'); setMarksFilterBatch('All'); setMarksSearchQuery(''); }}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl border border-slate-200 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reset
+              </button>
+            </div>
+            {filteredInternalMarksRows.length > 0 && (
+              <p className="text-[11px] text-slate-400 font-semibold mt-2">
+                Showing <strong className="text-slate-700">{filteredInternalMarksRows.length}</strong> student mark record{filteredInternalMarksRows.length !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[1050px]">
@@ -3060,120 +3298,140 @@ export default function ExaminationManagement({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
-                  {filteredStudents.map((s, idx) => (
-                    <tr key={s._id || s.id || s.rollNo || `mark-${idx}`} className="hover:bg-slate-50/70">
-                      <td className="py-2 px-3 text-center font-bold text-slate-400 border-r border-slate-100">{idx + 1}</td>
-                      <td className="py-2 px-4 border-r border-slate-100">
-                        <div className="font-mono font-bold text-blue-600 text-[11px]">{s.rollNo}</div>
-                        <div className="font-extrabold text-slate-900">{s.name}</div>
+                  {filteredInternalMarksRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={18} className="py-14 text-center">
+                        <div className="flex flex-col items-center justify-center gap-1.5 text-slate-400">
+                          <p className="font-extrabold text-sm text-slate-600">No student internal marks found</p>
+                          <p className="text-xs text-slate-400">
+                            {internalMarksheets.length === 0
+                              ? "No marksheets submitted by HOD yet."
+                              : "No records match the selected department, semester, year, subject, or batch filter."}
+                          </p>
+                        </div>
                       </td>
+                    </tr>
+                  ) : (
+                    filteredInternalMarksRows.map((s, idx) => (
+                      <tr key={s._id || s.id || `${s.subjectCode}-${s.rollNo}` || `mark-${idx}`} className="hover:bg-slate-50/70">
+                        <td className="py-2 px-3 text-center font-bold text-slate-400 border-r border-slate-100">{idx + 1}</td>
+                        <td className="py-2 px-4 border-r border-slate-100">
+                          <div className="font-mono font-bold text-blue-600 text-[11px]">{s.rollNo}</div>
+                          <div className="font-extrabold text-slate-900">{s.name}</div>
+                          {s.subjectCode && (
+                            <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                              {s.subjectCode}{s.subjectName ? ` • ${s.subjectName}` : ''}
+                            </div>
+                          )}
+                        </td>
 
-                      {/* INTERNAL IT1 - IT2 */}
-                      {['it1', 'it2'].map(f => {
-                        const val = s[f] !== null && s[f] !== undefined ? s[f] : (f === 'it1' ? s.cia1 : s.cia2);
-                        return (
-                          <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-indigo-50/20">
+                        {/* INTERNAL IT1 - IT2 */}
+                        {['it1', 'it2'].map(f => {
+                          const val = s[f] !== null && s[f] !== undefined ? s[f] : (f === 'it1' ? s.cia1 : s.cia2);
+                          return (
+                            <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-indigo-50/20">
+                              <input
+                                type="text"
+                                disabled={isMarksLocked}
+                                value={val !== null && val !== undefined ? val : ""}
+                                onChange={(e) => handleUpdateMarks(s.id, f, e.target.value)}
+                                className="w-11 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-indigo-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                                placeholder="-"
+                              />
+                            </td>
+                          );
+                        })}
+
+                        {/* MODEL */}
+                        <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-purple-50/20">
+                          <input
+                            type="text"
+                            disabled={isMarksLocked}
+                            value={s.model !== null && s.model !== undefined ? s.model : ""}
+                            onChange={(e) => handleUpdateMarks(s.id, 'model', e.target.value)}
+                            className="w-12 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-purple-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                            placeholder="-"
+                          />
+                        </td>
+
+                        {/* SEMESTER */}
+                        <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-rose-50/20">
+                          <input
+                            type="text"
+                            disabled={isMarksLocked}
+                            value={s.semester !== null && s.semester !== undefined ? s.semester : ""}
+                            onChange={(e) => handleUpdateMarks(s.id, 'semester', e.target.value)}
+                            className="w-12 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-rose-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                            placeholder="-"
+                          />
+                        </td>
+
+                        {/* SEMINAR */}
+                        <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-teal-50/20">
+                          <input
+                            type="text"
+                            disabled={isMarksLocked}
+                            value={s.seminar !== null && s.seminar !== undefined ? s.seminar : ""}
+                            onChange={(e) => handleUpdateMarks(s.id, 'seminar', e.target.value)}
+                            className="w-12 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-teal-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                            placeholder="-"
+                          />
+                        </td>
+
+                        {/* PROJECT */}
+                        <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-emerald-50/20">
+                          <input
+                            type="text"
+                            disabled={isMarksLocked}
+                            value={s.project !== null && s.project !== undefined ? s.project : ""}
+                            onChange={(e) => handleUpdateMarks(s.id, 'project', e.target.value)}
+                            className="w-14 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-emerald-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                            placeholder="-"
+                          />
+                        </td>
+
+                        {/* SNAP TESTS ST1 - ST4 */}
+                        {['st1', 'st2', 'st3', 'st4'].map(f => (
+                          <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-sky-50/20">
                             <input
                               type="text"
                               disabled={isMarksLocked}
-                              value={val !== null && val !== undefined ? val : ""}
+                              value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
                               onChange={(e) => handleUpdateMarks(s.id, f, e.target.value)}
-                              className="w-11 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-indigo-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                              className="w-11 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-sky-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
                               placeholder="-"
                             />
                           </td>
-                        );
-                      })}
+                        ))}
 
-                      {/* MODEL */}
-                      <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-purple-50/20">
-                        <input
-                          type="text"
-                          disabled={isMarksLocked}
-                          value={s.model !== null && s.model !== undefined ? s.model : ""}
-                          onChange={(e) => handleUpdateMarks(s.id, 'model', e.target.value)}
-                          className="w-12 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-purple-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
-                          placeholder="-"
-                        />
-                      </td>
+                        {/* ASSIGNMENT 1 - 4 */}
+                        {['assignment1', 'assignment2', 'assignment3', 'assignment4'].map(f => (
+                          <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-amber-50/20">
+                            <input
+                              type="text"
+                              disabled={isMarksLocked}
+                              value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
+                              onChange={(e) => handleUpdateMarks(s.id, f, e.target.value)}
+                              className="w-9 px-0.5 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-amber-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
+                              placeholder="-"
+                            />
+                          </td>
+                        ))}
 
-                      {/* SEMESTER */}
-                      <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-rose-50/20">
-                        <input
-                          type="text"
-                          disabled={isMarksLocked}
-                          value={s.semester !== null && s.semester !== undefined ? s.semester : ""}
-                          onChange={(e) => handleUpdateMarks(s.id, 'semester', e.target.value)}
-                          className="w-12 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-rose-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
-                          placeholder="-"
-                        />
-                      </td>
-
-                      {/* SEMINAR */}
-                      <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-teal-50/20">
-                        <input
-                          type="text"
-                          disabled={isMarksLocked}
-                          value={s.seminar !== null && s.seminar !== undefined ? s.seminar : ""}
-                          onChange={(e) => handleUpdateMarks(s.id, 'seminar', e.target.value)}
-                          className="w-12 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-teal-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
-                          placeholder="-"
-                        />
-                      </td>
-
-                      {/* PROJECT */}
-                      <td className="py-1.5 px-1 text-center border-r border-slate-100 bg-emerald-50/20">
-                        <input
-                          type="text"
-                          disabled={isMarksLocked}
-                          value={s.project !== null && s.project !== undefined ? s.project : ""}
-                          onChange={(e) => handleUpdateMarks(s.id, 'project', e.target.value)}
-                          className="w-14 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-emerald-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
-                          placeholder="-"
-                        />
-                      </td>
-
-                      {/* SNAP TESTS ST1 - ST4 */}
-                      {['st1', 'st2', 'st3', 'st4'].map(f => (
-                        <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-sky-50/20">
-                          <input
-                            type="text"
-                            disabled={isMarksLocked}
-                            value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
-                            onChange={(e) => handleUpdateMarks(s.id, f, e.target.value)}
-                            className="w-11 px-1 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-sky-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
-                            placeholder="-"
-                          />
+                        {/* TOTAL CIA */}
+                        <td className="py-2 px-3 text-center font-black text-sm text-indigo-700 bg-blue-50/30 border-r border-slate-100">
+                          {s.ciaTotal} / 25
                         </td>
-                      ))}
 
-                      {/* ASSIGNMENT 1 - 4 */}
-                      {['assignment1', 'assignment2', 'assignment3', 'assignment4'].map(f => (
-                        <td key={f} className="py-1.5 px-1 text-center border-r border-slate-100 bg-amber-50/20">
-                          <input
-                            type="text"
-                            disabled={isMarksLocked}
-                            value={s[f] !== null && s[f] !== undefined ? s[f] : ""}
-                            onChange={(e) => handleUpdateMarks(s.id, f, e.target.value)}
-                            className="w-9 px-0.5 py-1 bg-white border border-slate-200 rounded-md text-center font-bold text-slate-900 focus:border-amber-500 focus:outline-none disabled:bg-slate-50 disabled:opacity-75"
-                            placeholder="-"
-                          />
+                        {/* GRADE */}
+                        <td className="py-2 px-4 text-right">
+                          <span className="px-2 py-0.5 rounded-md font-black text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                            {s.grade}
+                          </span>
                         </td>
-                      ))}
-
-                      {/* TOTAL CIA */}
-                      <td className="py-2 px-3 text-center font-black text-sm text-indigo-700 bg-blue-50/30 border-r border-slate-100">
-                        {s.ciaTotal} / 25
-                      </td>
-
-                      {/* GRADE */}
-                      <td className="py-2 px-4 text-right">
-                        <span className="px-2 py-0.5 rounded-md font-black text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                          {s.grade}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
