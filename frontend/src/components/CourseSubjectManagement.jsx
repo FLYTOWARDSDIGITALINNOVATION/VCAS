@@ -167,7 +167,10 @@ export default function CourseSubjectManagement({ user }) {
       }
 
       setSubjectsList(clean);
-      try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean)); } catch (_) {}
+      try {
+        localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean));
+        window.dispatchEvent(new Event('vcas_subjects_updated'));
+      } catch (_) {}
 
       let realDepts = [];
       if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
@@ -1193,9 +1196,9 @@ export default function CourseSubjectManagement({ user }) {
                   className="w-full bg-slate-50/80 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">All Academic Years</option>
-                  <option value="1">1st Year (Fresher)</option>
-                  <option value="2">2nd Year (Sophomore)</option>
-                  <option value="3">3rd Year (Junior)</option>
+                  <option value="1">1st Year</option>
+                  <option value="2">2nd Year</option>
+                  <option value="3">3rd Year</option>
                 </select>
               </div>
             )}

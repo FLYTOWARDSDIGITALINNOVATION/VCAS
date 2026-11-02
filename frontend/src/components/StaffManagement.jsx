@@ -71,58 +71,12 @@ function normalizeStaff(s) {
 
 const INITIAL_STAFF = [];
 
-const DEPARTMENTS = [
-  'All Departments',
-  'Artificial Intelligence',
-  'Commerce',
-  'Computer Science',
-  'Criminology and Forensic Science',
-  'Management'
-];
-
-export const STANDARD_STAFF_CATEGORIES = [
-  { value: 'All Departments', label: 'All Staff' },
-  { value: 'Artificial Intelligence', label: '1. Artificial Intelligence' },
-  { value: 'Commerce', label: '2. Commerce' },
-  { value: 'Computer Science', label: '3. Computer Science' },
-  { value: 'Criminology and Forensic Science', label: '4. Criminology & Forensic' },
-  { value: 'Management', label: '5. Management' }
-];
-
 export const isStaffInDeptCategory = (s, deptValue) => {
   if (!s) return false;
-  if (deptValue === 'All Departments') return true;
+  if (!deptValue || deptValue === 'All Departments') return true;
   const sDept = String(s.department || '').toLowerCase().trim();
-  const sRole = String(s.role || '').toLowerCase().trim();
-
-  if (deptValue === 'Office') {
-    return sRole === 'office staff' || sDept.includes('office') || sDept.includes('admin');
-  }
-  if (deptValue === 'English') {
-    return sDept.includes('english');
-  }
-  if (deptValue === 'Tamil') {
-    return sDept.includes('tamil');
-  }
-  if (deptValue === 'Physical Education') {
-    return sDept.includes('physical') || sDept.includes('sports');
-  }
-  if (deptValue === 'Business Administration (BBA)' || deptValue === 'BBA') {
-    return sDept.includes('bba') || sDept.includes('business administration');
-  }
-  if (deptValue === 'Computer Applications (BCA)' || deptValue === 'BCA') {
-    return sDept.includes('bca') || sDept.includes('computer application');
-  }
-  if (deptValue === 'Computer Science') {
-    return (sDept.includes('computer science') || sDept === 'cs') && !sDept.includes('bca') && !sDept.includes('application');
-  }
-  if (deptValue === 'Commerce') {
-    return sDept.includes('commerce') || sDept.includes('b.com') || sDept.includes('m.com');
-  }
-  if (deptValue === 'Mathematics') {
-    return sDept.includes('math');
-  }
-  return s.department === deptValue || sDept === String(deptValue).toLowerCase().trim();
+  const target = String(deptValue).toLowerCase().trim();
+  return sDept === target || sDept.includes(target) || target.includes(sDept);
 };
 
 const DESIGNATIONS = [
@@ -199,8 +153,22 @@ export default function StaffManagement({ user }) {
   const [selectedStatus, setSelectedStatus] = useState('All Status');
   const [selectedNetSetFilter, setSelectedNetSetFilter] = useState('All');
   const [selectedSubject, setSelectedSubject] = useState('All Subjects');
-  const [departmentsList, setDepartmentsList] = useState([]);
-  const [subjectsList, setSubjectsList] = useState([]);
+  const [departmentsList, setDepartmentsList] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
+      if (Array.isArray(cached) && cached.length > 0) return cached;
+    } catch (_) {}
+    return [];
+  });
+  const [subjectsList, setSubjectsList] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+      if (Array.isArray(cached) && cached.length > 0) {
+        return cached.filter(s => Boolean(s.code) && s.code !== 'CS101');
+      }
+    } catch (_) {}
+    return [];
+  });
 
   // Selected staff for full detailed view
   const [selectedStaffForDetails, setSelectedStaffForDetails] = useState(null);
@@ -402,11 +370,27 @@ is authorized to export or issue this credential sheet.
     setTimeout(() => setToastMessage(''), 3500);
   };
 
+  // Fetch real departments from MongoDB
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/departments`);
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.data)) {
+        setDepartmentsList(data.data);
+        try {
+          localStorage.setItem('vcas_departments_cache', JSON.stringify(data.data));
+        } catch (_) {}
+      }
+    } catch (err) {
+      console.warn('Notice fetching departments in StaffManagement:', err);
+    }
+  };
+
   // Fetch staff list from MongoDB on mount
   const fetchStaffList = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/staff`);
+      const res = await fetch(`${API_BASE}/staff`);
       const result = await res.json();
       if (res.ok && result.success) {
         const normalized = (result.data || []).map(normalizeStaff);
@@ -421,54 +405,57 @@ is authorized to export or issue this credential sheet.
     }
   };
 
+  // Fetch real subjects matching the Subjects page
+  const fetchSubjects = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/subjects`);
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.data)) {
+        const clean = data.data.filter(s => Boolean(s.code) && s.code !== 'CS101');
+        setSubjectsList(clean);
+        try {
+          localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean));
+        } catch (_) {}
+      }
+    } catch (err) {
+      console.warn('Notice fetching subjects in StaffManagement:', err);
+    }
+  };
+
   React.useEffect(() => {
     fetchStaffList();
+    fetchDepartments();
+    fetchSubjects();
 
-    // Fetch real departments
-    fetch(`${API_BASE}/api/departments`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.data)) {
-          setDepartmentsList(data.data);
-        }
-      })
-      .catch(() => {});
+    const handleDeptUpdate = () => {
+      fetchDepartments();
+    };
 
-    // Fetch original real subjects
-    fetch(`${API_BASE}/api/subjects`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.data)) {
-          setSubjectsList(data.data);
+    const handleSubjUpdate = () => {
+      try {
+        const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+        if (Array.isArray(cached) && cached.length > 0) {
+          setSubjectsList(cached.filter(s => Boolean(s.code) && s.code !== 'CS101'));
+        } else {
+          fetchSubjects();
         }
-      })
-      .catch(() => {});
+      } catch (_) {
+        fetchSubjects();
+      }
+    };
 
-    // Also fetch classes to include any newly configured subjects
-    fetch(`${API_BASE}/api/classes`)
-      .then(res => res.json())
-      .then(data => {
-        const cls = data.classes || (Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []));
-        if (Array.isArray(cls)) {
-          setSubjectsList(prev => {
-            const seenCodes = new Set(prev.map(s => (s.code || '').toUpperCase()));
-            const merged = [...prev];
-            cls.forEach(c => {
-              const code = (c.code || c.classCode || '').toUpperCase();
-              if (code && !seenCodes.has(code)) {
-                seenCodes.add(code);
-                merged.push({
-                  code,
-                  name: c.name || c.className || code,
-                  department: c.dept || c.department || ''
-                });
-              }
-            });
-            return merged;
-          });
-        }
-      })
-      .catch(() => {});
+    window.addEventListener('vcas_departments_updated', handleDeptUpdate);
+    window.addEventListener('vcas_subjects_updated', handleSubjUpdate);
+    window.addEventListener('vcas_subject_removed', handleSubjUpdate);
+    window.addEventListener('storage', handleDeptUpdate);
+    window.addEventListener('storage', handleSubjUpdate);
+    return () => {
+      window.removeEventListener('vcas_departments_updated', handleDeptUpdate);
+      window.removeEventListener('vcas_subjects_updated', handleSubjUpdate);
+      window.removeEventListener('vcas_subject_removed', handleSubjUpdate);
+      window.removeEventListener('storage', handleDeptUpdate);
+      window.removeEventListener('storage', handleSubjUpdate);
+    };
   }, []);
 
   // Lock background scroll when any modal is open
@@ -489,26 +476,36 @@ is authorized to export or issue this credential sheet.
   }, [isAddModalOpen, editingStaff, deletingStaff]);
 
   // Form State for Add / Edit
-  const [formData, setFormData] = useState({
-    name: '',
-    empId: '',
-    department: 'Computer Science',
-    designation: 'Professor',
-    employmentType: 'Permanent / Full-Time',
-    email: '',
-    password: 'vcas@2026',
-    phone: '',
-    joiningDate: new Date().toISOString().split('T')[0],
-    status: 'Active',
-    qualification: '',
-    experience: '',
-    bloodGroup: 'O+',
-    dob: '1985-05-15',
-    address: '',
-    emergencyContact: '',
-    netSetExamStatus: 'Not Applicable',
-    netSetExamCertificate: '',
-    netSetCertificateName: ''
+  const [formData, setFormData] = useState(() => {
+    let firstDept = '';
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
+      if (Array.isArray(cached) && cached.length > 0) {
+        firstDept = cached[0]?.name || (typeof cached[0] === 'string' ? cached[0] : '');
+      }
+    } catch (_) {}
+    return {
+      name: '',
+      empId: '',
+      department: firstDept,
+      designation: 'Professor',
+      employmentType: 'Permanent / Full-Time',
+      email: '',
+      password: 'vcas@2026',
+      phone: '',
+      joiningDate: new Date().toISOString().split('T')[0],
+      status: 'Active',
+      qualification: '',
+      experience: '',
+      bloodGroup: 'O+',
+      dob: '1985-05-15',
+      address: '',
+      emergencyContact: '',
+      netSetExamStatus: 'Not Applicable',
+      netSetExamCertificate: '',
+      netSetCertificateName: '',
+      role: 'Staff'
+    };
   });
 
   const [formErrors, setFormErrors] = useState({});
@@ -553,10 +550,12 @@ is authorized to export or issue this credential sheet.
   const resetForm = () => {
     const nextIdNumber = staffList.length + 1;
     const nextEmpId = `EMP${String(nextIdNumber).padStart(3, '0')}`;
+    const realDepts = dynamicDepartments.filter(d => d !== 'All Departments');
+    const defaultDept = realDepts[0] || '';
     setFormData({
       name: '',
       empId: nextEmpId,
-      department: 'Computer Science',
+      department: defaultDept,
       designation: 'Assistant Professor',
       employmentType: 'Permanent / Full-Time',
       email: '',
@@ -588,10 +587,11 @@ is authorized to export or issue this credential sheet.
   // Open Edit Modal
   const handleOpenEditModal = (staff) => {
     setEditingStaff(staff);
+    const realDepts = dynamicDepartments.filter(d => d !== 'All Departments');
     setFormData({
       name: staff.name || '',
       empId: staff.empId || staff.staffId || '',
-      department: staff.department || 'Computer Science',
+      department: staff.department || realDepts[0] || '',
       designation: staff.designation || 'Professor',
       employmentType: staff.employmentType || 'Permanent / Full-Time',
       email: staff.email || '',
@@ -654,7 +654,7 @@ is authorized to export or issue this credential sheet.
         avatarBg: randomColor
       };
 
-      const res = await fetch(`${API_BASE}/api/staff`, {
+      const res = await fetch(`${API_BASE}/staff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -692,7 +692,7 @@ is authorized to export or issue this credential sheet.
         staffId: formData.empId.trim()
       };
 
-      const res = await fetch(`${API_BASE}/api/staff/${targetId}`, {
+      const res = await fetch(`${API_BASE}/staff/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -733,7 +733,7 @@ is authorized to export or issue this credential sheet.
 
     try {
       const targetId = deletingStaff._id || deletingStaff.staffId || deletingStaff.id;
-      const res = await fetch(`${API_BASE}/api/staff/${targetId}`, {
+      const res = await fetch(`${API_BASE}/staff/${targetId}`, {
         method: 'DELETE'
       });
 
@@ -756,11 +756,13 @@ is authorized to export or issue this credential sheet.
     }
   };
 
-  // Dynamic list of categories combining real departments
+  // Dynamic list of categories combining only real added departments
   const dynamicCategories = useMemo(() => {
     const list = [{ value: 'All Departments', label: 'All Staff' }];
-    const deptNames = departmentsList.map(d => (typeof d === 'string' ? d : d?.name || d?.departmentName || '').trim()).filter(Boolean);
-    const unique = Array.from(new Set(deptNames.length > 0 ? deptNames : getKnownDepartments()));
+    const deptNames = departmentsList
+      .map(d => (typeof d === 'string' ? d : d?.name || d?.departmentName || '').trim())
+      .filter(Boolean);
+    const unique = Array.from(new Set(deptNames));
     unique.forEach((name, idx) => {
       list.push({
         value: name,
@@ -770,36 +772,31 @@ is authorized to export or issue this credential sheet.
     return list;
   }, [departmentsList]);
 
-  // Dynamic list of departments combining real added departments
+  // Dynamic list of departments strictly matching ONLY the exactly added departments
   const dynamicDepartments = useMemo(() => {
-    const deptNames = departmentsList.map(d => (typeof d === 'string' ? d : d?.name || d?.departmentName || '').trim()).filter(Boolean);
-    const unique = Array.from(new Set([
-      ...(deptNames.length > 0 ? deptNames : getKnownDepartments()),
-      'Accounts & Finance',
-      'Administrative Office'
-    ]));
+    const deptNames = departmentsList
+      .map(d => (typeof d === 'string' ? d : d?.name || d?.departmentName || '').trim())
+      .filter(Boolean);
+    const unique = Array.from(new Set(deptNames));
     return ['All Departments', ...unique];
   }, [departmentsList]);
 
-  // Dynamic list of original subjects combining database subjects and assigned staff classes
+  // Dynamic list of original subjects strictly matching the Subjects page
   const dynamicSubjects = useMemo(() => {
     const map = new Map();
     subjectsList.forEach(s => {
       const code = (s.code || '').trim().toUpperCase();
-      if (code) map.set(code, { code, name: s.name || code });
-    });
-    staffList.forEach(s => {
-      if (Array.isArray(s.classes)) {
-        s.classes.forEach(c => {
-          const code = (c.code || '').trim().toUpperCase();
-          if (code && !map.has(code)) {
-            map.set(code, { code, name: c.name || code });
-          }
+      if (!code || code === 'CS101') return;
+      if (!map.has(code)) {
+        map.set(code, {
+          code,
+          name: s.name || s.title || code,
+          department: s.department || s.dept || ''
         });
       }
     });
     return Array.from(map.values());
-  }, [subjectsList, staffList]);
+  }, [subjectsList]);
 
   // Filtered staff list
   const filteredStaff = useMemo(() => {
@@ -825,11 +822,16 @@ is authorized to export or issue this credential sheet.
         || (selectedNetSetFilter === 'Pending' && !item.netSetExamCertificate);
 
       const matchesSubject = selectedSubject === 'All Subjects' || (
-        Array.isArray(item.classes) && item.classes.some(c => 
+        (Array.isArray(item.classes) && item.classes.some(c => 
           (c.code || '').toUpperCase() === selectedSubject.toUpperCase() ||
           (c.name || '').toLowerCase() === selectedSubject.toLowerCase()
-        )
-      ) || (item.department || '').toLowerCase().includes(selectedSubject.toLowerCase());
+        )) ||
+        (item.name && subjectsList.some(s => 
+          (s.code || '').toUpperCase() === selectedSubject.toUpperCase() &&
+          s.faculty && s.faculty.trim().toLowerCase() === item.name.trim().toLowerCase()
+        )) ||
+        (item.department || '').toLowerCase().includes(selectedSubject.toLowerCase())
+      );
 
       return matchesSearch && matchesDept && matchesRole && matchesDesignation && matchesStatus && matchesNetSet && matchesSubject;
     });
@@ -1489,8 +1491,7 @@ is authorized to export or issue this credential sheet.
                         setFormData(prev => ({
                           ...prev,
                           role: r,
-                          designation: r === 'Accountant' ? 'Accountant' : r === 'Office Staff' ? 'Office Staff' : (prev.designation === 'Accountant' || prev.designation === 'Office Staff' ? 'Assistant Professor' : prev.designation),
-                          department: r === 'Accountant' ? 'Accounts & Finance' : r === 'Office Staff' ? 'Administrative Office' : prev.department
+                          designation: r === 'Accountant' ? 'Accountant' : r === 'Office Staff' ? 'Office Staff' : (prev.designation === 'Accountant' || prev.designation === 'Office Staff' ? 'Assistant Professor' : prev.designation)
                         }));
                       }}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
@@ -1859,8 +1860,7 @@ is authorized to export or issue this credential sheet.
                         setFormData(prev => ({
                           ...prev,
                           role: r,
-                          designation: r === 'Accountant' ? 'Accountant' : r === 'Office Staff' ? 'Office Staff' : (prev.designation === 'Accountant' || prev.designation === 'Office Staff' ? 'Assistant Professor' : prev.designation),
-                          department: r === 'Accountant' ? 'Accounts & Finance' : r === 'Office Staff' ? 'Administrative Office' : prev.department
+                          designation: r === 'Accountant' ? 'Accountant' : r === 'Office Staff' ? 'Office Staff' : (prev.designation === 'Accountant' || prev.designation === 'Office Staff' ? 'Assistant Professor' : prev.designation)
                         }));
                       }}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"

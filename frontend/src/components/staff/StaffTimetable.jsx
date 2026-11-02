@@ -666,7 +666,7 @@ export default function StaffTimetable({ staffUser }) {
                   {selectedDay}'s Classes
                 </h3>
                 <p className="text-[11px] text-slate-500 font-medium">
-                  Daily Hours Taken: <span className="font-bold text-indigo-600">{dailyHoursForSelectedDay} Hours</span> ({dailyHoursForSelectedDay} of 8 periods)
+                  Daily Hours Taken: <span className="font-bold text-indigo-600">{dailyHoursForSelectedDay} Hours</span> ({dailyHoursForSelectedDay} of 6 periods)
                 </p>
               </div>
             </div>
@@ -776,7 +776,7 @@ export default function StaffTimetable({ staffUser }) {
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">
                   <th className="p-3 text-left w-24">Day</th>
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(slot => (
+                  {[1, 2, 3, 4, 5, 6].map(slot => (
                     <th key={slot} className="p-2.5 text-center min-w-[85px]">
                       P{slot}
                     </th>
@@ -803,7 +803,7 @@ export default function StaffTimetable({ staffUser }) {
                           <span>{day.substring(0, 3)}</span>
                         </div>
                       </td>
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(slot => {
+                      {[1, 2, 3, 4, 5, 6].map(slot => {
                         const cell = schedule[day]?.[String(slot)];
                         if (!cell) {
                           return (
@@ -851,7 +851,7 @@ export default function StaffTimetable({ staffUser }) {
               <tfoot>
                 <tr className="bg-slate-100/80 font-bold text-slate-700 text-[11px] border-t border-slate-200">
                   <td className="p-3 text-left">Weekly Total</td>
-                  <td colSpan={8} className="p-3 text-right text-slate-500 font-medium">
+                  <td colSpan={7} className="p-3 text-right text-slate-500 font-medium">
                     Total Weekly Teaching Hours:
                   </td>
                   <td className="p-3 text-center text-blue-700 font-black border-l border-slate-200 bg-blue-50/50">
@@ -932,7 +932,7 @@ export default function StaffTimetable({ staffUser }) {
                   Quick Select Periods on {slotForm.day}:
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
+                  {[1, 2, 3, 4, 5, 6].map(p => {
                     const currentParts = (slotForm.typedPeriods || '')
                       .split(/[,\s-]+/)
                       .map(Number)

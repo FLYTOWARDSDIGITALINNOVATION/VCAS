@@ -60,8 +60,8 @@ const FACULTY_PERIODS = DEFAULT_FACULTY_PERIODS;
 const INITIAL_SCHEDULES = {};
 
 const DEFAULT_CLASS_METRICS = {
-  weeklyPeriods: '30 Hours',
-  weeklyPeriodsSub: '5 Periods / Day × 6 Days',
+  weeklyPeriods: '36 Hours',
+  weeklyPeriodsSub: '6 Periods / Day × 6 Days',
   smartClassrooms: '18 Rooms',
   smartClassroomsSub: 'Projector Enabled',
   activeLabs: '8 Labs',
@@ -98,7 +98,17 @@ export default function TimetableManagement({ user }) {
   const [facultyPeriods, setFacultyPeriods] = useState(() => {
     try {
       const saved = localStorage.getItem('vcas_faculty_period_timings');
-      return saved ? JSON.parse(saved) : DEFAULT_FACULTY_PERIODS;
+      if (saved) {
+        let parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          parsed = parsed.filter(p => p.slot <= 6);
+          if (!parsed.some(p => p.slot === 6)) {
+            parsed.push({ slot: 6, time: '02:15 PM - 03:00 PM' });
+          }
+          return parsed;
+        }
+      }
+      return DEFAULT_FACULTY_PERIODS;
     } catch {
       return DEFAULT_FACULTY_PERIODS;
     }
@@ -107,7 +117,17 @@ export default function TimetableManagement({ user }) {
   const [classPeriods, setClassPeriods] = useState(() => {
     try {
       const saved = localStorage.getItem('vcas_class_period_timings');
-      return saved ? JSON.parse(saved) : DEFAULT_CLASS_PERIODS;
+      if (saved) {
+        let parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          parsed = parsed.filter(p => p.slot <= 6);
+          if (!parsed.some(p => p.slot === 6)) {
+            parsed.push({ slot: 6, time: '02:15 PM - 03:00 PM' });
+          }
+          return parsed;
+        }
+      }
+      return DEFAULT_CLASS_PERIODS;
     } catch {
       return DEFAULT_CLASS_PERIODS;
     }
@@ -131,20 +151,30 @@ export default function TimetableManagement({ user }) {
 
   const handleOpenEditTimings = (tab) => {
     setActiveTimingTab(tab || (viewMode === 'faculty' ? 'faculty' : 'class'));
-    setTempFacultyPeriods(facultyPeriods);
-    setTempClassPeriods(classPeriods);
+    const cleanFaculty = facultyPeriods.filter(p => p.slot <= 6);
+    if (!cleanFaculty.some(p => p.slot === 6)) {
+      cleanFaculty.push({ slot: 6, time: '02:15 PM - 03:00 PM' });
+    }
+    const cleanClass = classPeriods.filter(p => p.slot <= 6);
+    if (!cleanClass.some(p => p.slot === 6)) {
+      cleanClass.push({ slot: 6, time: '02:15 PM - 03:00 PM' });
+    }
+    setTempFacultyPeriods(cleanFaculty);
+    setTempClassPeriods(cleanClass);
     setTempBreakTimings(breakTimings);
     setIsEditTimingsOpen(true);
   };
 
   const handleSavePeriodTimings = (e) => {
     if (e) e.preventDefault();
-    setFacultyPeriods(tempFacultyPeriods);
-    setClassPeriods(tempClassPeriods);
+    const cleanFaculty = tempFacultyPeriods.filter(p => p.slot <= 6);
+    const cleanClass = tempClassPeriods.filter(p => p.slot <= 6);
+    setFacultyPeriods(cleanFaculty);
+    setClassPeriods(cleanClass);
     setBreakTimings(tempBreakTimings);
     try {
-      localStorage.setItem('vcas_faculty_period_timings', JSON.stringify(tempFacultyPeriods));
-      localStorage.setItem('vcas_class_period_timings', JSON.stringify(tempClassPeriods));
+      localStorage.setItem('vcas_faculty_period_timings', JSON.stringify(cleanFaculty));
+      localStorage.setItem('vcas_class_period_timings', JSON.stringify(cleanClass));
       localStorage.setItem('vcas_break_timings', JSON.stringify(tempBreakTimings));
     } catch (err) {
       console.error('Failed to save period timings:', err);
@@ -1232,9 +1262,16 @@ export default function TimetableManagement({ user }) {
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(5, 'faculty')}</span>
                     </th>
+                    <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P6</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(6, 'faculty')}</span>
+                    </th>
                     <th className="py-3 px-2 w-28 bg-slate-100/80 border-l border-slate-200 text-slate-700">
                       <span>Daily Hours</span>
-                      <span className="block text-[8.5px] text-slate-500 font-normal">Taken (Max 5)</span>
+                      <span className="block text-[8.5px] text-slate-500 font-normal">Taken (Max 6)</span>
                     </th>
                   </tr>
                 </thead>
@@ -1280,6 +1317,10 @@ export default function TimetableManagement({ user }) {
                         <td className="p-1.5 align-top">
                           <SlotCell slot={dayData['5']} onEdit={() => handleOpenEditSlot(day, 5, dayData['5'])} />
                         </td>
+                        {/* P6 */}
+                        <td className="p-1.5 align-top">
+                          <SlotCell slot={dayData['6']} onEdit={() => handleOpenEditSlot(day, 6, dayData['6'])} />
+                        </td>
 
                         {/* Daily Hours Taken */}
                         <td className="p-2 border-l border-slate-200 bg-slate-50/50 text-center align-middle">
@@ -1298,7 +1339,7 @@ export default function TimetableManagement({ user }) {
                 <tfoot>
                   <tr className="border-t border-slate-200 bg-slate-50/80 text-xs font-bold text-slate-700">
                     <td className="p-3 text-left">Weekly Total</td>
-                    <td colSpan={7} className="p-3 text-right text-slate-500 font-medium">
+                    <td colSpan={8} className="p-3 text-right text-slate-500 font-medium">
                       Total Assigned Teaching Hours:
                     </td>
                     <td className="p-3 text-center border-l border-slate-200 text-indigo-700 font-black bg-indigo-50/50">
@@ -1520,6 +1561,13 @@ export default function TimetableManagement({ user }) {
                       </div>
                       <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(5, 'class')}</span>
                     </th>
+                    <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>P6</span>
+                        <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(6, 'class')}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs">
@@ -1555,6 +1603,9 @@ export default function TimetableManagement({ user }) {
                         </td>
                         <td className="p-2 align-top">
                           <SlotCell slot={daySchedule[5]} onEdit={() => handleOpenEditSlot(day, 5, daySchedule[5])} />
+                        </td>
+                        <td className="p-2 align-top">
+                          <SlotCell slot={daySchedule[6]} onEdit={() => handleOpenEditSlot(day, 6, daySchedule[6])} />
                         </td>
                       </tr>
                     );
@@ -1631,7 +1682,7 @@ export default function TimetableManagement({ user }) {
                     onChange={(e) => setSlotForm({ ...slotForm, period: Number(e.target.value) })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 cursor-pointer"
                   >
-                    {[1, 2, 3, 4, 5].map(p => (
+                    {[1, 2, 3, 4, 5, 6].map(p => (
                       <option key={p} value={p}>Period {p} {getPeriodTime(p) ? `(${getPeriodTime(p)})` : ''}</option>
                     ))}
                   </select>
@@ -2276,7 +2327,7 @@ export default function TimetableManagement({ user }) {
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                Faculty Periods (P1 – P5)
+                Faculty Periods (P1 – P6)
               </button>
               <button
                 type="button"
@@ -2287,7 +2338,7 @@ export default function TimetableManagement({ user }) {
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                Class Periods (P1 – P5)
+                Class Periods (P1 – P6)
               </button>
               <button
                 type="button"
@@ -2307,7 +2358,7 @@ export default function TimetableManagement({ user }) {
               {activeTimingTab === 'faculty' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-700">5-Period Faculty Timetable Timings</span>
+                    <span className="text-xs font-extrabold text-slate-700">6-Period Faculty Timetable Timings</span>
                     <span className="text-[11px] text-indigo-600 font-semibold">Reflected across faculty schedule</span>
                   </div>
 
@@ -2340,7 +2391,7 @@ export default function TimetableManagement({ user }) {
               {activeTimingTab === 'class' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-700">5-Period Class Schedule Timings</span>
+                    <span className="text-xs font-extrabold text-slate-700">6-Period Class Schedule Timings</span>
                     <span className="text-[11px] text-indigo-600 font-semibold">Reflected across department matrix</span>
                   </div>
 

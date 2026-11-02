@@ -230,7 +230,7 @@ export default function AttendanceManagement({ user }) {
               id: s._id || sid,
               empId: sid,
               name: s.name,
-              department: s.department || (cat === 'Office Staff' ? 'Administrative Office' : cat === 'Accountant' ? 'Accounts & Finance' : 'Computer Science'),
+              department: s.department || '',
               designation: s.designation || cat,
               category: cat,
               inTime: hasPunched ? punch.inTime : '--',

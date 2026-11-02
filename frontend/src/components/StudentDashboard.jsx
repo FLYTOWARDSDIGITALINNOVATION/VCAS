@@ -937,42 +937,48 @@ CONTACT:
       { slot: 2, time: '10:30 – 11:30 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
       { slot: 3, time: '11:45 AM – 12:45 PM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
       { slot: 4, time: '01:30 – 02:30 PM', code: 'CS303L', subject: 'Data Structures Lab', faculty: 'Dr. K. Ramesh', room: 'CS Lab 2', type: 'lab', color: 'emerald' },
-      { slot: 5, time: '02:30 – 03:30 PM', code: 'ENG102', subject: 'Professional Communication', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' }
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'ENG102', subject: 'Professional Communication', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' },
+      { slot: 6, time: '02:15 – 03:00 PM', code: 'CS307L', subject: 'Web Technology Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab', color: 'emerald' }
     ],
     'Tuesday': [
       { slot: 1, time: '09:30 – 10:30 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
       { slot: 2, time: '10:30 – 11:30 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
       { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
       { slot: 4, time: '01:30 – 02:30 PM', code: 'CS305L', subject: 'RDBMS & SQL Lab', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab', color: 'emerald' },
-      { slot: 5, time: '02:30 – 03:30 PM', code: 'EVS101', subject: 'Environmental Studies', faculty: 'Dr. G. Lakshmi', room: 'LH-102', type: 'theory', color: 'amber' }
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'EVS101', subject: 'Environmental Studies', faculty: 'Dr. G. Lakshmi', room: 'LH-102', type: 'theory', color: 'amber' },
+      { slot: 6, time: '02:15 – 03:00 PM', code: 'CS301', subject: 'Data Structures Tutorial', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' }
     ],
     'Wednesday': [
       { slot: 1, time: '09:30 – 10:30 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
       { slot: 2, time: '10:30 – 11:30 AM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
       { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
       { slot: 4, time: '01:30 – 02:30 PM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
-      { slot: 5, time: '02:30 – 03:30 PM', code: 'LIB101', subject: 'Library & Research Hour', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' }
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'LIB101', subject: 'Library & Research Hour', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' },
+      { slot: 6, time: '02:15 – 03:00 PM', code: 'CS302', subject: 'DBMS Lab Practice', faculty: 'Prof. M. Priya', room: 'CS Lab 1', type: 'lab', color: 'indigo' }
     ],
     'Thursday': [
       { slot: 1, time: '09:30 – 10:30 AM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
       { slot: 2, time: '10:30 – 11:30 AM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
       { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
       { slot: 4, time: '01:30 – 02:30 PM', code: 'CS307L', subject: 'Web Development Lab', faculty: 'Mr. P. Vijay', room: 'CS Lab 3', type: 'lab', color: 'emerald' },
-      { slot: 5, time: '02:30 – 03:30 PM', code: 'SEM101', subject: 'Student Seminar & Presentation', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'amber' }
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'SEM101', subject: 'Student Seminar & Presentation', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'amber' },
+      { slot: 6, time: '02:15 – 03:00 PM', code: 'LIB101', subject: 'Digital Library & Research', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' }
     ],
     'Friday': [
       { slot: 1, time: '09:30 – 10:30 AM', code: 'CS301', subject: 'Data Structures & Algorithms', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
       { slot: 2, time: '10:30 – 11:30 AM', code: 'CS302', subject: 'Database Management Systems', faculty: 'Prof. M. Priya', room: 'LH-102', type: 'theory', color: 'indigo' },
       { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS306', subject: 'Web Technology & Design', faculty: 'Mr. P. Vijay', room: 'LH-102', type: 'theory', color: 'indigo' },
       { slot: 4, time: '01:30 – 02:30 PM', code: 'CS304', subject: 'Operating Systems & Architecture', faculty: 'Dr. R. Suresh', room: 'LH-102', type: 'theory', color: 'rose' },
-      { slot: 5, time: '02:30 – 03:30 PM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' }
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'MAT201', subject: 'Discrete Mathematics', faculty: 'Dr. S. Anand', room: 'LH-102', type: 'theory', color: 'purple' },
+      { slot: 6, time: '02:15 – 03:00 PM', code: 'CS308', subject: 'Cloud Computing Seminar', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' }
     ],
     'Saturday': [
       { slot: 1, time: '09:30 – 10:30 AM', code: 'CS308', subject: 'Cloud Computing & DevOps', faculty: 'Dr. K. Ramesh', room: 'LH-102', type: 'theory', color: 'blue' },
       { slot: 2, time: '10:30 – 11:30 AM', code: 'CS309', subject: 'Technical Soft Skills & Aptitude', faculty: 'Mrs. L. Vani', room: 'LH-102', type: 'theory', color: 'amber' },
       { slot: 3, time: '11:45 AM – 12:45 PM', code: 'CS310', subject: 'Mentorship & Project Lab', faculty: 'Dr. R. Suresh', room: 'CS Lab 1', type: 'lab', color: 'emerald' },
       { slot: 4, time: '01:30 – 02:30 PM', code: 'SPO101', subject: 'Physical Education / Sports', faculty: 'Director of PE', room: 'Sports Ground', type: 'theory', color: 'emerald' },
-      { slot: 5, time: '02:30 – 03:30 PM', code: 'LIB102', subject: 'Digital Library & Self-Study', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' }
+      { slot: 5, time: '02:30 – 03:30 PM', code: 'LIB102', subject: 'Digital Library & Self-Study', faculty: 'Librarian', room: 'Central Library', type: 'theory', color: 'amber' },
+      { slot: 6, time: '02:15 – 03:00 PM', code: 'SPO102', subject: 'Sports & Wellness Hour', faculty: 'Director of PE', room: 'Sports Ground', type: 'theory', color: 'emerald' }
     ]
   };
 

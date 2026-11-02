@@ -441,13 +441,12 @@ export default function ExcelAttendanceUploadModal({
                     onChange={(e) => setTargetSlot(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                   >
-                    <option value="8:30 AM">8:30 AM (Period 1)</option>
-                    <option value="9:30 AM">9:30 AM (Period 2)</option>
-                    <option value="10:30 AM">10:30 AM (Period 3)</option>
-                    <option value="11:30 AM">11:30 AM (Period 4)</option>
-                    <option value="1:30 PM">1:30 PM (Period 5)</option>
-                    <option value="2:30 PM">2:30 PM (Period 6)</option>
-                    <option value="3:30 PM">3:30 PM (Period 7)</option>
+                    <option value="9:30 AM">Period 1 (09:30 AM - 10:30 AM)</option>
+                    <option value="10:30 AM">Period 2 (10:30 AM - 11:20 AM)</option>
+                    <option value="11:30 AM">Period 3 (11:30 AM - 12:20 PM)</option>
+                    <option value="12:20 PM">Period 4 (12:20 PM - 01:00 PM)</option>
+                    <option value="1:30 PM">Period 5 (01:30 PM - 02:15 PM)</option>
+                    <option value="2:15 PM">Period 6 (02:15 PM - 03:00 PM)</option>
                   </select>
                 </div>
               </div>

@@ -72,6 +72,7 @@ export default function DepartmentManagement() {
           setDepartments(data.data || []);
           try {
             localStorage.setItem('vcas_departments_cache', JSON.stringify(data.data || []));
+            window.dispatchEvent(new Event('vcas_departments_updated'));
           } catch (_) {}
         }
       }
