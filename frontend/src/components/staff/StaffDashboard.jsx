@@ -135,7 +135,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       case 'Dashboard':            return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
       case 'Student':
       case 'Student Module':
-      case 'Student Entry':        return <StudentsPage user={staffUser} readOnly={true} />;
+      case 'Student Entry':        return <StudentsPage user={staffUser} readOnly={false} />;
       case 'My Classes':           return <StaffMyClasses staffUser={staffUser} />;
       case 'Attendance':           return <StaffAttendance staffUser={staffUser} />;
       case 'Internal Marks':       return <StaffInternalMarks staffUser={staffUser} />;

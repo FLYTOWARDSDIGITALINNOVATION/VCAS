@@ -3,6 +3,7 @@ const Attendance = require('../models/Attendance');
 const xlsx = require('xlsx');
 const ExcelJS = require('exceljs');
 const AdmZip = require('adm-zip');
+const mongoose = require('mongoose');
 
 // @desc   Get all students
 // @route  GET /api/students
@@ -38,7 +39,8 @@ exports.getAllStudents = async (req, res) => {
       ];
     }
 
-    const students = await Student.find(filter).sort({ createdAt: -1 });
+    // Sort in ascending creation order so the uploaded Excel sequence (Row 1 to Row 331) is preserved
+    const students = await Student.find(filter).sort({ createdAt: 1, _id: 1 });
 
     // Calculate real-time session attendance
     let enrichedStudents = students;
@@ -482,6 +484,59 @@ exports.deleteStudent = async (req, res) => {
   }
 };
 
+// @desc   Bulk delete students
+// @route  POST /api/students/bulk-delete
+// @route  DELETE /api/students/bulk
+exports.bulkDeleteStudents = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'No student IDs provided for deletion.' });
+    }
+
+    const objectIds = [];
+    const stringKeys = [];
+
+    ids.forEach(id => {
+      if (!id) return;
+      const strId = String(id).trim();
+      if (strId.match(/^[0-9a-fA-F]{24}$/)) {
+        try {
+          objectIds.push(new mongoose.Types.ObjectId(strId));
+        } catch (_) {}
+      }
+      stringKeys.push(strId);
+      stringKeys.push(strId.toUpperCase());
+    });
+
+    const conditions = [];
+    if (objectIds.length > 0) {
+      conditions.push({ _id: { $in: objectIds } });
+    }
+    if (stringKeys.length > 0) {
+      conditions.push({ regNo: { $in: stringKeys } });
+      conditions.push({ studentId: { $in: stringKeys } });
+      conditions.push({ admNo: { $in: stringKeys } });
+      conditions.push({ rollNo: { $in: stringKeys } });
+    }
+
+    if (conditions.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid student identifiers provided.' });
+    }
+
+    const deleteResult = await Student.deleteMany({ $or: conditions });
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${deleteResult.deletedCount || 0} student(s).`,
+      deletedCount: deleteResult.deletedCount || 0
+    });
+  } catch (error) {
+    console.error('Error in bulkDeleteStudents:', error);
+    res.status(500).json({ success: false, message: error.message || 'Error deleting students in bulk.' });
+  }
+};
+
 // @desc   Get student credentials (Super Admin Exclusive)
 // @route  GET /api/students/:id/credentials
 exports.getStudentCredentials = async (req, res) => {
@@ -587,15 +642,17 @@ function normalizeStudentRow(rawRow) {
   }
 
   const getVal = (...keys) => {
+    // 1. Exact match on cleaned key
     for (const k of keys) {
       const clean = k.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (norm[clean] !== undefined && norm[clean] !== null && String(norm[clean]).trim() !== '') {
         return norm[clean];
       }
     }
-    // Partial substring fallback search on keys
+    // 2. Partial match ONLY if key has at least 4 characters to avoid false hits
     for (const k of keys) {
       const clean = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (clean.length < 4) continue;
       for (const [actualKey, actualVal] of Object.entries(norm)) {
         if (actualKey.includes(clean) && actualVal !== undefined && actualVal !== null && String(actualVal).trim() !== '') {
           return actualVal;
@@ -605,49 +662,156 @@ function normalizeStudentRow(rawRow) {
     return '';
   };
 
-  // Ultra-wide student name recognition
+  // 1. Student Name: Explicitly avoid Department Name, HOD Name, College, University, Parent, Bank, etc.
   let name = String(getVal(
-    'name', 'studentname', 'fullname', 'nameofstudent', 'nameofthestudent',
-    'student', 'candidatename', 'nameofcandidate', 'pupilname', 'personname'
+    'studentnameasoncertificate', 'studentname', 'nameofstudent', 'nameofthestudent',
+    'candidatename', 'nameofcandidate', 'pupilname', 'fullname'
   )).trim();
 
-  // If still empty, check if any column header has "name" in it
+  // If still empty, check if any column header has "name" in it, strictly excluding non-student columns
   if (!name) {
-    for (const [k, v] of Object.entries(norm)) {
-      if (k.includes('name') && !k.includes('father') && !k.includes('mother') && !k.includes('parent') && !k.includes('bank') && !k.includes('college')) {
-        if (v && String(v).trim()) {
-          name = String(v).trim();
-          break;
-        }
+    for (const [k, v] of Object.entries(rawRow)) {
+      if (v === undefined || v === null || String(v).trim() === '') continue;
+      const ck = k.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (
+        ck.includes('name') &&
+        !ck.includes('department') &&
+        !ck.includes('dept') &&
+        !ck.includes('hod') &&
+        !ck.includes('university') &&
+        !ck.includes('institute') &&
+        !ck.includes('college') &&
+        !ck.includes('school') &&
+        !ck.includes('father') &&
+        !ck.includes('mother') &&
+        !ck.includes('parent') &&
+        !ck.includes('guardian') &&
+        !ck.includes('spouse') &&
+        !ck.includes('bank')
+      ) {
+        name = String(v).trim();
+        break;
       }
     }
   }
 
-  // Skip title banners or empty rows
-  if (!name || name.toLowerCase().includes('college') || name.toLowerCase().includes('university') || name.toLowerCase().includes('department of')) {
+  // Skip title banners, institutional headers, or empty rows
+  if (!name || name.toLowerCase().includes('college') || name.toLowerCase().includes('university') || name.toLowerCase().includes('department of') || name.toUpperCase() === 'HIGHER EDUCATION DEPARTMENT') {
     return null;
   }
 
-  const regNo = String(getVal('regno', 'registerno', 'registernumber', 'registrationno', 'registrationnumber', 'studentid', 'id', 'regn', 'register', 'admnumber', 'admissionno')).trim().toUpperCase();
-  const rollNo = String(getVal('rollno', 'rollnumber', 'roll', 'classrollno', 'rno', 'sno', 'slno', 'serialno', 'seatno')).trim().toUpperCase();
-  
-  // Date of Admission vs Admission Number: never let admission date be captured as admNo
-  const dateOfAdmission = formatExcelDate(getVal('dateofadmission', 'admissiondate', 'doa', 'doadm', 'admissionyear'));
-  let admNo = String(getVal('admno', 'admissionno', 'admissionnumber', 'admissionid', 'admnumber')).trim().toUpperCase();
-  // If admNo was mistakenly assigned a date string like "15/06/2024", clear it
+  // 2. Department & Course mapping:
+  // In DCE / government reports, 'Department Name' is often 'HIGHER EDUCATION DEPARTMENT'.
+  // The actual college department is in 'Branch / Specialization' or 'Course'.
+  let rawBranch = String(getVal('branchspecialization', 'specialization', 'branch', 'major', 'discipline')).trim();
+  let course = String(getVal('course', 'degree', 'programme') || 'Undergraduate').trim();
+  let courseAdmitted = String(getVal('courseadmitted', 'admittedcourse') || course).trim();
+
+  let department = 'General';
+  const branchUpper = (rawBranch || '').toUpperCase();
+  if (branchUpper.includes('COMPUTER SCIENCE')) {
+    department = 'Computer Science';
+  } else if (branchUpper.includes('ARTIFICIAL INTELLIGENCE')) {
+    department = 'Artificial Intelligence';
+  } else if (branchUpper.includes('COMMERCE')) {
+    department = 'Commerce';
+  } else if (branchUpper.includes('BUSINESS ADMINISTRATION') || branchUpper.includes('MANAGEMENT')) {
+    department = 'Management';
+  } else if (branchUpper.includes('CRIMINOLOGY')) {
+    department = 'Criminology and Forensic Science';
+  } else if (rawBranch) {
+    department = rawBranch;
+  } else {
+    // If no branch, check course
+    const courseUpper = course.toUpperCase();
+    if (courseUpper.includes('COMMERCE') || courseUpper === 'B.COM') department = 'Commerce';
+    else if (courseUpper.includes('B.B.A') || courseUpper.includes('BUSINESS')) department = 'Management';
+    else if (courseUpper.includes('B.SC')) department = 'Computer Science';
+    else {
+      const explicitDept = String(getVal('department', 'dept')).trim();
+      if (explicitDept && !explicitDept.toUpperCase().includes('HIGHER EDUCATION')) {
+        department = explicitDept;
+      }
+    }
+  }
+
+  // 3. Identification: EMIS ID, UMIS ID, Reg No, Roll No, Adm No
+  const emisNumber = String(getVal('studentemisid', 'emisid', 'emisnumber', 'emis')).trim();
+  const umisNumber = String(getVal('referenceumisid', 'umisid', 'umisnumber', 'umis')).trim();
+  const regRollRaw = String(getVal('registrationrollnumber', 'registrationnumber', 'registerno', 'regno', 'rollno', 'rollnumber')).trim();
+
+  let regNo = '';
+  let rollNo = '';
+  if (regRollRaw.length >= 12 && /^\d+$/.test(regRollRaw)) {
+    // 17-digit or long numeric registration number (e.g. Manonmaniam Sundaranar University register no)
+    regNo = regRollRaw;
+  } else if (regRollRaw.startsWith('VC') && regRollRaw.length >= 6) {
+    rollNo = regRollRaw;
+  } else if (regRollRaw) {
+    rollNo = regRollRaw;
+  }
+
+  // If regNo is still empty, use Student EMIS ID
+  if (!regNo && emisNumber) {
+    regNo = emisNumber;
+  }
+
+  // Date of Admission vs Admission Number
+  const rawDoa = getVal('dateofadmission', 'admissiondate', 'doa', 'doadm');
+  const dateOfAdmission = formatExcelDate(rawDoa);
+  let admNo = String(getVal('counsellingadmissionnumber', 'admissionnumber', 'admissionno', 'admno')).trim().toUpperCase();
   if (admNo.includes('/') || (admNo.includes('-') && admNo.length === 10)) {
     admNo = '';
   }
 
-  const umisNumber = String(getVal('umisnumber', 'umis', 'emis', 'emisnumber')).trim().toUpperCase();
-  const department = String(getVal('department', 'dept', 'branch', 'major', 'course', 'stream') || 'General').trim();
-  const course = String(getVal('course', 'degree', 'programme', 'prog') || 'Undergraduate').trim();
-  const courseAdmitted = String(getVal('courseadmitted', 'admittedcourse') || course).trim();
-  const sem = String(getVal('sem', 'semester', 'currentsem') || '1st Sem').trim();
-  const year = String(getVal('year', 'classyear', 'academicsem') || '1st Year').trim();
-  const batch = String(getVal('batch', 'batchyear') || '2022-2026').replace('–', '-').trim();
+  // 4. Batch & Academic Year
+  let batch = String(getVal('batch', 'batchyear')).replace('–', '-').trim();
+  if (!batch) {
+    let startYear = null;
+    if (rawDoa) {
+      const match = String(rawDoa).match(/(?:19|20)\d{2}/);
+      if (match) startYear = parseInt(match[0], 10);
+    }
+    const acadYr = String(getVal('academicyear', 'session')).trim();
+    if (!startYear && acadYr) {
+      const match = acadYr.match(/((?:19|20)\d{2})/);
+      if (match) startYear = parseInt(match[1], 10);
+    }
+    if (!startYear && rollNo.startsWith('VC')) {
+      const yr2 = rollNo.slice(2, 4);
+      if (/^\d{2}$/.test(yr2)) startYear = 2000 + parseInt(yr2, 10);
+    } else if (!startYear && regNo && /^\d{2}/.test(regNo)) {
+      const yr2 = regNo.slice(0, 2);
+      if (parseInt(yr2, 10) >= 20 && parseInt(yr2, 10) <= 30) {
+        startYear = 2000 + parseInt(yr2, 10);
+      }
+    }
+    if (!startYear) startYear = 2024;
+    const duration = (String(getVal('coursetype') || '').toUpperCase().includes('PG') || course.toUpperCase().startsWith('M.')) ? 2 : 3;
+    batch = `${startYear}-${startYear + duration}`;
+  }
+
   const academicYear = String(getVal('academicyear', 'session') || '2025-2026').replace('–', '-').trim();
-  const section = String(getVal('section', 'sec') || 'A').trim();
+
+  // 5. Year of study & Semester
+  const yearOfStudy = String(getVal('yearofstudy', 'classyear', 'year') || '1').trim();
+  let year = '1st Year';
+  let sem = '1st Sem';
+  if (yearOfStudy === '2' || yearOfStudy.includes('2')) {
+    year = '2nd Year';
+    sem = '3rd Sem';
+  } else if (yearOfStudy === '3' || yearOfStudy.includes('3')) {
+    year = '3rd Year';
+    sem = '5th Sem';
+  }
+
+  // 6. Section: ONLY match exact 'section' or 'sec', NEVER 'fathersoccupation'
+  let section = String(norm['section'] || norm['sec'] || 'A').trim();
+  if (section.length > 3 || section.toLowerCase().includes('wage') || section.toLowerCase().includes('employ')) {
+    section = 'A';
+  }
+
+  // 7. Personal & Demographic info
   const rawGender = String(getVal('gender', 'sex') || '').trim();
   let gender = 'Male';
   if (rawGender) {
@@ -657,19 +821,24 @@ function normalizeStudentRow(rawRow) {
       gender = 'Male';
     }
   }
-  const dobRaw = getVal('dob', 'dateofbirth', 'birthdate', 'birth', 'd.o.b', 'date_of_birth', 'borndate');
+
+  const dobRaw = getVal('studentdateofbirth', 'dob', 'dateofbirth', 'birthdate', 'birth', 'd.o.b', 'date_of_birth', 'borndate');
   const dob = formatExcelDate(dobRaw);
   const bloodGroup = String(getVal('bloodgroup', 'blood', 'bg') || 'O+').trim();
-  const phone = String(getVal('phone', 'mobile', 'mobileno', 'phonenumber', 'contact', 'contactno', 'cell', 'studentmobile', 'parentphone', 'fathermobile', 'tel', 'whatsapp')).trim();
-  const email = String(getVal('email', 'emailid', 'mail')).trim().toLowerCase();
+  const phone = String(getVal('mobilenumber', 'phone', 'mobile', 'mobileno', 'phonenumber', 'contact', 'contactno', 'cell', 'studentmobile', 'parentphone', 'fathermobile', 'tel', 'whatsapp')).trim();
+  const email = String(getVal('emailid', 'email', 'mail')).trim().toLowerCase();
+  
   const fatherName = String(getVal('fathername', 'fathersname', 'father')).trim();
-  const motherName = String(getVal('mothername', 'mothersname', 'mother')).trim();
-  const fatherMobile = String(getVal('fathermobile', 'fatherphone', 'parentphone', 'parentmobile', 'parentsphone')).trim();
+  const motherName = String(getVal('mothersname', 'mothername', 'mother')).trim();
+  const fatherOccupation = String(getVal('fathersoccupationsector', 'fatheroccupation', 'parentoccupation')).trim();
+  const motherOccupation = String(getVal('mothersoccupationsector', 'motheroccupation')).trim();
+  const fatherMobile = String(getVal('parentspouseguardianmobilenumber', 'fathermobile', 'fatherphone', 'parentphone', 'parentmobile', 'parentsphone')).trim();
   const motherMobile = String(getVal('mothermobile', 'motherphone')).trim();
-  const parentOccupation = String(getVal('parentoccupation', 'fatheroccupation')).trim();
   const parentEmail = String(getVal('parentemail')).trim();
-  const address = String(getVal('address', 'permanentaddress', 'commaddress', 'street')).trim();
-  const city = String(getVal('city', 'town', 'native')).trim();
+  const annualIncome = String(getVal('annualfamilyincomeinrs', 'annualincome', 'income')).trim();
+
+  const address = String(getVal('permanentaddress', 'communicationaddress', 'address', 'commaddress', 'street')).trim();
+  const city = String(getVal('city', 'permanentaddressdistrict', 'districtname', 'town', 'native')).trim();
   const state = String(getVal('state') || 'Tamil Nadu').trim();
   const pinCode = String(getVal('pincode', 'pin', 'postalcode', 'zip')).trim();
   const caste = String(getVal('caste')).trim();
@@ -693,15 +862,14 @@ function normalizeStudentRow(rawRow) {
     feeStatus = 'Overdue';
   }
 
-  // Sanitize student status (ignore unrelated columns like Parent Status, Occupation, Working, School, College, etc.)
-  const rawStatus = String(getVal('studentstatus', 'enrollmentstatus', 'academicstatus', 'status') || 'Active').trim().toLowerCase();
+  // Sanitize student status
+  const currentStatus = String(getVal('studentcurrentstatus', 'studentstatus', 'enrollmentstatus', 'academicstatus', 'status') || '').toLowerCase();
   let status = 'Active';
-  if (rawStatus === 'inactive' || rawStatus === 'discontinued' || rawStatus === 'dropped') {
+  if (currentStatus.includes('discontinue') || currentStatus.includes('inactive') || currentStatus.includes('dropped')) {
     status = 'Inactive';
-  } else if (rawStatus === 'suspended') {
+  } else if (currentStatus.includes('absent') || currentStatus.includes('suspend')) {
     status = 'Suspended';
   } else {
-    // If the Excel column contained values like "Working", "School", "College", "Not Applicable", default to Active student!
     status = 'Active';
   }
 
@@ -712,10 +880,14 @@ function normalizeStudentRow(rawRow) {
     return s;
   };
 
-  const aadhaar = cleanTextNo(String(getVal('aadhaarno', 'aadharno', 'aadhaar', 'aadhar', 'uid')));
+  const aadhaar = cleanTextNo(String(getVal('aadhaarnumber', 'aadhaarno', 'aadharno', 'aadhaar', 'aadhar', 'uid'))).replace(/\s+/g, '');
   const pan = cleanTextNo(String(getVal('panno', 'pan'))).toUpperCase();
   const incomeCertNo = cleanTextNo(String(getVal('incomecertno', 'incomecert', 'incomecertificate', 'incomeno', 'annualincomecert')));
   const drivingLicense = cleanTextNo(String(getVal('drivinglicenseno', 'drivinglicenceno', 'dlno', 'drivinglicense', 'drivinglicence', 'license', 'licence'))).toUpperCase();
+  const bankAccountNo = cleanTextNo(String(getVal('accountnumber', 'bankaccountno', 'accountno')));
+  const ifscCode = cleanTextNo(String(getVal('ifsccode', 'ifsc'))).toUpperCase();
+  const bankName = cleanTextNo(String(getVal('bankname', 'bank')));
+  const bankBranch = cleanTextNo(String(getVal('bankbranch', 'branchname')));
 
   const isImageValue = (v) => {
     if (!v || typeof v !== 'string') return false;
@@ -724,18 +896,14 @@ function normalizeStudentRow(rawRow) {
   };
 
   const getDocImage = (key, ...aliases) => {
-    // 1. Direct rawRow properties (populated by extractStudentsWithImages)
     if (isImageValue(rawRow[key])) return rawRow[key].trim();
     for (const a of aliases) {
       if (isImageValue(rawRow[a])) return rawRow[a].trim();
     }
-
-    // 2. Check getVal ONLY if the value is a valid image URI
     for (const a of [key, ...aliases]) {
       const v = getVal(a);
       if (isImageValue(v)) return String(v).trim();
     }
-
     return '';
   };
 
@@ -753,6 +921,7 @@ function normalizeStudentRow(rawRow) {
     regNo,
     rollNo,
     admNo,
+    emisNumber,
     umisNumber,
     department,
     course,
@@ -770,10 +939,13 @@ function normalizeStudentRow(rawRow) {
     email,
     fatherName,
     motherName,
+    fatherOccupation,
+    motherOccupation,
     fatherMobile,
     motherMobile,
-    parentOccupation,
+    parentOccupation: fatherOccupation,
     parentEmail,
+    annualIncome,
     address,
     city,
     state,
@@ -794,6 +966,10 @@ function normalizeStudentRow(rawRow) {
     status,
     aadhaar,
     pan,
+    bankAccountNo,
+    ifscCode,
+    bankName,
+    bankBranch,
     incomeCertNo,
     drivingLicense,
     photo,
@@ -1078,7 +1254,47 @@ async function processStudentsBatch(rawRows) {
   const errors = [];
   const processedRecords = [];
 
-  let currentCount = await Student.countDocuments();
+  // Preload existing students once for lightning-fast in-memory matching
+  const existingDocs = await Student.find({}, 'regNo studentId admNo emisNumber umisNumber aadhaar rollNo department name batch password').lean();
+  
+  const regMap = new Map();
+  const emisMap = new Map();
+  const umisMap = new Map();
+  const aadhaarMap = new Map();
+  const rollMap = new Map();
+  const usedAdmNos = new Set();
+  const usedRegNos = new Set();
+
+  existingDocs.forEach(s => {
+    if (s.regNo) {
+      const up = s.regNo.toUpperCase();
+      regMap.set(up, s._id);
+      usedRegNos.add(up);
+    }
+    if (s.studentId) {
+      const up = s.studentId.toUpperCase();
+      regMap.set(up, s._id);
+      usedRegNos.add(up);
+    }
+    if (s.emisNumber) {
+      emisMap.set(String(s.emisNumber).trim(), s._id);
+    }
+    if (s.umisNumber) {
+      umisMap.set(String(s.umisNumber).trim(), s._id);
+    }
+    if (s.aadhaar && s.aadhaar.length === 12) {
+      aadhaarMap.set(s.aadhaar, s._id);
+    }
+    if (s.rollNo && s.department && s.rollNo.length >= 8 && !/^VC\d{4}$/i.test(s.rollNo)) {
+      rollMap.set(`${s.rollNo.toUpperCase()}__${s.department.toUpperCase()}`, s._id);
+    }
+    if (s.admNo) {
+      usedAdmNos.add(s.admNo.toUpperCase());
+    }
+  });
+
+  let admCounter = existingDocs.length + 1;
+  let regCounter = existingDocs.length + 1;
 
   for (let i = 0; i < rawRows.length; i++) {
     const row = rawRows[i];
@@ -1091,39 +1307,41 @@ async function processStudentsBatch(rawRows) {
         continue;
       }
 
-      // Check existing student ONLY by explicit unique regNo or rollNo (NEVER by admNo to prevent date collisions)
-      let existingStudent = null;
+      // Check existing student ONLY by guaranteed unique identifiers (NEVER by generic prefix roll numbers like VC2605)
+      let existingId = null;
       if (normalized.regNo && !normalized.regNo.toLowerCase().includes('auto') && !normalized.regNo.toLowerCase().includes('tba') && !normalized.regNo.includes('/')) {
-        existingStudent = await Student.findOne({
-          $or: [
-            { regNo: normalized.regNo },
-            { studentId: normalized.regNo }
-          ]
-        });
+        existingId = regMap.get(normalized.regNo.toUpperCase());
       }
-      if (!existingStudent && normalized.rollNo && normalized.rollNo.length >= 3 && !normalized.rollNo.includes('/') && normalized.department && normalized.department !== 'General') {
-        existingStudent = await Student.findOne({
-          rollNo: normalized.rollNo,
-          department: normalized.department
-        });
+      if (!existingId && normalized.emisNumber) {
+        existingId = emisMap.get(normalized.emisNumber) || regMap.get(normalized.emisNumber.toUpperCase());
+      }
+      if (!existingId && normalized.umisNumber) {
+        existingId = umisMap.get(normalized.umisNumber);
+      }
+      if (!existingId && normalized.aadhaar && normalized.aadhaar.length === 12 && /^\d+$/.test(normalized.aadhaar)) {
+        existingId = aadhaarMap.get(normalized.aadhaar);
+      }
+      const isGenericRoll = !normalized.rollNo || normalized.rollNo.length < 8 || /^VC\d{4}$/i.test(normalized.rollNo);
+      if (!existingId && !isGenericRoll && normalized.department && normalized.department !== 'General') {
+        existingId = rollMap.get(`${normalized.rollNo.toUpperCase()}__${normalized.department.toUpperCase()}`);
       }
 
-      if (existingStudent) {
-        // Update existing student record with non-empty incoming values
+      if (existingId) {
+        const updateFields = {};
         for (const [k, v] of Object.entries(normalized)) {
           if (v !== '' && v !== undefined && v !== null) {
-            existingStudent[k] = v;
+            updateFields[k] = v;
           }
         }
         if (normalized.dob) {
-          existingStudent.password = normalized.dob;
+          updateFields.password = normalized.dob;
         }
-        await existingStudent.save();
+        await Student.updateOne({ _id: existingId }, { $set: updateFields });
         updatedCount++;
         processedRecords.push({
           row: rowNum,
-          name: existingStudent.name,
-          regNo: existingStudent.regNo,
+          name: normalized.name,
+          regNo: normalized.regNo,
           action: 'updated'
         });
         continue;
@@ -1132,24 +1350,25 @@ async function processStudentsBatch(rawRows) {
       // Determine regNo
       let finalRegNo = normalized.regNo;
       if (!finalRegNo || finalRegNo.toLowerCase().includes('auto')) {
-        currentCount++;
-        let candidate = `REG2026${String(currentCount).padStart(3, '0')}`;
-        while (await Student.findOne({ $or: [{ regNo: candidate }, { studentId: candidate }] })) {
-          currentCount++;
-          candidate = `REG2026${String(currentCount).padStart(3, '0')}`;
+        let candidate = `REG2026${String(regCounter).padStart(3, '0')}`;
+        while (usedRegNos.has(candidate.toUpperCase())) {
+          regCounter++;
+          candidate = `REG2026${String(regCounter).padStart(3, '0')}`;
         }
         finalRegNo = candidate;
+        usedRegNos.add(candidate.toUpperCase());
       }
 
       // Determine admNo
       let finalAdmNo = normalized.admNo;
       if (!finalAdmNo) {
-        let candidate = `ADM2026${String(currentCount).padStart(3, '0')}`;
-        while (await Student.findOne({ admNo: candidate })) {
-          currentCount++;
-          candidate = `ADM2026${String(currentCount).padStart(3, '0')}`;
+        let candidate = `ADM${String(admCounter).padStart(4, '0')}`;
+        while (usedAdmNos.has(candidate.toUpperCase())) {
+          admCounter++;
+          candidate = `ADM${String(admCounter).padStart(4, '0')}`;
         }
         finalAdmNo = candidate;
+        usedAdmNos.add(candidate.toUpperCase());
       }
 
       const finalStudentId = finalRegNo;
@@ -1165,6 +1384,13 @@ async function processStudentsBatch(rawRows) {
       });
 
       const saved = await newStudent.save();
+      
+      // Update memory index so subsequent duplicate rows in the same sheet don't collide
+      regMap.set(finalRegNo.toUpperCase(), saved._id);
+      if (normalized.emisNumber) emisMap.set(normalized.emisNumber, saved._id);
+      if (normalized.umisNumber) umisMap.set(normalized.umisNumber, saved._id);
+      if (normalized.aadhaar) aadhaarMap.set(normalized.aadhaar, saved._id);
+
       createdCount++;
       processedRecords.push({
         row: rowNum,

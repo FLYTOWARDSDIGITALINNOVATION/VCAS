@@ -14,6 +14,7 @@ const {
   createStudent,
   updateStudent,
   deleteStudent,
+  bulkDeleteStudents,
   getStudentCredentials,
   bulkImportStudents,
   uploadExcelStudents
@@ -25,6 +26,8 @@ router.route('/')
 
 // Bulk student operations
 router.post('/bulk', bulkImportStudents);
+router.post('/bulk-delete', bulkDeleteStudents);
+router.delete('/bulk', bulkDeleteStudents);
 router.post('/upload-excel', upload.single('file'), uploadExcelStudents);
 
 router.route('/:id/credentials')

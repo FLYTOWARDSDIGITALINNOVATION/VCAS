@@ -96,11 +96,12 @@ const getRowValue = (row, ...aliases) => {
     }
   }
 
-  // 4. Substring / partial match on cleaned key
+  // 4. Substring / partial match on cleaned key (ONLY for longer keys to avoid false hits like 'sec' or 'name')
   for (const a of aliases) {
     const ca = cleanHeaderKey(a);
+    if (ca.length < 4) continue;
     for (const [k, v] of Object.entries(cleanMap)) {
-      if ((k.includes(ca) || ca.includes(k)) && String(v).trim() !== '') {
+      if (k.includes(ca) && String(v).trim() !== '') {
         return v;
       }
     }
@@ -110,28 +111,35 @@ const getRowValue = (row, ...aliases) => {
 };
 
 // Smart row resolver for student preview
-const resolveStudentPreviewRow = (row, overrideDept = '') => {
+const resolveStudentPreviewRow = (row, overrideDept = '', overrideBatch = '') => {
   if (!row || typeof row !== 'object') return {};
 
-  // 1. Student Name
+  // 1. Student Name: Strictly avoid Department Name, College, University, Parent, Bank
   let name = getRowValue(
     row,
-    'studentname', 'nameofstudent', 'nameofthestudent', 'candidatename', 'nameofcandidate',
-    'fullname', 'pupilname', 'personname', 'candidate', 'name', 'student'
+    'studentnameasoncertificate', 'studentname', 'nameofstudent', 'nameofthestudent',
+    'candidatename', 'nameofcandidate', 'pupilname', 'fullname'
   );
 
-  // Fallback for name: find any column header containing 'name' that isn't father/mother/parent/college/school/bank
+  // Fallback for name: find any column header containing 'name' that isn't institutional/parent/bank
   if (!name) {
     for (const [k, v] of Object.entries(row)) {
       if (v === undefined || v === null || String(v).trim() === '') continue;
       const ck = cleanHeaderKey(k);
       if (
         ck.includes('name') &&
+        !ck.includes('department') &&
+        !ck.includes('dept') &&
+        !ck.includes('hod') &&
+        !ck.includes('university') &&
+        !ck.includes('institute') &&
+        !ck.includes('college') &&
+        !ck.includes('school') &&
         !ck.includes('father') &&
         !ck.includes('mother') &&
         !ck.includes('parent') &&
-        !ck.includes('college') &&
-        !ck.includes('school') &&
+        !ck.includes('guardian') &&
+        !ck.includes('spouse') &&
         !ck.includes('bank')
       ) {
         name = v;
@@ -140,27 +148,76 @@ const resolveStudentPreviewRow = (row, overrideDept = '') => {
     }
   }
 
-  // 2. Register Number
-  const regNo = getRowValue(
-    row,
-    'regno', 'registerno', 'registernumber', 'registrationno', 'registrationnumber',
-    'studentid', 'idno', 'id', 'regn', 'register', 'admnumber', 'admissionno', 'admno'
-  );
+  if (name && (String(name).toUpperCase() === 'HIGHER EDUCATION DEPARTMENT' || String(name).toLowerCase().includes('department of'))) {
+    name = '';
+  }
 
-  // 3. Roll Number
-  const rollNo = getRowValue(
-    row,
-    'rollno', 'rollnumber', 'roll', 'classrollno', 'rno', 'sno', 'slno', 'serialno', 'seatno'
-  );
+  // 2. Identification: EMIS ID, Reg No, Roll No
+  const emis = getRowValue(row, 'studentemisid', 'emisid', 'emisnumber', 'emis');
+  const regRollRaw = String(getRowValue(row, 'registrationrollnumber', 'registrationnumber', 'regno', 'rollno', 'rollnumber')).trim();
 
-  // 4. Department
+  let regNo = '';
+  let rollNo = '';
+  if (regRollRaw.length >= 12 && /^\d+$/.test(regRollRaw)) {
+    regNo = regRollRaw;
+  } else if (regRollRaw) {
+    rollNo = regRollRaw;
+  }
+  if (!regNo && emis) regNo = emis;
+
+  // 3. Department: Check Branch / Specialization first
   let department = overrideDept;
   if (!department) {
-    department = getRowValue(
-      row,
-      'department', 'dept', 'branch', 'course', 'major', 'programme', 'degree', 'stream'
-    );
-    if (!department) department = 'General';
+    const rawBranch = String(getRowValue(row, 'branchspecialization', 'specialization', 'branch', 'major') || '').toUpperCase();
+    const course = String(getRowValue(row, 'course', 'degree') || '').toUpperCase();
+
+    if (rawBranch.includes('COMPUTER SCIENCE')) {
+      department = 'Computer Science';
+    } else if (rawBranch.includes('ARTIFICIAL INTELLIGENCE')) {
+      department = 'Artificial Intelligence';
+    } else if (rawBranch.includes('COMMERCE')) {
+      department = 'Commerce';
+    } else if (rawBranch.includes('BUSINESS ADMINISTRATION') || rawBranch.includes('MANAGEMENT')) {
+      department = 'Management';
+    } else if (rawBranch.includes('CRIMINOLOGY')) {
+      department = 'Criminology and Forensic Science';
+    } else if (rawBranch) {
+      department = rawBranch;
+    } else if (course.includes('COMMERCE') || course === 'B.COM') {
+      department = 'Commerce';
+    } else if (course.includes('B.B.A') || course.includes('BUSINESS')) {
+      department = 'Management';
+    } else if (course.includes('B.SC')) {
+      department = 'Computer Science';
+    } else {
+      const explicit = String(getRowValue(row, 'department', 'dept')).trim();
+      if (explicit && !explicit.toUpperCase().includes('HIGHER EDUCATION')) {
+        department = explicit;
+      } else {
+        department = 'General';
+      }
+    }
+  }
+
+  // 4. Batch calculation
+  let batch = overrideBatch;
+  if (!batch) {
+    batch = getRowValue(row, 'batch', 'batchyear');
+    if (!batch) {
+      let startYear = null;
+      const doa = getRowValue(row, 'dateofadmission', 'admissiondate');
+      if (doa) {
+        const m = String(doa).match(/(?:19|20)\d{2}/);
+        if (m) startYear = parseInt(m[0], 10);
+      }
+      const acadYr = getRowValue(row, 'academicyear', 'session');
+      if (!startYear && acadYr) {
+        const m = String(acadYr).match(/((?:19|20)\d{2})/);
+        if (m) startYear = parseInt(m[1], 10);
+      }
+      if (!startYear) startYear = 2024;
+      batch = `${startYear}-${startYear + 3}`;
+    }
   }
 
   // 5. Gender
@@ -170,24 +227,22 @@ const resolveStudentPreviewRow = (row, overrideDept = '') => {
     const lg = rawGender.toLowerCase();
     if (lg.startsWith('f') || lg === 'w') {
       gender = 'Female';
-    } else if (lg.startsWith('m')) {
-      gender = 'Male';
     } else {
-      gender = rawGender;
+      gender = 'Male';
     }
   }
 
   // 6. DOB
   const rawDob = getRowValue(
     row,
-    'dob', 'dateofbirth', 'birthdate', 'birth', 'd.o.b', 'date_of_birth', 'borndate'
+    'studentdateofbirth', 'dob', 'dateofbirth', 'birthdate', 'birth', 'd.o.b', 'date_of_birth', 'borndate'
   );
   const dob = formatExcelDate(rawDob);
 
   // 7. Mobile
   const mobile = getRowValue(
     row,
-    'mobile', 'mobileno', 'phone', 'phonenumber', 'contact', 'contactno', 'cell', 'studentmobile', 'parentphone', 'fathermobile', 'tel', 'whatsapp'
+    'mobilenumber', 'mobile', 'mobileno', 'phone', 'phonenumber', 'contact', 'contactno', 'cell'
   );
 
   return {
@@ -195,6 +250,7 @@ const resolveStudentPreviewRow = (row, overrideDept = '') => {
     regNo: regNo ? String(regNo).trim().toUpperCase() : 'Auto-gen',
     rollNo: rollNo ? String(rollNo).trim().toUpperCase() : '—',
     department: String(department).trim(),
+    batch: String(batch).trim(),
     gender: String(gender).trim(),
     dob: dob || '—',
     mobile: mobile ? String(mobile).trim() : '—'
@@ -697,6 +753,7 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                             <th className="py-2 px-3">Reg No</th>
                             <th className="py-2 px-3">Roll No</th>
                             <th className="py-2 px-3">Department</th>
+                            <th className="py-2 px-3">Batch</th>
                             <th className="py-2 px-3">Gender</th>
                             <th className="py-2 px-3">DOB</th>
                             <th className="py-2 px-3">Mobile</th>
@@ -704,7 +761,7 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                           {previewRows.map((row, idx) => {
-                            const item = resolveStudentPreviewRow(row, overrideDept);
+                            const item = resolveStudentPreviewRow(row, overrideDept, overrideBatch);
 
                             return (
                               <tr key={idx} className="hover:bg-slate-50/80">
@@ -713,6 +770,7 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                                 <td className="py-2 px-3 font-mono text-emerald-700 font-semibold">{item.regNo}</td>
                                 <td className="py-2 px-3 font-mono">{item.rollNo}</td>
                                 <td className="py-2 px-3">{item.department}</td>
+                                <td className="py-2 px-3 font-semibold text-purple-700">{item.batch || '—'}</td>
                                 <td className="py-2 px-3">
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                     item.gender.toLowerCase() === 'female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'
@@ -739,7 +797,7 @@ export default function ExcelStudentUploadModal({ isOpen, onClose, onSuccess, de
                 <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
-                    Uploading and registering students into MongoDB Atlas...
+                    Uploading and registering students...
                   </span>
                   <span>{uploadProgress}%</span>
                 </div>

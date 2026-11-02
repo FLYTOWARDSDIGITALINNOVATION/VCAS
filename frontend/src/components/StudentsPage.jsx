@@ -29,6 +29,11 @@ import {
 import ModalPortal from './ModalPortal';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
 
+function getStudentIdentifier(student) {
+  if (!student) return '';
+  return String(student.id || student.regNo || student.studentId || student._id || student.rollNo || '').trim();
+}
+
 function normalizeStudent(s) {
   if (!s) return null;
   const regNo = s.regNo || s.registerNo || s.studentId || s.id || s._id || '';
@@ -96,7 +101,7 @@ function normalizeStudent(s) {
 }
 
 export default function StudentsPage({ user, canViewFees = (user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.role === 'Super Admin' || user?.isSuperAdmin), readOnly = false }) {
-  const isReadOnlyMode = Boolean(readOnly || user?.role === 'HOD' || user?.role === 'Staff' || user?.role === 'Faculty' || user?.designation === 'HOD' || user?.designation === 'Staff' || user?.designation === 'Faculty' || user?.designation?.toUpperCase()?.includes('HOD'));
+  const isReadOnlyMode = Boolean(readOnly);
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
   const [credentialModalStudent, setCredentialModalStudent] = useState(null);
   const [copiedStudentCred, setCopiedStudentCred] = useState(false);
@@ -108,6 +113,9 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   const [selectedBatch, setSelectedBatch] = useState('');
   const [selectedFeeStatus, setSelectedFeeStatus] = useState('All Statuses');
   const [selectedRows, setSelectedRows] = useState([]);
+  const [showBulkSelection, setShowBulkSelection] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [showAddWizard, setShowAddWizard] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedExportFields, setSelectedExportFields] = useState(['regNo', 'rollNo', 'name', 'aadhaar']);
@@ -420,20 +428,35 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
 
 
+  const selectedStudentItems = useMemo(() => {
+    const selectedSet = new Set(selectedRows);
+    return students.filter(student => selectedSet.has(getStudentIdentifier(student)));
+  }, [students, selectedRows]);
+
   // Selection handlers
   const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedRows(filteredStudents.map(s => s.id));
+    const visibleIds = filteredStudents
+      .map(student => getStudentIdentifier(student))
+      .filter(Boolean);
+
+    const shouldSelect = e.target.checked;
+    setShowBulkSelection(shouldSelect);
+
+    if (shouldSelect) {
+      setSelectedRows(prev => Array.from(new Set([...prev, ...visibleIds])));
     } else {
-      setSelectedRows([]);
+      setSelectedRows(prev => prev.filter(id => !visibleIds.includes(id)));
     }
   };
 
   const handleSelectRow = (id) => {
-    if (selectedRows.includes(id)) {
-      setSelectedRows(selectedRows.filter(rId => rId !== id));
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return;
+
+    if (selectedRows.includes(normalizedId)) {
+      setSelectedRows(selectedRows.filter(rId => rId !== normalizedId));
     } else {
-      setSelectedRows([...selectedRows, id]);
+      setSelectedRows([...selectedRows, normalizedId]);
     }
   };
 
@@ -926,6 +949,51 @@ Unauthorized reproduction or distribution is strictly prohibited.
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (!selectedStudentItems.length) return;
+    if (!window.confirm(`Delete ${selectedStudentItems.length} selected student(s)? This action cannot be undone.`)) return;
+
+    setIsBulkDeleting(true);
+    try {
+      const ids = selectedStudentItems
+        .map(student => getStudentIdentifier(student))
+        .filter(Boolean);
+
+      const res = await fetch(`${API_BASE}/students/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || 'Failed to delete selected students');
+      }
+
+      setStudents(prev => {
+        const validIds = new Set(ids);
+        const next = prev.filter(student => !validIds.has(getStudentIdentifier(student)));
+        try {
+          localStorage.setItem('vcas_students_cache', JSON.stringify(next));
+        } catch (e) { }
+        return next;
+      });
+
+      setSelectedRows([]);
+      setShowBulkSelection(false);
+      setShowBulkDeleteModal(false);
+      try {
+        window.dispatchEvent(new Event('vcas_students_updated'));
+      } catch (_) { }
+      showToast(`${selectedStudentItems.length} student(s) deleted successfully.`);
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+      alert(err.message || 'Unable to delete selected students.');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   const handleCompleteWizard = async (newStudentData) => {
     // If student was already created by AddStudentWizard
     if (newStudentData && (newStudentData._id || newStudentData.regNo || newStudentData.id)) {
@@ -1206,6 +1274,41 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
           {/* Filters Group */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {!isReadOnlyMode && isSuperAdmin && (
+              <div className="flex items-center gap-2 mr-1">
+                <label className="inline-flex items-center gap-2 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showBulkSelection || (filteredStudents.length > 0 && filteredStudents.every(student => selectedRows.includes(getStudentIdentifier(student))))}
+                    onChange={handleSelectAll}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>{selectedRows.length > 0 ? `${selectedRows.length} Selected` : 'Select All'}</span>
+                </label>
+                {selectedRows.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRows([]);
+                        setShowBulkSelection(false);
+                      }}
+                      className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowBulkDeleteModal(true)}
+                      className="px-2.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-bold shadow-md shadow-rose-500/20 cursor-pointer"
+                    >
+                      Delete Selected
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Batch Filter Input (Type Mode) */}
             <div className="relative flex items-center">
               <input
@@ -1312,8 +1415,24 @@ Unauthorized reproduction or distribution is strictly prohibited.
       {(() => {
         // Row renderer helper
         const renderStudentRow = (student, idx) => {
+          const studentId = getStudentIdentifier(student);
+          const isSelected = !!studentId && selectedRows.includes(studentId);
+          const showCheckboxes = showBulkSelection || selectedRows.length > 0;
+
           return (
             <tr key={student._id || student.id || student.rollNo || idx} className="hover:bg-slate-50/80 transition-colors">
+              {showCheckboxes && (
+                <td className="py-3.5 px-3 text-center w-12">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => handleSelectRow(studentId)}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    title={`Select ${student.name || 'student'}`}
+                  />
+                </td>
+              )}
+
               {/* Name & Reg No */}
               <td className="py-3.5 px-5 cursor-pointer whitespace-nowrap" onClick={() => setSelectedStudentProfile(student)}>
                 <div className="flex items-center gap-2.5 group">
@@ -1524,7 +1643,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   <tbody className="divide-y divide-slate-100 text-xs font-medium">
                     {studentList.length === 0 ? (
                       <tr>
-                        <td colSpan={isSuperAdmin ? "12" : "11"} className="py-10 text-center text-slate-400 font-normal">
+                        <td colSpan={(!isReadOnlyMode && isSuperAdmin ? 1 : 0) + (isSuperAdmin ? 12 : 11)} className="py-10 text-center text-slate-400 font-normal">
                           No students found in this batch.
                         </td>
                       </tr>
@@ -1910,6 +2029,55 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 </button>
               </div>
             </form>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* BULK DELETE CONFIRMATION MODAL */}
+      {showBulkDeleteModal && (
+        <ModalPortal isOpen={showBulkDeleteModal} onClose={() => setShowBulkDeleteModal(false)}>
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 leading-tight">Delete Selected Students</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  This will permanently remove <strong className="text-slate-900">{selectedStudentItems.length}</strong> selected student record(s).
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600">
+              <p>Selected students: {selectedStudentItems.map(student => student.name || student.regNo || student.id).join(', ') || 'None'}</p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isBulkDeleting}
+                onClick={() => setShowBulkDeleteModal(false)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all border border-slate-200 cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isBulkDeleting || !selectedStudentItems.length}
+                onClick={handleBulkDelete}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isBulkDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Yes, Delete</span>
+                )}
+              </button>
+            </div>
           </div>
         </ModalPortal>
       )}
