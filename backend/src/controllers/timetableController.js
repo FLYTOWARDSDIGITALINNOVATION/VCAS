@@ -139,9 +139,9 @@ exports.updateSlot = async (req, res) => {
         targetSlots = slotData.continuousSlots;
       } else if (slotData.periods) {
         if (Array.isArray(slotData.periods)) {
-          targetSlots = slotData.periods.map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 8);
+          targetSlots = slotData.periods.map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 6);
         } else if (typeof slotData.periods === 'string') {
-          targetSlots = slotData.periods.split(/[,\s-]+/).map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 8);
+          targetSlots = slotData.periods.split(/[,\s-]+/).map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 6);
         }
       } else if (slotData.isContinuousLab && Number(slotData.labHours) > 1) {
         const startPeriod = Number(slot);
@@ -149,7 +149,7 @@ exports.updateSlot = async (req, res) => {
         targetSlots = [];
         for (let i = 0; i < totalContinuous; i++) {
           const targetSlot = startPeriod + i;
-          if (targetSlot <= 8) targetSlots.push(targetSlot);
+          if (targetSlot <= 6) targetSlots.push(targetSlot);
         }
       }
 
@@ -308,7 +308,7 @@ exports.getStudentTimetable = async (req, res) => {
     };
 
     days.forEach(day => {
-      for (let s = 1; s <= 8; s++) {
+      for (let s = 1; s <= 6; s++) {
         const slotKey = String(s);
         let foundSlot = null;
 
@@ -473,15 +473,15 @@ exports.autoGenerateTimetableSchedule = async ({
       let periodsToAssign = [];
       if (periods) {
         if (Array.isArray(periods)) {
-          periodsToAssign = periods.map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 8);
+          periodsToAssign = periods.map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 6);
         } else if (typeof periods === 'string') {
-          periodsToAssign = periods.split(/[,\s-]+/).map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 8);
+          periodsToAssign = periods.split(/[,\s-]+/).map(Number).filter(p => !isNaN(p) && p >= 1 && p <= 6);
         }
       }
 
       if (periodsToAssign.length === 0) {
         // Continuous periods 1, 2, 3...
-        const totalContinuous = Math.min(8, numTheory);
+        const totalContinuous = Math.min(6, numTheory);
         for (let p = 1; p <= totalContinuous; p++) {
           periodsToAssign.push(p);
         }
