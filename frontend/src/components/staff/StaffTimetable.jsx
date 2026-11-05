@@ -71,32 +71,6 @@ export default function StaffTimetable({ staffUser }) {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Derive real-time added venues from classes & localStorage
-  const allVenues = useMemo(() => {
-    const set = new Set();
-    classes.forEach(c => {
-      if (c.room && typeof c.room === 'string' && c.room.trim()) set.add(c.room.trim());
-    });
-    try {
-      const custom = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
-      if (Array.isArray(custom)) {
-        custom.forEach(v => {
-          if (v && typeof v === 'string' && v.trim()) set.add(v.trim());
-        });
-      }
-    } catch (e) {}
-    try {
-      const halls = JSON.parse(localStorage.getItem('vcas_custom_exam_halls') || '[]');
-      if (Array.isArray(halls)) {
-        halls.forEach(h => {
-          const name = typeof h === 'string' ? h : (h.name || h.room || h.hallName);
-          if (name && typeof name === 'string' && name.trim()) set.add(name.trim());
-        });
-      }
-    } catch (e) {}
-    return Array.from(set);
-  }, [classes]);
-
   // Edit / Assign Slot Modal State
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
   const [isSavingSlot, setIsSavingSlot] = useState(false);
@@ -111,7 +85,7 @@ export default function StaffTimetable({ staffUser }) {
     typedPeriods: '1, 2, 3',
     code: '',
     name: '',
-    room: '',
+    room: 'Classroom',
     type: 'theory',
     color: 'blue',
     isContinuousLab: false,
@@ -133,6 +107,13 @@ export default function StaffTimetable({ staffUser }) {
 
   const [selectedStaffId, setSelectedStaffId] = useState(currentStaffId);
   const [departmentStaffList, setDepartmentStaffList] = useState([]);
+  const [allStaffList, setAllStaffList] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState(staffUser?.department || '');
+  const departmentOptions = Array.from(new Set(allStaffList.map(staff => staff?.department?.trim()).filter(Boolean))).sort();
+  const staffForSelectedDepartment = allStaffList.filter(staff =>
+    (staff?.department || '').trim().toLowerCase() === selectedDepartment.trim().toLowerCase()
+  );
+  const assignedStaffId = slotForm.staffId || selectedStaffId || currentStaffId;
 
   // Fetch timetable and classes from backend API for selected staff
   const fetchData = async (targetId = selectedStaffId) => {
@@ -172,6 +153,8 @@ export default function StaffTimetable({ staffUser }) {
             ? data.staff
             : [];
 
+        setAllStaffList(rows);
+
         if (rows.length > 0) {
           const myDept = (staffUser?.department || '').trim().toLowerCase();
           const deptStaff = rows.filter(s => {
@@ -183,12 +166,22 @@ export default function StaffTimetable({ staffUser }) {
           setDepartmentStaffList([]);
         }
       })
-      .catch(() => setDepartmentStaffList([]));
+      .catch(() => {
+        setAllStaffList([]);
+        setDepartmentStaffList([]);
+      });
   }, [staffUser?.department]);
 
   useEffect(() => {
     fetchData(selectedStaffId);
   }, [selectedStaffId]);
+
+  useEffect(() => {
+    const currentStaff = allStaffList.find(staff =>
+      String(staff.staffId || staff.employeeId || staff._id) === String(selectedStaffId)
+    );
+    if (currentStaff?.department) setSelectedDepartment(currentStaff.department);
+  }, [allStaffList, selectedStaffId]);
 
   // Open modal to assign or edit a specific day & slot (Only HOD has permission)
   const handleOpenSlotModal = (day, slot) => {
@@ -211,7 +204,7 @@ export default function StaffTimetable({ staffUser }) {
         typedPeriods: periodStr,
         code: existing.code || '',
         name: existing.name || '',
-        room: existing.room || '',
+        room: existing.room === 'Lab' ? 'Lab' : 'Classroom',
         type: (existing.type || 'theory').toLowerCase(),
         color: (existing.color || (existing.type === 'lab' ? 'emerald' : 'blue')).toLowerCase(),
         isContinuousLab: Boolean(existing.isContinuousLab || existing.type === 'lab'),
@@ -225,10 +218,10 @@ export default function StaffTimetable({ staffUser }) {
       setSlotForm({
         day,
         slot: Number(slot),
-        typedPeriods: '1, 2, 3',
+        typedPeriods: String(slot),
         code: firstClass ? firstClass.code : '',
         name: firstClass ? firstClass.name : '',
-        room: firstClass?.room || (isLab ? 'Computer Lab 1' : (allVenues[0] || '')),
+        room: 'Classroom',
         type: isLab ? 'lab' : 'theory',
         color: isLab ? 'emerald' : 'blue',
         isContinuousLab: isLab,
@@ -355,7 +348,7 @@ export default function StaffTimetable({ staffUser }) {
         slotData: {
           code: slotForm.code.trim().toUpperCase(),
           name: slotForm.name.trim(),
-          room: (slotForm.room || '').trim(),
+          room: slotForm.room === 'Lab' ? 'Lab' : 'Classroom',
           type: slotForm.type,
           color: slotForm.type === 'lab' ? 'emerald' : slotForm.color,
           isContinuousLab: isLabContinuous,
@@ -457,6 +450,13 @@ export default function StaffTimetable({ staffUser }) {
       dayHoursMap: hoursMap 
     };
   }, [schedule]);
+
+  const matrixDayHoursMap = dayHoursMap;
+  const matrixWeeklyTotal = totalAssignedSlots;
+  const viewedStaff = allStaffList.find(staff =>
+    String(staff.staffId || staff.employeeId || staff._id) === String(selectedStaffId)
+  ) || departmentStaffList.find(staff => String(staff.staffId || staff.employeeId || staff._id) === String(selectedStaffId));
+  const viewedStaffName = viewedStaff?.name || (String(selectedStaffId) === String(currentStaffId) ? staffUser?.name : selectedStaffId);
 
   const dailyHoursForSelectedDay = dayHoursMap[selectedDay] || 0;
   const todayHours = dayHoursMap[currentDayName] || 0;
@@ -654,119 +654,20 @@ export default function StaffTimetable({ staffUser }) {
         })}
       </div>
 
-      {/* Grid: Selected Day Detail View + Full Week Matrix */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Selected Day Timeline */}
-        <div className="lg:col-span-1 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <CalendarDays className="w-4 h-4 text-blue-600 shrink-0" />
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-sm">
-                  {selectedDay}'s Classes
-                </h3>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Daily Hours Taken: <span className="font-bold text-indigo-600">{dailyHoursForSelectedDay} Hours</span> ({dailyHoursForSelectedDay} of 6 periods)
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="px-2.5 py-1 text-xs font-black bg-indigo-50 text-indigo-700 rounded-xl border border-indigo-200">
-                {dailyHoursForSelectedDay} {dailyHoursForSelectedDay === 1 ? 'Hr Taken' : 'Hrs Taken'}
-              </span>
-              {selectedDay === currentDayName && (
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-600 rounded-full">
-                  Active Day
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-[520px]">
-            {slotTimes.map((slotItem, idx) => {
-              if (slotItem.isBreak) {
-                return (
-                  <div key={idx} className="flex items-center gap-3 py-1.5 px-3 rounded-lg bg-slate-50 border border-slate-100 text-slate-400 text-xs font-medium">
-                    <span className="text-[10px] font-bold uppercase">{slotItem.label}</span>
-                    <span className="text-[10px]">({slotItem.time})</span>
-                  </div>
-                );
-              }
-
-              const cls = schedule[selectedDay]?.[String(slotItem.slot)];
-
-              if (!cls) {
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => isHod && handleOpenSlotModal(selectedDay, slotItem.slot)}
-                    className={`flex items-center justify-between p-3 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs transition-colors ${
-                      isHod ? 'hover:border-blue-400 hover:bg-blue-50/20 cursor-pointer group' : 'bg-slate-50/50 cursor-default'
-                    }`}
-                  >
-                    <span className="font-semibold text-slate-500">Period {slotItem.slot}</span>
-                    <span className="text-[11px]">{slotItem.time}</span>
-                    {isHod ? (
-                      <span className="text-[11px] text-blue-600 opacity-0 group-hover:opacity-100 font-bold flex items-center gap-0.5">
-                        <Plus className="w-3 h-3" /> Assign
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 italic">No Class</span>
-                    )}
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() => isHod && handleOpenSlotModal(selectedDay, slotItem.slot)}
-                  className={`p-3.5 rounded-xl border transition-all ${
-                    isHod ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'
-                  } ${COLOR_MAP[cls.color] || 'bg-slate-50 border-slate-200'}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-md font-mono text-[10px] font-bold bg-white/80 border border-black/5">
-                        {cls.code}
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">
-                        Period {slotItem.slot}
-                      </span>
-                    </div>
-                    <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-white/60">
-                      {cls.type || 'theory'}
-                    </span>
-                  </div>
-
-                  <p className="font-bold text-xs mt-1.5 line-clamp-1">{cls.name}</p>
-
-                  <div className="mt-2 pt-2 border-t border-black/5 flex items-center justify-between text-[11px] opacity-85 font-medium">
-                    <span className="flex items-center gap-1">
-                      <Building2 className="w-3 h-3" /> {cls.room || 'Classroom'}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {slotItem.time}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
+      {/* Full Week Matrix */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Full Week Matrix Overview */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="font-extrabold text-slate-900 text-sm">Weekly Timetable Matrix</h3>
               <p className="text-[11px] text-slate-500">
-                {isHod ? 'Click on any period cell to assign or edit the subject' : 'View-only timetable matrix scheduled by HOD'}
+                {isHod ? 'Click on any period cell to assign or edit the selected faculty timetable' : 'View-only timetable matrix scheduled by HOD'}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-200">
-                Weekly Total: {totalAssignedSlots} Hours
+                Weekly Total: {matrixWeeklyTotal} Hours
               </span>
             </div>
           </div>
@@ -776,9 +677,12 @@ export default function StaffTimetable({ staffUser }) {
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">
                   <th className="p-3 text-left w-24">Day</th>
-                  {[1, 2, 3, 4, 5, 6].map(slot => (
-                    <th key={slot} className="p-2.5 text-center min-w-[85px]">
-                      P{slot}
+                  {slotTimes.map(slotItem => (
+                    <th key={slotItem.isBreak ? slotItem.slot : slotItem.slot} className={`p-2 text-center min-w-[92px] ${slotItem.isBreak ? 'bg-amber-50/70 text-amber-700' : ''}`}>
+                      <div>{slotItem.isBreak ? slotItem.label : `P${slotItem.slot}`}</div>
+                      <div className="mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-400 whitespace-nowrap">
+                        {slotItem.time}
+                      </div>
                     </th>
                   ))}
                   <th className="p-2.5 text-center min-w-[95px] bg-slate-100/80 border-l border-slate-200 text-slate-700">
@@ -789,7 +693,7 @@ export default function StaffTimetable({ staffUser }) {
               <tbody className="divide-y divide-slate-100">
                 {DAYS.map(day => {
                   const isCurrent = day === currentDayName;
-                  const dayCount = dayHoursMap[day] || 0;
+                  const dayCount = matrixDayHoursMap[day] || 0;
                   return (
                     <tr
                       key={day}
@@ -803,7 +707,15 @@ export default function StaffTimetable({ staffUser }) {
                           <span>{day.substring(0, 3)}</span>
                         </div>
                       </td>
-                      {[1, 2, 3, 4, 5, 6].map(slot => {
+                      {slotTimes.map((slotItem, idx) => {
+                        if (slotItem.isBreak) {
+                          return (
+                            <td key={`break-${idx}`} className="p-2 text-center bg-amber-50/40 text-[9px] font-bold uppercase text-amber-700 whitespace-nowrap">
+                              {slotItem.label}
+                            </td>
+                          );
+                        }
+                        const slot = slotItem.slot;
                         const cell = schedule[day]?.[String(slot)];
                         if (!cell) {
                           return (
@@ -824,13 +736,11 @@ export default function StaffTimetable({ staffUser }) {
                             key={slot}
                             onClick={() => isHod && handleOpenSlotModal(day, slot)}
                             className={`p-1.5 text-center ${isHod ? 'cursor-pointer' : 'cursor-default'}`}
-                            title={`${cell.code} - ${cell.name} (${cell.room})`}
+                            title={`${cell.name} - ${viewedStaffName}`}
                           >
-                            <div className={`p-1.5 rounded-lg border text-[11px] font-bold truncate transition-all ${
-                              isHod ? 'hover:scale-[1.02]' : ''
-                            } ${COLOR_MAP[cell.color] || 'bg-slate-50'}`}>
-                              <div>{cell.code}</div>
-                              <div className="text-[9px] opacity-75 font-normal truncate">{cell.room}</div>
+                            <div className={`p-1.5 rounded-lg border text-[11px] font-bold truncate transition-all ${isHod ? 'hover:scale-[1.02]' : ''} ${COLOR_MAP[cell.color] || 'bg-slate-50'}`}>
+                              <div>{cell.name || cell.code}</div>
+                              <div className="text-[9px] opacity-75 font-normal truncate">{viewedStaffName}</div>
                             </div>
                           </td>
                         );
@@ -851,11 +761,11 @@ export default function StaffTimetable({ staffUser }) {
               <tfoot>
                 <tr className="bg-slate-100/80 font-bold text-slate-700 text-[11px] border-t border-slate-200">
                   <td className="p-3 text-left">Weekly Total</td>
-                  <td colSpan={7} className="p-3 text-right text-slate-500 font-medium">
+                  <td colSpan={slotTimes.length} className="p-3 text-right text-slate-500 font-medium">
                     Total Weekly Teaching Hours:
                   </td>
                   <td className="p-3 text-center text-blue-700 font-black border-l border-slate-200 bg-blue-50/50">
-                    {totalAssignedSlots} hrs
+                    {matrixWeeklyTotal} hrs
                   </td>
                 </tr>
               </tfoot>
@@ -938,10 +848,12 @@ export default function StaffTimetable({ staffUser }) {
                       .map(Number)
                       .filter(Boolean);
                     const isSelected = currentParts.includes(p);
+                    const isAssigned = Boolean(schedule[slotForm.day]?.[String(p)]);
                     return (
                       <button
                         key={p}
                         type="button"
+                        disabled={isAssigned}
                         onClick={() => {
                           let next;
                           if (isSelected) {
@@ -951,10 +863,12 @@ export default function StaffTimetable({ staffUser }) {
                           }
                           setSlotForm({ ...slotForm, typedPeriods: next.join(', ') || String(p) });
                         }}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                          isSelected
+                        className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                          isAssigned
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-70'
+                            : isSelected
                             ? 'bg-blue-600 text-white shadow-xs'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer'
                         }`}
                       >
                         P{p}
@@ -969,43 +883,52 @@ export default function StaffTimetable({ staffUser }) {
 
               {isHod && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Assign To Staff</label>
-                  <select
-                    value={slotForm.staffId || selectedStaffId || currentStaffId}
-                    onChange={(e) => {
-                      const nextStaffId = e.target.value;
-                      setSlotForm(prev => ({ ...prev, staffId: nextStaffId }));
-                      setSelectedStaffId(nextStaffId);
-                    }}
-                    className="w-full bg-indigo-50/60 border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-indigo-900 focus:outline-none focus:border-indigo-600"
-                  >
-                    {departmentStaffList.map(staff => (
-                      <option key={staff.staffId || staff.employeeId || staff._id} value={staff.staffId || staff.employeeId || staff._id}>
-                        {staff.name} ({staff.staffId || staff.employeeId || staff._id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Class Quick Selection */}
-              {classes.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Select From Your Registered Classes
-                  </label>
-                  <select
-                    value={slotForm.code}
-                    onChange={(e) => handleSelectClass(e.target.value)}
-                    className="w-full bg-blue-50/60 border border-blue-200 rounded-xl px-3 py-2 text-xs font-bold text-blue-900 focus:outline-none focus:border-blue-600"
-                  >
-                    <option value="">-- Choose Subject --</option>
-                    {classes.map(c => (
-                      <option key={c.code} value={c.code}>
-                        {c.code} – {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
+                      <select
+                        value={selectedDepartment}
+                        onChange={(e) => {
+                          const nextDepartment = e.target.value;
+                          const firstStaff = allStaffList.find(staff =>
+                            (staff?.department || '').trim().toLowerCase() === nextDepartment.trim().toLowerCase()
+                          );
+                          const nextStaffId = firstStaff ? (firstStaff.staffId || firstStaff.employeeId || firstStaff._id) : '';
+                          setSelectedDepartment(nextDepartment);
+                          setSlotForm(prev => ({ ...prev, staffId: nextStaffId }));
+                          setSelectedStaffId(nextStaffId);
+                        }}
+                        className="w-full bg-indigo-50/60 border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-indigo-900 focus:outline-none focus:border-indigo-600"
+                      >
+                        <option value="">-- Choose Department --</option>
+                        {departmentOptions.map(department => (
+                          <option key={department} value={department}>{department}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Staff Name</label>
+                      <select
+                        value={assignedStaffId}
+                        onChange={(e) => {
+                          const nextStaffId = e.target.value;
+                          const nextStaff = staffForSelectedDepartment.find(staff =>
+                            String(staff.staffId || staff.employeeId || staff._id) === String(nextStaffId)
+                          );
+                          setSlotForm(prev => ({ ...prev, staffId: nextStaffId }));
+                          setSelectedStaffId(nextStaffId);
+                          if (nextStaff?.department) setSelectedDepartment(nextStaff.department);
+                        }}
+                        className="w-full bg-indigo-50/60 border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-indigo-900 focus:outline-none focus:border-indigo-600"
+                      >
+                        <option value="">-- Choose Staff --</option>
+                        {staffForSelectedDepartment.map(staff => {
+                          const staffId = staff.staffId || staff.employeeId || staff._id;
+                          return <option key={staffId} value={staffId}>{staff.name}</option>;
+                        })}
+                      </select>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1022,59 +945,31 @@ export default function StaffTimetable({ staffUser }) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Classroom / Lab Venue
-                    <span className="ml-1 text-[11px] font-normal text-blue-600">(Dropdown Option)</span>
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Venue</label>
                   <select
-                    value={allVenues.includes(slotForm.room) ? slotForm.room : (slotForm.room ? '__custom__' : (allVenues[0] || ''))}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val !== '__custom__') {
-                        const isLab = val.toLowerCase().includes('lab');
-                        setSlotForm(prev => ({
-                          ...prev,
-                          room: val,
-                          type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
-                        }));
-                      }
-                    }}
+                    value={slotForm.room === 'Lab' ? 'Lab' : 'Classroom'}
+                    onChange={(e) => setSlotForm(prev => ({ ...prev, room: e.target.value }))}
                     className="w-full bg-blue-50/60 border border-blue-200 rounded-xl px-3 py-2 text-xs font-bold text-blue-900 focus:outline-none focus:border-blue-600 mb-1.5 cursor-pointer"
                   >
-                    <option value="">-- Choose Added Venue --</option>
-                    {allVenues.map(v => (
-                      <option key={v} value={v}>{v}</option>
-                    ))}
-                    <option value="__custom__">-- Type Custom Venue Below --</option>
+                    <option value="Classroom">Classroom</option>
+                    <option value="Lab">Lab</option>
                   </select>
-                  <input
-                    type="text"
-                    placeholder="Or type custom classroom / lab venue"
-                    value={slotForm.room}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const isLab = val.toLowerCase().includes('lab');
-                      setSlotForm(prev => ({
-                        ...prev,
-                        room: val,
-                        type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
-                      }));
-                    }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 transition-all"
-                  />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Subject Title / Name *</label>
-                <input
-                  type="text"
+                <select
                   required
-                  placeholder="e.g. Cloud Computing & Distributed Systems"
-                  value={slotForm.name}
-                  onChange={(e) => setSlotForm({ ...slotForm, name: e.target.value })}
+                  value={classes.find(c => c.name === slotForm.name)?.code || ''}
+                  onChange={(e) => handleSelectClass(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                />
+                >
+                  <option value="">-- Choose Subject Title / Name --</option>
+                  {classes.map(c => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -92,8 +92,9 @@ export default function StaffQuestionPaper({ staffUser }) {
     try {
       const r = await fetch(`${API}/staff/${staffUser?.staffId}`);
       const d = await r.json();
-      if (d.success) setPapers(d.data);
-    } catch { showToast("Failed to fetch papers", "error"); }
+      if (!r.ok || !d.success) throw new Error(d.message || "Failed to fetch papers");
+      setPapers(Array.isArray(d.data) ? d.data : []);
+    } catch (error) { showToast(error.message || "Failed to fetch papers", "error"); }
     setLoading(false);
   };
 
@@ -127,10 +128,10 @@ export default function StaffQuestionPaper({ staffUser }) {
       const data = await res.json();
       if (data.success) {
         showToast("Question paper saved successfully!");
-        fetchPapers();
+        await fetchPapers();
         setView("list");
       } else { showToast(data.message || "Failed to save paper", "error"); }
-    } catch { showToast("Network error saving paper", "error"); }
+    } catch (error) { showToast(error.message || "Network error saving paper", "error"); }
     setSaving(false);
   };
 

@@ -2,7 +2,8 @@ const mongoose = require("mongoose");
 
 const questionSchema = new mongoose.Schema({
   questionNo: { type: Number, required: true },
-  text: { type: String, required: true },
+  // Draft papers can be saved before every question is written.
+  text: { type: String, default: "" },
   marks: { type: Number, required: true, default: 5 },
   unit: { type: String, default: "" },
   type: { 
@@ -42,8 +43,9 @@ const questionPaperSchema = new mongoose.Schema({
   section: { type: String, default: "A" },
   examType: { 
     type: String, 
-    enum: ["Internal Test 1", "Internal Test 2", "Model Exam", "Semester Exam", "Retest"], 
-    default: "Internal Test 1" 
+    // Keep the editor's stored values, while accepting labels used by older clients.
+    enum: ["internal1", "internal 2", "model", "semester", "seminar", "project", "Internal Test 1", "Internal Test 2", "Model Exam", "Semester Exam", "Retest"],
+    default: "internal1"
   },
   duration: { type: String, default: "3 Hours" },
   totalMarks: { type: Number, default: 100 },
