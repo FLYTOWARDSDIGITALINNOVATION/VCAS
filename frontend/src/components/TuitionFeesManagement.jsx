@@ -311,14 +311,15 @@ export default function TuitionFeesManagement({
       transport: { total: 0, paid: 0, pending: 0 }
     };
     const feeSection = breakdown.tuition || { total: safeNumber(r.totalFee, 0), paid: safeNumber(r.paidFee, 0), pending: safeNumber(r.pendingFee, 0) };
-    const totalFee = safeNumber(feeSection.total || r.totalFee, 0);
-    const paidFee = safeNumber(feeSection.paid || r.paidFee || totalFee, 0);
+    const totalFee = safeNumber(feeSection.total ?? r.totalFee ?? 0, 0);
+    const paidFee = safeNumber(feeSection.paid ?? r.paidFee ?? 0, 0);
     const pendingFee = safeNumber(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee), 0);
     const receiptDigits = String(rollNo).replace(/\D/g, '').slice(-6) || String(Date.now()).slice(-6);
-    const receiptNo = safeText(r.receiptNo, `REC-${new Date().getFullYear()}-${receiptDigits}`);
-    const txnRef = safeText(r.referenceNo || r.paymentRef || r.transactionRef || r.paymentRefNo, `TXN${Date.now().toString().slice(-10)}`);
+    const hasRecordedPayment = paidFee > 0 || totalFee > 0;
+    const receiptNo = safeText(r.receiptNo, hasRecordedPayment ? `REC-${new Date().getFullYear()}-${receiptDigits}` : '');
+    const txnRef = safeText(r.referenceNo || r.paymentRef || r.transactionRef || r.paymentRefNo, hasRecordedPayment ? `TXN${Date.now().toString().slice(-10)}` : '');
     const payDate = safeText(r.lastPaymentDate || r.paymentDate, new Date().toISOString().split('T')[0]);
-    const statusLabel = pendingFee <= 0 ? 'Fully Paid' : paidFee > 0 ? 'Partial / Pending' : 'Pending';
+    const statusLabel = paidFee > 0 && pendingFee <= 0 ? 'Fully Paid' : paidFee > 0 ? 'Partial / Pending' : 'Pending';
     const breakdownRows = [[`Tuition Fees`, Number(paidFee || 0)]];
 
     printWin.document.write(`
@@ -327,26 +328,26 @@ export default function TuitionFeesManagement({
         <head>
           <title>Tuition Fee Bill - ${studentName} (${rollNo})</title>
           <style>
-            @page { size: A4; margin: 15mm; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; margin: 0; padding: 20px; }
-            .receipt-box { border: 2px solid #0f172a; border-radius: 12px; padding: 24px; max-width: 720px; margin: 0 auto; }
-            .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
-            .college-title { font-size: 18px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; margin: 0; }
-            .college-sub { font-size: 12px; font-weight: 700; color: #475569; margin: 2px 0 0 0; }
-            .badge { display: inline-block; background: #0f172a; color: white; font-size: 11px; font-weight: 800; padding: 3px 12px; border-radius: 9999px; margin-top: 8px; letter-spacing: 0.5px; }
-            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 12px; margin-bottom: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; }
+            @page { size: A6 portrait; margin: 6mm; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; margin: 0; padding: 8px; }
+            .receipt-box { border: 1.5px solid #0f172a; border-radius: 10px; padding: 12px; max-width: 100%; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 1px solid #0f172a; padding-bottom: 8px; margin-bottom: 10px; }
+            .college-title { font-size: 12px; font-weight: 900; letter-spacing: 0.2px; text-transform: uppercase; margin: 0; }
+            .college-sub { font-size: 8px; font-weight: 700; color: #475569; margin: 2px 0 0 0; }
+            .badge { display: inline-block; background: #0f172a; color: white; font-size: 8px; font-weight: 800; padding: 2px 8px; border-radius: 9999px; margin-top: 6px; letter-spacing: 0.3px; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 9px; margin-bottom: 10px; padding: 8px; background: #f8fafc; border-radius: 6px; }
             .meta-item span { color: #64748b; font-weight: 500; }
             .meta-item strong { color: #0f172a; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px; }
-            th { background: #0f172a; color: white; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; }
-            td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 9px; }
+            th { background: #0f172a; color: white; padding: 5px 6px; text-align: left; font-size: 8px; text-transform: uppercase; }
+            td { padding: 5px 6px; border-bottom: 1px solid #e2e8f0; }
             .total-row td { font-weight: bold; background: #f1f5f9; }
             .paid-row td { font-weight: bold; color: #047857; background: #ecfdf5; }
             .due-row td { font-weight: bold; color: #b91c1c; background: #fef2f2; }
-            .footer-sign { display: flex; justify-content: space-between; margin-top: 36px; padding-top: 12px; }
-            .sign-box { text-align: center; min-width: 160px; }
-            .sign-line { border-top: 1px dashed #0f172a; margin-top: 40px; padding-top: 4px; font-size: 11px; font-weight: bold; color: #475569; }
-            .note { text-align: center; font-size: 10px; color: #94a3b8; font-style: italic; margin-top: 20px; }
+            .footer-sign { display: flex; justify-content: space-between; margin-top: 14px; padding-top: 8px; }
+            .sign-box { text-align: center; min-width: 90px; }
+            .sign-line { border-top: 1px dashed #0f172a; margin-top: 18px; padding-top: 3px; font-size: 8px; font-weight: bold; color: #475569; }
+            .note { text-align: center; font-size: 7px; color: #94a3b8; font-style: italic; margin-top: 10px; }
           </style>
         </head>
         <body>
