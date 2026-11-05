@@ -3,21 +3,33 @@ const Class = require('../models/Class');
 const Staff = require('../models/Staff');
 const Student = require('../models/Student');
 
+function normalizeAttendanceStatus(value = 'Present') {
+  const rawStatus = String(value || 'Present').trim();
+  if (!rawStatus) return 'Present';
+
+  const normalized = rawStatus.toLowerCase();
+  if (normalized === 'present') return 'Present';
+  if (normalized === 'absent') return 'Absent';
+  if (normalized === 'late') return 'Late';
+  if (normalized === 'od' || normalized === 'on duty') return 'On Duty';
+
+  return rawStatus;
+}
+
 // Helper to compute counts from records array
 function computeCounts(records = []) {
   let presentCount = 0;
   let absentCount = 0;
   let lateCount = 0;
+  let odCount = 0;
 
   const normalizedRecords = records.map(r => {
-    const rawStatus = (r.status || 'Present').trim();
-    let status = 'Present';
-    if (rawStatus.toLowerCase() === 'absent') status = 'Absent';
-    else if (rawStatus.toLowerCase() === 'late') status = 'Late';
+    const status = normalizeAttendanceStatus(r.status || 'Present');
 
     if (status === 'Present') presentCount++;
     else if (status === 'Absent') absentCount++;
     else if (status === 'Late') lateCount++;
+    else if (status === 'On Duty') odCount++;
 
     return {
       rollNo: (r.rollNo || '').trim().toUpperCase(),
@@ -32,7 +44,8 @@ function computeCounts(records = []) {
     totalStudents: normalizedRecords.length,
     presentCount,
     absentCount,
-    lateCount
+    lateCount,
+    odCount
   };
 }
 
@@ -168,7 +181,8 @@ exports.saveSession = async (req, res) => {
       totalStudents: computed.totalStudents,
       presentCount: computed.presentCount,
       absentCount: computed.absentCount,
-      lateCount: computed.lateCount
+      lateCount: computed.lateCount,
+      odCount: computed.odCount
     };
 
     const options = { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true };
@@ -214,6 +228,7 @@ exports.updateSession = async (req, res) => {
       session.presentCount = computed.presentCount;
       session.absentCount = computed.absentCount;
       session.lateCount = computed.lateCount;
+      session.odCount = computed.odCount;
     }
 
     await session.save();
@@ -271,6 +286,7 @@ exports.getClassSummary = async (req, res) => {
             present: 0,
             absent: 0,
             late: 0,
+            onDuty: 0,
             total: 0
           };
         }
@@ -278,14 +294,17 @@ exports.getClassSummary = async (req, res) => {
         if (st === 'present') studentMap[rollNo].present++;
         else if (st === 'absent') studentMap[rollNo].absent++;
         else if (st === 'late') studentMap[rollNo].late++;
+        else if (st === 'od' || st === 'on duty') studentMap[rollNo].onDuty++;
         studentMap[rollNo].total++;
       }
     }
 
     const studentSummaries = Object.values(studentMap).map(s => {
-      const percentage = s.total > 0 ? Math.round(((s.present + s.late) / s.total) * 100) : 0;
+      const onDuty = s.onDuty || 0;
+      const percentage = s.total > 0 ? Math.round(((s.present + s.late + onDuty) / s.total) * 100) : 0;
       return {
         ...s,
+        onDuty,
         percentage
       };
     });
@@ -342,6 +361,7 @@ exports.getStudentAttendance = async (req, res) => {
     let present = 0;
     let absent = 0;
     let late = 0;
+    let onDuty = 0;
     const subjectMap = {};
 
     const history = sessions.map(sess => {
@@ -356,6 +376,7 @@ exports.getStudentAttendance = async (req, res) => {
       if (st === 'present') present++;
       else if (st === 'absent') absent++;
       else if (st === 'late') late++;
+      else if (st === 'od' || st === 'on duty') onDuty++;
 
       const subKey = sess.classCode || sess.className || 'General';
       if (!subjectMap[subKey]) {
@@ -366,13 +387,15 @@ exports.getStudentAttendance = async (req, res) => {
           total: 0,
           present: 0,
           absent: 0,
-          late: 0
+          late: 0,
+          onDuty: 0
         };
       }
       subjectMap[subKey].total++;
       if (st === 'present') subjectMap[subKey].present++;
       else if (st === 'absent') subjectMap[subKey].absent++;
       else if (st === 'late') subjectMap[subKey].late++;
+      else if (st === 'od' || st === 'on duty') subjectMap[subKey].onDuty++;
 
       return {
         sessionId: sess._id,
@@ -387,12 +410,12 @@ exports.getStudentAttendance = async (req, res) => {
     });
 
     const percentage = total > 0 
-      ? Math.round(((present + late) / total) * 100) 
+      ? Math.round(((present + late + onDuty) / total) * 100) 
       : (student && student.attendance !== undefined ? student.attendance : 85);
 
     const subjectBreakdown = Object.values(subjectMap).map(sub => ({
       ...sub,
-      percentage: sub.total > 0 ? Math.round(((sub.present + sub.late) / sub.total) * 100) : 0
+      percentage: sub.total > 0 ? Math.round(((sub.present + sub.late + (sub.onDuty || 0)) / sub.total) * 100) : 0
     }));
 
     res.status(200).json({
@@ -404,6 +427,7 @@ exports.getStudentAttendance = async (req, res) => {
       present,
       absent,
       late,
+      onDuty,
       percentage,
       subjectBreakdown,
       history
@@ -499,7 +523,8 @@ exports.bulkSaveAttendance = async (req, res) => {
           totalStudents: computed.totalStudents,
           presentCount: computed.presentCount,
           absentCount: computed.absentCount,
-          lateCount: computed.lateCount
+          lateCount: computed.lateCount,
+          odCount: computed.odCount
         };
 
         await Attendance.findOneAndUpdate(filter, update, { upsert: true, new: true, setDefaultsOnInsert: true });
@@ -592,6 +617,7 @@ exports.getFilteredAttendance = async (req, res) => {
           present: 0,
           absent: 0,
           late: 0,
+          onDuty: 0,
           percentage: st.attendance || 0
         };
       }
@@ -615,6 +641,7 @@ exports.getFilteredAttendance = async (req, res) => {
             present: 0,
             absent: 0,
             late: 0,
+            onDuty: 0,
             percentage: 0
           };
         }
@@ -625,14 +652,15 @@ exports.getFilteredAttendance = async (req, res) => {
         if (st === 'present') entry.present += 1;
         else if (st === 'absent') entry.absent += 1;
         else if (st === 'late') entry.late += 1;
+        else if (st === 'od' || st === 'on duty') entry.onDuty += 1;
       });
     });
 
     const studentSummaries = Object.values(studentMap).map(s => {
       const pct = s.totalClasses > 0
-        ? Math.round(((s.present + s.late) / s.totalClasses) * 100)
+        ? Math.round(((s.present + s.late + (s.onDuty || 0)) / s.totalClasses) * 100)
         : s.percentage || 85;
-      return { ...s, percentage: pct };
+      return { ...s, onDuty: s.onDuty || 0, percentage: pct };
     }).sort((a, b) => a.rollNo.localeCompare(b.rollNo));
 
     res.status(200).json({

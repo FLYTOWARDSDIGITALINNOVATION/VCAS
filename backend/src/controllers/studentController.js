@@ -55,7 +55,8 @@ exports.getAllStudents = async (req, res) => {
             if (!attMap.has(roll)) attMap.set(roll, { total: 0, attended: 0 });
             const st = attMap.get(roll);
             st.total++;
-            if (r.status === 'Present' || r.status === 'Late' || r.status === 'present' || r.status === 'late') {
+            const normalizedStatus = String(r.status || '').trim().toLowerCase();
+            if (normalizedStatus === 'present' || normalizedStatus === 'late' || normalizedStatus === 'on duty' || normalizedStatus === 'od') {
               st.attended++;
             }
           });
@@ -123,7 +124,8 @@ exports.getStudentById = async (req, res) => {
           const rec = sess.records.find(r => (r.rollNo || '').trim().toUpperCase() === roll);
           if (rec) {
             total++;
-            if (rec.status === 'Present' || rec.status === 'Late' || rec.status === 'present' || rec.status === 'late') {
+            const normalizedStatus = String(rec.status || '').trim().toLowerCase();
+            if (normalizedStatus === 'present' || normalizedStatus === 'late' || normalizedStatus === 'on duty' || normalizedStatus === 'od') {
               attended++;
             }
           }
@@ -794,15 +796,41 @@ function normalizeStudentRow(rawRow) {
   const academicYear = String(getVal('academicyear', 'session') || '2025-2026').replace('–', '-').trim();
 
   // 5. Year of study & Semester
-  const yearOfStudy = String(getVal('yearofstudy', 'classyear', 'year') || '1').trim();
+  const rawYearOfStudy = String(getVal('yearofstudy', 'classyear', 'year') || '1').trim();
+  const yearOfStudy = rawYearOfStudy.toLowerCase().replace(/\s+/g, '');
   let year = '1st Year';
   let sem = '1st Sem';
-  if (yearOfStudy === '2' || yearOfStudy.includes('2')) {
-    year = '2nd Year';
-    sem = '3rd Sem';
-  } else if (yearOfStudy === '3' || yearOfStudy.includes('3')) {
-    year = '3rd Year';
-    sem = '5th Sem';
+
+  const studyYearMatch = yearOfStudy.match(/^(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|[1-9]|10)$/i);
+  if (studyYearMatch) {
+    const matched = studyYearMatch[0].toLowerCase();
+    const yearNum = /^(first|1st|1)$/.test(matched) ? 1
+      : /^(second|2nd|2)$/.test(matched) ? 2
+      : /^(third|3rd|3)$/.test(matched) ? 3
+      : /^(fourth|4th|4)$/.test(matched) ? 4
+      : /^(fifth|5th|5)$/.test(matched) ? 5
+      : /^(sixth|6th|6)$/.test(matched) ? 6
+      : /^(seventh|7th|7)$/.test(matched) ? 7
+      : /^(eighth|8th|8)$/.test(matched) ? 8
+      : /^(ninth|9th|9)$/.test(matched) ? 9
+      : 10;
+
+    if (yearNum === 1) {
+      year = '1st Year';
+      sem = '1st Sem';
+    } else if (yearNum === 2) {
+      year = '2nd Year';
+      sem = '3rd Sem';
+    } else if (yearNum === 3) {
+      year = '3rd Year';
+      sem = '5th Sem';
+    } else if (yearNum === 4) {
+      year = '4th Year';
+      sem = '7th Sem';
+    } else {
+      year = `${yearNum}th Year`;
+      sem = `${Math.max(1, (yearNum - 1) * 2 + 1)}th Sem`;
+    }
   }
 
   // 6. Section: ONLY match exact 'section' or 'sec', NEVER 'fathersoccupation'

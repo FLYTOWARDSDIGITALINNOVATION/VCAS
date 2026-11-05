@@ -5,7 +5,7 @@ const attendanceRecordSchema = new mongoose.Schema({
   name:    { type: String, required: true, trim: true },
   status:  {
     type: String,
-    enum: ['Present', 'Absent', 'Late', 'present', 'absent', 'late'],
+    enum: ['Present', 'Absent', 'Late', 'On Duty', 'OD', 'present', 'absent', 'late', 'on duty', 'od'],
     default: 'Present'
   },
   remarks: { type: String, default: '', trim: true }
@@ -72,6 +72,10 @@ const attendanceSessionSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  odCount: {
+    type: Number,
+    default: 0
+  },
   records: [attendanceRecordSchema]
 }, {
   timestamps: true,
@@ -91,15 +95,18 @@ attendanceSessionSchema.pre('save', function (next) {
     let p = 0;
     let a = 0;
     let l = 0;
+    let od = 0;
     for (const r of this.records) {
       const s = (r.status || '').toLowerCase();
       if (s === 'present') p++;
       else if (s === 'absent') a++;
       else if (s === 'late') l++;
+      else if (s === 'od' || s === 'on duty') od++;
     }
     this.presentCount = p;
     this.absentCount = a;
     this.lateCount = l;
+    this.odCount = od;
   }
   next();
 });

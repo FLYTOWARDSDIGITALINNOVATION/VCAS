@@ -80,8 +80,10 @@ export default function AttendanceManagement({ user }) {
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [attendanceRangeStart, setAttendanceRangeStart] = useState(getLocalDateString());
+  const [attendanceRangeEnd, setAttendanceRangeEnd] = useState(getLocalDateString());
 
-  // Filter for Date-specific Attendance: 'ALL', 'Present', 'Absent', 'Late', 'On Duty'
+  // Filter for Date-specific Attendance: 'ALL', 'Present', 'Absent', 'Late', 'OD', 'On Duty'
   const [dateStatusFilter, setDateStatusFilter] = useState('ALL');
   const effectiveStatusFilter = onlyShowAbsentStudents ? 'Absent' : dateStatusFilter;
 
@@ -159,7 +161,8 @@ export default function AttendanceManagement({ user }) {
                 const rec = sess.records.find(r => (r.rollNo || '').toUpperCase() === roll);
                 if (rec) {
                   total++;
-                  const isPresent = rec.status === 'Present' || rec.status === 'Late';
+                  const status = String(rec.status || '').trim();
+                  const isPresent = status === 'Present' || status === 'Late' || status === 'On Duty' || status === 'OD';
                   if (isPresent) attended++;
                   const subCode = sess.classCode || 'General';
                   if (!subMap[subCode]) {
@@ -297,6 +300,13 @@ export default function AttendanceManagement({ user }) {
   }, [staffAttendance, staffCategoryFilter, staffSearchQuery]);
 
   // Helper to resolve student status from saved staff sessions ONLY
+  const normalizeAttendanceStatus = (value) => {
+    const status = String(value || '').trim();
+    if (!status) return status;
+    if (status.toLowerCase() === 'od' || status.toLowerCase() === 'on duty') return 'On Duty';
+    return status;
+  };
+
   const resolveStudentAttendanceForDate = (student, dateStr) => {
     // 1. Sunday check
     const parts = (dateStr || '').split('-');
@@ -320,11 +330,13 @@ export default function AttendanceManagement({ user }) {
         (r.rollNo || '').trim().toUpperCase() === (student.rollNo || '').trim().toUpperCase()
       );
       if (rec) {
-        const isAbs = rec.status === 'Absent';
-        const isLt = rec.status === 'Late';
+        const status = normalizeAttendanceStatus(rec.status);
+        const isAbs = status === 'Absent';
+        const isLt = status === 'Late';
+        const isOnDuty = status === 'On Duty';
         return {
-          status: rec.status,
-          periods: isAbs ? 0 : isLt ? 5 : 6,
+          status,
+          periods: isAbs ? 0 : isLt || isOnDuty ? 5 : 6,
           isPresent: !isAbs,
           isMarked: true
         };
@@ -537,10 +549,10 @@ export default function AttendanceManagement({ user }) {
         matchesStatus = s.dayStatus === 'Absent';
       } else if (effectiveStatusFilter === 'Late') {
         matchesStatus = s.dayStatus === 'Late';
-      } else if (effectiveStatusFilter === 'On Duty') {
-        matchesStatus = s.dayStatus === 'On Duty';
-      } else if (effectiveStatusFilter === 'Not Marked') {
-        matchesStatus = s.dayStatus === 'Not Marked';
+      } else if (effectiveStatusFilter === 'OD' || effectiveStatusFilter === 'On Duty') {
+        matchesStatus = s.dayStatus === 'On Duty' || s.dayStatus === 'OD';
+      } else if (effectiveStatusFilter === 'Not Marked' || effectiveStatusFilter === 'Not Came') {
+        matchesStatus = s.dayStatus === 'Not Marked' || s.dayStatus === 'Not Came';
       }
 
       return matchesSearch && matchesDept && matchesStatus;
@@ -552,11 +564,11 @@ export default function AttendanceManagement({ user }) {
     const all = students.map(s => resolveStudentAttendanceForDate(s, selectedDate));
     const total = all.length;
     const marked = all.filter(a => a.isMarked);
-    const present = all.filter(a => a.status === 'Present').length;
-    const absent = all.filter(a => a.status === 'Absent').length;
-    const late = all.filter(a => a.status === 'Late').length;
-    const od = all.filter(a => a.status === 'On Duty').length;
-    const notMarked = all.filter(a => a.status === 'Not Marked').length;
+    const present = all.filter(a => normalizeAttendanceStatus(a.status) === 'Present').length;
+    const absent = all.filter(a => normalizeAttendanceStatus(a.status) === 'Absent').length;
+    const late = all.filter(a => normalizeAttendanceStatus(a.status) === 'Late').length;
+    const od = all.filter(a => normalizeAttendanceStatus(a.status) === 'On Duty').length;
+    const notMarked = all.filter(a => normalizeAttendanceStatus(a.status) === 'Not Marked' || normalizeAttendanceStatus(a.status) === 'Not Came').length;
     const percent = marked.length > 0
       ? Math.round(((present + late + od) / marked.length) * 100)
       : 0;
@@ -592,10 +604,10 @@ export default function AttendanceManagement({ user }) {
 
   const rollTally = useMemo(() => {
     const total = rollCallStudents.length;
-    const present = rollCallStudents.filter(s => s.status === 'Present').length;
-    const absent = rollCallStudents.filter(s => s.status === 'Absent').length;
-    const late = rollCallStudents.filter(s => s.status === 'Late').length;
-    const od = rollCallStudents.filter(s => s.status === 'On Duty').length;
+    const present = rollCallStudents.filter(s => normalizeAttendanceStatus(s.status) === 'Present').length;
+    const absent = rollCallStudents.filter(s => normalizeAttendanceStatus(s.status) === 'Absent').length;
+    const late = rollCallStudents.filter(s => normalizeAttendanceStatus(s.status) === 'Late').length;
+    const od = rollCallStudents.filter(s => normalizeAttendanceStatus(s.status) === 'On Duty').length;
     const percent = total > 0 ? ((present + late + od) / total * 100).toFixed(1) : '0.0';
     return { total, present, absent, late, od, percent };
   }, [rollCallStudents]);
@@ -727,21 +739,58 @@ export default function AttendanceManagement({ user }) {
   };
 
   const handleExportAttendanceCSV = () => {
-    const headers = ['Roll No', 'Register No', 'Student Name', 'Department', 'Date', 'Day Status', 'Overall Attendance %'];
-    const rows = dailyDateAttendees.map(s => [
-      `"${s.rollNo}"`,
-      `"${s.regNo}"`,
-      `"${s.name}"`,
-      `"${s.department}"`,
-      `"${selectedDate}"`,
-      `"${s.dayStatus}"`,
-      `${s.attendancePercent}%`
-    ]);
+    const formatToDateInput = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const normalizeRange = (startVal, endVal) => {
+      const start = new Date(`${startVal}T00:00:00`);
+      const end = new Date(`${endVal}T00:00:00`);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [selectedDate];
+
+      const range = [];
+      const safeStart = new Date(start.getTime());
+      const safeEnd = new Date(end.getTime());
+      const [startDate, endDate] = safeStart <= safeEnd ? [safeStart, safeEnd] : [safeEnd, safeStart];
+
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        range.push(formatToDateInput(d));
+      }
+      return range;
+    };
+
+    const rangeDates = normalizeRange(attendanceRangeStart || selectedDate, attendanceRangeEnd || selectedDate);
+    const headers = ['Date', 'Roll No', 'Register No', 'Student Name', 'Department', 'Day Status', 'Overall Attendance %'];
+
+    const rows = [];
+    rangeDates.forEach(dateStr => {
+      students.forEach(student => {
+        const dayInfo = resolveStudentAttendanceForDate(student, dateStr);
+        if (dayInfo.status === 'Holiday (Sunday)' || !dayInfo.isMarked) return;
+        rows.push([
+          `"${dateStr}"`,
+          `"${student.rollNo || ''}"`,
+          `"${student.regNo || student.registerNumber || ''}"`,
+          `"${student.name || ''}"`,
+          `"${student.department || ''}"`,
+          `"${dayInfo.status || 'Not Marked'}"`,
+          `${student.attendancePercent ?? 0}%`
+        ]);
+      });
+    });
+
+    const fileName = rangeDates.length > 1
+      ? `Attendance_${rangeDates[0]}_to_${rangeDates[rangeDates.length - 1]}.csv`
+      : `Attendance_${rangeDates[0]}.csv`;
+
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Vidyapeeth_Attendance_${selectedDate}.csv`);
+    link.setAttribute('download', fileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -790,14 +839,32 @@ export default function AttendanceManagement({ user }) {
 
         <div className="flex flex-wrap items-center gap-2.5">
           {isSuperAdmin && (
-            <button
-            onClick={handleExportAttendanceCSV}
-            title="Download CSV Attendance Sheet"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs"
-          >
-            <Download className="w-4 h-4 text-slate-600" />
-            <span>Export Report</span>
-          </button>
+            <>
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-2 shadow-xs">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">From</label>
+                <input
+                  type="date"
+                  value={attendanceRangeStart}
+                  onChange={(e) => setAttendanceRangeStart(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-500"
+                />
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">To</label>
+                <input
+                  type="date"
+                  value={attendanceRangeEnd}
+                  onChange={(e) => setAttendanceRangeEnd(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <button
+                onClick={handleExportAttendanceCSV}
+                title="Download CSV Attendance Sheet"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs"
+              >
+                <Download className="w-4 h-4 text-slate-600" />
+                <span>Export Report</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1057,8 +1124,23 @@ export default function AttendanceManagement({ user }) {
                         : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
                     }`}
                   >
-                    <span>⏰ Late / OD</span>
-                    <span className="text-[10px] font-black">{dateTally.late + dateTally.od}</span>
+                    <span>⏰ Late</span>
+                    <span className="text-[10px] font-black">{dateTally.late}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setDateStatusFilter('OD');
+                      setActiveTab('daily-log');
+                    }}
+                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${
+                      dateStatusFilter === 'OD' || dateStatusFilter === 'On Duty'
+                        ? 'bg-violet-600 text-white border-violet-600 shadow-xs'
+                        : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
+                    }`}
+                  >
+                    <span>🛡️ OD</span>
+                    <span className="text-[10px] font-black">{dateTally.od}</span>
                   </button>
                 </div>
               </div>
@@ -1268,13 +1350,15 @@ export default function AttendanceManagement({ user }) {
                                   ? 'bg-rose-50 text-rose-700 border-rose-200'
                                   : s.dayStatus === 'Late'
                                   ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : s.dayStatus === 'On Duty' || s.dayStatus === 'OD'
+                                  ? 'bg-violet-50 text-violet-700 border-violet-200'
                                   : 'bg-purple-50 text-purple-700 border-purple-200'
                               }`}>
                                 {s.dayStatus === 'Present' && '✓ Present'}
-                                {s.dayStatus === 'Not Marked' && '⏳ Not Marked'}
+                                {(s.dayStatus === 'Not Marked' || s.dayStatus === 'Not Came') && '⏳ Not Came'}
                                 {s.dayStatus === 'Absent' && '✕ Absent'}
                                 {s.dayStatus === 'Late' && '⏰ Late'}
-                                {s.dayStatus === 'On Duty' && '🛡️ On Duty'}
+                                {(s.dayStatus === 'On Duty' || s.dayStatus === 'OD') && '🛡️ OD'}
                                 {s.dayStatus.includes('Holiday') && s.dayStatus}
                               </span>
                             </td>
@@ -1384,9 +1468,10 @@ export default function AttendanceManagement({ user }) {
                   <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">Present: {rollTally.present}</span>
                   <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded-md">Absent: {rollTally.absent}</span>
                   <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md">Late: {rollTally.late}</span>
+                  <span className="text-violet-700 font-bold bg-violet-50 px-2 py-0.5 rounded-md">OD: {rollTally.od}</span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => handleMarkAll('Present')}
                     className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg transition-all border border-emerald-200"
@@ -1398,6 +1483,18 @@ export default function AttendanceManagement({ user }) {
                     className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg transition-all border border-rose-200"
                   >
                     ✕ All Absent
+                  </button>
+                  <button
+                    onClick={() => handleMarkAll('Late')}
+                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs rounded-lg transition-all border border-amber-200"
+                  >
+                    ⏰ All Late
+                  </button>
+                  <button
+                    onClick={() => handleMarkAll('On Duty')}
+                    className="px-2.5 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 font-bold text-xs rounded-lg transition-all border border-violet-200"
+                  >
+                    🛡️ All OD
                   </button>
                   <button
                     onClick={handleSubmitRollCall}
@@ -1457,6 +1554,14 @@ export default function AttendanceManagement({ user }) {
                                 }`}
                               >
                                 Late
+                              </button>
+                              <button
+                                onClick={() => handleToggleRollStatus(s.id, 'On Duty')}
+                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${
+                                  s.status === 'On Duty' ? 'bg-violet-600 text-white shadow-xs' : 'text-slate-600'
+                                }`}
+                              >
+                                OD
                               </button>
                             </div>
                           </td>
