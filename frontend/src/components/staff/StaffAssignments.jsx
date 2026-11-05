@@ -111,11 +111,12 @@ export default function StaffAssignments({ staffUser }) {
   useEffect(() => {
     const loadCatalogs = async () => {
       try {
-        const [subjectsRes, studentsRes, deptsRes, classesRes] = await Promise.all([
+        const [subjectsRes, studentsRes, deptsRes, classesRes, departmentClassesRes] = await Promise.all([
           fetch(`${API}/subjects`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
           fetch(`${API}/students`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
           fetch(`${API}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
-          fetch(`${API}/classes/staff/${encodeURIComponent(staffId)}`).then(r => r.json()).catch(() => ({ success: false, classes: [] }))
+          fetch(`${API}/classes/staff/${encodeURIComponent(staffId)}`).then(r => r.json()).catch(() => ({ success: false, classes: [] })),
+          fetch(`${API}/classes?dept=${encodeURIComponent(staffUser?.department || '')}`).then(r => r.json()).catch(() => ({ success: false, classes: [] }))
         ]);
 
         const subjectList = Array.isArray(subjectsRes?.data)
@@ -124,22 +125,38 @@ export default function StaffAssignments({ staffUser }) {
         const staffClasses = Array.isArray(classesRes?.classes)
           ? classesRes.classes
           : (Array.isArray(classesRes?.data) ? classesRes.data : []);
+        const departmentClasses = Array.isArray(departmentClassesRes?.classes)
+          ? departmentClassesRes.classes
+          : (Array.isArray(departmentClassesRes?.data) ? departmentClassesRes.data : []);
+        const deptList = Array.isArray(deptsRes?.data) ? deptsRes.data : [];
         const catalogByCode = new Map(subjectList.map(subject => [
           String(subject?.code || subject?.subjectCode || '').trim().toUpperCase(), subject
         ]).filter(([code]) => code));
+
         const staffName = String(staffUser?.name || staffUser?.fullName || '').trim().toLowerCase();
         const staffCode = String(staffId || '').trim().toLowerCase();
         const staffDepartment = String(staffUser?.department || '').trim().toLowerCase();
         const isHodUser = Boolean(
           staffUser?.isHod ||
+          staffUser?.canAllocateTasks ||
           String(staffUser?.role || '').toUpperCase().includes('HOD') ||
-          String(staffUser?.designation || '').toUpperCase().includes('HOD')
+          String(staffUser?.designation || '').toUpperCase().includes('HOD') ||
+          deptList.some((department) => {
+            const deptName = String(department?.name || '').trim().toLowerCase();
+            if (!deptName || deptName !== staffDepartment) return false;
+            const identifiers = [staffUser?.name, staffUser?.fullName, staffUser?.email, staffUser?._id, staffId]
+              .map(value => String(value || '').trim().toLowerCase())
+              .filter(Boolean);
+            return identifiers.includes(String(department?.hod || '').trim().toLowerCase()) ||
+              identifiers.includes(String(department?.hodEmail || '').trim().toLowerCase());
+          })
         );
 
         const matchesStaffScope = (item) => {
           if (!item) return false;
           const code = String(item?.code || item?.subjectCode || '').trim();
           if (!code) return false;
+
           const faculty = String(item?.faculty || item?.staffName || item?.staffId || item?.employeeId || '').trim().toLowerCase();
           const createdBy = String(item?.createdBy || item?.createdById || item?.createdByStaffId || '').trim().toLowerCase();
           const createdByName = String(item?.createdByName || '').trim().toLowerCase();
@@ -177,13 +194,23 @@ export default function StaffAssignments({ staffUser }) {
             })
           : [];
 
+        const hodDepartmentSubjects = subjectList.filter((subject) =>
+          staffDepartment && String(subject?.department || subject?.dept || '').trim().toLowerCase() === staffDepartment
+        );
+        const hodDepartmentClasses = Array.isArray(departmentClasses)
+          ? departmentClasses.filter((courseClass) =>
+              staffDepartment && String(courseClass?.dept || courseClass?.department || '').trim().toLowerCase() === staffDepartment
+            )
+          : [];
+
         const subjectByCode = new Map();
-        (scopedStaffClasses.length > 0
-          ? scopedStaffClasses
-          : scopedSubjectList.length > 0
-            ? scopedSubjectList
-            : subjectList
-        ).forEach((courseClass) => {
+        const visibleSubjects = isHodUser && staffDepartment
+          ? [...hodDepartmentSubjects, ...hodDepartmentClasses, ...scopedSubjectList, ...scopedStaffClasses]
+          : (scopedStaffClasses.length > 0
+              ? scopedStaffClasses
+              : (scopedSubjectList.length > 0 ? scopedSubjectList : subjectList));
+
+        visibleSubjects.forEach((courseClass) => {
           const code = String(courseClass?.code || courseClass?.subjectCode || '').trim();
           const key = code.toUpperCase();
           if (!key || subjectByCode.has(key)) return;
@@ -197,8 +224,6 @@ export default function StaffAssignments({ staffUser }) {
         });
         const availableSubjects = [...subjectByCode.values()];
         const studentList = Array.isArray(studentsRes?.data) ? studentsRes.data : [];
-        const deptList = Array.isArray(deptsRes?.data) ? deptsRes.data : [];
-
         setSubjectCatalog(availableSubjects);
         setDepartmentCatalog([
           ...new Set([
