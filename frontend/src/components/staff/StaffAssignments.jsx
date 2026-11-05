@@ -124,17 +124,33 @@ export default function StaffAssignments({ staffUser }) {
         const staffClasses = Array.isArray(classesRes?.classes)
           ? classesRes.classes
           : (Array.isArray(classesRes?.data) ? classesRes.data : []);
-        const subjectByCode = new Map(subjectList.map(subject => [
+        const catalogByCode = new Map(subjectList.map(subject => [
           String(subject?.code || subject?.subjectCode || '').trim().toUpperCase(), subject
         ]).filter(([code]) => code));
-        staffClasses.forEach((courseClass) => {
+        const staffName = String(staffUser?.name || staffUser?.fullName || '').trim().toLowerCase();
+        const staffCode = String(staffId || '').trim().toLowerCase();
+        const ownCatalogSubjects = subjectList.filter((subject) => {
+          const faculty = String(subject?.faculty || subject?.staffId || subject?.staffName || '').trim().toLowerCase();
+          return faculty && (faculty === staffCode || (staffName && faculty === staffName));
+        });
+        const staffDepartment = String(staffUser?.department || '').trim().toLowerCase();
+        const departmentSubjects = subjectList.filter((subject) =>
+          staffDepartment && String(subject?.department || subject?.dept || '').trim().toLowerCase() === staffDepartment
+        );
+        const subjectByCode = new Map();
+        (staffClasses.length > 0
+          ? staffClasses
+          : (ownCatalogSubjects.length > 0 ? ownCatalogSubjects : departmentSubjects)
+        ).forEach((courseClass) => {
           const code = String(courseClass?.code || courseClass?.subjectCode || '').trim();
           const key = code.toUpperCase();
           if (!key || subjectByCode.has(key)) return;
+          const catalogSubject = catalogByCode.get(key);
           subjectByCode.set(key, {
             code,
-            name: courseClass?.name || courseClass?.subjectName || code,
-            department: courseClass?.dept || courseClass?.department || staffUser?.department || ''
+            ...catalogSubject,
+            name: courseClass?.name || courseClass?.subjectName || catalogSubject?.name || catalogSubject?.subjectName || code,
+            department: courseClass?.dept || courseClass?.department || catalogSubject?.department || staffUser?.department || ''
           });
         });
         const availableSubjects = [...subjectByCode.values()];
