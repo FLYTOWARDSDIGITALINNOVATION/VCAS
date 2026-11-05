@@ -442,7 +442,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     const totalAmount = baseAmount + uniformFee + bookFee + fineAmount;
     const paidAmount = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
       ? parseFloat(entryFormData.paidAmount) || 0
-      : totalAmount;
+      : 0;
     const pendingAmount = Math.max(0, totalAmount - paidAmount);
     const feeStatus = pendingAmount === 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
     const activeFeeType = activeTab && ['Tuition Fees', 'Exam Fees', 'Transport Fees'].includes(activeTab)
@@ -1092,23 +1092,21 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
     let matchesCourse = true;
     if (courseFilter !== 'All') {
-      const cFilter = courseFilter.toLowerCase().trim();
-      const recCourse = String(rec.course || '').toLowerCase().trim();
-      const recDept = String(rec.department || '').toLowerCase().trim();
+      const cFilter = String(courseFilter || '').trim();
+      const recCourse = String(rec.course || '').trim();
+      const recDept = String(rec.department || '').trim();
+      const normalizeText = (value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+      const matchesDepartmentValue = (actualValue, expectedValue) => {
+        const actual = normalizeText(actualValue);
+        const expected = normalizeText(expectedValue);
+        if (!actual || !expected) return false;
+        return actual === expected || actual.includes(expected) || expected.includes(actual);
+      };
 
-      const isCommerceFilter = cFilter.includes('commerce') || cFilter === 'b.com' || cFilter === 'c';
-      const isCSFilter = cFilter.includes('computer') || cFilter === 'cs' || cFilter.includes('science');
-
-      const isCommerceStudent = recDept.includes('commerce') || recCourse.includes('commerce') || recDept.includes('b.com') || recCourse.includes('b.com');
-      const isCSStudent = (recDept.includes('computer') || recCourse.includes('computer') || recDept.includes('cs') || recCourse.includes('cs')) && !isCommerceStudent;
-
-      if (isCommerceFilter) {
-        matchesCourse = isCommerceStudent;
-      } else if (isCSFilter) {
-        matchesCourse = isCSStudent;
-      } else {
-        matchesCourse = recDept.includes(cFilter) || recCourse.includes(cFilter) || (cFilter.length >= 4 && (cFilter.includes(recDept) || cFilter.includes(recCourse)));
-      }
+      matchesCourse = matchesDepartmentValue(recDept, cFilter) ||
+        matchesDepartmentValue(recCourse, cFilter) ||
+        matchesDepartmentValue(cFilter, recDept) ||
+        matchesDepartmentValue(cFilter, recCourse);
     }
 
     let matchesFeeType = true;

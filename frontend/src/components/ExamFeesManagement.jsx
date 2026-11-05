@@ -32,6 +32,13 @@ export default function ExamFeesManagement({
 
   const normalizeDeptText = (value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
 
+  const departmentMatches = (actualValue, expectedValue) => {
+    const actual = normalizeDeptText(actualValue);
+    const expected = normalizeDeptText(expectedValue);
+    if (!actual || !expected) return false;
+    return actual === expected || actual.includes(expected) || expected.includes(actual);
+  };
+
   const getCourseCodeFromDepartment = (selectedDepartment) => {
     const departmentValue = String(selectedDepartment || '').trim();
     if (!departmentValue) return 'B.Com';
@@ -73,13 +80,15 @@ export default function ExamFeesManagement({
         const deptName = String(d.name || '').trim();
         const deptCode = String(d.code || '').trim();
         const candidate = String(rawDept || '').trim();
-        return normalizeDeptText(deptName) === normalizeDeptText(candidate) || normalizeDeptText(deptCode) === normalizeDeptText(candidate);
+        return departmentMatches(deptName, candidate) || departmentMatches(deptCode, candidate);
       });
-      const departmentValue = matchingDepartment ? (matchingDepartment.name || matchingDepartment.code || rawDept) : rawDept;
+      const fallbackDepartment = String(rawDept || '').trim() || 'B.Com';
+      const departmentValue = matchingDepartment ? (matchingDepartment.name || matchingDepartment.code || fallbackDepartment) : fallbackDepartment;
       const courseValue = getCourseCodeFromDepartment(departmentValue);
       const baseAmt = parseFloat(entryFormData.amount) || 5000;
       const fineAmt = parseFloat(entryFormData.fine) || 0;
       const total = baseAmt + fineAmt;
+      const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== '' ? parseFloat(entryFormData.paidAmount) || 0 : 0;
 
       setEntryFormData(prev => ({
         ...prev,
@@ -90,19 +99,25 @@ export default function ExamFeesManagement({
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
         amount: prev.amount || '5000',
         totalAmount: String(total),
-        paidAmount: prev.paidAmount !== undefined ? prev.paidAmount : String(total),
-        balance: String(Math.max(0, total - (parseFloat(prev.paidAmount !== undefined ? prev.paidAmount : total) || 0)))
+        paidAmount: prev.paidAmount !== undefined && prev.paidAmount !== '' ? String(prev.paidAmount) : '0',
+        balance: String(Math.max(0, total - currentPaid))
       }));
     }
   };
 
   const matchesFeeSection = (record, sectionKey) => {
     if (!record) return false;
-    const feeType = String(record.feeType || '').toLowerCase();
+    const feeType = String(record.feeType || record.feeCategory || '').toLowerCase();
     const breakdown = record.feeBreakdown || {};
 
     if (sectionKey === 'exam') {
-      return !feeType || feeType.includes('exam') || !!breakdown.exam || record.examFee !== undefined || record.examAmount !== undefined;
+      return !feeType ||
+        feeType.includes('exam') ||
+        feeType.includes('examination') ||
+        !!breakdown.exam ||
+        record.examFee !== undefined ||
+        record.examAmount !== undefined ||
+        (Number(record.amount) > 0 && !record.uniformFee && !record.bookFee && !record.vehicleNo);
     }
 
     if (sectionKey === 'tuition') {
@@ -139,27 +154,18 @@ export default function ExamFeesManagement({
       (r.rollNo && r.rollNo.toLowerCase().includes(term)) ||
       (r.id && r.id.toLowerCase().includes(term)) ||
       (r.course && r.course.toLowerCase().includes(term)) ||
-      (r.status && r.status.toLowerCase().includes(term))
+      (r.department && r.department.toLowerCase().includes(term)) ||
+      (r.status && r.status.toLowerCase().includes(term)) ||
+      (r.receiptNo && r.receiptNo.toLowerCase().includes(term)) ||
+      (r.referenceNo && r.referenceNo.toLowerCase().includes(term)) ||
+      (r.paymentRef && r.paymentRef.toLowerCase().includes(term))
     );
     let matchesDept = true;
     if (tableDeptFilter !== 'All') {
-      const fDept = tableDeptFilter.toLowerCase().trim();
-      const rCourse = String(r.course || '').toLowerCase().trim();
-      const rDept = String(r.department || '').toLowerCase().trim();
-
-      const isCommerceFilter = fDept.includes('commerce') || fDept === 'b.com' || fDept === 'c';
-      const isCSFilter = fDept.includes('computer') || fDept === 'cs' || fDept.includes('science');
-
-      const isCommerceStudent = rDept.includes('commerce') || rCourse.includes('commerce') || rDept.includes('b.com') || rCourse.includes('b.com');
-      const isCSStudent = (rDept.includes('computer') || rCourse.includes('computer') || rDept.includes('cs') || rCourse.includes('cs')) && !isCommerceStudent;
-
-      if (isCommerceFilter) {
-        matchesDept = isCommerceStudent;
-      } else if (isCSFilter) {
-        matchesDept = isCSStudent;
-      } else {
-        matchesDept = rDept.includes(fDept) || rCourse.includes(fDept) || (fDept.length >= 4 && (fDept.includes(rDept) || fDept.includes(rCourse)));
-      }
+      const fDept = String(tableDeptFilter || '').trim();
+      const rCourse = String(r.course || '').trim();
+      const rDept = String(r.department || '').trim();
+      matchesDept = departmentMatches(rDept, fDept) || departmentMatches(rCourse, fDept) || departmentMatches(fDept, rDept) || departmentMatches(fDept, rCourse);
     }
     const matchesYear = tableYearFilter === 'All' || String(r.year || '').toLowerCase() === tableYearFilter.toLowerCase();
     const matchesBatch = tableBatchFilter === 'All' || String(r.batch || r.academicYear || '').toLowerCase().includes(tableBatchFilter.toLowerCase());
@@ -173,21 +179,34 @@ export default function ExamFeesManagement({
       alert('Please allow popups to download or print the examination fee receipt.');
       return;
     }
-    const studentName = r.name || 'Student';
-    const rollNo = r.rollNo || r.id || 'N/A';
-    const dept = r.course || r.department || 'Degree';
+
+    const safeText = (value, fallback = '') => {
+      const text = String(value ?? '').trim();
+      return text || fallback;
+    };
+
+    const safeNumber = (value, fallback = 0) => {
+      const num = Number(value ?? fallback);
+      return Number.isFinite(num) ? num : fallback;
+    };
+
+    const studentName = safeText(r.name, 'Student');
+    const rollNo = safeText(r.rollNo || r.id, 'N/A');
+    const dept = safeText(r.department || r.course, 'UG Program');
     const breakdown = r.feeBreakdown || {
       tuition: { total: 0, paid: 0, pending: 0 },
       exam: { total: 0, paid: 0, pending: 0 },
       transport: { total: 0, paid: 0, pending: 0 }
     };
-    const feeSection = breakdown.exam || { total: Number(r.totalFee) || 0, paid: Number(r.paidFee) || 0, pending: Number(r.pendingFee) || 0 };
-    const totalFee = Number(feeSection.total || r.totalFee || 0);
-    const paidFee = Number(feeSection.paid || r.paidFee || totalFee);
-    const pendingFee = Number(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee));
-    const receiptNo = r.receiptNo || '';
-    const txnRef = r.referenceNo || r.paymentRef || r.transactionRef || '';
-    const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
+    const feeSection = breakdown.exam || { total: safeNumber(r.totalFee, 0), paid: safeNumber(r.paidFee, 0), pending: safeNumber(r.pendingFee, 0) };
+    const totalFee = safeNumber(feeSection.total || r.totalFee, 0);
+    const paidFee = safeNumber(feeSection.paid || r.paidFee || totalFee, 0);
+    const pendingFee = safeNumber(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee), 0);
+    const receiptDigits = String(rollNo).replace(/\D/g, '').slice(-6) || String(Date.now()).slice(-6);
+    const receiptNo = safeText(r.receiptNo, `REC-${new Date().getFullYear()}-${receiptDigits}`);
+    const txnRef = safeText(r.referenceNo || r.paymentRef || r.transactionRef || r.paymentRefNo, `TXN${Date.now().toString().slice(-10)}`);
+    const payDate = safeText(r.lastPaymentDate || r.paymentDate, new Date().toISOString().split('T')[0]);
+    const statusLabel = pendingFee <= 0 ? 'Fully Paid' : paidFee > 0 ? 'Partial / Pending' : 'Pending';
     const breakdownRows = [[`Exam Fees`, Number(paidFee || 0)]];
 
     printWin.document.write(`
@@ -233,7 +252,7 @@ export default function ExamFeesManagement({
               <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
               <div class="meta-item"><span>Roll / ID No:</span> <strong>${rollNo}</strong></div>
               <div class="meta-item"><span>Department:</span> <strong>${dept}</strong></div>
-              <div class="meta-item"><span>Status:</span> <strong>${pendingFee === 0 ? 'Fully Paid' : 'Pending'}</strong></div>
+              <div class="meta-item"><span>Status:</span> <strong>${statusLabel}</strong></div>
             </div>
             <table>
               <thead>

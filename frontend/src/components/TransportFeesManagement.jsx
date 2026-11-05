@@ -175,21 +175,34 @@ export default function TransportFeesManagement({
       alert('Please allow popups to download or print the transport fee bill receipt.');
       return;
     }
-    const studentName = r.name || 'Student';
-    const rollNo = r.rollNo || r.id || 'N/A';
-    const dept = r.course || r.department || 'Degree';
+
+    const safeText = (value, fallback = '') => {
+      const text = String(value ?? '').trim();
+      return text || fallback;
+    };
+
+    const safeNumber = (value, fallback = 0) => {
+      const num = Number(value ?? fallback);
+      return Number.isFinite(num) ? num : fallback;
+    };
+
+    const studentName = safeText(r.name, 'Student');
+    const rollNo = safeText(r.rollNo || r.id, 'N/A');
+    const dept = safeText(r.department || r.course, 'UG Program');
     const breakdown = r.feeBreakdown || {
       tuition: { total: 0, paid: 0, pending: 0 },
       exam: { total: 0, paid: 0, pending: 0 },
       transport: { total: 0, paid: 0, pending: 0 }
     };
-    const feeSection = breakdown.transport || { total: Number(r.totalFee) || 0, paid: Number(r.paidFee) || 0, pending: Number(r.pendingFee) || 0 };
-    const totalFee = Number(feeSection.total || r.totalFee || 0);
-    const paidFee = Number(feeSection.paid || r.paidFee || totalFee);
-    const pendingFee = Number(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee));
-    const receiptNo = r.receiptNo || '';
-    const txnRef = r.referenceNo || r.paymentRef || r.transactionRef || '';
-    const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
+    const feeSection = breakdown.transport || { total: safeNumber(r.totalFee, 0), paid: safeNumber(r.paidFee, 0), pending: safeNumber(r.pendingFee, 0) };
+    const totalFee = safeNumber(feeSection.total || r.totalFee, 0);
+    const paidFee = safeNumber(feeSection.paid || r.paidFee || totalFee, 0);
+    const pendingFee = safeNumber(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee), 0);
+    const receiptDigits = String(rollNo).replace(/\D/g, '').slice(-6) || String(Date.now()).slice(-6);
+    const receiptNo = safeText(r.receiptNo, `REC-${new Date().getFullYear()}-${receiptDigits}`);
+    const txnRef = safeText(r.referenceNo || r.paymentRef || r.transactionRef || r.paymentRefNo, `TXN${Date.now().toString().slice(-10)}`);
+    const payDate = safeText(r.lastPaymentDate || r.paymentDate, new Date().toISOString().split('T')[0]);
+    const statusLabel = pendingFee <= 0 ? 'Fully Paid' : paidFee > 0 ? 'Partial / Pending' : 'Pending';
     const breakdownRows = [[`Transport Fees`, Number(paidFee || 0)]];
 
     printWin.document.write(`
@@ -234,7 +247,7 @@ export default function TransportFeesManagement({
               <div class="meta-item"><span>Payment Date:</span> <strong>${payDate}</strong></div>
               <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
               <div class="meta-item"><span>Roll / ID No:</span> <strong>${rollNo}</strong></div>
-              <div class="meta-item"><span>Status:</span> <strong>${pendingFee === 0 ? 'Fully Paid' : 'Pending'}</strong></div>
+              <div class="meta-item"><span>Status:</span> <strong>${statusLabel}</strong></div>
             </div>
             <table>
               <thead>

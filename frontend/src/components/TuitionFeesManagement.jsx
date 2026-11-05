@@ -34,6 +34,13 @@ export default function TuitionFeesManagement({
 
   const normalizeDeptText = (value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
 
+  const departmentMatches = (actualValue, expectedValue) => {
+    const actual = normalizeDeptText(actualValue);
+    const expected = normalizeDeptText(expectedValue);
+    if (!actual || !expected) return false;
+    return actual === expected || actual.includes(expected) || expected.includes(actual);
+  };
+
   const getCourseCodeFromDepartment = (selectedDepartment) => {
     const departmentValue = String(selectedDepartment || '').trim();
     if (!departmentValue) return 'B.Com';
@@ -54,8 +61,53 @@ export default function TuitionFeesManagement({
     return matchedDept?.code || departmentValue;
   };
 
+  const getDepartmentSelectionValue = (selectedDepartment) => {
+    const raw = String(selectedDepartment || '').trim();
+    if (!raw) return '';
+
+    const canonicalMap = {
+      commerce: 'Commerce',
+      bcom: 'Commerce',
+      'b.com': 'Commerce',
+      'b com': 'Commerce',
+      computerscience: 'Computer Science',
+      cs: 'Computer Science',
+      'bsc computerscience': 'Computer Science',
+      'bsc cs': 'Computer Science',
+      artificialintelligence: 'Artificial Intelligence',
+      ai: 'Artificial Intelligence',
+      'bsc artificialintelligence': 'Artificial Intelligence',
+      criminologyandforensicscience: 'Criminology and Forensic Science',
+      criminology: 'Criminology and Forensic Science',
+      forensicscience: 'Criminology and Forensic Science',
+      cfs: 'Criminology and Forensic Science',
+      management: 'Management',
+      bba: 'Management',
+      'business administration': 'Management',
+      english: 'English',
+      math: 'Mathematics',
+      mathematics: 'Mathematics',
+      physics: 'Physics',
+      chemistry: 'Chemistry'
+    };
+
+    const normalizedRaw = normalizeDeptText(raw);
+    const explicitCanonical = canonicalMap[normalizedRaw];
+    if (explicitCanonical) return explicitCanonical;
+
+    const directMatch = (adminDepartments || []).find(d => {
+      const code = String(d.code || '').trim();
+      const name = String(d.name || '').trim();
+      const normalizedCode = normalizeDeptText(code);
+      const normalizedName = normalizeDeptText(name);
+      return departmentMatches(code, raw) || departmentMatches(name, raw) || normalizedCode === normalizedRaw || normalizedName === normalizedRaw || normalizedCode.includes(normalizedRaw) || normalizedName.includes(normalizedRaw);
+    });
+
+    return directMatch?.name || directMatch?.code || raw;
+  };
+
   // Auto-calculate fee based on department, component, and scholarship slab
-  const handleCalculateFee = (selectedCourse, component, concession) => {
+  const handleCalculateFee = (selectedCourse, component, concession, explicitDepartment = null) => {
     const isTech = ['CS', 'AI', 'CFS'].includes(selectedCourse);
     const regFee = isTech ? 8000 : 7000;
     const baseSemFee = 10000;
@@ -81,15 +133,16 @@ export default function TuitionFeesManagement({
     const grandTotal = total + uniformNum + bookNum + fineNum;
     const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== ''
       ? parseFloat(entryFormData.paidAmount) || 0
-      : grandTotal;
+      : 0;
+    const nextDepartment = explicitDepartment || entryFormData.department || selectedCourse;
 
     setEntryFormData(prev => ({
       ...prev,
       course: selectedCourse,
-      department: prev.department || selectedCourse,
+      department: explicitDepartment || prev.department || selectedCourse,
       amount: String(total),
       totalAmount: String(grandTotal),
-      paidAmount: prev.paidAmount !== undefined ? prev.paidAmount : String(grandTotal),
+      paidAmount: prev.paidAmount !== undefined && prev.paidAmount !== '' ? prev.paidAmount : '0',
       balance: String(Math.max(0, grandTotal - currentPaid))
     }));
   };
@@ -102,19 +155,19 @@ export default function TuitionFeesManagement({
       course,
       department
     }));
-    handleCalculateFee(course, feeComponent, concessionCategory);
+    handleCalculateFee(course, feeComponent, concessionCategory, department);
   };
 
   const onComponentChange = (e) => {
     const comp = e.target.value;
     setFeeComponent(comp);
-    handleCalculateFee(entryFormData.course || 'B.Com', comp, concessionCategory);
+    handleCalculateFee(entryFormData.course || 'B.Com', comp, concessionCategory, entryFormData.department || entryFormData.course || 'B.Com');
   };
 
   const onConcessionChange = (e) => {
     const conc = e.target.value;
     setConcessionCategory(conc);
-    handleCalculateFee(entryFormData.course || 'B.Com', feeComponent, conc);
+    handleCalculateFee(entryFormData.course || 'B.Com', feeComponent, conc, entryFormData.department || entryFormData.course || 'B.Com');
   };
 
   // Select student and auto-fill details
@@ -134,13 +187,7 @@ export default function TuitionFeesManagement({
 
     if (found) {
       const rawDept = found.department || found.course || 'B.Com';
-      const matchingDepartment = (adminDepartments || []).find(d => {
-        const deptName = String(d.name || '').trim();
-        const deptCode = String(d.code || '').trim();
-        const candidate = String(rawDept || '').trim();
-        return normalizeDeptText(deptName) === normalizeDeptText(candidate) || normalizeDeptText(deptCode) === normalizeDeptText(candidate);
-      });
-      const departmentValue = matchingDepartment ? (matchingDepartment.code || matchingDepartment.name) : rawDept;
+      const departmentValue = getDepartmentSelectionValue(rawDept);
       const selectedCourseCode = getCourseCodeFromDepartment(departmentValue);
 
       const regFee = 7000;
@@ -150,6 +197,7 @@ export default function TuitionFeesManagement({
       const bookNum = parseFloat(entryFormData.bookFee) || 0;
       const fineNum = parseFloat(entryFormData.fine) || 0;
       const totalPayable = calcAmt + uniformNum + bookNum + fineNum;
+      const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== '' ? parseFloat(entryFormData.paidAmount) || 0 : 0;
 
       setEntryFormData(prev => ({
         ...prev,
@@ -160,19 +208,28 @@ export default function TuitionFeesManagement({
         academicYear: found.academicYear || prev.academicYear || '2025 - 2026',
         amount: String(calcAmt),
         totalAmount: String(totalPayable),
-        paidAmount: prev.paidAmount !== undefined ? prev.paidAmount : String(totalPayable),
-        balance: String(Math.max(0, totalPayable - (parseFloat(prev.paidAmount !== undefined ? prev.paidAmount : totalPayable) || 0)))
+        paidAmount: prev.paidAmount !== undefined && prev.paidAmount !== '' ? String(prev.paidAmount) : '0',
+        balance: String(Math.max(0, totalPayable - currentPaid))
       }));
     }
   };
 
   const matchesFeeSection = (record, sectionKey) => {
     if (!record) return false;
-    const feeType = String(record.feeType || '').toLowerCase();
+    const feeType = String(record.feeType || record.feeCategory || '').toLowerCase();
     const breakdown = record.feeBreakdown || {};
 
     if (sectionKey === 'tuition') {
-      return !feeType || feeType.includes('tuition') || feeType.includes('semester') || !!breakdown.tuition || record.baseAmount !== undefined || record.uniformFee !== undefined || record.bookFee !== undefined;
+      return !feeType ||
+        feeType.includes('tuition') ||
+        feeType.includes('semester') ||
+        feeType.includes('course fee') ||
+        feeType.includes('fee') && (feeType.includes('tuition') || feeType.includes('semester')) ||
+        !!breakdown.tuition ||
+        record.baseAmount !== undefined ||
+        record.uniformFee !== undefined ||
+        record.bookFee !== undefined ||
+        (Number(record.amount) > 0 && !record.examAmount && !record.vehicleNo);
     }
 
     if (sectionKey === 'exam') {
@@ -209,27 +266,18 @@ export default function TuitionFeesManagement({
       (r.rollNo && r.rollNo.toLowerCase().includes(term)) ||
       (r.id && r.id.toLowerCase().includes(term)) ||
       (r.course && r.course.toLowerCase().includes(term)) ||
-      (r.status && r.status.toLowerCase().includes(term))
+      (r.department && r.department.toLowerCase().includes(term)) ||
+      (r.status && r.status.toLowerCase().includes(term)) ||
+      (r.receiptNo && r.receiptNo.toLowerCase().includes(term)) ||
+      (r.referenceNo && r.referenceNo.toLowerCase().includes(term)) ||
+      (r.paymentRef && r.paymentRef.toLowerCase().includes(term))
     );
     let matchesDept = true;
     if (tableDeptFilter !== 'All') {
-      const fDept = tableDeptFilter.toLowerCase().trim();
-      const rCourse = String(r.course || '').toLowerCase().trim();
-      const rDept = String(r.department || '').toLowerCase().trim();
-
-      const isCommerceFilter = fDept.includes('commerce') || fDept === 'b.com' || fDept === 'c';
-      const isCSFilter = fDept.includes('computer') || fDept === 'cs' || fDept.includes('science');
-
-      const isCommerceStudent = rDept.includes('commerce') || rCourse.includes('commerce') || rDept.includes('b.com') || rCourse.includes('b.com');
-      const isCSStudent = (rDept.includes('computer') || rCourse.includes('computer') || rDept.includes('cs') || rCourse.includes('cs')) && !isCommerceStudent;
-
-      if (isCommerceFilter) {
-        matchesDept = isCommerceStudent;
-      } else if (isCSFilter) {
-        matchesDept = isCSStudent;
-      } else {
-        matchesDept = rDept.includes(fDept) || rCourse.includes(fDept) || (fDept.length >= 4 && (fDept.includes(rDept) || fDept.includes(rCourse)));
-      }
+      const fDept = String(tableDeptFilter || '').trim();
+      const rCourse = String(r.course || '').trim();
+      const rDept = String(r.department || '').trim();
+      matchesDept = departmentMatches(rDept, fDept) || departmentMatches(rCourse, fDept) || departmentMatches(fDept, rDept) || departmentMatches(fDept, rCourse);
     }
     const matchesYear = tableYearFilter === 'All' || String(r.year || '').toLowerCase() === tableYearFilter.toLowerCase();
     const matchesBatch = tableBatchFilter === 'All' || String(r.batch || r.academicYear || '').toLowerCase().includes(tableBatchFilter.toLowerCase());
@@ -243,21 +291,34 @@ export default function TuitionFeesManagement({
       alert('Please allow popups to download or print the tuition fee bill receipt.');
       return;
     }
-    const studentName = r.name || 'Student';
-    const rollNo = r.rollNo || r.id || 'N/A';
-    const dept = r.course || r.department || 'Undergraduate';
+
+    const safeText = (value, fallback = '') => {
+      const text = String(value ?? '').trim();
+      return text || fallback;
+    };
+
+    const safeNumber = (value, fallback = 0) => {
+      const num = Number(value ?? fallback);
+      return Number.isFinite(num) ? num : fallback;
+    };
+
+    const studentName = safeText(r.name, 'Student');
+    const rollNo = safeText(r.rollNo || r.id, 'N/A');
+    const dept = safeText(r.department || r.course, 'UG Program');
     const breakdown = r.feeBreakdown || {
       tuition: { total: 0, paid: 0, pending: 0 },
       exam: { total: 0, paid: 0, pending: 0 },
       transport: { total: 0, paid: 0, pending: 0 }
     };
-    const feeSection = breakdown.tuition || { total: Number(r.totalFee) || 0, paid: Number(r.paidFee) || 0, pending: Number(r.pendingFee) || 0 };
-    const totalFee = Number(feeSection.total || r.totalFee || 0);
-    const paidFee = Number(feeSection.paid || r.paidFee || totalFee);
-    const pendingFee = Number(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee));
-    const receiptNo = r.receiptNo || '';
-    const txnRef = r.referenceNo || r.paymentRef || r.transactionRef || '';
-    const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
+    const feeSection = breakdown.tuition || { total: safeNumber(r.totalFee, 0), paid: safeNumber(r.paidFee, 0), pending: safeNumber(r.pendingFee, 0) };
+    const totalFee = safeNumber(feeSection.total || r.totalFee, 0);
+    const paidFee = safeNumber(feeSection.paid || r.paidFee || totalFee, 0);
+    const pendingFee = safeNumber(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee), 0);
+    const receiptDigits = String(rollNo).replace(/\D/g, '').slice(-6) || String(Date.now()).slice(-6);
+    const receiptNo = safeText(r.receiptNo, `REC-${new Date().getFullYear()}-${receiptDigits}`);
+    const txnRef = safeText(r.referenceNo || r.paymentRef || r.transactionRef || r.paymentRefNo, `TXN${Date.now().toString().slice(-10)}`);
+    const payDate = safeText(r.lastPaymentDate || r.paymentDate, new Date().toISOString().split('T')[0]);
+    const statusLabel = pendingFee <= 0 ? 'Fully Paid' : paidFee > 0 ? 'Partial / Pending' : 'Pending';
     const breakdownRows = [[`Tuition Fees`, Number(paidFee || 0)]];
 
     printWin.document.write(`
@@ -303,7 +364,7 @@ export default function TuitionFeesManagement({
               <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
               <div class="meta-item"><span>Roll / ID No:</span> <strong>${rollNo}</strong></div>
               <div class="meta-item"><span>Department:</span> <strong>${dept}</strong></div>
-              <div class="meta-item"><span>Status:</span> <strong>${pendingFee === 0 ? 'Fully Paid' : 'Partial / Pending'}</strong></div>
+              <div class="meta-item"><span>Status:</span> <strong>${statusLabel}</strong></div>
             </div>
             <table>
               <thead>
@@ -474,10 +535,11 @@ export default function TuitionFeesManagement({
                   <option value="">Select dept...</option>
                   {adminDepartments.length > 0 ? (
                     adminDepartments.map((dept) => {
-                      const val = dept.code || dept.name;
+                      const optionValue = dept.name || dept.code || 'UG Program';
+                      const optionLabel = dept.name || dept.code || 'UG Program';
                       return (
-                        <option key={dept._id || val} value={val}>
-                          {dept.name} {dept.code ? `(${dept.code})` : ''}
+                        <option key={dept._id || optionValue} value={optionValue}>
+                          {optionLabel} {dept.code && dept.name ? `(${dept.code})` : ''}
                         </option>
                       );
                     })
@@ -963,7 +1025,7 @@ export default function TuitionFeesManagement({
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search student / roll..."
+                placeholder="Search student / roll / receipt..."
                 value={tableSearchTerm}
                 onChange={(e) => setTableSearchTerm(e.target.value)}
                 className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-2xs"
@@ -1028,7 +1090,7 @@ export default function TuitionFeesManagement({
               {tableSearchTerm ? 'No students match your search query' : 'No tuition entries added yet'}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {tableSearchTerm ? 'Try typing a different name or roll number' : 'Select a student above and click "Save Tuition Entry" to record collections.'}
+              {tableSearchTerm ? 'Try typing a different name, roll number, or receipt number' : 'Select a student above and click "Save Tuition Entry" to record collections.'}
             </p>
           </div>
         ) : (
