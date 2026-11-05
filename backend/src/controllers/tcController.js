@@ -125,7 +125,7 @@ exports.getStudentForTC = async (req, res) => {
       regNo: student.regNo || student.studentId || student.rollNo || cleanId,
       studentName: student.name || student.fullName || '',
       gender: student.gender || 'Male',
-      dob: student.dob || '',
+      dob: student.dob || student.dateOfBirth || student.birthDate || student.dateofbirth || '',
       fatherName: student.fatherName || '',
       nationality: student.nationality || 'Indian',
       religion: student.religion || 'Hindu',

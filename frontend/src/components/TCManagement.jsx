@@ -11,6 +11,16 @@ import CollegeLogo from './CollegeLogo';
 import TCCertificatePreview, { openTCPrintWindow } from './TCCertificatePreview';
 import { convertDateToWords } from '../utils/dateToWords';
 
+const normalizeDateForInput = (value) => {
+  if (!value) return '';
+  const text = String(value).trim();
+  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
+  const local = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (local) return `${local[3]}-${local[2].padStart(2, '0')}-${local[1].padStart(2, '0')}`;
+  return '';
+};
+
 export default function TCManagement({ user }) {
   // Main view mode: 'form' | 'records'
   const [activeTab, setActiveTab] = useState('form');
@@ -203,7 +213,11 @@ export default function TCManagement({ user }) {
 
       if (res.ok && result.success && result.foundStudent && result.data) {
         const st = result.data;
-        const words = st.dob ? convertDateToWords(st.dob) : '';
+        // Date inputs only accept YYYY-MM-DD. Student data can also contain
+        // dates imported as DD/MM/YYYY or an ISO timestamp.
+        const rawDob = st.dob || st.dateOfBirth || st.birthDate || '';
+        const dob = normalizeDateForInput(rawDob);
+        const words = dob ? convertDateToWords(dob) : '';
 
         setFormData(prev => ({
           ...prev,
@@ -211,7 +225,7 @@ export default function TCManagement({ user }) {
           umisNumber: st.umisNumber || st.umis || prev.umisNumber || '',
           studentName: st.studentName || prev.studentName,
           gender: st.gender || prev.gender,
-          dob: st.dob || prev.dob,
+          dob: dob || prev.dob,
           dobWords: words || prev.dobWords,
           fatherName: st.fatherName || prev.fatherName,
           nationality: st.nationality || prev.nationality,
