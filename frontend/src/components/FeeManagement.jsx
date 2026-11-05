@@ -43,6 +43,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   const [feeTypeFilter, setFeeTypeFilter] = useState('All');
   const [yearFilter, setYearFilter] = useState('All');
   const [batchFilter, setBatchFilter] = useState('All');
+  const [dateFilter, setDateFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('All');
   
   // Toast Notification
   const [toastMessage, setToastMessage] = useState(null);
@@ -178,7 +180,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
             const totalPaid = tuitionPaid + examPaid + transportPaid;
             const totalFee = Number(st.totalFee) || (Number(breakdown.tuition?.total || 0) + Number(breakdown.exam?.total || 0) + Number(breakdown.transport?.total || 0) || 25000);
             const pending = Math.max(0, totalFee - totalPaid);
-            const status = pending === 0 ? 'Paid' : 'Pending';
+            const status = totalFee > 0 && totalPaid > 0 && pending === 0 ? 'Paid' : 'Pending';
             const dbPaid = (st.feeStatus || '').toLowerCase() === 'paid';
             const hasPaymentRecord = savedPayments[sid] !== undefined;
             const isPaid = hasPaymentRecord
@@ -444,7 +446,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       ? parseFloat(entryFormData.paidAmount) || 0
       : 0;
     const pendingAmount = Math.max(0, totalAmount - paidAmount);
-    const feeStatus = pendingAmount === 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
+    const feeStatus = paidAmount > 0 && pendingAmount === 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
     const activeFeeType = activeTab && ['Tuition Fees', 'Exam Fees', 'Transport Fees'].includes(activeTab)
       ? activeTab
       : (entryFormData.feeType || 'Tuition Fees');
@@ -454,8 +456,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     const studentName = (entryFormData.studentName || '').trim();
     const department = entryFormData.department || entryFormData.course || 'UG Program';
     const course = entryFormData.course || department;
-    const generatedReceiptNo = (entryFormData.receiptNo || `REC-2026-${String(rollNo || studentName || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`).trim();
-    const txnRef = entryFormData.referenceNo || 'TXN' + Math.floor(1000000000 + Math.random() * 9000000000);
+    const hasRealPayment = Number(paidAmount) > 0 || Boolean((entryFormData.receiptNo || '').trim()) || Boolean((entryFormData.referenceNo || '').trim());
+    const generatedReceiptNo = hasRealPayment ? (entryFormData.receiptNo || `REC-2026-${String(rollNo || studentName || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`).trim() : '';
+    const txnRef = hasRealPayment ? (entryFormData.referenceNo || 'TXN' + Math.floor(1000000000 + Math.random() * 9000000000)) : '';
     const payDate = entryFormData.paymentDate || entryFormData.dueDate || new Date().toISOString().split('T')[0];
     const feeKey = feeTypeName.toLowerCase().includes('exam') ? 'exam' : feeTypeName.toLowerCase().includes('transport') ? 'transport' : 'tuition';
 
@@ -562,7 +565,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         const existingTotal = Number(rec.totalFee || 0);
         const newTotal = existingTotal + totalAmount;
         const newPending = Math.max(0, newTotal - newPaid);
-        const newStatus = newPending === 0 ? 'Paid' : (newPaid > 0 ? 'Partial' : 'Pending');
+        const newStatus = newPaid > 0 && newPending === 0 ? 'Paid' : (newPaid > 0 ? 'Partial' : 'Pending');
         const nextBreakdown = {
           ...(rec.feeBreakdown || {
             tuition: { total: 0, paid: 0, pending: 0 },
@@ -756,8 +759,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       amount: student && student.pendingFee > 0 ? student.pendingFee : '',
       feeType: student ? student.feeType : 'Exam Fees',
       paymentMethod: student?.paymentMode || 'UPI / Online',
-      receiptNo: student?.receiptNo || `REC-2026-${String(student?.id || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`,
-      referenceNo: student?.paymentRef || student?.referenceNo || `TXN${Math.floor(1000000000 + Math.random() * 9000000000)}`,
+      receiptNo: student?.receiptNo || '',
+      referenceNo: student?.paymentRef || student?.referenceNo || '',
       remarks: ''
     });
   };
@@ -774,14 +777,14 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
     const existingStudent = feeRecords.find(rec => rec.id === targetStudentId) || null;
     const today = new Date().toISOString().split('T')[0];
-    const generatedReceiptNo = (payFormData.receiptNo || existingStudent?.receiptNo || `REC-2026-${String(targetStudentId || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`).trim();
-    const generatedRefNo = (payFormData.referenceNo || existingStudent?.paymentRef || existingStudent?.referenceNo || `TXN${Math.floor(1000000000 + Math.random() * 9000000000)}`).trim();
+    const generatedReceiptNo = (payFormData.receiptNo || existingStudent?.receiptNo || (amountNum > 0 ? `REC-2026-${String(targetStudentId || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}` : '')).trim();
+    const generatedRefNo = (payFormData.referenceNo || existingStudent?.paymentRef || existingStudent?.referenceNo || (amountNum > 0 ? `TXN${Math.floor(1000000000 + Math.random() * 9000000000)}` : '')).trim();
 
     const nextRecords = feeRecords.map(rec => {
       if (rec.id === targetStudentId) {
         const newPaid = (Number(rec.paidFee) || 0) + amountNum;
         const newPending = Math.max(0, (Number(rec.totalFee) || 0) - newPaid);
-        const newStatus = newPending === 0 ? 'Paid' : 'Pending';
+        const newStatus = amountNum > 0 && newPending === 0 ? 'Paid' : 'Pending';
 
         try {
           const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
@@ -902,7 +905,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       return;
     }
 
-    const receiptNo = studentRec.receiptNo || `REC-2026-${String(studentRec.id || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
+    const hasRecordedPayment = Number(studentRec.paidFee) > 0 || Number(studentRec.totalFee) > 0;
+    const receiptNo = String(studentRec.receiptNo || '').trim() || (hasRecordedPayment ? `REC-2026-${String(studentRec.id || '').replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000)}` : '');
     const studentName = studentRec.name || 'Student';
     const rollNo = studentRec.rollNo || studentRec.id || '—';
     const dept = studentRec.department || studentRec.course || '—';
@@ -912,8 +916,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     const paidFee = Number(studentRec.paidFee) || 0;
     const pendingFee = Math.max(0, totalFee - paidFee);
     const payMode = studentRec.paymentMode || 'Online / UPI';
-    const txnRef = studentRec.paymentRef || studentRec.referenceNo || studentRec.transactionRef || '';
+    const txnRef = String(studentRec.paymentRef || studentRec.referenceNo || studentRec.transactionRef || '').trim() || (hasRecordedPayment ? `TXN${Math.floor(1000000000 + Math.random() * 9000000000)}` : '');
     const payDate = studentRec.lastPaymentDate || new Date().toLocaleDateString('en-IN');
+    const statusLabel = paidFee > 0 && pendingFee <= 0 ? 'Fully Paid' : paidFee > 0 ? 'Partial / Pending' : 'Pending';
     const breakdown = studentRec.feeBreakdown || {
       tuition: { total: 0, paid: 0, pending: 0 },
       exam: { total: 0, paid: 0, pending: 0 },
@@ -942,12 +947,12 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         <head>
           <title>Fee_Bill_Receipt_${receiptNo}_${rollNo}</title>
           <style>
-            @page { size: A4 portrait; margin: 15mm; }
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 0; padding: 20px; background: #fff; }
-            .receipt-box { max-width: 680px; margin: 0 auto; border: 2px solid #0f172a; border-radius: 12px; padding: 24px; position: relative; }
-            .header { text-align: center; border-bottom: 2px dashed #cbd5e1; padding-bottom: 16px; margin-bottom: 16px; }
-            .brand-name { font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px; }
-            .affiliation { font-size: 11px; font-weight: 600; color: #475569; margin-top: 3px; }
+            @page { size: A6 portrait; margin: 6mm; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 0; padding: 8px; background: #fff; }
+            .receipt-box { max-width: 100%; margin: 0 auto; border: 1.5px solid #0f172a; border-radius: 10px; padding: 12px; position: relative; box-sizing: border-box; }
+            .header { text-align: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; }
+            .brand-name { font-size: 12px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 6px; }
+            .affiliation { font-size: 8px; font-weight: 600; color: #475569; margin-top: 2px; }
             .badge { display: inline-block; background: #0f172a; color: #fff; font-size: 11px; font-weight: 800; padding: 4px 14px; border-radius: 9999px; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px; }
             .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; margin-bottom: 16px; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
             .meta-item { display: flex; justify-content: space-between; }
@@ -1072,7 +1077,10 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       String(rec.feeType || '').toLowerCase().includes(term) ||
       String(rec.driverName || '').toLowerCase().includes(term) ||
       String(rec.vehicleNo || '').toLowerCase().includes(term) ||
-      String(rec.routeStop || '').toLowerCase().includes(term)
+      String(rec.routeStop || '').toLowerCase().includes(term) ||
+      String(rec.receiptNo || '').toLowerCase().includes(term) ||
+      String(rec.referenceNo || '').toLowerCase().includes(term) ||
+      String(rec.paymentRef || '').toLowerCase().includes(term)
     );
 
     let matchesStatus = true;
@@ -1132,7 +1140,29 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       matchesBatch = !rec.batch || !bFilter || recBatch.includes(bFilter) || bFilter.includes(recBatch) || String(rec.batch || '').toLowerCase().includes(batchFilter.toLowerCase());
     }
 
-    return matchesSearch && matchesStatus && matchesCourse && matchesFeeType && matchesYear && matchesBatch;
+    let matchesDate = true;
+    if (dateFilter) {
+      const paymentDate = String(rec.lastPaymentDate || rec.paymentDate || rec.date || '').slice(0, 10);
+      matchesDate = paymentDate === dateFilter;
+    }
+
+    let matchesPayment = true;
+    if (paymentFilter !== 'All') {
+      const paymentMode = String(rec.paymentMode || rec.paymentMethod || rec.mode || '').toLowerCase();
+      if (paymentFilter === 'GPay / UPI') {
+        matchesPayment = paymentMode.includes('gpay') || paymentMode.includes('upi') || paymentMode.includes('google pay') || paymentMode.includes('phonepe') || paymentMode.includes('paytm') || paymentMode.includes('online');
+      } else if (paymentFilter === 'Cash') {
+        matchesPayment = paymentMode.includes('cash');
+      } else if (paymentFilter === 'Bank') {
+        matchesPayment = paymentMode.includes('bank') || paymentMode.includes('neft') || paymentMode.includes('challan');
+      } else if (paymentFilter === 'Card') {
+        matchesPayment = paymentMode.includes('card');
+      } else {
+        matchesPayment = paymentMode.includes(paymentFilter.toLowerCase());
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesCourse && matchesFeeType && matchesYear && matchesBatch && matchesDate && matchesPayment;
   });
 
   return (
@@ -1473,7 +1503,34 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 </select>
               </div>
 
-              {(searchTerm || feeTypeFilter !== 'All' || statusFilter !== 'All' || courseFilter !== 'All' || yearFilter !== 'All' || batchFilter !== 'All') && (
+              <div className="flex items-center gap-2">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-2 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  title="Filter by payment date"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Mode:</span>
+                <select
+                  value={paymentFilter}
+                  onChange={(e) => setPaymentFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="All">All Payment Modes</option>
+                  <option value="GPay / UPI">GPay / UPI</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Online">Online</option>
+                  <option value="Bank">Bank</option>
+                  <option value="Card">Card</option>
+                </select>
+              </div>
+
+              {(searchTerm || feeTypeFilter !== 'All' || statusFilter !== 'All' || courseFilter !== 'All' || yearFilter !== 'All' || batchFilter !== 'All' || dateFilter || paymentFilter !== 'All') && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1483,6 +1540,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                     setCourseFilter('All');
                     setYearFilter('All');
                     setBatchFilter('All');
+                    setDateFilter('');
+                    setPaymentFilter('All');
                   }}
                   className="px-2.5 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
                   title="Clear all active filters"
