@@ -105,6 +105,8 @@ export default function AttendanceManagement({ user }) {
   const [staffAttendance, setStaffAttendance] = useState([]);
   const [staffCategoryFilter, setStaffCategoryFilter] = useState('ALL'); // 'ALL' | 'Faculty' | 'Office Staff' | 'Accountant'
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
+  const [staffAttendanceFromDate, setStaffAttendanceFromDate] = useState('');
+  const [staffAttendanceToDate, setStaffAttendanceToDate] = useState('');
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [dbSessions, setDbSessions] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -228,6 +230,7 @@ export default function AttendanceManagement({ user }) {
             const todayStr = new Date().toISOString().split('T')[0];
             const punch = savedPunches[`${sid}_${todayStr}`] || s.todayPunch || null;
             const hasPunched = Boolean(punch && punch.inTime);
+            const attendanceDate = s.attendanceDate || s.date || s.lastPunchDate || todayStr;
 
             return {
               id: s._id || sid,
@@ -236,6 +239,7 @@ export default function AttendanceManagement({ user }) {
               department: s.department || '',
               designation: s.designation || cat,
               category: cat,
+              date: attendanceDate,
               inTime: hasPunched ? punch.inTime : '--',
               outTime: hasPunched ? (punch.outTime || '--') : '--',
               status: s.status === 'Inactive' ? 'On Leave' : (hasPunched ? 'Present' : 'Not Punched In'),
@@ -287,6 +291,11 @@ export default function AttendanceManagement({ user }) {
       if (staffCategoryFilter === 'Office Staff' && st.category !== 'Office Staff') return false;
       if (staffCategoryFilter === 'Accountant' && st.category !== 'Accountant') return false;
 
+      const staffDate = st.date || getLocalDateString();
+      if (staffAttendanceFromDate && staffDate < staffAttendanceFromDate) return false;
+      if (staffAttendanceToDate && staffDate > staffAttendanceToDate) return false;
+      if (staffAttendanceFromDate && staffAttendanceToDate && staffAttendanceFromDate > staffAttendanceToDate) return false;
+
       if (staffSearchQuery.trim()) {
         const q = staffSearchQuery.toLowerCase().trim();
         const matchesName = (st.name || '').toLowerCase().includes(q);
@@ -297,7 +306,7 @@ export default function AttendanceManagement({ user }) {
       }
       return true;
     });
-  }, [staffAttendance, staffCategoryFilter, staffSearchQuery]);
+  }, [staffAttendance, staffCategoryFilter, staffSearchQuery, staffAttendanceFromDate, staffAttendanceToDate]);
 
   // Helper to resolve student status from saved staff sessions ONLY
   const normalizeAttendanceStatus = (value) => {
@@ -1673,7 +1682,7 @@ export default function AttendanceManagement({ user }) {
               </div>
 
               {/* Filters & Search Toolbar */}
-              <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
                   <button
                     type="button"
@@ -1721,24 +1730,56 @@ export default function AttendanceManagement({ user }) {
                   </button>
                 </div>
 
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={staffSearchQuery}
-                    onChange={(e) => setStaffSearchQuery(e.target.value)}
-                    placeholder="Search name, ID, or department..."
-                    className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 transition-all"
-                  />
-                  {staffSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setStaffSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">From</label>
+                    <input
+                      type="date"
+                      value={staffAttendanceFromDate}
+                      onChange={(e) => setStaffAttendanceFromDate(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-700 focus:outline-none focus:border-blue-500"
+                    />
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">To</label>
+                    <input
+                      type="date"
+                      value={staffAttendanceToDate}
+                      min={staffAttendanceFromDate || undefined}
+                      onChange={(e) => setStaffAttendanceToDate(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-700 focus:outline-none focus:border-blue-500"
+                    />
+                    {(staffAttendanceFromDate || staffAttendanceToDate) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStaffAttendanceFromDate('');
+                          setStaffAttendanceToDate('');
+                        }}
+                        className="text-[10px] font-bold text-slate-500 hover:text-slate-700 px-1.5"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative w-full sm:w-72">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={staffSearchQuery}
+                      onChange={(e) => setStaffSearchQuery(e.target.value)}
+                      placeholder="Search name, ID, or department..."
+                      className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 transition-all"
+                    />
+                    {staffSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setStaffSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

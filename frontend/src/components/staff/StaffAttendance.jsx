@@ -29,6 +29,12 @@ const getSheetJS = () => {
 };
 
 export default function StaffAttendance({ staffUser }) {
+  const isHodUser = Boolean(
+    staffUser?.isHod ||
+    staffUser?.role?.toUpperCase?.().includes('HOD') ||
+    staffUser?.designation?.toUpperCase?.().includes('HOD')
+  );
+
   const [activeTab, setActiveTab] = useState('mark'); // 'mark' | 'history'
 
   // Department Selection & Available Departments
@@ -67,12 +73,19 @@ export default function StaffAttendance({ staffUser }) {
   const [downloadYear, setDownloadYear] = useState('I Year');
   const [downloadBatch, setDownloadBatch] = useState('2022-2026');
   const [downloadSemester, setDownloadSemester] = useState('1');
+  const [downloadStartDate, setDownloadStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [downloadEndDate, setDownloadEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [downloadFormat, setDownloadFormat] = useState('excel'); // 'excel' | 'csv'
   const [isExporting, setIsExporting] = useState(false);
 
   // Download Attendance Data Handler
   const handleDownloadAttendanceData = async () => {
     try {
+      if (downloadStartDate && downloadEndDate && downloadStartDate > downloadEndDate) {
+        alert('From date cannot be later than To date.');
+        return;
+      }
+
       setIsExporting(true);
       const params = new URLSearchParams();
 
@@ -91,6 +104,9 @@ export default function StaffAttendance({ staffUser }) {
         if (downloadSemester && downloadSemester !== 'All') params.append('semester', downloadSemester);
       }
 
+      if (downloadStartDate) params.append('startDate', downloadStartDate);
+      if (downloadEndDate) params.append('endDate', downloadEndDate);
+
       const res = await fetch(`${API_BASE}/attendance/export/filtered?${params.toString()}`);
       const data = await res.json();
 
@@ -108,7 +124,10 @@ export default function StaffAttendance({ staffUser }) {
       }
 
       const dateStamp = new Date().toISOString().split('T')[0];
-      const filename = `Attendance_${downloadMode}_${downloadMode === 'department' ? downloadDept.replace(/\s+/g, '_') : downloadMode === 'batch' ? downloadBatch : downloadMode === 'year' ? downloadYear.replace(/\s+/g, '_') : 'Sem' + downloadSemester}_${dateStamp}`;
+      const rangeSuffix = downloadStartDate || downloadEndDate
+        ? `_${downloadStartDate || 'start'}_to_${downloadEndDate || 'end'}`
+        : '';
+      const filename = `Attendance_${downloadMode}_${downloadMode === 'department' ? downloadDept.replace(/\s+/g, '_') : downloadMode === 'batch' ? downloadBatch : downloadMode === 'year' ? downloadYear.replace(/\s+/g, '_') : 'Sem' + downloadSemester}${rangeSuffix}_${dateStamp}`;
 
       const rowsToExport = summaries.length > 0 ? summaries.map((s, idx) => ({
         'S.No': idx + 1,
@@ -182,13 +201,39 @@ export default function StaffAttendance({ staffUser }) {
     if (!staffUser?.staffId) return;
     try {
       setLoadingClasses(true);
+
+      let allDeptClasses = [];
+      if (isHodUser && staffUser?.department) {
+        const deptRes = await fetch(`${API_BASE}/classes?dept=${encodeURIComponent(staffUser.department)}`);
+        const deptData = await deptRes.json();
+        if (deptData.success && Array.isArray(deptData.classes)) {
+          allDeptClasses = deptData.classes;
+        }
+      }
+
       const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}`);
       const data = await res.json();
-      if (data.success && Array.isArray(data.classes)) {
-        setClasses(data.classes);
-        if (data.classes.length > 0 && !selectedClassCode) {
-          setSelectedClassCode(data.classes[0].code);
-        }
+      const staffClasses = data.success && Array.isArray(data.classes) ? data.classes : [];
+      const mergedClasses = isHodUser && staffUser?.department
+        ? [...allDeptClasses, ...staffClasses]
+        : staffClasses;
+
+      const uniqueClasses = mergedClasses.filter((cls, idx, arr) => {
+        const key = `${cls.code || ''}-${cls.name || ''}-${cls.dept || ''}`;
+        return arr.findIndex(item => `${item.code || ''}-${item.name || ''}-${item.dept || ''}` === key) === idx;
+      });
+
+      const departmentScopedClasses = isHodUser && staffUser?.department
+        ? uniqueClasses.filter(cls => {
+            const clsDept = (cls.dept || '').trim().toLowerCase();
+            const userDept = (staffUser.department || '').trim().toLowerCase();
+            return !clsDept || !userDept || clsDept === userDept;
+          })
+        : uniqueClasses;
+
+      setClasses(departmentScopedClasses);
+      if (departmentScopedClasses.length > 0 && !selectedClassCode) {
+        setSelectedClassCode(departmentScopedClasses[0].code);
       }
     } catch (err) {
       console.error('Error fetching classes:', err);
@@ -357,11 +402,61 @@ export default function StaffAttendance({ staffUser }) {
     }
   };
 
-  // Effective students list: if a department is selected, only return students from that department
+  // Effective students list: prefer the selected class roster first, then match by class year/section,
+  // and only fall back to department-wide students when no class-specific roster is available.
   const effectiveStudents = useMemo(() => {
+    const normalizeText = (value) => String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const yearMatch = (studentYear, classYear) => {
+      if (classYear === undefined || classYear === null || classYear === '') return true;
+      const studentText = normalizeText(studentYear);
+      const classText = normalizeText(classYear);
+      if (!studentText || !classText) return true;
+      if (studentText === classText) return true;
+      const studentDigits = studentText.match(/\d+/g);
+      const classDigits = classText.match(/\d+/g);
+      if (studentDigits && classDigits) {
+        return studentDigits[0] === classDigits[0];
+      }
+      return false;
+    };
+
+    const classRoster = currentClass?.students || currentClass?.enrolledStudents || [];
+    if (currentClass && classRoster.length > 0) {
+      return classRoster.map(s => ({
+        rollNo: (s.rollNo || '').toUpperCase(),
+        name: s.name,
+        department: currentClass?.dept || s.department || 'General',
+        phone: s.phone || '',
+        email: s.email || ''
+      }));
+    }
+
+    if (currentClass) {
+      const deptNormalized = (currentClass.dept || selectedDepartment || '').trim().toLowerCase();
+      const classYear = currentClass.year;
+      const classSection = (currentClass.section || '').trim().toUpperCase();
+
+      const matchedReg = allRegisteredStudents.filter(s => {
+        const studentDept = (s.department || '').trim().toLowerCase();
+        const matchesDept = !deptNormalized || !studentDept || studentDept === deptNormalized || studentDept.includes(deptNormalized) || deptNormalized.includes(studentDept);
+        const matchesYear = yearMatch(s.year, classYear);
+        const matchesSection = !classSection || !s.section || String(s.section).trim().toUpperCase() === classSection;
+        return matchesDept && matchesYear && matchesSection;
+      }).map(s => ({
+        rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
+        name: s.name,
+        department: s.department || currentClass?.dept || selectedDepartment || 'General',
+        phone: s.phone || '',
+        email: s.email || ''
+      }));
+
+      if (matchedReg.length > 0) {
+        return matchedReg;
+      }
+    }
+
     if (selectedDepartment && selectedDepartment !== 'All') {
       const deptNormalized = selectedDepartment.toLowerCase().trim();
-      // Match all registered students strictly under the selected department
       const matchedReg = allRegisteredStudents.filter(s => {
         const d = (s.department || '').toLowerCase().trim();
         const c = (s.course || '').toLowerCase().trim();
@@ -376,7 +471,6 @@ export default function StaffAttendance({ staffUser }) {
         email: s.email || ''
       }));
 
-      // Match any extra students enrolled in classes under this department
       const extraFromClasses = [];
       filteredClasses.forEach(cls => {
         (cls.students || cls.enrolledStudents || []).forEach(st => {
@@ -393,20 +487,7 @@ export default function StaffAttendance({ staffUser }) {
         });
       });
 
-      // Return only matched students — empty if none registered under this dept
       return [...matchedReg, ...extraFromClasses];
-    }
-
-    // If 'All' is selected, fall back to current class students if any, or all registered students
-    const cStudents = currentClass?.students || currentClass?.enrolledStudents || [];
-    if (cStudents.length > 0) {
-      return cStudents.map(s => ({
-        rollNo: (s.rollNo || '').toUpperCase(),
-        name: s.name,
-        department: currentClass?.dept || s.department || 'General',
-        phone: s.phone || '',
-        email: s.email || ''
-      }));
     }
 
     return allRegisteredStudents.map(s => ({
@@ -480,6 +561,8 @@ export default function StaffAttendance({ staffUser }) {
 
   // Quick tally counts
   const totalCount = effectiveStudents.length;
+  const isOnDutyStatus = (value) => value === 'OD' || value === 'On Duty';
+
   const presentCount = useMemo(() => {
     return effectiveStudents.filter(s => attendanceState[s.rollNo] === 'Present').length;
   }, [effectiveStudents, attendanceState]);
@@ -490,6 +573,10 @@ export default function StaffAttendance({ staffUser }) {
 
   const lateCount = useMemo(() => {
     return effectiveStudents.filter(s => attendanceState[s.rollNo] === 'Late').length;
+  }, [effectiveStudents, attendanceState]);
+
+  const odCount = useMemo(() => {
+    return effectiveStudents.filter(s => isOnDutyStatus(attendanceState[s.rollNo])).length;
   }, [effectiveStudents, attendanceState]);
 
   const handleMarkAll = (status) => {
@@ -563,8 +650,8 @@ export default function StaffAttendance({ staffUser }) {
       }
 
       const saved = data.session;
-      setSavedSuccessMsg(`Attendance for ${activeCode} on ${selectedDate} (${sessionSlot}) recorded successfully! (Present: ${saved?.presentCount ?? presentCount}, Absent: ${saved?.absentCount ?? absentCount})`);
-      
+      setSavedSuccessMsg(`Attendance for ${activeCode} on ${selectedDate} (${sessionSlot}) recorded successfully! (Present: ${saved?.presentCount ?? presentCount}, Absent: ${saved?.absentCount ?? absentCount}, Late: ${saved?.lateCount ?? lateCount}, OD: ${saved?.odCount ?? odCount})`);
+
       // Update local historyList immediately so existingSession is immediately recognized
       if (saved) {
         setHistoryList(prev => {
@@ -822,6 +909,11 @@ export default function StaffAttendance({ staffUser }) {
                     Late: {lateCount}
                   </span>
                 )}
+                {odCount > 0 && (
+                  <span className="px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold">
+                    OD: {odCount}
+                  </span>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -849,6 +941,22 @@ export default function StaffAttendance({ staffUser }) {
                   className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
                 >
                   Mark All Absent
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMarkAll('OD')}
+                  className="px-3 py-1.5 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                >
+                  Mark All OD
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting || effectiveStudents.length === 0}
+                  onClick={handleSaveAttendance}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-extrabold shadow-sm disabled:opacity-50 transition-all cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {isSubmitting ? 'Saving...' : existingSession ? 'Save Update' : 'Save Attendance'}
                 </button>
 
                 <div className="relative">
@@ -938,6 +1046,7 @@ export default function StaffAttendance({ staffUser }) {
                       <tbody className="divide-y divide-slate-50">
                         {displayedStudents.map((student, idx) => {
                           const status = attendanceState[student.rollNo] || 'Present';
+                          const normalizedStatus = status === 'On Duty' ? 'OD' : status;
                           return (
                             <tr key={student.rollNo} className="hover:bg-slate-50/80 transition-colors">
                               <td className="px-5 py-3 text-slate-400 font-medium">{idx + 1}</td>
@@ -946,11 +1055,11 @@ export default function StaffAttendance({ staffUser }) {
                               <td className="px-5 py-3 text-slate-600 hidden md:table-cell font-medium">{student.department || selectedDepartment || '—'}</td>
                               <td className="px-5 py-3 text-slate-500 hidden sm:table-cell">{student.phone || '—'}</td>
                               <td className="px-5 py-3 text-center">
-                                <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+                                <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl flex-wrap justify-center">
                                   <button
                                     type="button"
                                     onClick={() => toggleStudentStatus(student.rollNo, 'Present')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${status === 'Present'
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Present'
                                         ? 'bg-emerald-600 text-white shadow-xs'
                                         : 'text-slate-600 hover:text-slate-900'
                                       }`}
@@ -960,7 +1069,7 @@ export default function StaffAttendance({ staffUser }) {
                                   <button
                                     type="button"
                                     onClick={() => toggleStudentStatus(student.rollNo, 'Absent')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${status === 'Absent'
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Absent'
                                         ? 'bg-rose-600 text-white shadow-xs'
                                         : 'text-slate-600 hover:text-slate-900'
                                       }`}
@@ -970,12 +1079,22 @@ export default function StaffAttendance({ staffUser }) {
                                   <button
                                     type="button"
                                     onClick={() => toggleStudentStatus(student.rollNo, 'Late')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${status === 'Late'
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Late'
                                         ? 'bg-amber-600 text-white shadow-xs'
                                         : 'text-slate-600 hover:text-slate-900'
                                       }`}
                                   >
                                     Late
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleStudentStatus(student.rollNo, 'OD')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'OD'
+                                        ? 'bg-violet-600 text-white shadow-xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                      }`}
+                                  >
+                                    OD
                                   </button>
                                 </div>
                               </td>
@@ -989,7 +1108,7 @@ export default function StaffAttendance({ staffUser }) {
                   {/* Bottom Submit Bar */}
                   <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-xs text-slate-500 font-medium">
-                      {presentCount + lateCount} of {totalCount} students marked present or late
+                      {presentCount + lateCount + odCount} of {totalCount} students marked present, late, or OD
                     </span>
                     <button
                       type="button"
@@ -1238,6 +1357,36 @@ export default function StaffAttendance({ staffUser }) {
                     <p className="text-[10px] text-slate-400">Downloads attendance records for Semester {downloadSemester}.</p>
                   </div>
                 )}
+
+                {/* Date Range Filter */}
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-xs font-bold text-slate-700">Date Range</label>
+                    <span className="text-[10px] font-semibold text-slate-400">Optional</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">From</label>
+                      <input
+                        type="date"
+                        value={downloadStartDate}
+                        onChange={(e) => setDownloadStartDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">To</label>
+                      <input
+                        type="date"
+                        value={downloadEndDate}
+                        min={downloadStartDate || undefined}
+                        onChange={(e) => setDownloadEndDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Download records only within the selected date range.</p>
+                </div>
 
                 {/* Format selection */}
                 <div>
