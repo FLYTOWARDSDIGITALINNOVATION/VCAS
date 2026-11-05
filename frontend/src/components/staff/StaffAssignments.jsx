@@ -129,18 +129,60 @@ export default function StaffAssignments({ staffUser }) {
         ]).filter(([code]) => code));
         const staffName = String(staffUser?.name || staffUser?.fullName || '').trim().toLowerCase();
         const staffCode = String(staffId || '').trim().toLowerCase();
-        const ownCatalogSubjects = subjectList.filter((subject) => {
-          const faculty = String(subject?.faculty || subject?.staffId || subject?.staffName || '').trim().toLowerCase();
-          return faculty && (faculty === staffCode || (staffName && faculty === staffName));
-        });
         const staffDepartment = String(staffUser?.department || '').trim().toLowerCase();
-        const departmentSubjects = subjectList.filter((subject) =>
-          staffDepartment && String(subject?.department || subject?.dept || '').trim().toLowerCase() === staffDepartment
+        const isHodUser = Boolean(
+          staffUser?.isHod ||
+          String(staffUser?.role || '').toUpperCase().includes('HOD') ||
+          String(staffUser?.designation || '').toUpperCase().includes('HOD')
         );
+
+        const matchesStaffScope = (item) => {
+          if (!item) return false;
+          const code = String(item?.code || item?.subjectCode || '').trim();
+          if (!code) return false;
+          const faculty = String(item?.faculty || item?.staffName || item?.staffId || item?.employeeId || '').trim().toLowerCase();
+          const createdBy = String(item?.createdBy || item?.createdById || item?.createdByStaffId || '').trim().toLowerCase();
+          const createdByName = String(item?.createdByName || '').trim().toLowerCase();
+          const subjectDepartment = String(item?.department || item?.dept || '').trim().toLowerCase();
+
+          const sameTeacher = Boolean(
+            faculty && (
+              faculty === staffCode ||
+              faculty === staffName ||
+              faculty.includes(staffName) ||
+              String(item?.staffId || '').trim().toLowerCase() === staffCode ||
+              String(item?.employeeId || '').trim().toLowerCase() === staffCode
+            )
+          );
+
+          const sameCreator = Boolean(
+            (createdBy && (createdBy === staffCode || createdBy === staffName)) ||
+            (createdByName && (createdByName === staffName || createdByName.includes(staffName)))
+          );
+
+          const sameDepartment = Boolean(staffDepartment && subjectDepartment && subjectDepartment === staffDepartment);
+          return sameTeacher || sameCreator || (isHodUser && sameDepartment);
+        };
+
+        const scopedSubjectList = subjectList.filter(matchesStaffScope);
+        const scopedStaffClasses = Array.isArray(staffClasses)
+          ? staffClasses.filter((courseClass) => {
+              const code = String(courseClass?.code || courseClass?.subjectCode || '').trim();
+              if (!code) return false;
+              const dept = String(courseClass?.dept || courseClass?.department || '').trim().toLowerCase();
+              const faculty = String(courseClass?.faculty || courseClass?.staffName || courseClass?.staffId || courseClass?.employeeId || '').trim().toLowerCase();
+              const sameTeacher = Boolean(faculty && (faculty === staffCode || faculty === staffName || faculty.includes(staffName)));
+              const sameDepartment = Boolean(staffDepartment && dept && dept === staffDepartment);
+              return sameTeacher || (isHodUser && sameDepartment) || (!faculty && !dept && !!code);
+            })
+          : [];
+
         const subjectByCode = new Map();
-        (staffClasses.length > 0
-          ? staffClasses
-          : (ownCatalogSubjects.length > 0 ? ownCatalogSubjects : departmentSubjects)
+        (scopedStaffClasses.length > 0
+          ? scopedStaffClasses
+          : scopedSubjectList.length > 0
+            ? scopedSubjectList
+            : subjectList
         ).forEach((courseClass) => {
           const code = String(courseClass?.code || courseClass?.subjectCode || '').trim();
           const key = code.toUpperCase();
@@ -191,6 +233,42 @@ export default function StaffAssignments({ staffUser }) {
     loadCatalogs();
   }, [staffId, staffUser?.department, staffUser?.batch, staffUser?.year, staffUser?.academicYear]);
 
+  const sanitizePayload = (payload) => {
+    const seen = new WeakSet();
+
+    const cleanValue = (value) => {
+      if (value === null || value === undefined) return value;
+      if (typeof value === 'function') return undefined;
+      if (typeof value === 'symbol') return String(value);
+      if (value === window || value === globalThis) return undefined;
+      if (typeof Window !== 'undefined' && value instanceof Window) return undefined;
+      if (typeof value === 'object') {
+        if (value && typeof value.nodeType === 'number') return undefined;
+        if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'Window') return undefined;
+        if (seen.has(value)) return undefined;
+        seen.add(value);
+
+        if (Array.isArray(value)) {
+          return value
+            .map((item) => cleanValue(item))
+            .filter((item) => item !== undefined);
+        }
+
+        const plain = {};
+        Object.entries(value).forEach(([key, item]) => {
+          if (['__reactFiber', '_owner', '_debugOwner', 'window', 'globalThis'].includes(key)) return;
+          const cleaned = cleanValue(item);
+          if (cleaned !== undefined) plain[key] = cleaned;
+        });
+        return plain;
+      }
+
+      return value;
+    };
+
+    return cleanValue(payload);
+  };
+
   const toast = (msg, isError = false) => {
     if (isError) { setErrorMsg(msg); setSuccessMsg(""); }
     else         { setSuccessMsg(msg); setErrorMsg(""); }
@@ -200,24 +278,37 @@ export default function StaffAssignments({ staffUser }) {
   const subjectOptions = useMemo(() => {
     const list = [];
     const added = new Set();
-    const catalogEntries = Array.isArray(subjectCatalog) ? subjectCatalog : [];
-    catalogEntries.forEach((subject) => {
-      const code = String(subject?.code || subject?.subjectCode || '').trim();
-      const name = String(subject?.name || subject?.subjectName || code || 'General').trim();
-      const value = code || name;
-      if (!value) return;
-      if (added.has(value)) return;
-      added.add(value);
-      list.push({ value, label: code ? `${code} - ${name}` : name });
-    });
+    const genericValues = new Set(['GENERAL', 'COURSE', 'ALL SUBJECTS', 'UNASSIGNED', 'N/A', 'NA', 'DEFAULT', '-- SELECT --']);
 
-    assignments.forEach((a) => {
-      const code = String(a.subjectCode || '').trim();
-      const name = String(a.subjectName || code || 'General').trim();
+    const looksLikeDemoSubject = (value) => {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (!normalized) return false;
+      return /(^|\s)(demo|sample|test|example|placeholder|dummy|sanitized)(\s|$|[a-z0-9_-])/.test(normalized) ||
+        /(^test[a-z0-9]+|^demo[a-z0-9]+|^sample[a-z0-9]+|^example[a-z0-9]+)/.test(normalized) ||
+        /sanitized|assignment subject|test assignment/.test(normalized);
+    };
+
+    const addOption = (rawCode, rawName) => {
+      const code = String(rawCode || '').trim();
+      const name = String(rawName || '').trim();
+      const normalizedCode = code.toUpperCase();
+      const normalizedName = name.toUpperCase();
+      const hasGenericValue = (!code && !name) || genericValues.has(normalizedCode) || genericValues.has(normalizedName);
+      if (hasGenericValue || looksLikeDemoSubject(code) || looksLikeDemoSubject(name)) return;
+
       const value = code || name;
       if (!value || added.has(value)) return;
       added.add(value);
       list.push({ value, label: code ? `${code} - ${name}` : name });
+    };
+
+    const catalogEntries = Array.isArray(subjectCatalog) ? subjectCatalog : [];
+    catalogEntries.forEach((subject) => {
+      addOption(subject?.code || subject?.subjectCode, subject?.name || subject?.subjectName || subject?.code || subject?.subjectCode);
+    });
+
+    assignments.forEach((a) => {
+      addOption(a.subjectCode, a.subjectName || a.subjectCode);
     });
 
     return list;
@@ -416,41 +507,58 @@ export default function StaffAssignments({ staffUser }) {
   const handleCreateAssignment = async (e) => {
     e.preventDefault();
     if (!newTitle.trim() || !newDueDate) return;
+    if (!staffId) {
+      toast("No staff session found. Please refresh and sign in again.", true);
+      return;
+    }
+
     setSaving(true);
     try {
-      const res  = await fetch(`${API}/assignments/${staffId}`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          staffName:   staffUser?.name || "",
-          subjectCode: newSubjectCode.trim().toUpperCase(),
-          subjectName: newSubjectName.trim(),
-          department:  newDepartment || staffUser?.department || "",
-          batch:       newBatch || "",
-          year:        newYear || "",
-          academicYear: newYear || "",
-          title:       newTitle.trim(),
-          description: newDescription.trim(),
-          dueDate:     newDueDate,
-          totalMarks:  Number(newMarks) || (newCategory === "Project" ? 50 : 20),
-          category:    newCategory,
-          projectPhase: newCategory === "Project" ? newProjectPhase : "",
-          attachmentName,
-          attachmentData,
-          attachmentSize,
-          attachmentType,
-        }),
+      const payload = sanitizePayload({
+        staffName: staffUser?.name || "",
+        staffId,
+        subjectCode: newSubjectCode.trim().toUpperCase(),
+        subjectName: newSubjectName.trim(),
+        department: newDepartment || staffUser?.department || "",
+        batch: newBatch || "",
+        year: newYear || "",
+        academicYear: newYear || "",
+        title: newTitle.trim(),
+        description: newDescription.trim(),
+        dueDate: newDueDate,
+        totalMarks: Number(newMarks) || (newCategory === "Project" ? 50 : 20),
+        category: newCategory,
+        projectPhase: newCategory === "Project" ? newProjectPhase : "",
+        attachmentName,
+        attachmentData,
+        attachmentSize,
+        attachmentType,
       });
-      const json = await res.json();
+
+      const res = await fetch(`${API}/assignments/${staffId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      let json = null;
+      try {
+        json = await res.json();
+      } catch {
+        const text = await res.text();
+        throw new Error(text || "Unexpected empty server response.");
+      }
+
       if (json.success) {
         setAssignments((prev) => [json.data, ...prev]);
         closeModal();
         toast(newCategory === "Project" ? "Project Assignment created and published!" : "Assignment created and published successfully!");
       } else {
-        toast(json.message, true);
+        toast(json.message || "Assignment creation failed.", true);
       }
-    } catch {
-      toast("Server error. Please try again.", true);
+    } catch (err) {
+      console.error("Create assignment failed:", err);
+      toast(err?.message || "Server error. Please try again.", true);
     } finally {
       setSaving(false);
     }
@@ -461,27 +569,29 @@ export default function StaffAssignments({ staffUser }) {
     if (!newTitle.trim() || !newDueDate) return;
     setSaving(true);
     try {
+      const payload = sanitizePayload({
+        subjectCode: newSubjectCode.trim().toUpperCase(),
+        subjectName: newSubjectName.trim(),
+        department: newDepartment || "",
+        batch: newBatch || "",
+        year: newYear || "",
+        academicYear: newYear || "",
+        title: newTitle.trim(),
+        description: newDescription.trim(),
+        dueDate: newDueDate,
+        totalMarks: Number(newMarks) || (newCategory === "Project" ? 50 : 20),
+        category: newCategory,
+        projectPhase: newCategory === "Project" ? newProjectPhase : "",
+        attachmentName,
+        attachmentData,
+        attachmentSize,
+        attachmentType,
+      });
+
       const res  = await fetch(`${API}/assignments/${staffId}/${editingId}`, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          subjectCode: newSubjectCode.trim().toUpperCase(),
-          subjectName: newSubjectName.trim(),
-          department:  newDepartment || "",
-          batch:       newBatch || "",
-          year:        newYear || "",
-          academicYear: newYear || "",
-          title:       newTitle.trim(),
-          description: newDescription.trim(),
-          dueDate:     newDueDate,
-          totalMarks:  Number(newMarks) || (newCategory === "Project" ? 50 : 20),
-          category:    newCategory,
-          projectPhase: newCategory === "Project" ? newProjectPhase : "",
-          attachmentName,
-          attachmentData,
-          attachmentSize,
-          attachmentType,
-        }),
+        body:    JSON.stringify(payload),
       });
       const json = await res.json();
       if (json.success) {

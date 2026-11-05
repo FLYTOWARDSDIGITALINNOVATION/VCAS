@@ -119,8 +119,8 @@ export default function StaffInternalMarks({ staffUser }) {
   const getStoredSubject = () => {
     try {
       const stored = localStorage.getItem('vcas_internal_subject') || sessionStorage.getItem('vcas_internal_subject');
-      if (stored && !['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76'].includes(stored.toUpperCase())) {
-        return stored;
+      if (stored && stored.trim()) {
+        return stored.trim();
       }
       return "";
     } catch {
@@ -251,10 +251,9 @@ export default function StaffInternalMarks({ staffUser }) {
     const legacyExclusions = ['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004'];
     const list = staffSubjects.filter(s => {
       const code = (s.code || '').toUpperCase().trim();
-      // If this subject is in official subjects, keep it; else if it's legacy exclusion, drop it
       return !legacyExclusions.includes(code);
     });
-    if (subjectCode && !list.some((s) => s.code === subjectCode) && !['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76'].includes(subjectCode.toUpperCase())) {
+    if (subjectCode && !list.some((s) => s.code === subjectCode) && !legacyExclusions.includes(subjectCode.toUpperCase())) {
       list.unshift({ code: subjectCode, name: (subjectName && subjectName !== 'Course') ? subjectName : subjectCode });
     }
     return list;
@@ -515,7 +514,7 @@ export default function StaffInternalMarks({ staffUser }) {
       const subs = [];
       const seen = new Set();
       const allSubjects = subjectsData?.data || (Array.isArray(subjectsData) ? subjectsData : []);
-      const officialSubjectCodes = new Set(allSubjects.map(s => (s.code || '').toUpperCase().trim()));
+      const officialSubjectCodes = new Set(allSubjects.map(s => (s.code || '').toUpperCase().trim()).filter(Boolean));
       const legacyExclusions = new Set(['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004']);
       const roleKey = String(staffUser?.role || '').toUpperCase();
       const designationKey = String(staffUser?.designation || '').toUpperCase();
@@ -530,39 +529,78 @@ export default function StaffInternalMarks({ staffUser }) {
       const isHodUser = staffUser?.isHod === true || looksLikeHodUser(staffUser?.role) || looksLikeHodUser(staffUser?.designation);
       const isPrincipalOrAdmin = roleKey.includes('PRINCIPAL') || roleKey.includes('ADMIN') || designationKey.includes('PRINCIPAL') || designationKey.includes('ADMIN');
 
-      const addSub = (code, name) => {
-        const c = (code || '').trim().toUpperCase();
-        if (!c || c.length < 3 || seen.has(c)) return;
-        if (legacyExclusions.has(c) && !officialSubjectCodes.has(c)) return;
-        seen.add(c);
-        subs.push({ code: c, name: (name && name !== 'Course' && name !== c) ? name : c });
+      const isGenericSubjectEntry = (value) => {
+        const normalized = String(value || '').trim();
+        if (!normalized) return true;
+        const candidate = normalized.toUpperCase();
+        return ['GENERAL', 'COURSE', 'ALL SUBJECTS', 'UNASSIGNED', 'N/A', 'NA', 'DEFAULT', '-- SELECT --'].includes(candidate);
       };
 
-      allSubjects
-        .filter(s => {
-          if (!s.code) return false;
-          if (!effectiveStaffId && !staffUser?.name) return true;
+      const looksLikeDemoSubject = (value) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (!normalized) return false;
+        return /(^|\s)(demo|sample|test|example|placeholder|dummy|sanitized)(\s|$|[a-z0-9_-])/.test(normalized) ||
+          /(^test[a-z0-9]+|^demo[a-z0-9]+|^sample[a-z0-9]+|^example[a-z0-9]+)/.test(normalized) ||
+          /sanitized|assignment subject|test assignment/.test(normalized);
+      };
 
-          const facultyName = (s.faculty || '').trim().toLowerCase();
-          const staffName = (staffUser?.name || '').trim().toLowerCase();
-          const staffIdLower = String(effectiveStaffId || '').trim().toLowerCase();
-          const subjectDept = (s.department || '').trim().toLowerCase();
-          const userDept = (staffUser?.department || '').trim().toLowerCase();
+      const addSub = (code, name) => {
+        const c = (code || '').trim().toUpperCase();
+        const n = String(name || '').trim();
+        if (!c || c.length < 2 || seen.has(c)) return;
+        if (isGenericSubjectEntry(c) || isGenericSubjectEntry(n) || looksLikeDemoSubject(c) || looksLikeDemoSubject(n)) return;
+        if (legacyExclusions.has(c) && !officialSubjectCodes.has(c)) return;
+        seen.add(c);
+        subs.push({ code: c, name: (n && !isGenericSubjectEntry(n) && !looksLikeDemoSubject(n) && n !== c) ? n : c });
+      };
 
-          const matchFaculty = facultyName && (
-            facultyName === staffIdLower ||
-            facultyName === staffName ||
-            facultyName.includes(staffName)
-          );
-          const matchDept = subjectDept && userDept && subjectDept === userDept;
+      const normalizeIdentity = (value) => String(value || '').trim().toLowerCase().replace(/^(dr|prof|mr|mrs|ms|miss)\.?\s+/i, '').replace(/[^a-z0-9]/g, '');
+      const matchesStaffIdentity = (value) => {
+        const candidate = String(value || '').trim();
+        if (!candidate) return false;
+        const candidateNorm = normalizeIdentity(candidate);
+        const staffNameNorm = normalizeIdentity(staffUser?.name || '');
+        const staffIdNorm = normalizeIdentity(effectiveStaffId || '');
+        if (!candidateNorm) return false;
+        return candidateNorm === staffNameNorm ||
+          candidateNorm === staffIdNorm ||
+          candidateNorm.includes(staffNameNorm) ||
+          candidateNorm.includes(staffIdNorm) ||
+          staffNameNorm.includes(candidateNorm) ||
+          staffIdNorm.includes(candidateNorm);
+      };
 
-          if (isHodUser || isPrincipalOrAdmin || !userDept) {
-            return true;
-          }
+      const permittedSubjects = allSubjects.filter(s => {
+        if (!s.code) return false;
+        if (!effectiveStaffId && !staffUser?.name) return true;
 
-          return matchFaculty || matchDept || !s.faculty;
-        })
-        .forEach(s => addSub(s.code, s.name));
+        const subjectValues = [
+          s.faculty,
+          s.staffName,
+          s.staffId,
+          s.employeeId,
+          s.createdBy,
+          s.createdById,
+          s.createdByName,
+          s.createdByStaffId,
+          s.department,
+          s.dept
+        ];
+        const userDept = (staffUser?.department || '').trim().toLowerCase();
+        const subjectDept = (s.department || s.dept || '').trim().toLowerCase();
+
+        const directMatch = subjectValues.some(matchesStaffIdentity);
+        const matchDept = Boolean(userDept && subjectDept && subjectDept === userDept);
+
+        if (isHodUser || isPrincipalOrAdmin || !userDept) {
+          return true;
+        }
+
+        return directMatch || matchDept;
+      });
+
+      const subjectSource = permittedSubjects.length > 0 ? permittedSubjects : allSubjects;
+      subjectSource.forEach(s => addSub(s.code, s.name));
 
       const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
       staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
@@ -572,21 +610,55 @@ export default function StaffInternalMarks({ staffUser }) {
         .filter(c => c.staffId && c.staffId.trim().toLowerCase() === String(effectiveStaffId || '').trim().toLowerCase())
         .forEach(c => addSub(c.code || c.classCode, c.name || c.className));
 
+      const validCatalogCodes = new Set(officialSubjectCodes);
+      const classroomCodes = new Set(staffClasses.map(c => (c.code || c.classCode || '').toUpperCase().trim()).filter(Boolean));
+
       if (asgtsData?.success && Array.isArray(asgtsData.data)) {
-        asgtsData.data.forEach(a => addSub(a.subjectCode, a.subjectName || a.title));
+        asgtsData.data.forEach(a => {
+          const code = String(a.subjectCode || '').trim();
+          if (!code) return;
+          const cleanCode = code.toUpperCase();
+          const assignmentUser = String(a.staffId || a.employeeId || a.staffName || a.faculty || '').trim();
+          const isForThisStaff = !assignmentUser || assignmentUser.toLowerCase() === String(effectiveStaffId || '').toLowerCase() || matchesStaffIdentity(a.staffName || a.faculty);
+          if (isForThisStaff || !validCatalogCodes.has(cleanCode)) {
+            validCatalogCodes.add(cleanCode);
+          }
+          addSub(cleanCode, a.subjectName || a.title || cleanCode);
+        });
       }
 
       if (marksData?.success && Array.isArray(marksData.data)) {
-        marksData.data.forEach(m => addSub(m.subjectCode, m.subjectName));
+        marksData.data.forEach(m => {
+          const code = String(m.subjectCode || '').trim();
+          if (!code) return;
+          const cleanCode = code.toUpperCase();
+          const marksUser = String(m.staffId || m.employeeId || m.staffName || '').trim();
+          const isForThisStaff = !marksUser || marksUser.toLowerCase() === String(effectiveStaffId || '').toLowerCase() || matchesStaffIdentity(m.staffName || m.faculty);
+          if (isForThisStaff || !validCatalogCodes.has(cleanCode) || classroomCodes.has(cleanCode)) {
+            validCatalogCodes.add(cleanCode);
+          }
+          addSub(cleanCode, m.subjectName || m.subjectCode || cleanCode);
+        });
       }
 
-      setStaffSubjects(subs);
+      const stored = localStorage.getItem('vcas_internal_subject') || sessionStorage.getItem('vcas_internal_subject');
+      const storedCode = stored ? stored.trim().toUpperCase() : '';
+      const activeSubs = subs.filter(s => !legacyExclusions.has((s.code || '').toUpperCase()));
+      const availableSubs = activeSubs.length > 0 ? activeSubs : subs;
+      setStaffSubjects(availableSubs);
 
-      if (subs.length > 0) {
-        const stored = localStorage.getItem('vcas_internal_subject');
-        const match = subs.find(s => s.code === stored || s.code === subjectCode);
-        const target = match ? match.code : subs[0].code;
-        const targetName = match ? match.name : subs[0].name;
+      if (storedCode && !availableSubs.some(s => s.code === storedCode)) {
+        localStorage.removeItem('vcas_internal_subject');
+        sessionStorage.removeItem('vcas_internal_subject');
+        setSubjectCode('');
+        setSearchInput('');
+        setSubjectName('');
+      }
+
+      if (availableSubs.length > 0) {
+        const match = availableSubs.find(s => s.code === storedCode || s.code === subjectCode);
+        const target = match ? match.code : availableSubs[0].code;
+        const targetName = match ? match.name : availableSubs[0].name;
         setSubjectCode(target);
         setSearchInput(target);
         setSubjectName(targetName);
@@ -1535,10 +1607,9 @@ export default function StaffInternalMarks({ staffUser }) {
 
       {/* Subject Input & Component Selector */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 space-y-4">
-        {subjectCode && (
-          <>
-            {/* Multi-Filter Bar: Department, Year, Batch, Semester & Search */}
-            <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/80 space-y-3">
+        <>
+          {/* Multi-Filter Bar: Department, Year, Batch, Semester & Search */}
+          <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/80 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                   <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
@@ -1700,15 +1771,13 @@ export default function StaffInternalMarks({ staffUser }) {
                 })}
               </div>
             </div>
-          </>
-        )}
+        </>
       </div>
 
       {!subjectCode ? (
         <div className="bg-white rounded-2xl border border-slate-100 p-10 text-center text-slate-400">
           <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 text-slate-200" />
-          <p className="text-sm font-semibold">Enter a subject code above to load or create a marksheet.</p>
-          <p className="text-xs mt-1">e.g., CS2001, CS2005, CS101</p>
+          <p className="text-sm font-semibold">Select a subject from the dropdown above to load or create a marksheet.</p>
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center py-16 text-slate-400">

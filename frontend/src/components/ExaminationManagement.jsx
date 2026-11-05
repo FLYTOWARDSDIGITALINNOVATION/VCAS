@@ -55,6 +55,15 @@ export default function ExaminationManagement({ user }) {
   const currentUser = user || JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
   const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin || currentUser?.role === 'SuperAdmin' || currentUser?.role === 'superadmin';
   const isAdminUser = currentUser?.role === 'Admin' || currentUser?.role === 'admin';
+  const userDepartment = String(currentUser?.department || currentUser?.dept || '').trim();
+  const userName = String(currentUser?.name || currentUser?.fullName || '').trim().toLowerCase();
+  const userStaffId = String(currentUser?.staffId || currentUser?.id || '').trim().toLowerCase();
+  const isHodUser = Boolean(
+    currentUser?.isHod ||
+    currentUser?.role?.toUpperCase?.().includes('HOD') ||
+    currentUser?.designation?.toUpperCase?.().includes('HOD')
+  );
+
   // Tabs: 'schedules', 'hall-tickets', 'internal-marks', 'results', 'seating'
   const [activeTab, setActiveTab] = useState('schedules');
 
@@ -89,6 +98,31 @@ export default function ExaminationManagement({ user }) {
   const [availableVenues, setAvailableVenues] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [internalMarksheets, setInternalMarksheets] = useState([]);
+
+  const scopedDepartmentOptions = useMemo(() => {
+    if (isSuperAdmin || isAdminUser || !userDepartment) return availableDepartments.filter(Boolean);
+    return Array.from(new Set([
+      userDepartment,
+      ...availableDepartments.filter(d => {
+        const dept = String(d || '').trim();
+        if (!dept) return false;
+        const a = dept.toLowerCase();
+        const b = userDepartment.toLowerCase();
+        return a === b || a.includes(b) || b.includes(a);
+      })
+    ])).filter(Boolean);
+  }, [availableDepartments, userDepartment, isSuperAdmin, isAdminUser]);
+
+  const userScopedSubjects = useMemo(() => {
+    if (isSuperAdmin || isAdminUser) return availableSubjects;
+    return availableSubjects.filter(s => {
+      const subjectDept = String(s?.department || s?.dept || '').trim();
+      const facultyName = String(s?.faculty || s?.staffName || s?.staffId || '').trim().toLowerCase();
+      const sameDept = !userDepartment || !subjectDept || subjectDept.toLowerCase() === userDepartment.toLowerCase() || subjectDept.toLowerCase().includes(userDepartment.toLowerCase()) || userDepartment.toLowerCase().includes(subjectDept.toLowerCase());
+      const sameTeacher = !facultyName || (!userName && !userStaffId) || facultyName === userName || facultyName === userStaffId || facultyName.includes(userName) || facultyName.includes(userStaffId);
+      return sameDept && (isHodUser ? true : sameTeacher);
+    });
+  }, [availableSubjects, userDepartment, userName, userStaffId, isHodUser, isSuperAdmin, isAdminUser]);
 
   // Fetch real exam schedules, staff-uploaded internal marks, halls, and students
   const fetchAllExaminationData = async () => {
@@ -608,13 +642,12 @@ export default function ExaminationManagement({ user }) {
   // Subjects for the Add Exam Schedule modal:
   // If user selects a department, show subjects for that department (or all subjects if none match or department is empty)
   const modalScheduleSubjects = useMemo(() => {
-    let list = availableSubjects;
+    let list = userScopedSubjects;
     if (scheduleForm.department && scheduleForm.department.trim() !== '') {
       const targetDept = scheduleForm.department.toLowerCase().trim();
       list = list.filter(s => {
-        if (!s.department) return true;
-        const sDept = (s.department || '').toLowerCase().trim();
-        return sDept === targetDept || sDept.includes(targetDept) || targetDept.includes(sDept);
+        const sDept = String(s?.department || s?.dept || '').toLowerCase().trim();
+        return !sDept || sDept === targetDept || sDept.includes(targetDept) || targetDept.includes(sDept);
       });
     }
     if (scheduleForm.sem && scheduleForm.sem.trim() !== '') {
@@ -732,7 +765,7 @@ export default function ExaminationManagement({ user }) {
     setScheduleForm({
       code: '',
       name: '',
-      department: '',
+      department: userDepartment || '',
       year: 1,
       sem: 'Sem 1',
       date: new Date().toISOString().split('T')[0],
@@ -744,6 +777,12 @@ export default function ExaminationManagement({ user }) {
     });
     setIsAddScheduleOpen(true);
   };
+
+  useEffect(() => {
+    if (!isSuperAdmin && !isAdminUser && userDepartment && !scopedDepartmentOptions.includes(scheduleForm.department)) {
+      setScheduleForm(prev => ({ ...prev, department: userDepartment }));
+    }
+  }, [scheduleForm.department, userDepartment, isSuperAdmin, isAdminUser, scopedDepartmentOptions]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -2484,7 +2523,7 @@ export default function ExaminationManagement({ user }) {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-rose-500 focus:outline-none cursor-pointer"
                 >
                   <option value="All Departments">All Departments</option>
-                  {availableDepartments.filter(d => d !== 'All Departments').map(d => (
+                  {scopedDepartmentOptions.filter(d => d !== 'All Departments').map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
@@ -3887,7 +3926,7 @@ export default function ExaminationManagement({ user }) {
                     required
                   >
                     <option value="">-- Select Department --</option>
-                    {availableDepartments.filter(d => d !== 'All Departments').map(d => (
+                    {scopedDepartmentOptions.filter(d => d !== 'All Departments').map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>

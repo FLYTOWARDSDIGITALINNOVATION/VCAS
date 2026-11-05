@@ -261,9 +261,47 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
       if (subRes && subRes.ok) {
         const subData = await subRes.json();
         const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
-        // Only created subjects, filter out deleted or dummy
-        const filteredSubs = rawSubs.filter(s => s && s.code && !['CS401', 'CS402', 'SF76', 'CS2001', 'CS2005'].includes(s.code.toUpperCase()));
-        setAvailableSubjects(filteredSubs);
+        const staffIdLower = String(staff?.staffId || staff?.employeeId || '').trim().toLowerCase();
+        const staffNameLower = String(staff?.name || '').trim().toLowerCase();
+        const staffDeptLower = String(staff?.department || '').trim().toLowerCase();
+        const isHod = Boolean(
+          staff?.isHod ||
+          String(staff?.role || '').toUpperCase().includes('HOD') ||
+          String(staff?.designation || '').toUpperCase().includes('HOD')
+        );
+
+        const matchesStaffScope = (s) => {
+          if (!s || !s.code) return false;
+          if (['CS401', 'CS402', 'SF76', 'CS2001', 'CS2005'].includes(String(s.code).toUpperCase())) return false;
+
+          const faculty = String(s.faculty || s.staffName || '').trim().toLowerCase();
+          const staffIdField = String(s.staffId || s.employeeId || s.createdByStaffId || '').trim().toLowerCase();
+          const createdBy = String(s.createdBy || s.createdById || '').trim().toLowerCase();
+          const createdByName = String(s.createdByName || '').trim().toLowerCase();
+          const subjectDept = String(s.department || s.dept || '').trim().toLowerCase();
+
+          const sameFaculty = Boolean(
+            faculty && (
+              faculty === staffIdLower ||
+              faculty === staffNameLower ||
+              faculty.includes(staffNameLower) ||
+              staffIdField === staffIdLower ||
+              staffIdField === staffNameLower
+            )
+          );
+
+          const sameCreatedBy = Boolean(
+            (createdBy && (createdBy === staffIdLower || createdBy === staffNameLower)) ||
+            (createdByName && (createdByName === staffNameLower || createdByName.includes(staffNameLower)))
+          );
+
+          const sameDept = Boolean(staffDeptLower && subjectDept && subjectDept === staffDeptLower);
+          const departmentHodScope = isHod && sameDept;
+
+          return sameFaculty || sameCreatedBy || departmentHodScope;
+        };
+
+        setAvailableSubjects(rawSubs.filter(matchesStaffScope));
       }
 
       if (sRes && sRes.ok) {

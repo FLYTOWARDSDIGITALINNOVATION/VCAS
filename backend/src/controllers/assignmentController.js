@@ -1,7 +1,57 @@
 const Assignment = require("../models/Assignment");
 const Class = require("../models/Class");
 const Student = require("../models/Student");
+const Subject = require("../models/Subject");
 const { syncSubjectAssignmentMarksToInternal } = require("../services/internalMarksSyncService");
+
+const syncSubjectCatalogFromAssignment = async (assignment) => {
+  try {
+    const code = String(assignment?.subjectCode || '').trim();
+    const subjectName = String(assignment?.subjectName || assignment?.title || '').trim();
+    const department = String(assignment?.department || '').trim();
+    if (!code || !subjectName) return null;
+
+    const cleanCode = code.toUpperCase();
+    const cleanDepartment = department || 'General';
+    const staffName = String(assignment?.staffName || '').trim();
+    const semValue = Number(assignment?.semester) || 1;
+
+    let subject = await Subject.findOne({ code: cleanCode });
+    if (subject) {
+      let changed = false;
+      if (subject.name !== subjectName) { subject.name = subjectName; changed = true; }
+      if (!subject.department || subject.department !== cleanDepartment) { subject.department = cleanDepartment; changed = true; }
+      if (staffName && (!subject.faculty || subject.faculty !== staffName)) { subject.faculty = staffName; changed = true; }
+      if (changed) await subject.save();
+      return subject;
+    }
+
+    subject = await Subject.create({
+      code: cleanCode,
+      name: subjectName,
+      department: cleanDepartment,
+      year: Number(assignment?.year) || 1,
+      sem: semValue ? `Sem ${semValue}` : 'Sem 1',
+      credits: 3,
+      type: 'Theory',
+      faculty: staffName,
+      ltp: '3-0-0',
+      hours: '3 hrs/wk',
+      theoryHours: 3,
+      labHours: 0,
+      isContinuousLab: true,
+      prerequisite: 'None',
+      textbooks: '',
+      studentsEnrolled: 0,
+      units: [],
+      evaluation: { internal: 40, external: 60 }
+    });
+    return subject;
+  } catch (err) {
+    console.warn('Could not sync assignment subject to subject catalog:', err.message);
+    return null;
+  }
+};
 
 // Helper to ensure an assignment has student submissions initialized from its class
 const ensureSubmissionsForAssignment = async (assignment) => {
@@ -125,6 +175,8 @@ const createAssignment = async (req, res) => {
       attachmentSize: attachmentSize || "",
       attachmentType: attachmentType || "",
     });
+
+    await syncSubjectCatalogFromAssignment(assignment);
     res.status(201).json({ success: true, data: assignment, message: "Assignment created." });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -186,6 +238,7 @@ const updateAssignment = async (req, res) => {
     if (attachmentType !== undefined) assignment.attachmentType = attachmentType;
 
     await assignment.save();
+    await syncSubjectCatalogFromAssignment(assignment);
     res.json({ success: true, data: assignment, message: "Assignment updated." });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

@@ -385,7 +385,29 @@ export default function StaffExamSchedule({ staffUser, onNavigate }) {
       setStudents(studentList);
 
       if (data.success && Array.isArray(data.subjects)) {
-        setAvailableCatalogSubjects(data.subjects);
+        const staffIdLower = String(staffUser?.staffId || staffUser?.employeeId || '').trim().toLowerCase();
+        const staffNameLower = String(staffUser?.name || '').trim().toLowerCase();
+        const staffDeptLower = String(staffUser?.department || '').trim().toLowerCase();
+        const isHod = Boolean(
+          staffUser?.isHod ||
+          String(staffUser?.role || '').toUpperCase().includes('HOD') ||
+          String(staffUser?.designation || '').toUpperCase().includes('HOD')
+        );
+
+        const allowedSubjects = data.subjects.filter((s) => {
+          if (!s || !s.code) return false;
+          const faculty = String(s.faculty || s.staffName || '').trim().toLowerCase();
+          const staffIdField = String(s.staffId || s.employeeId || s.createdByStaffId || '').trim().toLowerCase();
+          const createdBy = String(s.createdBy || s.createdById || '').trim().toLowerCase();
+          const createdByName = String(s.createdByName || '').trim().toLowerCase();
+          const subjectDept = String(s.department || s.dept || '').trim().toLowerCase();
+          const sameFaculty = Boolean(faculty && (faculty === staffIdLower || faculty === staffNameLower || faculty.includes(staffNameLower) || staffIdField === staffIdLower || staffIdField === staffNameLower));
+          const sameCreatedBy = Boolean((createdBy && (createdBy === staffIdLower || createdBy === staffNameLower)) || (createdByName && (createdByName === staffNameLower || createdByName.includes(staffNameLower))));
+          const sameDept = Boolean(staffDeptLower && subjectDept && subjectDept === staffDeptLower);
+          return sameFaculty || sameCreatedBy || (isHod && sameDept);
+        });
+
+        setAvailableCatalogSubjects(allowedSubjects);
       }
     } catch (err) {
       console.error('Failed to load students for eligibility:', err);

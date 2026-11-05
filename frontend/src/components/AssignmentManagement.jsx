@@ -53,7 +53,18 @@ const INITIAL_ASSIGNMENTS = [];
 const INITIAL_SUBMISSIONS = [];
 
 export default function AssignmentManagement({ user }) {
-  const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
+  const currentUser = user || JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin || currentUser?.role === 'SuperAdmin' || currentUser?.role === 'superadmin';
+  const isAdminUser = currentUser?.role === 'Admin' || currentUser?.role === 'admin';
+  const currentUserDept = String(currentUser?.department || currentUser?.dept || '').trim();
+  const currentUserName = String(currentUser?.name || currentUser?.fullName || '').trim().toLowerCase();
+  const currentUserStaffId = String(currentUser?.staffId || currentUser?.id || '').trim().toLowerCase();
+  const isHodUser = Boolean(
+    currentUser?.isHod ||
+    currentUser?.role?.toUpperCase?.().includes('HOD') ||
+    currentUser?.designation?.toUpperCase?.().includes('HOD')
+  );
+
   // Tabs: 'assignments', 'submissions', 'analytics'
   const [activeTab, setActiveTab] = useState('assignments');
 
@@ -63,6 +74,32 @@ export default function AssignmentManagement({ user }) {
   const [availableClasses, setAvailableClasses] = useState([]);
   const [availableDepartments, setAvailableDepartments] = useState(() => getKnownDepartments());
   const [loading, setLoading] = useState(false);
+
+  const scopedDepartments = useMemo(() => {
+    if (isSuperAdmin || isAdminUser || !currentUserDept) return availableDepartments.filter(Boolean);
+    return Array.from(new Set([
+      currentUserDept,
+      ...availableDepartments.filter(d => {
+        const dept = String(d || '').trim();
+        if (!dept) return false;
+        const a = dept.toLowerCase();
+        const b = currentUserDept.toLowerCase();
+        return a === b || a.includes(b) || b.includes(a);
+      })
+    ])).filter(Boolean);
+  }, [availableDepartments, currentUserDept, isSuperAdmin, isAdminUser]);
+
+  const userScopedClasses = useMemo(() => {
+    if (isSuperAdmin || isAdminUser) return availableClasses;
+    return availableClasses.filter(c => {
+      const dept = String(c?.dept || c?.department || '').trim();
+      const staffName = String(c?.staffName || c?.faculty || '').trim().toLowerCase();
+      const staffId = String(c?.staffId || '').trim().toLowerCase();
+      const sameDept = !currentUserDept || !dept || dept.toLowerCase() === currentUserDept.toLowerCase() || dept.toLowerCase().includes(currentUserDept.toLowerCase()) || currentUserDept.toLowerCase().includes(dept.toLowerCase());
+      const sameTeacher = !staffName && !staffId ? true : (!currentUserName && !currentUserStaffId) || staffName === currentUserName || staffId === currentUserStaffId || staffName.includes(currentUserName) || staffId.includes(currentUserStaffId);
+      return sameDept && (isHodUser ? true : sameTeacher);
+    });
+  }, [availableClasses, currentUserDept, currentUserName, currentUserStaffId, isHodUser, isSuperAdmin, isAdminUser]);
 
   // Selected Assignment for Submissions view
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(1);
@@ -259,6 +296,12 @@ export default function AssignmentManagement({ user }) {
   useEffect(() => {
     fetchAssignments();
   }, []);
+
+  useEffect(() => {
+    if (!isSuperAdmin && !isAdminUser && currentUserDept && !scopedDepartments.includes(assignmentForm.department)) {
+      setAssignmentForm(prev => ({ ...prev, department: currentUserDept }));
+    }
+  }, [assignmentForm.department, currentUserDept, isSuperAdmin, isAdminUser, scopedDepartments]);
 
   // Lock background scroll when any modal is open
   React.useEffect(() => {
@@ -1035,7 +1078,7 @@ export default function AssignmentManagement({ user }) {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                 >
                   <option value="All Departments">All Departments</option>
-                  {availableDepartments.map(d => (
+                  {scopedDepartments.filter(d => d !== 'All Departments').map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
@@ -1798,7 +1841,7 @@ export default function AssignmentManagement({ user }) {
                     defaultValue=""
                   >
                     <option value="">-- Choose a Registered Class (Optional) --</option>
-                    {availableClasses.map(c => (
+                    {userScopedClasses.map(c => (
                       <option key={c._id || c.code} value={c.code}>
                         {c.code} – {c.name} ({c.dept || 'General'})
                       </option>
@@ -1847,10 +1890,10 @@ export default function AssignmentManagement({ user }) {
                   onChange={(e) => setAssignmentForm({ ...assignmentForm, department: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
                 >
-                  {availableDepartments.length === 0 ? (
+                  {scopedDepartments.length === 0 ? (
                     <option value="">No departments added yet</option>
                   ) : (
-                    availableDepartments.map(d => (
+                    scopedDepartments.map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))
                   )}
