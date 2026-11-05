@@ -111,17 +111,37 @@ export default function StaffAssignments({ staffUser }) {
   useEffect(() => {
     const loadCatalogs = async () => {
       try {
-        const [subjectsRes, studentsRes, deptsRes] = await Promise.all([
+        const [subjectsRes, studentsRes, deptsRes, classesRes] = await Promise.all([
           fetch(`${API}/subjects`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
           fetch(`${API}/students`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
-          fetch(`${API}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] }))
+          fetch(`${API}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
+          fetch(`${API}/classes/staff/${encodeURIComponent(staffId)}`).then(r => r.json()).catch(() => ({ success: false, classes: [] }))
         ]);
 
-        const subjectList = Array.isArray(subjectsRes?.data) ? subjectsRes.data : [];
+        const subjectList = Array.isArray(subjectsRes?.data)
+          ? subjectsRes.data
+          : (Array.isArray(subjectsRes) ? subjectsRes : []);
+        const staffClasses = Array.isArray(classesRes?.classes)
+          ? classesRes.classes
+          : (Array.isArray(classesRes?.data) ? classesRes.data : []);
+        const subjectByCode = new Map(subjectList.map(subject => [
+          String(subject?.code || subject?.subjectCode || '').trim().toUpperCase(), subject
+        ]).filter(([code]) => code));
+        staffClasses.forEach((courseClass) => {
+          const code = String(courseClass?.code || courseClass?.subjectCode || '').trim();
+          const key = code.toUpperCase();
+          if (!key || subjectByCode.has(key)) return;
+          subjectByCode.set(key, {
+            code,
+            name: courseClass?.name || courseClass?.subjectName || code,
+            department: courseClass?.dept || courseClass?.department || staffUser?.department || ''
+          });
+        });
+        const availableSubjects = [...subjectByCode.values()];
         const studentList = Array.isArray(studentsRes?.data) ? studentsRes.data : [];
         const deptList = Array.isArray(deptsRes?.data) ? deptsRes.data : [];
 
-        setSubjectCatalog(subjectList);
+        setSubjectCatalog(availableSubjects);
         setDepartmentCatalog([
           ...new Set([
             ...deptList.map(d => d?.name || d).filter(Boolean),
@@ -153,7 +173,7 @@ export default function StaffAssignments({ staffUser }) {
     };
 
     loadCatalogs();
-  }, [staffUser?.department, staffUser?.batch, staffUser?.year, staffUser?.academicYear]);
+  }, [staffId, staffUser?.department, staffUser?.batch, staffUser?.year, staffUser?.academicYear]);
 
   const toast = (msg, isError = false) => {
     if (isError) { setErrorMsg(msg); setSuccessMsg(""); }
