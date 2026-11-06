@@ -153,14 +153,18 @@ export default function AttendanceManagement({ user }) {
         const d = await resStudents.value.json();
         if (d.success && Array.isArray(d.data)) {
           const mappedStudents = d.data.map(stu => {
-            const roll = (stu.rollNo || '').toUpperCase();
+            const roll = (stu.rollNo || stu.regNo || stu.studentId || stu.admissionNo || '').trim().toUpperCase();
+            const reg = (stu.regNo || stu.admissionNo || stu.admNo || stu.studentId || stu.rollNo || '').trim().toUpperCase();
             let attended = 0;
             let total = 0;
             const subMap = {};
 
             sessionsList.forEach(sess => {
               if (Array.isArray(sess.records)) {
-                const rec = sess.records.find(r => (r.rollNo || '').toUpperCase() === roll);
+                const rec = sess.records.find(r => {
+                  const rRoll = (r.rollNo || '').trim().toUpperCase();
+                  return rRoll && (rRoll === roll || rRoll === reg);
+                });
                 if (rec) {
                   total++;
                   const status = String(rec.status || '').trim();
@@ -178,37 +182,38 @@ export default function AttendanceManagement({ user }) {
 
             const percent = total > 0 
               ? parseFloat(((attended / total) * 100).toFixed(1)) 
-              : (stu.attendance ? parseFloat(stu.attendance) : 95.0);
+              : (stu.attendance ? parseFloat(stu.attendance) : 0);
 
             const subjectWise = Object.values(subMap).map(s => ({
               ...s,
-              percent: s.total > 0 ? parseFloat(((s.attended / s.total) * 100).toFixed(1)) : 100
+              percent: s.total > 0 ? parseFloat(((s.attended / s.total) * 100).toFixed(1)) : 0
             }));
 
             let yearNum = 1;
             const semStr = (stu.sem || stu.semester || '').toLowerCase();
-            if (semStr.includes('3') || semStr.includes('4')) yearNum = 2;
-            else if (semStr.includes('5') || semStr.includes('6')) yearNum = 3;
-            else if (semStr.includes('7') || semStr.includes('8')) yearNum = 4;
+            const yrStr = (stu.year || '').toLowerCase();
+            if (semStr.includes('3') || semStr.includes('4') || yrStr.includes('2')) yearNum = 2;
+            else if (semStr.includes('5') || semStr.includes('6') || yrStr.includes('3')) yearNum = 3;
+            else if (semStr.includes('7') || semStr.includes('8') || yrStr.includes('4')) yearNum = 4;
 
             return {
               id: stu._id || stu.id,
-              rollNo: stu.rollNo,
-              regNo: stu.admissionNo || stu.admNo || stu.studentId || stu.rollNo,
+              rollNo: roll || stu.rollNo,
+              regNo: reg || stu.regNo,
               name: stu.name || stu.fullName,
               department: stu.department || 'Computer Science',
               year: yearNum,
               sem: stu.sem || stu.semester || 'Sem 1',
               section: stu.section || 'A',
-              totalClasses: total > 0 ? total : 24,
-              attendedClasses: total > 0 ? attended : Math.round(24 * (percent / 100)),
+              totalClasses: total,
+              attendedClasses: attended,
               attendancePercent: percent,
               parentName: stu.fatherName || stu.motherName || 'Parent',
               parentPhone: stu.fatherMobile || stu.phone || stu.mobile || 'N/A',
               parentEmail: stu.parentEmail || stu.email || 'parent@vcas.edu',
               status: 'Present',
-              periodsAttended: 6,
-              totalPeriodsToday: 6,
+              periodsAttended: attended > 0 ? attended : 0,
+              totalPeriodsToday: total > 0 ? total : 0,
               subjectWise: subjectWise
             };
           });
@@ -326,23 +331,37 @@ export default function AttendanceManagement({ user }) {
       }
     }
 
-    // 2. Match session submitted by staff for this date
-    const match = dbSessions.find(s => {
+    const sRoll = (student.rollNo || '').trim().toUpperCase();
+    const sReg = (student.regNo || '').trim().toUpperCase();
+
+    // 2. Match sessions submitted by staff or admin for this date
+    const matchingSessions = dbSessions.filter(s => {
       if (s.date !== dateStr) return false;
-      return Array.isArray(s.records) && s.records.some(r =>
-        (r.rollNo || '').trim().toUpperCase() === (student.rollNo || '').trim().toUpperCase()
-      );
+      return Array.isArray(s.records) && s.records.some(r => {
+        const rRoll = (r.rollNo || '').trim().toUpperCase();
+        return rRoll && (rRoll === sRoll || rRoll === sReg);
+      });
     });
 
-    if (match) {
-      const rec = match.records.find(r =>
-        (r.rollNo || '').trim().toUpperCase() === (student.rollNo || '').trim().toUpperCase()
-      );
-      if (rec) {
-        const status = normalizeAttendanceStatus(rec.status);
+    if (matchingSessions.length > 0) {
+      let foundRecord = null;
+      for (const sess of matchingSessions) {
+        const rec = sess.records.find(r => {
+          const rRoll = (r.rollNo || '').trim().toUpperCase();
+          return rRoll && (rRoll === sRoll || rRoll === sReg);
+        });
+        if (rec) {
+          foundRecord = rec;
+          const st = normalizeAttendanceStatus(rec.status);
+          if (st === 'Present') break;
+        }
+      }
+
+      if (foundRecord) {
+        const status = normalizeAttendanceStatus(foundRecord.status);
         const isAbs = status === 'Absent';
         const isLt = status === 'Late';
-        const isOnDuty = status === 'On Duty';
+        const isOnDuty = status === 'On Duty' || status === 'OD';
         return {
           status,
           periods: isAbs ? 0 : isLt || isOnDuty ? 5 : 6,
@@ -606,7 +625,7 @@ export default function AttendanceManagement({ user }) {
         (cleanDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
         (cleanDept && sDept.includes(cleanDept)) ||
         (sDept && cleanDept.includes(sDept));
-      const matchYear = Number(s.year) === Number(rollYear);
+      const matchYear = rollYear === 'ALL' || Number(s.year) === Number(rollYear);
       return matchDept && matchYear;
     });
   }, [students, rollDept, rollYear]);
@@ -667,7 +686,8 @@ export default function AttendanceManagement({ user }) {
         (cleanDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
         (cleanDept && sDept.includes(cleanDept)) ||
         (sDept && cleanDept.includes(sDept));
-      if (matchDept && Number(s.year) === Number(rollYear)) {
+      const matchYear = rollYear === 'ALL' || Number(s.year) === Number(rollYear);
+      if (matchDept && matchYear) {
         return { ...s, status };
       }
       return s;
@@ -677,9 +697,13 @@ export default function AttendanceManagement({ user }) {
 
   const handleSubmitRollCall = async () => {
     try {
+      if (rollCallStudents.length === 0) {
+        showToast('No students to mark in this selection.');
+        return;
+      }
       const code = ((rollSubject || buildSessionCode()).split(' ')[0].trim().toUpperCase()) || buildSessionCode();
       const records = rollCallStudents.map(s => ({
-        rollNo: s.rollNo,
+        rollNo: s.rollNo || s.regNo || '',
         name: s.name,
         status: s.status || 'Present'
       }));
@@ -689,6 +713,7 @@ export default function AttendanceManagement({ user }) {
         staffName: 'Academic Administrator',
         classCode: code,
         className: rollSubject || `${rollDept || 'Department'} - Year ${rollYear} (${rollSem})`,
+        department: rollDept && rollDept !== 'All Departments' ? rollDept : 'General',
         date: selectedDate,
         slot: rollPeriod,
         records
@@ -701,22 +726,15 @@ export default function AttendanceManagement({ user }) {
       });
       const data = await res.json();
 
-      if (data.success && data.session) {
-        setDbSessions(prev => {
-          const idx = prev.findIndex(s => s._id === data.session._id);
-          if (idx >= 0) {
-            const copy = [...prev];
-            copy[idx] = data.session;
-            return copy;
-          }
-          return [data.session, ...prev];
-        });
-        showToast(`Attendance for ${payload.className} saved successfully.`);
+      if (res.ok && data.success && data.session) {
+        showToast(`Attendance for ${payload.className} (${payload.date}) saved successfully!`);
+        fetchAllAttendanceData();
       } else {
-        showToast(`Attendance for ${payload.className} saved.`);
+        alert(data.message || 'Failed to save attendance session.');
       }
     } catch (err) {
-      showToast(`Attendance for ${rollSubject || buildSessionCode()} recorded locally.`);
+      console.error('Error saving roll call:', err);
+      alert('Network error saving attendance: ' + err.message);
     }
   };
 
@@ -1436,12 +1454,19 @@ export default function AttendanceManagement({ user }) {
                     <select
                       value={rollYear}
                       onChange={(e) => {
-                        const y = Number(e.target.value);
-                        setRollYear(y);
-                        setRollSem(`Sem ${y * 2 - 1}`);
+                        const val = e.target.value;
+                        if (val === 'ALL') {
+                          setRollYear('ALL');
+                          setRollSem('All Semesters');
+                        } else {
+                          const y = Number(val);
+                          setRollYear(y);
+                          setRollSem(`Sem ${y * 2 - 1}`);
+                        }
                       }}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
                     >
+                      <option value="ALL">All Years / All Semesters</option>
                       <option value={1}>1st Year (Sem 1)</option>
                       <option value={2}>2nd Year (Sem 3)</option>
                       <option value={3}>3rd Year (Sem 5)</option>

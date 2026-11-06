@@ -73,8 +73,13 @@ export default function StaffAttendance({ staffUser }) {
   const [downloadYear, setDownloadYear] = useState('I Year');
   const [downloadBatch, setDownloadBatch] = useState('2022-2026');
   const [downloadSemester, setDownloadSemester] = useState('1');
-  const [downloadStartDate, setDownloadStartDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [downloadEndDate, setDownloadEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // Quick date range state — visible directly in the header for fast download
+  const todayStr = new Date().toISOString().split('T')[0];
+  const firstOfMonthStr = (() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; })();
+  const [downloadStartDate, setDownloadStartDate] = useState(firstOfMonthStr);
+  const [downloadEndDate, setDownloadEndDate] = useState(todayStr);
+
   const [downloadFormat, setDownloadFormat] = useState('excel'); // 'excel' | 'csv'
   const [isExporting, setIsExporting] = useState(false);
 
@@ -196,7 +201,90 @@ export default function StaffAttendance({ staffUser }) {
     document.body.removeChild(link);
   };
 
-  // Fetch classes from backend API
+  // Quick Download — triggered by the inline From/To date header button
+  // Downloads the current department's attendance within the selected date range directly
+  const handleQuickDownload = async () => {
+    try {
+      if (downloadStartDate && downloadEndDate && downloadStartDate > downloadEndDate) {
+        alert('From date cannot be later than To date.');
+        return;
+      }
+      setIsExporting(true);
+      const params = new URLSearchParams();
+      const deptToUse = selectedDepartment && selectedDepartment !== 'All'
+        ? selectedDepartment
+        : (staffUser?.department || downloadDept || '');
+      if (deptToUse) params.append('department', deptToUse);
+      if (downloadStartDate) params.append('startDate', downloadStartDate);
+      if (downloadEndDate) params.append('endDate', downloadEndDate);
+
+      const res = await fetch(`${API_BASE}/attendance/export/filtered?${params.toString()}`);
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to fetch attendance data for export.');
+      }
+
+      const summaries = data.studentSummaries || [];
+      const sessions = data.sessions || [];
+
+      if (summaries.length === 0 && sessions.length === 0) {
+        alert(`No attendance records found for ${deptToUse || 'selected'} between ${downloadStartDate} and ${downloadEndDate}.`);
+        return;
+      }
+
+      const rangeSuffix = `_${downloadStartDate}_to_${downloadEndDate}`;
+      const filename = `Attendance_${(deptToUse || 'All').replace(/\s+/g, '_')}${rangeSuffix}`;
+
+      const rowsToExport = summaries.length > 0
+        ? summaries.map((s, idx) => ({
+            'S.No': idx + 1,
+            'Roll No': s.rollNo,
+            'Register No': s.regNo || '',
+            'Student Name': s.name,
+            'Department': s.department || deptToUse || '',
+            'Batch': s.batch || '',
+            'Semester': s.semester || '',
+            'Total Sessions': s.totalClasses,
+            'Present': s.present,
+            'Absent': s.absent,
+            'Late': s.late,
+            'Attendance %': `${s.percentage}%`
+          }))
+        : sessions.flatMap((sess, sIdx) =>
+            (sess.records || []).map((r, rIdx) => ({
+              'S.No': `${sIdx + 1}.${rIdx + 1}`,
+              'Date': sess.date,
+              'Slot': sess.slot,
+              'Class Code': sess.classCode,
+              'Roll No': r.rollNo,
+              'Student Name': r.name,
+              'Status': r.status,
+              'Remarks': r.remarks || ''
+            }))
+          );
+
+      const XLSX = await getSheetJS();
+      if (XLSX) {
+        const ws = XLSX.utils.json_to_sheet(rowsToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+        XLSX.writeFile(wb, `${filename}.xlsx`);
+      } else {
+        downloadAsCsv(rowsToExport, filename);
+      }
+
+      setSavedSuccessMsg(`✓ Attendance downloaded for ${deptToUse || 'All'} (${downloadStartDate} → ${downloadEndDate})`);
+      setTimeout(() => setSavedSuccessMsg(''), 5000);
+    } catch (err) {
+      console.error('Quick download error:', err);
+      alert('Error downloading attendance: ' + err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Fetch classes from backend API (including HOD-added department subjects)
   const fetchClasses = async () => {
     if (!staffUser?.staffId) return;
     try {
@@ -204,23 +292,99 @@ export default function StaffAttendance({ staffUser }) {
 
       let allDeptClasses = [];
       if (isHodUser && staffUser?.department) {
+        // Load all classes for this department
         const deptRes = await fetch(`${API_BASE}/classes?dept=${encodeURIComponent(staffUser.department)}`);
         const deptData = await deptRes.json();
         if (deptData.success && Array.isArray(deptData.classes)) {
           allDeptClasses = deptData.classes;
         }
+
+        // Also load subjects added by HOD from /subjects endpoint and convert to class-like shape
+        try {
+          const subRes = await fetch(`${API_BASE}/subjects`);
+          const subData = await subRes.json();
+          const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
+          const deptLower = staffUser.department.trim().toLowerCase();
+          const hodSubjectsAsClasses = rawSubs
+            .filter(s => {
+              if (!s || !s.code) return false;
+              const subDept = (s.department || s.dept || '').trim().toLowerCase();
+              return subDept && (subDept === deptLower || subDept.includes(deptLower) || deptLower.includes(subDept));
+            })
+            .map(s => ({
+              code: (s.code || '').trim().toUpperCase(),
+              name: s.name || s.code,
+              dept: s.department || s.dept || staffUser.department,
+              year: Number(s.year) || 1,
+              semester: s.sem ? (parseInt(String(s.sem).replace(/\D/g, ''), 10) || 1) : 1,
+              section: s.section || 'A',
+              credits: Number(s.credits) || 3,
+              theoryHours: Number(s.theoryHours) || 3,
+              labHours: Number(s.labHours) || 0,
+              staffId: s.faculty || s.staffId || staffUser.staffId,
+              staffName: s.staffName || s.faculty || staffUser.name || '',
+              students: s.students || [],
+              _fromSubjectsAPI: true
+            }));
+          allDeptClasses = [...allDeptClasses, ...hodSubjectsAsClasses];
+        } catch (_) {}
       }
 
       const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}`);
       const data = await res.json();
       const staffClasses = data.success && Array.isArray(data.classes) ? data.classes : [];
+
+      // For non-HOD staff, also load their own subjects from /subjects so their own subjects appear
+      let ownSubjectsAsClasses = [];
+      if (!isHodUser) {
+        try {
+          const subRes = await fetch(`${API_BASE}/subjects`);
+          const subData = await subRes.json();
+          const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
+          const staffIdLower = (staffUser.staffId || '').trim().toLowerCase();
+          const staffNameLower = (staffUser.name || '').trim().toLowerCase();
+          ownSubjectsAsClasses = rawSubs
+            .filter(s => {
+              if (!s || !s.code) return false;
+              const faculty = (s.faculty || s.staffName || s.staffId || '').trim().toLowerCase();
+              const createdBy = (s.createdBy || s.createdByName || '').trim().toLowerCase();
+              return (
+                faculty === staffIdLower ||
+                faculty === staffNameLower ||
+                faculty.includes(staffNameLower) ||
+                createdBy === staffIdLower ||
+                createdBy === staffNameLower
+              );
+            })
+            .map(s => ({
+              code: (s.code || '').trim().toUpperCase(),
+              name: s.name || s.code,
+              dept: s.department || s.dept || staffUser.department || '',
+              year: Number(s.year) || 1,
+              semester: s.sem ? (parseInt(String(s.sem).replace(/\D/g, ''), 10) || 1) : 1,
+              section: s.section || 'A',
+              credits: Number(s.credits) || 3,
+              theoryHours: Number(s.theoryHours) || 3,
+              labHours: Number(s.labHours) || 0,
+              staffId: staffUser.staffId,
+              staffName: staffUser.name || '',
+              students: s.students || [],
+              _fromSubjectsAPI: true
+            }));
+        } catch (_) {}
+      }
+
       const mergedClasses = isHodUser && staffUser?.department
         ? [...allDeptClasses, ...staffClasses]
-        : staffClasses;
+        : [...staffClasses, ...ownSubjectsAsClasses];
 
-      const uniqueClasses = mergedClasses.filter((cls, idx, arr) => {
-        const key = `${cls.code || ''}-${cls.name || ''}-${cls.dept || ''}`;
-        return arr.findIndex(item => `${item.code || ''}-${item.name || ''}-${item.dept || ''}` === key) === idx;
+      // Deduplicate by subject code (keep existing class record over subjects-API stub)
+      const seen = new Set();
+      const uniqueClasses = mergedClasses.filter(cls => {
+        const key = (cls.code || '').trim().toUpperCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
 
       const departmentScopedClasses = isHodUser && staffUser?.department
@@ -379,9 +543,17 @@ export default function StaffAttendance({ staffUser }) {
 
   // Current active class object
   const currentClass = useMemo(() => {
+    if (selectedClassCode === 'ALL_DEPT') {
+      return {
+        code: 'ALL_DEPT',
+        name: `All ${selectedDepartment !== 'All' ? selectedDepartment : 'Department'} Students (General Attendance)`,
+        dept: selectedDepartment !== 'All' ? selectedDepartment : '',
+        isAllDept: true
+      };
+    }
     if (filteredClasses.length === 0) return null;
     return filteredClasses.find(c => c.code === selectedClassCode) || filteredClasses[0] || null;
-  }, [filteredClasses, selectedClassCode]);
+  }, [filteredClasses, selectedClassCode, selectedDepartment]);
 
   const handleDepartmentChange = (newDept) => {
     setSelectedDepartment(newDept);
@@ -397,7 +569,7 @@ export default function StaffAttendance({ staffUser }) {
       if (matched.length > 0) {
         setSelectedClassCode(matched[0].code);
       } else {
-        setSelectedClassCode('');
+        setSelectedClassCode('ALL_DEPT');
       }
     }
   };
@@ -419,6 +591,24 @@ export default function StaffAttendance({ staffUser }) {
       }
       return false;
     };
+
+    // If user selected "All Department Students", return all students in that department
+    if (selectedClassCode === 'ALL_DEPT' || currentClass?.isAllDept) {
+      const deptNorm = (selectedDepartment !== 'All' ? selectedDepartment : '').toLowerCase().trim();
+      return allRegisteredStudents.filter(s => {
+        if (!deptNorm) return true;
+        const d = (s.department || '').toLowerCase().trim();
+        const c = (s.course || '').toLowerCase().trim();
+        return Boolean(d && (d === deptNorm || d.includes(deptNorm) || deptNorm.includes(d))) ||
+               Boolean(c && (c === deptNorm || c.includes(deptNorm) || deptNorm.includes(c)));
+      }).map(s => ({
+        rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
+        name: s.name,
+        department: s.department || selectedDepartment,
+        phone: s.phone || '',
+        email: s.email || ''
+      }));
+    }
 
     const classRoster = currentClass?.students || currentClass?.enrolledStudents || [];
     if (currentClass && classRoster.length > 0) {
@@ -614,8 +804,13 @@ export default function StaffAttendance({ staffUser }) {
       return;
     }
 
-    const activeCode = currentClass?.code || selectedClassCode || (selectedDepartment !== 'All' ? `${selectedDepartment.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase()}101` : 'ATT101');
-    const activeName = currentClass?.name || (selectedDepartment !== 'All' ? `${selectedDepartment} Attendance` : 'General Attendance');
+    const isAllDept = selectedClassCode === 'ALL_DEPT' || currentClass?.isAllDept;
+    const activeCode = isAllDept
+      ? `${(selectedDepartment !== 'All' ? selectedDepartment : 'ALL').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase()}-ALL`
+      : (currentClass?.code || selectedClassCode || (selectedDepartment !== 'All' ? `${selectedDepartment.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase()}101` : 'ATT101'));
+    const activeName = isAllDept
+      ? `${selectedDepartment !== 'All' ? selectedDepartment : 'Department'} - All Students Attendance`
+      : (currentClass?.name || (selectedDepartment !== 'All' ? `${selectedDepartment} Attendance` : 'General Attendance'));
 
     try {
       setIsSubmitting(true);
@@ -680,7 +875,7 @@ export default function StaffAttendance({ staffUser }) {
   return (
     <div className="p-5 sm:p-7 space-y-6 max-w-6xl mx-auto">
       {/* Header & Tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-slate-900">Attendance Management</h2>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -700,15 +895,55 @@ export default function StaffAttendance({ staffUser }) {
             <span>Bulk Upload Attendance</span>
           </button>
 
-          {/* Download Filtered Attendance Button */}
+          {/* Quick Date Range + Download — visible inline for fast access */}
+          <div className="flex items-center gap-2 bg-indigo-50/80 border border-indigo-200 rounded-xl px-3 py-1.5 shadow-2xs">
+            <Filter className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+              <span className="text-indigo-600 text-[10px] font-extrabold uppercase tracking-wide mr-0.5">From</span>
+              <input
+                type="date"
+                value={downloadStartDate}
+                max={downloadEndDate || undefined}
+                onChange={e => setDownloadStartDate(e.target.value)}
+                className="bg-white border border-indigo-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-500 cursor-pointer"
+                title="Attendance From Date"
+              />
+              <span className="text-indigo-400 font-extrabold">→</span>
+              <span className="text-indigo-600 text-[10px] font-extrabold uppercase tracking-wide">To</span>
+              <input
+                type="date"
+                value={downloadEndDate}
+                min={downloadStartDate || undefined}
+                onChange={e => setDownloadEndDate(e.target.value)}
+                className="bg-white border border-indigo-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-500 cursor-pointer"
+                title="Attendance To Date"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={isExporting}
+              onClick={() => {
+                handleQuickDownload();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+              title="Download attendance within selected date range"
+            >
+              {isExporting
+                ? <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block" /> Exporting…</>
+                : <><Download className="w-3.5 h-3.5" /> Download</>
+              }
+            </button>
+          </div>
+
+          {/* Advanced filters modal trigger */}
           <button
             type="button"
             onClick={() => setShowDownloadModal(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-all cursor-pointer shadow-2xs"
-            title="Download department, year, batch, or semester-wise attendance"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold border border-slate-200 transition-all cursor-pointer shadow-2xs"
+            title="Advanced filters: department, year, batch, semester wise"
           >
-            <Download className="w-4 h-4 text-indigo-600" />
-            <span>Download Data</span>
+            <Filter className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Advanced Filters</span>
           </button>
 
           {/* Tab Switcher */}
@@ -787,17 +1022,16 @@ export default function StaffAttendance({ staffUser }) {
                   onChange={(e) => setSelectedClassCode(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                 >
+                  <option value="ALL_DEPT">
+                    ★ All {selectedDepartment !== 'All' ? selectedDepartment : 'Department'} Students (General Attendance)
+                  </option>
                   {filteredClasses.length > 0 ? (
                     filteredClasses.map(cls => (
                       <option key={cls.code} value={cls.code}>
                         {cls.code} – {cls.name} (Year {cls.year}, Sem {cls.semester})
                       </option>
                     ))
-                  ) : (
-                    <option value="">
-                      {selectedDepartment !== 'All' ? `No subjects in ${selectedDepartment}` : (currentClass?.code || "GENERAL")}
-                    </option>
-                  )}
+                  ) : null}
                 </select>
               </div>
 

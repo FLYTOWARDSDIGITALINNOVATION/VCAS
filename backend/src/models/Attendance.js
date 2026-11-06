@@ -29,6 +29,12 @@ const attendanceSessionSchema = new mongoose.Schema({
     default: '',
     trim: true
   },
+  department: {
+    type: String,
+    default: '',
+    trim: true,
+    index: true
+  },
   staffId: {
     type: String,
     required: [true, 'Staff ID is required'],

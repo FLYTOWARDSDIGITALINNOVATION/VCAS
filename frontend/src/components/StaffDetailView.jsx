@@ -55,6 +55,12 @@ const CATEGORY_CONFIG = {
 
 export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloadCredentials, onPrintCredentials }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin;
+  // Detect if the viewed staff member is an HoD
+  const isHod = Boolean(
+    staff?.isHod ||
+    String(staff?.role || '').toUpperCase().includes('HOD') ||
+    String(staff?.designation || '').toUpperCase().includes('HOD')
+  );
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'attendance', 'classes', 'timetable', 'leaves'
   const [selectedMonth, setSelectedMonth] = useState('August 2026');
   const [markedToday, setMarkedToday] = useState(false);
@@ -295,7 +301,14 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
             (createdByName && (createdByName === staffNameLower || createdByName.includes(staffNameLower)))
           );
 
-          const sameDept = Boolean(staffDeptLower && subjectDept && subjectDept === staffDeptLower);
+          // HOD: include ALL subjects from their department (use fuzzy match)
+          const sameDept = Boolean(
+            staffDeptLower && subjectDept && (
+              subjectDept === staffDeptLower ||
+              subjectDept.includes(staffDeptLower) ||
+              staffDeptLower.includes(subjectDept)
+            )
+          );
           const departmentHodScope = isHod && sameDept;
 
           return sameFaculty || sameCreatedBy || departmentHodScope;
@@ -1958,14 +1971,14 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
               {/* 1. SUBJECT SELECTION FROM CREATED SUBJECTS */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Select Created Subject <span className="text-[11px] font-normal text-blue-600">(Dropdown of Added Subjects)</span>
+                  Select Created Subject <span className="text-[11px] font-normal text-blue-600">(Your subjects{isHod ? ' & all dept subjects' : ''})</span>
                 </label>
                 <select
                   value={availableSubjects.some(s => s.code === classForm.code) ? classForm.code : (classForm.code ? '__custom__' : '')}
                   onChange={(e) => handleSelectCreatedSubject(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs sm:text-sm font-bold text-blue-950 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer transition-all"
                 >
-                  <option value="">-- Choose Subject Created by Admin / Staff --</option>
+                  <option value="">-- Choose Subject {isHod ? '(Dept Subjects)' : 'Created by Admin / Staff'} --</option>
                   {availableSubjects.length === 0 ? (
                     <option value="" disabled>No subjects created yet in Subjects page</option>
                   ) : (

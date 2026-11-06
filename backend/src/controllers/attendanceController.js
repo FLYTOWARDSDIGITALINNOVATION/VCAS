@@ -125,6 +125,7 @@ exports.saveSession = async (req, res) => {
       classId,
       classCode,
       className,
+      department,
       staffId,
       staffName,
       date,
@@ -148,19 +149,24 @@ exports.saveSession = async (req, res) => {
     // Lookup metadata if className or staffName missing
     let resolvedClassName = className ? className.trim() : '';
     let resolvedStaffName = staffName ? staffName.trim() : '';
+    let resolvedDepartment = department ? department.trim() : '';
     let resolvedClassId = classId || null;
 
-    if (!resolvedClassName || !resolvedClassId) {
+    if (!resolvedClassName || !resolvedClassId || !resolvedDepartment) {
       const cls = await Class.findOne({ code: finalClassCode });
       if (cls) {
         if (!resolvedClassName) resolvedClassName = cls.name;
         if (!resolvedClassId) resolvedClassId = cls._id;
+        if (!resolvedDepartment) resolvedDepartment = cls.dept || '';
       }
     }
 
     if (!resolvedStaffName) {
       const staff = await Staff.findOne({ staffId: finalStaffId });
-      if (staff) resolvedStaffName = staff.name;
+      if (staff) {
+        resolvedStaffName = staff.name;
+        if (!resolvedDepartment) resolvedDepartment = staff.department || '';
+      }
     }
 
     const computed = computeCounts(records);
@@ -175,6 +181,7 @@ exports.saveSession = async (req, res) => {
     const update = {
       classId: resolvedClassId,
       className: resolvedClassName,
+      department: resolvedDepartment,
       staffName: resolvedStaffName,
       topic: (topic || '').trim(),
       records: computed.records,
@@ -590,27 +597,19 @@ exports.getFilteredAttendance = async (req, res) => {
       if (endDate) sessionFilter.date.$lte = endDate.trim();
     }
 
-    if (department && department !== 'All' && department !== 'All Departments' && (!classCode || classCode === 'All')) {
-      const matchingClasses = await Class.find({ dept: { $regex: new RegExp(department.trim(), 'i') } }).select('code');
-      const classCodes = matchingClasses.map(c => c.code);
-      if (classCodes.length > 0) {
-        sessionFilter.classCode = { $in: classCodes };
-      }
-    }
-
     const sessions = await Attendance.find(sessionFilter).sort({ date: -1 });
 
     // 3. Compute student attendance summaries if targetStudents or sessions exist
     const studentMap = {};
 
     targetStudents.forEach(st => {
-      const roll = (st.rollNo || st.regNo || '').toUpperCase().trim();
+      const roll = (st.rollNo || st.regNo || st.studentId || '').toUpperCase().trim();
       if (roll) {
         studentMap[roll] = {
           rollNo: roll,
-          regNo: st.regNo || '',
+          regNo: st.regNo || st.rollNo || '',
           name: st.name || '',
-          department: st.department || '',
+          department: st.department || department || '',
           batch: st.batch || '',
           semester: st.sem || '',
           totalClasses: 0,
@@ -618,7 +617,7 @@ exports.getFilteredAttendance = async (req, res) => {
           absent: 0,
           late: 0,
           onDuty: 0,
-          percentage: st.attendance || 0
+          percentage: 0
         };
       }
     });
@@ -659,7 +658,7 @@ exports.getFilteredAttendance = async (req, res) => {
     const studentSummaries = Object.values(studentMap).map(s => {
       const pct = s.totalClasses > 0
         ? Math.round(((s.present + s.late + (s.onDuty || 0)) / s.totalClasses) * 100)
-        : s.percentage || 85;
+        : 0;
       return { ...s, onDuty: s.onDuty || 0, percentage: pct };
     }).sort((a, b) => a.rollNo.localeCompare(b.rollNo));
 
