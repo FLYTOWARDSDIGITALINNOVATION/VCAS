@@ -1242,11 +1242,13 @@ export default function TimetableManagement({ user }) {
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(2, 'faculty')}</span>
                     </th>
+                    {/* Morning Break */}
                     <th className="py-3 px-1 w-12 bg-amber-50/60 text-amber-800 border-x border-amber-100 text-[9px] group hover:bg-amber-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
                       <Coffee className="w-3 h-3 mx-auto mb-0.5 text-amber-600" />
                       <span>BREAK</span>
                       <span className="block text-[8px] text-amber-700 font-mono font-normal">{breakTimings.tea.split('(')[0].trim()}</span>
                     </th>
+                    {/* P3 */}
                     <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P3</span>
@@ -1254,11 +1256,7 @@ export default function TimetableManagement({ user }) {
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(3, 'faculty')}</span>
                     </th>
-                    <th className="py-3 px-1 w-12 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[9px] group hover:bg-emerald-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
-                      <Utensils className="w-3 h-3 mx-auto mb-0.5 text-emerald-600" />
-                      <span>LUNCH</span>
-                      <span className="block text-[8px] text-emerald-700 font-mono font-normal">{breakTimings.lunch.split('(')[0].trim()}</span>
-                    </th>
+                    {/* P4 */}
                     <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P4</span>
@@ -1266,6 +1264,13 @@ export default function TimetableManagement({ user }) {
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(4, 'faculty')}</span>
                     </th>
+                    {/* Lunch Break alone after 4th Period */}
+                    <th className="py-3 px-1 w-12 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[9px] group hover:bg-emerald-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
+                      <Utensils className="w-3 h-3 mx-auto mb-0.5 text-emerald-600" />
+                      <span>LUNCH</span>
+                      <span className="block text-[8px] text-emerald-700 font-mono font-normal">{breakTimings.lunch.split('(')[0].trim()}</span>
+                    </th>
+                    {/* P5 */}
                     <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P5</span>
@@ -1273,6 +1278,7 @@ export default function TimetableManagement({ user }) {
                       </div>
                       <span className="block text-[8.5px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(5, 'faculty')}</span>
                     </th>
+                    {/* P6 */}
                     <th className="py-3 px-2 w-36 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('faculty')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P6</span>
@@ -1307,23 +1313,23 @@ export default function TimetableManagement({ user }) {
 
                         {/* Morning Break */}
                         <td className="p-1 bg-amber-50/30 border-x border-amber-100 text-center text-[9px] font-bold text-amber-700">
-                          15m
+                          10m
                         </td>
 
                         {/* P3 */}
                         <td className="p-1.5 align-top">
                           <SlotCell slot={dayData['3']} onEdit={() => handleOpenEditSlot(day, 3, dayData['3'])} />
                         </td>
-
-                        {/* Lunch Break */}
-                        <td className="p-1 bg-emerald-50/30 border-x border-emerald-100 text-center text-[9px] font-bold text-emerald-700">
-                          45m
-                        </td>
-
                         {/* P4 */}
                         <td className="p-1.5 align-top">
                           <SlotCell slot={dayData['4']} onEdit={() => handleOpenEditSlot(day, 4, dayData['4'])} />
                         </td>
+
+                        {/* Lunch Break alone after 4th Period */}
+                        <td className="p-1 bg-emerald-50/30 border-x border-emerald-100 text-center text-[9px] font-bold text-emerald-700">
+                          30m
+                        </td>
+
                         {/* P5 */}
                         <td className="p-1.5 align-top">
                           <SlotCell slot={dayData['5']} onEdit={() => handleOpenEditSlot(day, 5, dayData['5'])} />
@@ -1553,17 +1559,17 @@ export default function TimetableManagement({ user }) {
                       </div>
                       <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(3, 'class')}</span>
                     </th>
-                    <th className="py-4 px-1.5 w-10 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[10px] group hover:bg-emerald-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
-                      <Utensils className="w-3.5 h-3.5 mx-auto mb-0.5 text-emerald-600" />
-                      <span>LUNCH</span>
-                      <span className="block text-[8px] text-emerald-700 font-mono">{breakTimings.lunch.split('(')[0].trim()}</span>
-                    </th>
                     <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
                         <span>P4</span>
                         <Pencil className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       <span className="block text-[9px] text-slate-500 font-mono font-normal mt-0.5">{getPeriodTime(4, 'class')}</span>
+                    </th>
+                    <th className="py-4 px-1.5 w-10 bg-emerald-50/60 text-emerald-800 border-x border-emerald-100 text-[10px] group hover:bg-emerald-100/60 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('breaks')} title="Click to change break timings">
+                      <Utensils className="w-3.5 h-3.5 mx-auto mb-0.5 text-emerald-600" />
+                      <span>LUNCH</span>
+                      <span className="block text-[8px] text-emerald-700 font-mono">{breakTimings.lunch.split('(')[0].trim()}</span>
                     </th>
                     <th className="py-4 px-3 w-40 group hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={() => handleOpenEditTimings('class')} title="Click to change period timings">
                       <div className="flex items-center justify-center gap-1">
@@ -1598,19 +1604,18 @@ export default function TimetableManagement({ user }) {
                         </td>
 
                         <td className="p-1 bg-amber-50/30 border-x border-amber-100 text-center text-[10px] font-bold text-amber-700">
-                          15m
+                          10m
                         </td>
 
                         <td className="p-2 align-top">
                           <SlotCell slot={daySchedule[3]} onEdit={() => handleOpenEditSlot(day, 3, daySchedule[3])} />
                         </td>
-
-                        <td className="p-1 bg-emerald-50/30 border-x border-emerald-100 text-center text-[10px] font-bold text-emerald-700">
-                          45m
-                        </td>
-
                         <td className="p-2 align-top">
                           <SlotCell slot={daySchedule[4]} onEdit={() => handleOpenEditSlot(day, 4, daySchedule[4])} />
+                        </td>
+
+                        <td className="p-1 bg-emerald-50/30 border-x border-emerald-100 text-center text-[10px] font-bold text-emerald-700">
+                          30m
                         </td>
                         <td className="p-2 align-top">
                           <SlotCell slot={daySchedule[5]} onEdit={() => handleOpenEditSlot(day, 5, daySchedule[5])} />
@@ -2550,7 +2555,7 @@ export default function TimetableManagement({ user }) {
                           type="text"
                           value={tempBreakTimings.tea}
                           onChange={(e) => setTempBreakTimings(prev => ({ ...prev, tea: e.target.value }))}
-                          placeholder="e.g. 11:00 - 11:15 AM (15m)"
+                          placeholder="e.g. 11:20 - 11:30 AM (10m)"
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
                           required
                         />
@@ -2568,7 +2573,7 @@ export default function TimetableManagement({ user }) {
                           type="text"
                           value={tempBreakTimings.lunch}
                           onChange={(e) => setTempBreakTimings(prev => ({ ...prev, lunch: e.target.value }))}
-                          placeholder="e.g. 12:55 - 1:45 PM (50m)"
+                          placeholder="e.g. 01:00 - 01:30 PM (30m)"
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
                           required
                         />

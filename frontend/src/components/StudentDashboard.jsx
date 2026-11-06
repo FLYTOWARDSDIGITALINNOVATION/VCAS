@@ -2214,23 +2214,39 @@ CONTACT:
                     <tbody className="divide-y divide-slate-100">
                       {currentDaySlots.length > 0 ? (
                         currentDaySlots.map((slot, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3.5 px-4 font-bold text-slate-800">Hour {slot.slot}</td>
-                            <td className="py-3.5 px-4 text-slate-500 font-medium">{slot.time}</td>
-                            <td className="py-3.5 px-4 font-mono font-bold text-blue-700">{slot.code}</td>
-                            <td className="py-3.5 px-4 font-extrabold text-slate-900">{slot.subject}</td>
-                            <td className="py-3.5 px-4 text-slate-600 font-medium">{slot.faculty}</td>
-                            <td className="py-3.5 px-4 font-medium text-slate-700">{slot.room}</td>
-                            <td className="py-3.5 px-4 text-right">
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                (slot.type || '').toLowerCase() === 'lab' 
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                                  : 'bg-blue-50 text-blue-700 border border-blue-200'
-                              }`}>
-                                {(slot.type || 'theory').toUpperCase()}
-                              </span>
-                            </td>
-                          </tr>
+                          <React.Fragment key={idx}>
+                            <tr className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-3.5 px-4 font-bold text-slate-800">Hour {slot.slot}</td>
+                              <td className="py-3.5 px-4 text-slate-500 font-medium">{slot.time}</td>
+                              <td className="py-3.5 px-4 font-mono font-bold text-blue-700">{slot.code}</td>
+                              <td className="py-3.5 px-4 font-extrabold text-slate-900">{slot.subject}</td>
+                              <td className="py-3.5 px-4 text-slate-600 font-medium">{slot.faculty}</td>
+                              <td className="py-3.5 px-4 font-medium text-slate-700">{slot.room}</td>
+                              <td className="py-3.5 px-4 text-right">
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                  (slot.type || '').toLowerCase() === 'lab' 
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                    : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                }`}>
+                                  {(slot.type || 'theory').toUpperCase()}
+                                </span>
+                              </td>
+                            </tr>
+                            {Number(slot.slot) === 2 && (
+                              <tr key={`break-after-2`} className="bg-amber-50/80 border-y border-amber-200/80">
+                                <td colSpan="7" className="py-2 px-4 text-center font-bold text-xs text-amber-800 tracking-wide">
+                                  ☕ Morning Break (11:20 AM – 11:30 AM)
+                                </td>
+                              </tr>
+                            )}
+                            {Number(slot.slot) === 4 && (
+                              <tr key={`break-after-4`} className="bg-emerald-50/80 border-y border-emerald-200/80">
+                                <td colSpan="7" className="py-2 px-4 text-center font-bold text-xs text-emerald-800 tracking-wide">
+                                  🍱 Lunch Break (01:00 PM – 01:30 PM)
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         ))
                       ) : (
                         <tr>
