@@ -73,6 +73,9 @@ export default function StaffTimetable({ staffUser }) {
   // Timetable schedule & classes from database
   const [schedule, setSchedule] = useState({});
   const [classes, setClasses] = useState([]);
+  const [allClasses, setAllClasses] = useState([]);
+  const [allTimetables, setAllTimetables] = useState([]);
+  const [availableRooms, setAvailableRooms] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Edit / Assign Slot Modal State
@@ -89,7 +92,7 @@ export default function StaffTimetable({ staffUser }) {
     typedPeriods: '1, 2, 3',
     code: '',
     name: '',
-    room: 'Classroom',
+    room: '',
     type: 'theory',
     color: 'blue',
     isContinuousLab: false,
@@ -122,26 +125,121 @@ export default function StaffTimetable({ staffUser }) {
   );
   const assignedStaffId = slotForm.staffId || selectedStaffId || currentStaffId;
 
-  // Fetch timetable and classes from backend API for selected staff
+  // Derive list of real classrooms from database classes, timetables, and custom venues (matching admin side)
+  const allVenues = useMemo(() => {
+    const set = new Set();
+    // 1. From database classes & rooms
+    availableRooms.forEach(r => {
+      if (r && typeof r === 'string' && r.trim()) set.add(r.trim());
+    });
+    // 2. From allTimetables (assigned across staff/admin)
+    allTimetables.forEach(t => {
+      const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+      Object.values(sched).forEach(day => {
+        if (day && typeof day === 'object') {
+          Object.values(day).forEach(slot => {
+            if (slot?.room && typeof slot.room === 'string' && slot.room.trim()) {
+              set.add(slot.room.trim());
+            }
+          });
+        }
+      });
+    });
+    // 3. From custom added venues in localStorage
+    try {
+      const custom = JSON.parse(localStorage.getItem('vcas_custom_venues') || '[]');
+      if (Array.isArray(custom)) {
+        custom.forEach(v => {
+          if (v && typeof v === 'string' && v.trim()) set.add(v.trim());
+        });
+      }
+    } catch (_) {}
+
+    const result = Array.from(set);
+    return result.length > 0 ? result : ['LH-101', 'LH-102', 'Computer Lab 1', 'Seminar Hall 1'];
+  }, [availableRooms, allTimetables]);
+
+  // Combined classes available for assigning timetable: staff classes + department classes + all added classes
+  const availableClassesForStaff = useMemo(() => {
+    const list = [...classes];
+    const seenCodes = new Set(classes.map(c => c.code));
+
+    const myDept = (selectedDepartment || staffUser?.department || '').trim().toLowerCase();
+
+    // First add department classes
+    allClasses.forEach(c => {
+      if (c && c.code && !seenCodes.has(c.code)) {
+        const cDept = (c.dept || c.department || '').trim().toLowerCase();
+        if (myDept && (cDept === myDept || cDept.includes(myDept) || myDept.includes(cDept))) {
+          seenCodes.add(c.code);
+          list.push(c);
+        }
+      }
+    });
+
+    // Then any remaining added classes
+    allClasses.forEach(c => {
+      if (c && c.code && !seenCodes.has(c.code)) {
+        seenCodes.add(c.code);
+        list.push(c);
+      }
+    });
+
+    return list;
+  }, [classes, allClasses, selectedDepartment, staffUser?.department]);
+
+  // Fetch timetable and classes from backend API for selected staff, plus all classes & venues
   const fetchData = async (targetId = selectedStaffId) => {
     const idToFetch = targetId || currentStaffId;
-    if (!idToFetch) return;
     try {
       setLoading(true);
-      const [tRes, cRes] = await Promise.all([
-        fetch(`${API_BASE}/timetable/staff/${idToFetch}`),
-        fetch(`${API_BASE}/classes/staff/${idToFetch}`)
+      const [tRes, cRes, allCRes, allTRes] = await Promise.all([
+        idToFetch ? fetch(`${API_BASE}/timetable/staff/${idToFetch}`).catch(() => null) : Promise.resolve(null),
+        idToFetch ? fetch(`${API_BASE}/classes/staff/${idToFetch}`).catch(() => null) : Promise.resolve(null),
+        fetch(`${API_BASE}/classes`).catch(() => null),
+        fetch(`${API_BASE}/timetable`).catch(() => null)
       ]);
 
-      const tData = await tRes.json();
-      const cData = await cRes.json();
+      if (tRes && tRes.ok) {
+        const tData = await tRes.json();
+        if (tData.success && tData.schedule) {
+          setSchedule(tData.schedule);
+        }
+      }
 
-      if (tData.success && tData.schedule) {
-        setSchedule(tData.schedule);
+      if (cRes && cRes.ok) {
+        const cData = await cRes.json();
+        if (cData.success && Array.isArray(cData.classes)) {
+          setClasses(cData.classes);
+        }
       }
-      if (cData.success && Array.isArray(cData.classes)) {
-        setClasses(cData.classes);
+
+      let roomList = [];
+      if (allCRes && allCRes.ok) {
+        const allCData = await allCRes.json();
+        const rawClasses = allCData?.classes || allCData?.data || (Array.isArray(allCData) ? allCData : []);
+        setAllClasses(rawClasses);
+        const classRooms = rawClasses.map(c => c.room).filter(Boolean);
+        roomList = [...roomList, ...classRooms];
       }
+
+      if (allTRes && allTRes.ok) {
+        const allTData = await allTRes.json();
+        const rawTimetables = allTData?.timetables || allTData?.data || (Array.isArray(allTData) ? allTData : []);
+        setAllTimetables(rawTimetables);
+      }
+
+      try {
+        const customHalls = localStorage.getItem('vcas_custom_exam_halls');
+        if (customHalls) {
+          const parsed = JSON.parse(customHalls);
+          const hallNames = parsed.map(h => typeof h === 'string' ? h : (h?.name || h?.hallName || h?.room)).filter(Boolean);
+          roomList = [...roomList, ...hallNames];
+        }
+      } catch (_) {}
+
+      const uniqueRooms = Array.from(new Set(roomList.map(r => typeof r === 'string' ? r.trim() : '').filter(Boolean)));
+      setAvailableRooms(uniqueRooms);
     } catch (err) {
       console.error('Error fetching timetable:', err);
     } finally {
@@ -211,7 +309,7 @@ export default function StaffTimetable({ staffUser }) {
         typedPeriods: periodStr,
         code: existing.code || '',
         name: existing.name || '',
-        room: existing.room === 'Lab' ? 'Lab' : 'Classroom',
+        room: existing.room || (allVenues[0] || 'LH-101'),
         type: (existing.type || 'theory').toLowerCase(),
         color: (existing.color || (existing.type === 'lab' ? 'emerald' : existing.type === 'part-time' ? 'orange' : existing.type === 'combined' ? 'violet' : 'blue')).toLowerCase(),
         isContinuousLab: Boolean(existing.isContinuousLab || existing.type === 'lab'),
@@ -223,7 +321,7 @@ export default function StaffTimetable({ staffUser }) {
       });
     } else {
       // Default to first class if available
-      const firstClass = classes[0] || null;
+      const firstClass = (availableClassesForStaff && availableClassesForStaff[0]) || classes[0] || null;
       const isLab = Boolean(firstClass && (firstClass.labHours > 0 || firstClass.type === 'lab' || firstClass.name?.toLowerCase().includes('lab')));
       setSlotForm({
         day,
@@ -231,7 +329,7 @@ export default function StaffTimetable({ staffUser }) {
         typedPeriods: String(slot),
         code: firstClass ? firstClass.code : '',
         name: firstClass ? firstClass.name : '',
-        room: 'Classroom',
+        room: firstClass?.room || (allVenues[0] || 'LH-101'),
         type: isLab ? 'lab' : 'theory',
         color: isLab ? 'emerald' : 'blue',
         isContinuousLab: isLab,
@@ -247,7 +345,7 @@ export default function StaffTimetable({ staffUser }) {
 
   // When user picks a class from dropdown, auto-fill code, name, room, and continuous lab hours
   const handleSelectClass = (classCode) => {
-    const selected = classes.find(c => c.code === classCode);
+    const selected = availableClassesForStaff.find(c => c.code === classCode) || classes.find(c => c.code === classCode);
     if (selected) {
       const isLab = Boolean(selected.labHours > 0 || selected.type === 'lab' || selected.name?.toLowerCase().includes('lab'));
       const hrs = Number(selected.theoryHours || selected.labHours) || 3;
@@ -258,7 +356,7 @@ export default function StaffTimetable({ staffUser }) {
         ...prev,
         code: selected.code,
         name: selected.name,
-        room: selected.room || prev.room || (isLab ? 'Computer Lab 1' : (allVenues[0] || '')),
+        room: selected.room || prev.room || (isLab ? 'Computer Lab 1' : (allVenues[0] || 'LH-101')),
         type: isLab ? 'lab' : prev.type,
         color: isLab ? 'emerald' : prev.color,
         isContinuousLab: isLab ? true : prev.isContinuousLab,
@@ -289,6 +387,33 @@ export default function StaffTimetable({ staffUser }) {
     const targetRoom = (slotForm.room || '').trim().toLowerCase();
     if (!targetRoom) return null;
 
+    const targetStaffId = slotForm.staffId || selectedStaffId || currentStaffId;
+
+    // Check across other faculty timetables
+    if (allTimetables && allTimetables.length > 0) {
+      const clash = allTimetables.find(t => {
+        if (t.staffId === targetStaffId) return false;
+        const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+        const daySlots = sched[slotForm.day] || {};
+        const existing = daySlots[String(slotForm.slot)];
+        return existing && existing.room && existing.room.trim().toLowerCase() === targetRoom;
+      });
+      if (clash) {
+        const sched = clash.schedule instanceof Map ? Object.fromEntries(clash.schedule) : (clash.schedule || {});
+        const existing = sched[slotForm.day]?.[String(slotForm.slot)];
+        const staffObj = allStaffList.find(s => s.staffId === clash.staffId || s.employeeId === clash.staffId);
+        return {
+          room: slotForm.room,
+          facultyName: staffObj?.name || clash.staffName || clash.staffId,
+          code: existing?.code || 'Another subject',
+          name: existing?.name || '',
+          day: slotForm.day,
+          slot: slotForm.slot
+        };
+      }
+    }
+
+    // Check current schedule for room clash
     for (const day of DAYS) {
       const daySlots = schedule[day] || {};
       for (const periodKey of Object.keys(daySlots)) {
@@ -298,7 +423,7 @@ export default function StaffTimetable({ staffUser }) {
         if (occupied.room.trim().toLowerCase() === targetRoom) {
           return {
             room: slotForm.room,
-            facultyName: occupied.staffName || occupied.faculty || 'Another faculty',
+            facultyName: occupied.staffName || occupied.faculty || staffUser?.name || 'Faculty',
             code: occupied.code,
             name: occupied.name,
             day,
@@ -308,7 +433,7 @@ export default function StaffTimetable({ staffUser }) {
       }
     }
     return null;
-  }, [isSlotModalOpen, schedule, slotForm.day, slotForm.slot, slotForm.room]);
+  }, [isSlotModalOpen, schedule, allTimetables, allStaffList, slotForm.day, slotForm.slot, slotForm.room, slotForm.staffId, selectedStaffId, currentStaffId, staffUser?.name]);
 
   // Save slot to database
   const handleSaveSlot = async (e) => {
@@ -361,7 +486,7 @@ export default function StaffTimetable({ staffUser }) {
         slotData: {
           code: slotForm.code.trim().toUpperCase(),
           name: slotForm.name.trim(),
-          room: slotForm.room === 'Lab' ? 'Lab' : 'Classroom',
+          room: slotForm.room?.trim() || (allVenues[0] || 'Classroom'),
           type: slotForm.type,
           color: slotForm.type === 'lab' ? 'emerald' : slotForm.type === 'part-time' ? 'orange' : slotForm.type === 'combined' ? 'violet' : slotForm.color,
           isContinuousLab: isLabContinuous,
@@ -769,6 +894,11 @@ export default function StaffTimetable({ staffUser }) {
                                   🏫 Combined · {cell.combinedDept ? cell.combinedDept.split(' ')[0] : 'Multi-Dept'}
                                 </div>
                               )}
+                              {cell.room && (
+                                <div className="text-[9px] font-semibold text-slate-600 truncate mt-0.5" title={`Venue: ${cell.room}`}>
+                                  📍 {cell.room}
+                                </div>
+                              )}
                               <div className="text-[9px] opacity-75 font-normal truncate mt-0.5 text-slate-600">{viewedStaffName}</div>
                             </div>
                           </td>
@@ -973,7 +1103,36 @@ export default function StaffTimetable({ staffUser }) {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* SUBJECT / CLASS SELECTION */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Subject Title / Class *</label>
+                <select
+                  value={availableClassesForStaff.find(c => c.name === slotForm.name || c.code === slotForm.code)?.code || ''}
+                  onChange={(e) => handleSelectClass(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 mb-1.5 cursor-pointer"
+                >
+                  <option value="">-- Choose Subject / Class from Dropdown --</option>
+                  {availableClassesForStaff.length === 0 ? (
+                    <option value="" disabled>No added classes found</option>
+                  ) : (
+                    availableClassesForStaff.map(c => (
+                      <option key={c.code || c._id} value={c.code}>
+                        {c.code ? `${c.code} — ` : ''}{c.name} {c.room ? `[${c.room}]` : ''} {c.section ? `(Sec ${c.section})` : ''}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <input
+                  type="text"
+                  required
+                  placeholder="Or enter subject / class name"
+                  value={slotForm.name}
+                  onChange={(e) => setSlotForm({ ...slotForm, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-blue-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
                   <input
@@ -985,32 +1144,52 @@ export default function StaffTimetable({ staffUser }) {
                   />
                 </div>
 
+                {/* CLASSROOM OR LAB VENUE DROPDOWN */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Venue</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Classroom / Lab Venue <span className="text-[11px] font-normal text-blue-600">(Dropdown Option)</span>
+                  </label>
                   <select
-                    value={slotForm.room === 'Lab' ? 'Lab' : 'Classroom'}
-                    onChange={(e) => setSlotForm(prev => ({ ...prev, room: e.target.value }))}
-                    className="w-full bg-blue-50/60 border border-blue-200 rounded-xl px-3 py-2 text-xs font-bold text-blue-900 focus:outline-none focus:border-blue-600 mb-1.5 cursor-pointer"
+                    value={slotForm.room}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const isLab = val.toLowerCase().includes('lab');
+                      setSlotForm(prev => ({
+                        ...prev,
+                        room: val,
+                        type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
+                      }));
+                    }}
+                    className="w-full bg-blue-50/60 border border-blue-200 rounded-xl px-3 py-2 text-xs font-bold text-blue-900 focus:bg-white focus:border-blue-600 focus:outline-none cursor-pointer transition-all mb-1.5"
                   >
-                    <option value="Classroom">Classroom</option>
-                    <option value="Lab">Lab</option>
+                    <option value="">-- Choose Classroom / Lab Venue --</option>
+                    {allVenues.length === 0 ? (
+                      <option value="" disabled>No added classrooms found</option>
+                    ) : (
+                      allVenues.map(venue => (
+                        <option key={venue} value={venue}>{venue}</option>
+                      ))
+                    )}
+                    {slotForm.room && !allVenues.includes(slotForm.room) && (
+                      <option value={slotForm.room}>{slotForm.room}</option>
+                    )}
                   </select>
+                  <input
+                    type="text"
+                    value={slotForm.room}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const isLab = val.toLowerCase().includes('lab');
+                      setSlotForm(prev => ({
+                        ...prev,
+                        room: val,
+                        type: isLab ? 'lab' : (prev.type === 'lab' ? 'theory' : prev.type)
+                      }));
+                    }}
+                    placeholder="Or type custom classroom / lab room"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-600 focus:outline-none transition-all"
+                  />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Subject Title / Name *</label>
-                <select
-                  required
-                  value={classes.find(c => c.name === slotForm.name)?.code || ''}
-                  onChange={(e) => handleSelectClass(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                >
-                  <option value="">-- Choose Subject Title / Name --</option>
-                  {classes.map(c => (
-                    <option key={c.code} value={c.code}>{c.name}</option>
-                  ))}
-                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
