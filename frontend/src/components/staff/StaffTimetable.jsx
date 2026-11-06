@@ -752,21 +752,24 @@ export default function StaffTimetable({ staffUser }) {
                             key={slot}
                             onClick={() => isHod && handleOpenSlotModal(day, slot)}
                             className={`p-1.5 text-center ${isHod ? 'cursor-pointer' : 'cursor-default'}`}
-                            title={`${cell.name} - ${viewedStaffName}`}
+                            title={`${cell.name || cell.code} - ${viewedStaffName}`}
                           >
-                            <div className={`p-1.5 rounded-lg border text-[11px] font-bold truncate transition-all ${isHod ? 'hover:scale-[1.02]' : ''} ${COLOR_MAP[cell.color] || 'bg-slate-50'}`}>
-                              <div>{cell.name || cell.code}</div>
+                            <div className={`p-1.5 rounded-lg border text-[11px] font-bold transition-all ${isHod ? 'hover:scale-[1.02]' : ''} ${COLOR_MAP[cell.color] || 'bg-slate-50'}`}>
+                              <div className="font-extrabold text-slate-900 leading-tight">{cell.name || cell.code}</div>
+                              {cell.code && cell.name && cell.code !== cell.name && (
+                                <div className="text-[9px] font-mono text-slate-500 uppercase">{cell.code}</div>
+                              )}
                               {cell.type === 'part-time' && (
-                                <div className="text-[8px] font-black text-orange-600 uppercase tracking-tight">
+                                <div className="text-[8px] font-black text-orange-600 uppercase tracking-tight mt-0.5">
                                   ⏰ Part-Time · {cell.partTimeSchedule === 'before-lunch' ? 'Pre-Lunch' : 'Pre-Break'}
                                 </div>
                               )}
                               {cell.type === 'combined' && (
-                                <div className="text-[8px] font-black text-violet-600 uppercase tracking-tight truncate" title={`Combined with ${cell.combinedDept || ''}`}>
+                                <div className="text-[8px] font-black text-violet-600 uppercase tracking-tight mt-0.5" title={`Combined with ${cell.combinedDept || ''}`}>
                                   🏫 Combined · {cell.combinedDept ? cell.combinedDept.split(' ')[0] : 'Multi-Dept'}
                                 </div>
                               )}
-                              <div className="text-[9px] opacity-75 font-normal truncate">{viewedStaffName}</div>
+                              <div className="text-[9px] opacity-75 font-normal truncate mt-0.5 text-slate-600">{viewedStaffName}</div>
                             </div>
                           </td>
                         );
