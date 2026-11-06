@@ -503,12 +503,14 @@ export default function StaffInternalMarks({ staffUser }) {
 
   const fetchStaffSubjects = useCallback(async () => {
     try {
-      const [staffClsData, allClassesData, subjectsData, asgtsData, marksData] = await Promise.all([
+      const [staffClsData, allClassesData, subjectsData, asgtsData, marksData, departmentsData, departmentClassesData] = await Promise.all([
         fetch(`${API}/classes/staff/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
         fetch(`${API}/classes`).then(r => r.json()).catch(() => null),
         fetch(`${API}/subjects`).then(r => r.json()).catch(() => null),
         fetch(`${API}/assignments/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
         fetch(`${API}/internal-marks/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+        fetch(`${API}/departments`).then(r => r.json()).catch(() => null),
+        fetch(`${API}/classes?dept=${encodeURIComponent(staffUser?.department || '')}`).then(r => r.json()).catch(() => null),
       ]);
 
       const subs = [];
@@ -526,7 +528,17 @@ export default function StaffInternalMarks({ staffUser }) {
           (normalized.includes('HEAD') && normalized.includes('DEPARTMENT')) ||
           normalized.includes('DEPARTMENT HEAD');
       };
-      const isHodUser = staffUser?.isHod === true || looksLikeHodUser(staffUser?.role) || looksLikeHodUser(staffUser?.designation);
+      const normalizeIdentity = (value) => String(value || '').trim().toLowerCase().replace(/^(dr|prof|mr|mrs|ms|miss)\.?\s+/i, '').replace(/[^a-z0-9]/g, '');
+      const departmentList = departmentsData?.data || (Array.isArray(departmentsData) ? departmentsData : []);
+      const staffDepartment = String(staffUser?.department || '').trim().toLowerCase();
+      const staffIdentifiers = [staffUser?.name, staffUser?.fullName, staffUser?.email, staffUser?._id, effectiveStaffId]
+        .map(normalizeIdentity).filter(Boolean);
+      const isDepartmentHod = departmentList.some(department => {
+        if (String(department?.name || '').trim().toLowerCase() !== staffDepartment) return false;
+        return [department?.hod, department?.hodEmail].map(normalizeIdentity).some(identity => identity && staffIdentifiers.includes(identity));
+      });
+      const isHodUser = staffUser?.isHod === true || staffUser?.canAllocateTasks === true ||
+        looksLikeHodUser(staffUser?.role) || looksLikeHodUser(staffUser?.designation) || isDepartmentHod;
       const isPrincipalOrAdmin = roleKey.includes('PRINCIPAL') || roleKey.includes('ADMIN') || designationKey.includes('PRINCIPAL') || designationKey.includes('ADMIN');
 
       const isGenericSubjectEntry = (value) => {
@@ -554,7 +566,6 @@ export default function StaffInternalMarks({ staffUser }) {
         subs.push({ code: c, name: (n && !isGenericSubjectEntry(n) && !looksLikeDemoSubject(n) && n !== c) ? n : c });
       };
 
-      const normalizeIdentity = (value) => String(value || '').trim().toLowerCase().replace(/^(dr|prof|mr|mrs|ms|miss)\.?\s+/i, '').replace(/[^a-z0-9]/g, '');
       const matchesStaffIdentity = (value) => {
         const candidate = String(value || '').trim();
         if (!candidate) return false;
@@ -572,38 +583,24 @@ export default function StaffInternalMarks({ staffUser }) {
 
       const permittedSubjects = allSubjects.filter(s => {
         if (!s.code) return false;
-        if (!effectiveStaffId && !staffUser?.name) return true;
-
-        const subjectValues = [
-          s.faculty,
-          s.staffName,
-          s.staffId,
-          s.employeeId,
-          s.createdBy,
-          s.createdById,
-          s.createdByName,
-          s.createdByStaffId,
-          s.department,
-          s.dept
-        ];
-        const userDept = (staffUser?.department || '').trim().toLowerCase();
-        const subjectDept = (s.department || s.dept || '').trim().toLowerCase();
-
-        const directMatch = subjectValues.some(matchesStaffIdentity);
-        const matchDept = Boolean(userDept && subjectDept && subjectDept === userDept);
-
-        if (isHodUser || isPrincipalOrAdmin || !userDept) {
-          return true;
-        }
-
-        return directMatch || matchDept;
+        if (isPrincipalOrAdmin) return true;
+        const subjectDept = String(s.department || s.dept || '').trim().toLowerCase();
+        if (isHodUser) return Boolean(staffDepartment && subjectDept === staffDepartment);
+        return [s.faculty, s.staffName, s.staffId, s.employeeId, s.createdBy, s.createdById, s.createdByName, s.createdByStaffId]
+          .some(matchesStaffIdentity);
       });
 
-      const subjectSource = permittedSubjects.length > 0 ? permittedSubjects : allSubjects;
-      subjectSource.forEach(s => addSub(s.code, s.name));
+      permittedSubjects.forEach(s => addSub(s.code, s.name));
 
       const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
       staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+
+      if (isHodUser) {
+        const departmentClasses = departmentClassesData?.classes || (Array.isArray(departmentClassesData?.data) ? departmentClassesData.data : []);
+        departmentClasses
+          .filter(c => String(c.dept || c.department || '').trim().toLowerCase() === staffDepartment)
+          .forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+      }
 
       const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
       allClasses
