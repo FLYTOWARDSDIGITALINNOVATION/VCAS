@@ -315,13 +315,17 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           let count = 0;
           studentMap.forEach(st => {
             const stDept = (st.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (
+            const matchName = cleanDeptName && (
               stDept === cleanDeptName ||
+              (cleanDeptName.length >= 4 && stDept.includes(cleanDeptName)) ||
+              (stDept.length >= 4 && cleanDeptName.includes(stDept))
+            );
+            const matchCode = cleanDeptCode && (
               stDept === cleanDeptCode ||
-              (cleanDeptName && stDept.includes(cleanDeptName)) ||
-              (stDept && cleanDeptName.includes(stDept)) ||
-              (cleanDeptCode && (stDept.includes(cleanDeptCode) || cleanDeptCode.includes(stDept)))
-            ) {
+              (cleanDeptCode.length >= 4 && stDept.includes(cleanDeptCode)) ||
+              (stDept.length >= 4 && cleanDeptCode.includes(stDept))
+            );
+            if (matchName || matchCode) {
               count++;
             }
           });

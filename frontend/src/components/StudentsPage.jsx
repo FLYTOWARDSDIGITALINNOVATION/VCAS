@@ -307,10 +307,19 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
   }, [students]);
 
   const uniqueYears = useMemo(() => {
+    // Normalize all year values to avoid duplicates like "1st Year" and "I Year" both appearing
+    const normalizeYear = (val) => {
+      const v = String(val || '').toLowerCase().trim();
+      if (v.includes('4') || v.includes('iv') || v.startsWith('fourth')) return '4th Year';
+      if (v.includes('3') || v.includes('iii') || v.startsWith('third')) return '3rd Year';
+      if (v.includes('2') || v.includes('ii') || v.startsWith('second')) return '2nd Year';
+      if (v.includes('1') || v.includes('i ') || v === 'i' || v.startsWith('first')) return '1st Year';
+      return val; // keep as-is if unrecognised
+    };
     const ySet = new Set();
     students.forEach(s => {
       const y = (s.year || '').trim();
-      if (y) ySet.add(y);
+      if (y) ySet.add(normalizeYear(y));
     });
     return Array.from(ySet).sort((a, b) => Number(String(a).match(/\d+/)?.[0] || 0) - Number(String(b).match(/\d+/)?.[0] || 0));
   }, [students]);
@@ -376,9 +385,16 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     const matchesDept = matchesDepartmentFilter(student);
     const matchesFee = !canViewFees || selectedFeeStatus === 'All Statuses' || student.feeStatus === selectedFeeStatus;
 
+    const normalizeYear = (val) => {
+      const v = String(val || '').toLowerCase().trim();
+      if (v.includes('4') || v.includes('iv') || v.startsWith('fourth')) return 4;
+      if (v.includes('3') || v.includes('iii') || v.startsWith('third')) return 3;
+      if (v.includes('2') || v.includes('ii') || v.startsWith('second')) return 2;
+      if (v.includes('1') || v.includes('i ') || v === 'i' || v.startsWith('first')) return 1;
+      return 0;
+    };
     const matchesYear = selectedYear === 'All Years' ||
-      String(student.year || '').trim().toLowerCase() === selectedYear.toLowerCase() ||
-      String(student.year || '').trim().toLowerCase().includes(selectedYear.toLowerCase());
+      normalizeYear(student.year) === normalizeYear(selectedYear);
 
     const studentSem = String(student.sem || student.semester || '').trim();
     const matchesSemester = selectedSemester === 'All Semesters' ||

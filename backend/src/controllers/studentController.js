@@ -17,19 +17,20 @@ exports.getAllStudents = async (req, res) => {
       filter.department = new RegExp(`^${department.trim()}$`, 'i');
     }
     if (year && year !== 'All') {
-      // Match e.g. "1st Year", "2nd Year" etc. stored in student.year
-      const yearNum = (() => {
-        const s = String(year).toLowerCase();
-        if (s.includes('1') || s.startsWith('first') || s.startsWith('i ') || s === 'i') return 1;
-        if (s.includes('2') || s.startsWith('second') || s.startsWith('ii ') || s === 'ii') return 2;
-        if (s.includes('3') || s.startsWith('third') || s.startsWith('iii')) return 3;
-        if (s.includes('4') || s.startsWith('fourth') || s.startsWith('iv')) return 4;
-        return null;
-      })();
-      if (yearNum) {
-        const ordinals = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
-        const ord = ordinals[yearNum];
-        filter.year = new RegExp(`^${ord}`, 'i');
+      // Match all year formats: "1st Year", "I Year", "First Year", "1", "II Year", "2nd Year" etc.
+      const s = String(year).toLowerCase().trim();
+      let yearPattern = null;
+      if (s.includes('1') || s.startsWith('first') || s === 'i' || s.startsWith('i ') || s === 'i year') {
+        yearPattern = /^(1st|first|i\b|1\b)/i;
+      } else if (s.includes('2') || s.startsWith('second') || s === 'ii' || s.startsWith('ii ') || s === 'ii year') {
+        yearPattern = /^(2nd|second|ii\b|2\b)/i;
+      } else if (s.includes('3') || s.startsWith('third') || s === 'iii' || s.startsWith('iii ') || s === 'iii year') {
+        yearPattern = /^(3rd|third|iii\b|3\b)/i;
+      } else if (s.includes('4') || s.startsWith('fourth') || s === 'iv' || s.startsWith('iv ') || s === 'iv year') {
+        yearPattern = /^(4th|fourth|iv\b|4\b)/i;
+      }
+      if (yearPattern) {
+        filter.year = yearPattern;
       }
     }
     if (feeStatus && feeStatus !== 'All Statuses') {

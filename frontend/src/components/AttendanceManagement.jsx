@@ -1,33 +1,33 @@
 import React, { useState, useMemo } from 'react';
 import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
-import { 
-  CheckSquare, 
-  Search, 
-  Calendar as CalendarIcon, 
-  Clock, 
-  Users, 
-  UserCheck, 
-  AlertTriangle, 
-  FileSpreadsheet, 
-  Download, 
-  Printer, 
-  CheckCircle2, 
-  XCircle, 
-  Plus, 
-  Eye, 
-  Filter, 
-  RotateCcw, 
-  Send, 
-  X, 
-  Check, 
-  TrendingUp, 
-  TrendingDown, 
-  ChevronRight, 
+import {
+  CheckSquare,
+  Search,
+  Calendar as CalendarIcon,
+  Clock,
+  Users,
+  UserCheck,
+  AlertTriangle,
+  FileSpreadsheet,
+  Download,
+  Printer,
+  CheckCircle2,
+  XCircle,
+  Plus,
+  Eye,
+  Filter,
+  RotateCcw,
+  Send,
+  X,
+  Check,
+  TrendingUp,
+  TrendingDown,
+  ChevronRight,
   ChevronLeft,
-  Building2, 
-  GraduationCap, 
-  BookOpen, 
+  Building2,
+  GraduationCap,
+  BookOpen,
   SlidersHorizontal,
   Mail,
   Phone,
@@ -60,6 +60,72 @@ function getLocalDateString() {
   const dy = String(d.getDate()).padStart(2, '0');
   return `${yr}-${mo}-${dy}`;
 }
+
+// Robust department matching helper: accurately matches exact, canonical aliases, and prefixes without false positives
+const checkDepartmentMatch = (studentDept, targetDept) => {
+  if (!targetDept || targetDept === 'All Departments' || targetDept === 'All') return true;
+  if (!studentDept) return false;
+
+  const sRaw = String(studentDept).trim().toLowerCase();
+  const tRaw = String(targetDept).trim().toLowerCase();
+  if (sRaw === tRaw) return true;
+
+  // Canonical mapping for standard college departments/abbreviations
+  const canonicalMap = {
+    computerscience: 'cs',
+    cs: 'cs',
+    bsccomputerscience: 'cs',
+    bsccs: 'cs',
+    msccomputerscience: 'cs',
+    msccs: 'cs',
+    criminologyandforensicscience: 'cfs',
+    criminology: 'cfs',
+    forensicscience: 'cfs',
+    cfs: 'cfs',
+    bsccriminologyandforensicscience: 'cfs',
+    commerce: 'commerce',
+    bcom: 'commerce',
+    bcomca: 'commerce_ca',
+    businessadministration: 'bba',
+    bba: 'bba',
+    bca: 'bca',
+    mca: 'mca',
+    mba: 'mba',
+    english: 'english',
+    tamil: 'tamil',
+    mathematics: 'maths',
+    maths: 'maths'
+  };
+
+  const toClean = (val) => String(val || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const sClean = toClean(studentDept);
+  const tClean = toClean(targetDept);
+
+  if (sClean === tClean) return true;
+
+  const sCanon = canonicalMap[sClean];
+  const tCanon = canonicalMap[tClean];
+  if (sCanon && tCanon) {
+    return sCanon === tCanon;
+  }
+
+  // CS specific check to prevent false positives with forensic science, economics, etc.
+  const isCS = (cleanVal) => {
+    return cleanVal === 'cs' || cleanVal.includes('computerscience') || cleanVal.includes('computerapplication');
+  };
+  const sIsCS = isCS(sClean);
+  const tIsCS = isCS(tClean);
+  if (sIsCS || tIsCS) {
+    return sIsCS && tIsCS;
+  }
+
+  // General containment only if length is at least 4 chars and clearly non-conflicting
+  if (sClean.length >= 4 && tClean.length >= 4) {
+    if (sClean.includes(tClean) || tClean.includes(sClean)) return true;
+  }
+
+  return false;
+};
 
 export default function AttendanceManagement({ user }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
@@ -131,9 +197,8 @@ export default function AttendanceManagement({ user }) {
           setAvailableDepartments(deptNames);
           if (deptNames.length > 0) {
             setRollDept(prev => {
-              if (prev === 'All Departments') return prev;
               if (prev && deptNames.includes(prev)) return prev;
-              return isSuperAdmin ? 'All Departments' : deptNames[0];
+              return deptNames[0];
             });
           }
         }
@@ -180,8 +245,8 @@ export default function AttendanceManagement({ user }) {
               }
             });
 
-            const percent = total > 0 
-              ? parseFloat(((attended / total) * 100).toFixed(1)) 
+            const percent = total > 0
+              ? parseFloat(((attended / total) * 100).toFixed(1))
               : (stu.attendance ? parseFloat(stu.attendance) : 0);
 
             const subjectWise = Object.values(subMap).map(s => ({
@@ -189,12 +254,19 @@ export default function AttendanceManagement({ user }) {
               percent: s.total > 0 ? parseFloat(((s.attended / s.total) * 100).toFixed(1)) : 0
             }));
 
+            // Derive year number: prioritise the student's stored year string first
             let yearNum = 1;
             const semStr = (stu.sem || stu.semester || '').toLowerCase();
             const yrStr = (stu.year || '').toLowerCase();
-            if (semStr.includes('3') || semStr.includes('4') || yrStr.includes('2')) yearNum = 2;
-            else if (semStr.includes('5') || semStr.includes('6') || yrStr.includes('3')) yearNum = 3;
-            else if (semStr.includes('7') || semStr.includes('8') || yrStr.includes('4')) yearNum = 4;
+            // Parse from explicit year field (e.g. "1st Year", "I Year", "2nd Year", "2", etc.)
+            if (yrStr.includes('4') || yrStr.includes('iv') || yrStr.startsWith('fourth')) yearNum = 4;
+            else if (yrStr.includes('3') || yrStr.includes('iii') || yrStr.startsWith('third')) yearNum = 3;
+            else if (yrStr.includes('2') || yrStr.includes('ii') || yrStr.startsWith('second')) yearNum = 2;
+            else if (yrStr.includes('1') || yrStr.includes('i ') || yrStr === 'i' || yrStr.startsWith('first')) yearNum = 1;
+            // Fall back to semester if year string is ambiguous
+            else if (semStr.includes('7') || semStr.includes('8')) yearNum = 4;
+            else if (semStr.includes('5') || semStr.includes('6')) yearNum = 3;
+            else if (semStr.includes('3') || semStr.includes('4')) yearNum = 2;
 
             return {
               id: stu._id || stu.id,
@@ -229,8 +301,8 @@ export default function AttendanceManagement({ user }) {
             const cat = (s.role === 'Office Staff' || s.designation?.toLowerCase().includes('office') || s.department?.toLowerCase().includes('office'))
               ? 'Office Staff'
               : (s.role === 'Accountant' || s.designation?.toLowerCase().includes('account') || s.department?.toLowerCase().includes('account'))
-              ? 'Accountant'
-              : 'Faculty';
+                ? 'Accountant'
+                : 'Faculty';
             const savedPunches = JSON.parse(localStorage.getItem('vcas_staff_punches') || '{}');
             const todayStr = new Date().toISOString().split('T')[0];
             const punch = savedPunches[`${sid}_${todayStr}`] || s.todayPunch || null;
@@ -285,7 +357,7 @@ export default function AttendanceManagement({ user }) {
     fetchAllAttendanceData();
   }, []);
 
-    const staffFacultyCount = staffAttendance.filter(s => s.category === 'Faculty').length;
+  const staffFacultyCount = staffAttendance.filter(s => s.category === 'Faculty').length;
   const staffOfficeCount = staffAttendance.filter(s => s.category === 'Office Staff').length;
   const staffAccountantCount = staffAttendance.filter(s => s.category === 'Accountant').length;
   const staffPresentCount = staffAttendance.filter(s => s.status === 'Present').length;
@@ -332,33 +404,57 @@ export default function AttendanceManagement({ user }) {
     }
 
     const sRoll = (student.rollNo || '').trim().toUpperCase();
-    const sReg = (student.regNo || '').trim().toUpperCase();
+    const sReg = (student.regNo || student.registerNumber || '').trim().toUpperCase();
+    const sAdm = (student.admissionNo || '').trim().toUpperCase();
+    const sName = (student.name || '').trim().toLowerCase();
+    const sDept = (student.department || '').trim().toLowerCase();
+
+    const matchesRecord = (r) => {
+      const rRoll = (r.rollNo || r.regNo || '').trim().toUpperCase();
+      const rName = (r.name || '').trim().toLowerCase();
+      if (rRoll && (rRoll === sRoll || rRoll === sReg || (sAdm && rRoll === sAdm))) return true;
+      if (rName && sName && rName === sName) return true;
+      return false;
+    };
 
     // 2. Match sessions submitted by staff or admin for this date
     const matchingSessions = dbSessions.filter(s => {
       if (s.date !== dateStr) return false;
-      return Array.isArray(s.records) && s.records.some(r => {
-        const rRoll = (r.rollNo || '').trim().toUpperCase();
-        return rRoll && (rRoll === sRoll || rRoll === sReg);
-      });
+      return Array.isArray(s.records) && s.records.some(matchesRecord);
     });
 
     if (matchingSessions.length > 0) {
       let foundRecord = null;
+      let hasAbsent = false;
+      let hasPresent = false;
+      let hasLate = false;
+      let hasOD = false;
+
       for (const sess of matchingSessions) {
-        const rec = sess.records.find(r => {
-          const rRoll = (r.rollNo || '').trim().toUpperCase();
-          return rRoll && (rRoll === sRoll || rRoll === sReg);
-        });
+        const rec = sess.records.find(matchesRecord);
         if (rec) {
-          foundRecord = rec;
           const st = normalizeAttendanceStatus(rec.status);
-          if (st === 'Present') break;
+          if (st === 'Absent') {
+            hasAbsent = true;
+            foundRecord = rec;
+          } else if (st === 'Present') {
+            hasPresent = true;
+            if (!foundRecord || normalizeAttendanceStatus(foundRecord.status) !== 'Absent') {
+              foundRecord = rec;
+            }
+          } else if (st === 'Late') {
+            hasLate = true;
+            if (!foundRecord) foundRecord = rec;
+          } else if (st === 'On Duty' || st === 'OD') {
+            hasOD = true;
+            if (!foundRecord) foundRecord = rec;
+          }
         }
       }
 
       if (foundRecord) {
-        const status = normalizeAttendanceStatus(foundRecord.status);
+        // If student was marked Absent in ANY session on this date, reflect as Absent
+        const status = hasAbsent ? 'Absent' : hasPresent ? 'Present' : hasLate ? 'Late' : hasOD ? 'On Duty' : normalizeAttendanceStatus(foundRecord.status);
         const isAbs = status === 'Absent';
         const isLt = status === 'Late';
         const isOnDuty = status === 'On Duty' || status === 'OD';
@@ -402,7 +498,7 @@ export default function AttendanceManagement({ user }) {
     }
   }, [buildSessionCode, rollSubject]);
 
-  // Restore any saved session statuses for roll call
+  // Restore any saved session statuses for roll call, or reset to Present by default
   React.useEffect(() => {
     const code = (rollSubject || buildSessionCode()).split(' ')[0].trim().toUpperCase();
     const existing = dbSessions.find(s =>
@@ -415,10 +511,15 @@ export default function AttendanceManagement({ user }) {
         if (r.rollNo) statusMap[r.rollNo.trim().toUpperCase()] = r.status;
       });
       setStudents(prev => prev.map(s => {
-        const saved = statusMap[s.rollNo?.trim().toUpperCase()];
-        if (saved) return { ...s, status: saved };
-        return s;
+        const saved = statusMap[s.rollNo?.trim().toUpperCase()] || statusMap[s.regNo?.trim().toUpperCase()];
+        return { ...s, status: saved || 'Present' };
       }));
+    } else {
+      // Default to Present so roll call does not get stuck in Absent state
+      setStudents(prev => prev.map(s => ({
+        ...s,
+        status: 'Present'
+      })));
     }
   }, [selectedDate, rollSubject, dbSessions, buildSessionCode]);
 
@@ -474,26 +575,26 @@ export default function AttendanceManagement({ user }) {
     const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
     const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sun, 1 = Mon...
     const realToday = getLocalDateString();
-    
+
     const daysArray = [];
-    
+
     // Empty cells before first day
     for (let i = 0; i < firstDayIndex; i++) {
       daysArray.push({ day: null });
     }
-    
+
     // Days of the month
     for (let d = 1; d <= totalDays; d++) {
       const formattedMonth = String(currentMonth + 1).padStart(2, '0');
       const formattedDay = String(d).padStart(2, '0');
       const dateString = `${currentYear}-${formattedMonth}-${formattedDay}`;
-      
+
       const dayOfWeek = new Date(currentYear, currentMonth, d).getDay();
       const isSunday = dayOfWeek === 0;
-      
+
       // Attendance is marked ONLY if staff recorded attendance session in dbSessions
       const hasAttendanceMarked = dbSessions.some(s => s.date === dateString);
-      
+
       daysArray.push({
         day: d,
         dateString,
@@ -503,7 +604,7 @@ export default function AttendanceManagement({ user }) {
         hasAttendanceMarked
       });
     }
-    
+
     return daysArray;
   }, [currentYear, currentMonth, selectedDate, dbSessions]);
 
@@ -566,7 +667,8 @@ export default function AttendanceManagement({ user }) {
         String(s.department || '').toLowerCase().includes(q)
       );
 
-      const matchesDept = filterDept === 'All Departments' || s.department === filterDept;
+      // Department match
+      const matchesDept = checkDepartmentMatch(s.department, filterDept);
 
       let matchesStatus = true;
       if (onlyShowAbsentStudents) {
@@ -616,15 +718,8 @@ export default function AttendanceManagement({ user }) {
   // Handlers for Roll Call & Actions
   // -------------------------------------------------------------
   const rollCallStudents = useMemo(() => {
-    const allDepartmentsSelected = !rollDept || rollDept === 'All Departments';
-    const cleanDept = (rollDept || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     return students.filter(s => {
-      const sDept = (s.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const matchDept = allDepartmentsSelected ||
-        sDept === cleanDept ||
-        (cleanDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
-        (cleanDept && sDept.includes(cleanDept)) ||
-        (sDept && cleanDept.includes(sDept));
+      const matchDept = checkDepartmentMatch(s.department, rollDept);
       const matchYear = rollYear === 'ALL' || Number(s.year) === Number(rollYear);
       return matchDept && matchYear;
     });
@@ -642,7 +737,6 @@ export default function AttendanceManagement({ user }) {
 
   const filteredRegisterStudents = useMemo(() => {
     const q = (searchQuery || '').toLowerCase().trim();
-    const cleanFilterDept = (filterDept || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     return students.filter(s => {
       const matchesSearch = !q || (
         String(s.name || '').toLowerCase().includes(q) ||
@@ -651,12 +745,7 @@ export default function AttendanceManagement({ user }) {
         String(s.department || '').toLowerCase().includes(q)
       );
 
-      const sDept = (s.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const matchesDept = filterDept === 'All Departments' || 
-        sDept === cleanFilterDept ||
-        (cleanFilterDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
-        sDept.includes(cleanFilterDept) || cleanFilterDept.includes(sDept);
-
+      const matchesDept = checkDepartmentMatch(s.department, filterDept);
       const matchesYear = filterYear === 'ALL' || Number(s.year) === Number(filterYear);
 
       let matchesRange = true;
@@ -677,15 +766,8 @@ export default function AttendanceManagement({ user }) {
   };
 
   const handleMarkAll = (status) => {
-    const allDepartmentsSelected = !rollDept || rollDept === 'All Departments';
-    const cleanDept = (rollDept || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     setStudents(prev => prev.map(s => {
-      const sDept = (s.department || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const matchDept = allDepartmentsSelected ||
-        sDept === cleanDept ||
-        (cleanDept.includes('computerscience') && (sDept.includes('computerscience') || sDept.includes('cs'))) ||
-        (cleanDept && sDept.includes(cleanDept)) ||
-        (sDept && cleanDept.includes(sDept));
+      const matchDept = checkDepartmentMatch(s.department, rollDept);
       const matchYear = rollYear === 'ALL' || Number(s.year) === Number(rollYear);
       if (matchDept && matchYear) {
         return { ...s, status };
@@ -697,6 +779,10 @@ export default function AttendanceManagement({ user }) {
 
   const handleSubmitRollCall = async () => {
     try {
+      if (!rollDept || rollDept === 'All Departments') {
+        alert('Please select a specific Department before saving session roll call attendance.');
+        return;
+      }
       if (rollCallStudents.length === 0) {
         showToast('No students to mark in this selection.');
         return;
@@ -833,7 +919,7 @@ export default function AttendanceManagement({ user }) {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full font-sans animate-fadeIn">
-      
+
       {/* TOAST NOTIFICATION */}
       {toastMessage && typeof document !== 'undefined' && createPortal(
         <div className="fixed top-6 right-6 z-[99999] bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700 animate-fadeIn pointer-events-auto">
@@ -960,15 +1046,15 @@ export default function AttendanceManagement({ user }) {
 
       {/* 3. MAIN TWO-COLUMN LAYOUT (LEFT: SIDE CALENDAR FILTER, RIGHT: ATTENDANCE CONTENT) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* ========================================================================= */}
         {/* LEFT COLUMN: INTERACTIVE SIDE CALENDAR WIDGET & DATE FILTERS              */}
         {/* ========================================================================= */}
         <aside className="lg:col-span-4 xl:col-span-4 space-y-5">
-          
+
           {/* Calendar Box */}
           <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-4 sticky top-20">
-            
+
             {/* Calendar Header with Prev/Next Month */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -1027,23 +1113,21 @@ export default function AttendanceManagement({ user }) {
                   <button
                     key={cell.dateString}
                     onClick={() => handleSelectCalendarDate(cell.dateString)}
-                    className={`h-9 w-full rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer ${
-                      isSelected
+                    className={`h-9 w-full rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer ${isSelected
                         ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-500/30 scale-105 z-10'
                         : isToday
-                        ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200'
-                        : isSunday
-                        ? 'text-rose-400 hover:bg-rose-50'
-                        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
+                          ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200'
+                          : isSunday
+                            ? 'text-rose-400 hover:bg-rose-50'
+                            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
                   >
                     <span className="text-xs leading-none">{cell.day}</span>
-                    
+
                     {/* Status Dot */}
                     {!isSelected && (
-                      <span className={`w-1 h-1 rounded-full mt-0.5 ${
-                        cell.hasAttendanceMarked ? 'bg-emerald-500 ring-1 ring-emerald-300' : isSunday ? 'bg-rose-300' : isToday ? 'bg-blue-500' : 'bg-transparent'
-                      }`}></span>
+                      <span className={`w-1 h-1 rounded-full mt-0.5 ${cell.hasAttendanceMarked ? 'bg-emerald-500 ring-1 ring-emerald-300' : isSunday ? 'bg-rose-300' : isToday ? 'bg-blue-500' : 'bg-transparent'
+                        }`}></span>
                     )}
                   </button>
                 );
@@ -1058,21 +1142,19 @@ export default function AttendanceManagement({ user }) {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <button
                   onClick={() => handleSelectCalendarDate(getLocalDateString())}
-                  className={`py-1.5 px-2.5 rounded-xl font-bold transition-all text-left flex items-center justify-between border ${
-                    selectedDate === getLocalDateString()
+                  className={`py-1.5 px-2.5 rounded-xl font-bold transition-all text-left flex items-center justify-between border ${selectedDate === getLocalDateString()
                       ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-100 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   <span>📌 Today</span>
                 </button>
                 <button
                   onClick={() => handleSelectCalendarDate('2026-08-28')}
-                  className={`py-1.5 px-2.5 rounded-xl font-bold transition-all text-left flex items-center justify-between border ${
-                    selectedDate === '2026-08-28'
+                  className={`py-1.5 px-2.5 rounded-xl font-bold transition-all text-left flex items-center justify-between border ${selectedDate === '2026-08-28'
                       ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-100 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   <span>📅 Friday (28 Aug)</span>
                 </button>
@@ -1100,11 +1182,10 @@ export default function AttendanceManagement({ user }) {
                       setDateStatusFilter('ALL');
                       setActiveTab('daily-log');
                     }}
-                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${
-                      dateStatusFilter === 'ALL'
+                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${dateStatusFilter === 'ALL'
                         ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
+                      }`}
                   >
                     <span>All Students</span>
                     <span className="text-[10px] opacity-80">{dateTally.total}</span>
@@ -1115,11 +1196,10 @@ export default function AttendanceManagement({ user }) {
                       setDateStatusFilter('Present');
                       setActiveTab('daily-log');
                     }}
-                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${
-                      dateStatusFilter === 'Present'
+                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${dateStatusFilter === 'Present'
                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                         : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                    }`}
+                      }`}
                   >
                     <span>✓ Present (Came)</span>
                     <span className="text-[10px] font-black">{dateTally.present}</span>
@@ -1130,11 +1210,10 @@ export default function AttendanceManagement({ user }) {
                       setDateStatusFilter('Absent');
                       setActiveTab('daily-log');
                     }}
-                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${
-                      dateStatusFilter === 'Absent'
+                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${dateStatusFilter === 'Absent'
                         ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
                         : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                    }`}
+                      }`}
                   >
                     <span>✕ Absent</span>
                     <span className="text-[10px] font-black">{dateTally.absent}</span>
@@ -1145,11 +1224,10 @@ export default function AttendanceManagement({ user }) {
                       setDateStatusFilter('Late');
                       setActiveTab('daily-log');
                     }}
-                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${
-                      dateStatusFilter === 'Late'
+                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${dateStatusFilter === 'Late'
                         ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
                         : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                    }`}
+                      }`}
                   >
                     <span>⏰ Late</span>
                     <span className="text-[10px] font-black">{dateTally.late}</span>
@@ -1160,11 +1238,10 @@ export default function AttendanceManagement({ user }) {
                       setDateStatusFilter('OD');
                       setActiveTab('daily-log');
                     }}
-                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${
-                      dateStatusFilter === 'OD' || dateStatusFilter === 'On Duty'
+                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border ${dateStatusFilter === 'OD' || dateStatusFilter === 'On Duty'
                         ? 'bg-violet-600 text-white border-violet-600 shadow-xs'
                         : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
-                    }`}
+                      }`}
                   >
                     <span>🛡️ OD</span>
                     <span className="text-[10px] font-black">{dateTally.od}</span>
@@ -1182,7 +1259,7 @@ export default function AttendanceManagement({ user }) {
         {/* RIGHT COLUMN: ATTENDANCE RECORDS & TABS                                   */}
         {/* ========================================================================= */}
         <main className="lg:col-span-8 xl:col-span-8 space-y-5">
-          
+
           {/* Active Date Banner */}
           <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -1216,11 +1293,10 @@ export default function AttendanceManagement({ user }) {
           <div className="flex items-center border-b border-slate-200 text-xs sm:text-sm overflow-x-auto gap-1">
             <button
               onClick={() => setActiveTab('daily-log')}
-              className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'daily-log'
+              className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'daily-log'
                   ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
                   : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
-              }`}
+                }`}
             >
               <CalendarCheck2 className="w-4 h-4" />
               <span>Daily Attendees List ({dailyDateAttendees.length})</span>
@@ -1229,11 +1305,10 @@ export default function AttendanceManagement({ user }) {
             {!onlyShowAbsentStudents && (
               <button
                 onClick={() => setActiveTab('roll-call')}
-                className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                  activeTab === 'roll-call'
+                className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'roll-call'
                     ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
                     : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
-                }`}
+                  }`}
               >
                 <CheckSquare className="w-4 h-4" />
                 <span>Mark Roll Call</span>
@@ -1242,11 +1317,10 @@ export default function AttendanceManagement({ user }) {
 
             <button
               onClick={() => setActiveTab('student-register')}
-              className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'student-register'
+              className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'student-register'
                   ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
                   : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
-              }`}
+                }`}
             >
               <Users className="w-4 h-4" />
               <span>Shortage Monitor (&lt;75%)</span>
@@ -1255,11 +1329,10 @@ export default function AttendanceManagement({ user }) {
             {!isFinanceOrOffice && (
               <button
                 onClick={() => setActiveTab('staff-attendance')}
-                className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                  activeTab === 'staff-attendance'
+                className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'staff-attendance'
                     ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
                     : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
-                }`}
+                  }`}
               >
                 <UserCheck className="w-4 h-4" />
                 <span>Staff Attendance (Faculty & Office)</span>
@@ -1271,11 +1344,10 @@ export default function AttendanceManagement({ user }) {
 
             <button
               onClick={() => setActiveTab('leaves')}
-              className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'leaves'
+              className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'leaves'
                   ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
                   : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
-              }`}
+                }`}
             >
               <Clock className="w-4 h-4" />
               <span>Leaves & OD</span>
@@ -1287,7 +1359,7 @@ export default function AttendanceManagement({ user }) {
           {/* ========================================================================= */}
           {activeTab === 'daily-log' && (
             <div className="space-y-4">
-              
+
               {/* Filter Row */}
               <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="relative flex-1 w-full">
@@ -1336,20 +1408,19 @@ export default function AttendanceManagement({ user }) {
                     <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                       {dailyDateAttendees.length > 0 ? (
                         dailyDateAttendees.map((s) => (
-                          <tr 
-                            key={s.id} 
+                          <tr
+                            key={s.id}
                             onClick={() => setViewingStudentProfile(s)}
                             className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                           >
                             <td className="py-3.5 px-5">
                               <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                                  s.dayStatus === 'Present'
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${s.dayStatus === 'Present'
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : s.dayStatus === 'Absent'
-                                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                }`}>
+                                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  }`}>
                                   {s.name.charAt(0)}
                                 </div>
                                 <div>
@@ -1370,17 +1441,16 @@ export default function AttendanceManagement({ user }) {
                             </td>
 
                             <td className="py-3.5 px-4">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${
-                                s.dayStatus === 'Present'
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${s.dayStatus === 'Present'
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : s.dayStatus === 'Absent'
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : s.dayStatus === 'Late'
-                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : s.dayStatus === 'On Duty' || s.dayStatus === 'OD'
-                                  ? 'bg-violet-50 text-violet-700 border-violet-200'
-                                  : 'bg-purple-50 text-purple-700 border-purple-200'
-                              }`}>
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : s.dayStatus === 'Late'
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                      : s.dayStatus === 'On Duty' || s.dayStatus === 'OD'
+                                        ? 'bg-violet-50 text-violet-700 border-violet-200'
+                                        : 'bg-purple-50 text-purple-700 border-purple-200'
+                                }`}>
                                 {s.dayStatus === 'Present' && '✓ Present'}
                                 {(s.dayStatus === 'Not Marked' || s.dayStatus === 'Not Came') && '⏳ Not Came'}
                                 {s.dayStatus === 'Absent' && '✕ Absent'}
@@ -1492,7 +1562,7 @@ export default function AttendanceManagement({ user }) {
                   </div>
                 </div>
 
-                
+
               </div>
 
               {/* Tally Bar & Bulk Actions */}
@@ -1567,33 +1637,29 @@ export default function AttendanceManagement({ user }) {
                             <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/80">
                               <button
                                 onClick={() => handleToggleRollStatus(s.id, 'Present')}
-                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${
-                                  s.status === 'Present' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600'
-                                }`}
+                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${s.status === 'Present' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600'
+                                  }`}
                               >
                                 Present
                               </button>
                               <button
                                 onClick={() => handleToggleRollStatus(s.id, 'Absent')}
-                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${
-                                  s.status === 'Absent' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600'
-                                }`}
+                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${s.status === 'Absent' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600'
+                                  }`}
                               >
                                 Absent
                               </button>
                               <button
                                 onClick={() => handleToggleRollStatus(s.id, 'Late')}
-                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${
-                                  s.status === 'Late' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600'
-                                }`}
+                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${s.status === 'Late' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600'
+                                  }`}
                               >
                                 Late
                               </button>
                               <button
                                 onClick={() => handleToggleRollStatus(s.id, 'On Duty')}
-                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${
-                                  s.status === 'On Duty' ? 'bg-violet-600 text-white shadow-xs' : 'text-slate-600'
-                                }`}
+                                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all ${s.status === 'On Duty' ? 'bg-violet-600 text-white shadow-xs' : 'text-slate-600'
+                                  }`}
                               >
                                 OD
                               </button>
@@ -1651,9 +1717,8 @@ export default function AttendanceManagement({ user }) {
                           {s.department} (Yr {s.year})
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className={`font-black text-xs ${
-                            s.attendancePercent < 75 ? 'text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200' : 'text-emerald-600'
-                          }`}>
+                          <span className={`font-black text-xs ${s.attendancePercent < 75 ? 'text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200' : 'text-emerald-600'
+                            }`}>
                             {s.attendancePercent}%
                           </span>
                         </td>
@@ -1712,44 +1777,40 @@ export default function AttendanceManagement({ user }) {
                   <button
                     type="button"
                     onClick={() => setStaffCategoryFilter('ALL')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      staffCategoryFilter === 'ALL'
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${staffCategoryFilter === 'ALL'
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     All Staff ({staffAttendance.length})
                   </button>
                   <button
                     type="button"
                     onClick={() => setStaffCategoryFilter('Faculty')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      staffCategoryFilter === 'Faculty'
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${staffCategoryFilter === 'Faculty'
                         ? 'bg-white text-blue-600 shadow-xs'
                         : 'text-slate-600 hover:text-blue-600'
-                    }`}
+                      }`}
                   >
                     👨‍🏫 Faculty ({staffFacultyCount})
                   </button>
                   <button
                     type="button"
                     onClick={() => setStaffCategoryFilter('Office Staff')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      staffCategoryFilter === 'Office Staff'
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${staffCategoryFilter === 'Office Staff'
                         ? 'bg-white text-amber-700 shadow-xs'
                         : 'text-slate-600 hover:text-amber-700'
-                    }`}
+                      }`}
                   >
                     📋 Office Staff ({staffOfficeCount})
                   </button>
                   <button
                     type="button"
                     onClick={() => setStaffCategoryFilter('Accountant')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      staffCategoryFilter === 'Accountant'
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${staffCategoryFilter === 'Accountant'
                         ? 'bg-white text-emerald-700 shadow-xs'
                         : 'text-slate-600 hover:text-emerald-700'
-                    }`}
+                      }`}
                   >
                     💰 Accountant ({staffAccountantCount})
                   </button>
@@ -1836,13 +1897,12 @@ export default function AttendanceManagement({ user }) {
                             <span className="text-[11px] text-slate-400 font-mono">{st.empId} • {st.designation}</span>
                           </td>
                           <td className="py-3.5 px-4">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-bold ${
-                              st.category === 'Office Staff'
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-bold ${st.category === 'Office Staff'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                 : st.category === 'Accountant'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-blue-50 text-blue-700 border border-blue-200'
-                            }`}>
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-blue-50 text-blue-700 border border-blue-200'
+                              }`}>
                               {st.category === 'Office Staff' ? '📋 Office Staff' : st.category === 'Accountant' ? '💰 Accountant' : '👨‍🏫 Teaching Faculty'}
                             </span>
                           </td>
@@ -1852,13 +1912,12 @@ export default function AttendanceManagement({ user }) {
                           </td>
                           <td className="py-3.5 px-4 font-bold text-blue-600">{st.workHours}</td>
                           <td className="py-3.5 px-5 text-right">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${
-                              st.status === 'Present'
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${st.status === 'Present'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : st.status === 'Late'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : st.status === 'Not Punched In' ? 'bg-slate-100 text-slate-500 border border-slate-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}>
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : st.status === 'Not Punched In' ? 'bg-slate-100 text-slate-500 border border-slate-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}>
                               {st.status}
                             </span>
                           </td>
@@ -1883,9 +1942,8 @@ export default function AttendanceManagement({ user }) {
                       <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 font-bold text-xs rounded-lg border border-blue-100">
                         {req.type}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
-                        req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
                         {req.status}
                       </span>
                     </div>
@@ -1931,7 +1989,7 @@ export default function AttendanceManagement({ user }) {
       {viewingStudentProfile && (
         <ModalPortal isOpen={Boolean(viewingStudentProfile)} onClose={() => setViewingStudentProfile(null)}>
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto" onClick={(e) => e.stopPropagation()}>
-            
+
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
@@ -1958,9 +2016,8 @@ export default function AttendanceManagement({ user }) {
                 <p className="text-xs text-slate-300 mt-0.5">{viewingStudentProfile.attendedClasses} / {viewingStudentProfile.totalClasses} Lectures Attended</p>
               </div>
 
-              <span className={`px-3 py-1.5 text-xs font-bold rounded-xl ${
-                viewingStudentProfile.attendancePercent < 75 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-              }`}>
+              <span className={`px-3 py-1.5 text-xs font-bold rounded-xl ${viewingStudentProfile.attendancePercent < 75 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                }`}>
                 {viewingStudentProfile.attendancePercent < 75 ? '⚠️ Shortage Risk' : '✓ Eligible for Exams'}
               </span>
             </div>
@@ -1974,9 +2031,8 @@ export default function AttendanceManagement({ user }) {
                       <span className="font-bold text-purple-600 mr-2">{sub.code}:</span>
                       <span className="font-bold text-slate-900">{sub.name}</span>
                     </div>
-                    <span className={`font-black text-xs ${
-                      sub.percent >= 85 ? 'text-emerald-600' : sub.percent >= 75 ? 'text-amber-600' : 'text-rose-600'
-                    }`}>
+                    <span className={`font-black text-xs ${sub.percent >= 85 ? 'text-emerald-600' : sub.percent >= 75 ? 'text-amber-600' : 'text-rose-600'
+                      }`}>
                       {sub.percent}%
                     </span>
                   </div>
