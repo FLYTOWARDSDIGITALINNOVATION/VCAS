@@ -4,7 +4,7 @@ import {
   CheckSquare, Calendar as CalendarIcon, Clock, Users,
   CheckCircle2, XCircle, History, Save, AlertCircle,
   Search, BookOpen, ChevronRight, Plus, UploadCloud, Download,
-  FileSpreadsheet, Loader2, Filter, Layers, X
+  FileSpreadsheet, Loader2, Filter, Layers, X, Building2, GraduationCap
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
 import ExcelAttendanceUploadModal from './ExcelAttendanceUploadModal';
@@ -41,6 +41,9 @@ export default function StaffAttendance({ staffUser }) {
   const [selectedDepartment, setSelectedDepartment] = useState(() => staffUser?.department || 'All');
   const [adminDepartments, setAdminDepartments] = useState([]);
 
+  // Year Selection ('All' | '1st Year' | '2nd Year' | '3rd Year' | '4th Year')
+  const [selectedYear, setSelectedYear] = useState('All');
+
   // Classes & Student Roster
   const [classes, setClasses] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
@@ -58,6 +61,9 @@ export default function StaffAttendance({ staffUser }) {
   // Real Attendance History from database
   const [historyList, setHistoryList] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyDeptFilter, setHistoryDeptFilter] = useState('All');
+  const [historyYearFilter, setHistoryYearFilter] = useState('All');
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
 
   // Quick Student Add & Auto-Import state
   const [allRegisteredStudents, setAllRegisteredStudents] = useState([]);
@@ -215,6 +221,7 @@ export default function StaffAttendance({ staffUser }) {
         ? selectedDepartment
         : (staffUser?.department || downloadDept || '');
       if (deptToUse) params.append('department', deptToUse);
+      if (selectedYear && selectedYear !== 'All') params.append('year', selectedYear);
       if (downloadStartDate) params.append('startDate', downloadStartDate);
       if (downloadEndDate) params.append('endDate', downloadEndDate);
 
@@ -229,12 +236,13 @@ export default function StaffAttendance({ staffUser }) {
       const sessions = data.sessions || [];
 
       if (summaries.length === 0 && sessions.length === 0) {
-        alert(`No attendance records found for ${deptToUse || 'selected'} between ${downloadStartDate} and ${downloadEndDate}.`);
+        alert(`No attendance records found for ${deptToUse || 'selected'}${selectedYear !== 'All' ? ` (${selectedYear})` : ''} between ${downloadStartDate} and ${downloadEndDate}.`);
         return;
       }
 
       const rangeSuffix = `_${downloadStartDate}_to_${downloadEndDate}`;
-      const filename = `Attendance_${(deptToUse || 'All').replace(/\s+/g, '_')}${rangeSuffix}`;
+      const yrSuffix = selectedYear && selectedYear !== 'All' ? `_${selectedYear.replace(/\s+/g, '_')}` : '';
+      const filename = `Attendance_${(deptToUse || 'All').replace(/\s+/g, '_')}${yrSuffix}${rangeSuffix}`;
 
       const rowsToExport = summaries.length > 0
         ? summaries.map((s, idx) => ({
@@ -423,10 +431,14 @@ export default function StaffAttendance({ staffUser }) {
     }
   };
 
-  // Fetch all registered students
-  const fetchRegisteredStudents = async () => {
+  // Fetch registered students — optionally filtered by dept+year for efficiency
+  const fetchRegisteredStudents = async (dept = null, yr = null) => {
     try {
-      const res = await fetch(`${API_BASE}/students`);
+      const params = new URLSearchParams();
+      if (dept && dept !== 'All') params.set('department', dept);
+      if (yr && yr !== 'All') params.set('year', yr);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`${API_BASE}/students${query}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
         setAllRegisteredStudents(data.data);
@@ -452,9 +464,22 @@ export default function StaffAttendance({ staffUser }) {
   useEffect(() => {
     fetchClasses();
     fetchHistory();
-    fetchRegisteredStudents();
+    fetchRegisteredStudents(); // fetch all on initial load
     fetchDepartments();
   }, [staffUser?.staffId]);
+
+  // Re-fetch students whenever dept or year filter changes (server-side filter = exact match)
+  useEffect(() => {
+    if (selectedDepartment && selectedDepartment !== 'All') {
+      fetchRegisteredStudents(
+        selectedDepartment !== 'All' ? selectedDepartment : null,
+        selectedYear !== 'All' ? selectedYear : null
+      );
+    } else {
+      // When "All" dept — fetch everything
+      fetchRegisteredStudents();
+    }
+  }, [selectedDepartment, selectedYear]);
 
   // Derived available departments
   const availableDepartments = useMemo(() => {
@@ -531,175 +556,301 @@ export default function StaffAttendance({ staffUser }) {
     }
   };
 
-  // Filter classes according to selected department
+  // Year & Department Normalization Helpers
+  const extractYearNumber = (value) => {
+    if (!value && value !== 0) return null;
+    const str = String(value).trim().toLowerCase();
+    if (!str || str === 'all') return null;
+
+    if (str === 'iv' || str.startsWith('iv ') || str.includes('4th') || str.includes('fourth')) return 4;
+    if (str === 'iii' || str.startsWith('iii ') || str.includes('3rd') || str.includes('third')) return 3;
+    if (str === 'ii' || str.startsWith('ii ') || str.includes('2nd') || str.includes('second')) return 2;
+    if (str === 'i' || str.startsWith('i ') || str.includes('1st') || str.includes('first')) return 1;
+
+    const digits = str.match(/\d+/);
+    if (digits) {
+      const num = parseInt(digits[0], 10);
+      if (num >= 1 && num <= 6) return num;
+    }
+    return null;
+  };
+
+  const getStudentYearNumber = (stu) => {
+    if (!stu) return null;
+    const yrNum = extractYearNumber(stu.year);
+    if (yrNum !== null) return yrNum;
+
+    const semStr = String(stu.sem || stu.semester || '').trim().toLowerCase();
+    const semDigits = semStr.match(/\d+/);
+    if (semDigits) {
+      const semNum = parseInt(semDigits[0], 10);
+      if (semNum >= 1 && semNum <= 10) {
+        return Math.ceil(semNum / 2);
+      }
+    }
+    return null;
+  };
+
+  const matchesStudentYear = (stu, targetYear) => {
+    if (!targetYear || targetYear === 'All' || targetYear === 'ALL') return true;
+    const targetYearNum = extractYearNumber(targetYear);
+    if (!targetYearNum) return true;
+    const stuYearNum = getStudentYearNumber(stu);
+    if (stuYearNum !== null) {
+      return stuYearNum === targetYearNum;
+    }
+    return false;
+  };
+
+  const matchesStudentDept = (stu, targetDept) => {
+    if (!targetDept || targetDept === 'All' || targetDept === 'ALL') return true;
+    const cleanTarget = targetDept.toLowerCase().trim();
+    const d = String(stu?.department || '').toLowerCase().trim();
+    const c = String(stu?.course || '').toLowerCase().trim();
+    const ca = String(stu?.courseAdmitted || '').toLowerCase().trim();
+
+    // Exact match first
+    if (d && d === cleanTarget) return true;
+    if (c && c === cleanTarget) return true;
+    if (ca && ca === cleanTarget) return true;
+
+    // Normalize (remove spaces, punctuation)
+    const normTarget = cleanTarget.replace(/[^a-z0-9]/g, '');
+    const normD = d.replace(/[^a-z0-9]/g, '');
+    const normC = c.replace(/[^a-z0-9]/g, '');
+    const normCA = ca.replace(/[^a-z0-9]/g, '');
+
+    // Exact normalized match
+    if (normD && normD === normTarget) return true;
+    if (normC && normC === normTarget) return true;
+    if (normCA && normCA === normTarget) return true;
+
+    // Longer value contains shorter — only if target is a meaningful substring (len >= 3)
+    if (normTarget.length >= 3) {
+      if (normD && normD.includes(normTarget)) return true;
+      if (normC && normC.includes(normTarget)) return true;
+    }
+
+    // Abbreviation aliases — strict word-boundary approach
+    // Map full names → canonical abbreviation
+    const abbrevMap = {
+      computerscience: 'cs', compsci: 'cs', bsc: 'bsc',
+      informationtechnology: 'it', infotech: 'it',
+      businessadministration: 'bba', commerceaccounts: 'bcom',
+      bca: 'bca', mca: 'mca', mba: 'mba',
+    };
+    const resolveAbbrev = (val) => {
+      const v = val.replace(/[^a-z0-9]/g, '');
+      return abbrevMap[v] || v;
+    };
+    const tResolved = resolveAbbrev(normTarget);
+    const dResolved = resolveAbbrev(normD);
+    const cResolved = resolveAbbrev(normC);
+
+    if (tResolved && tResolved === dResolved) return true;
+    if (tResolved && tResolved === cResolved) return true;
+
+    return false;
+  };
+
+  // Filter classes according to selected department AND selected year
   const filteredClasses = useMemo(() => {
-    if (!selectedDepartment || selectedDepartment === 'All') return classes;
-    const deptNorm = selectedDepartment.toLowerCase().trim();
-    return classes.filter(c => {
-      const d = (c.dept || '').toLowerCase().trim();
-      return Boolean(d && (d === deptNorm || d.includes(deptNorm) || deptNorm.includes(d)));
-    });
-  }, [classes, selectedDepartment]);
+    let list = classes;
+    if (selectedDepartment && selectedDepartment !== 'All') {
+      const deptNorm = selectedDepartment.toLowerCase().trim();
+      list = list.filter(c => {
+        const d = (c.dept || '').toLowerCase().trim();
+        return Boolean(d && (d === deptNorm || d.includes(deptNorm) || deptNorm.includes(d)));
+      });
+    }
+    if (selectedYear && selectedYear !== 'All') {
+      const targetYr = extractYearNumber(selectedYear);
+      if (targetYr) {
+        list = list.filter(c => {
+          if (!c.year) return true;
+          const classYr = extractYearNumber(c.year);
+          return classYr ? classYr === targetYr : true;
+        });
+      }
+    }
+    return list;
+  }, [classes, selectedDepartment, selectedYear]);
 
   // Current active class object
   const currentClass = useMemo(() => {
     if (selectedClassCode === 'ALL_DEPT') {
+      const deptLabel = selectedDepartment !== 'All' ? selectedDepartment : 'Department';
+      const yrLabel = selectedYear !== 'All' ? ` (${selectedYear})` : '';
       return {
         code: 'ALL_DEPT',
-        name: `All ${selectedDepartment !== 'All' ? selectedDepartment : 'Department'} Students (General Attendance)`,
+        name: `All ${deptLabel}${yrLabel} Students (General Attendance)`,
         dept: selectedDepartment !== 'All' ? selectedDepartment : '',
+        year: selectedYear !== 'All' ? selectedYear : '',
         isAllDept: true
       };
     }
     if (filteredClasses.length === 0) return null;
     return filteredClasses.find(c => c.code === selectedClassCode) || filteredClasses[0] || null;
-  }, [filteredClasses, selectedClassCode, selectedDepartment]);
+  }, [filteredClasses, selectedClassCode, selectedDepartment, selectedYear]);
 
   const handleDepartmentChange = (newDept) => {
     setSelectedDepartment(newDept);
     setSearchQuery('');
-    if (!newDept || newDept === 'All') {
-      if (classes.length > 0) setSelectedClassCode(classes[0].code);
+    const deptNorm = (newDept && newDept !== 'All') ? newDept.toLowerCase().trim() : '';
+    const targetYr = extractYearNumber(selectedYear);
+
+    const matched = classes.filter(c => {
+      const d = (c.dept || '').toLowerCase().trim();
+      const matchDept = !deptNorm || Boolean(d && (d === deptNorm || d.includes(deptNorm) || deptNorm.includes(d)));
+      const classYr = extractYearNumber(c.year);
+      const matchYr = !targetYr || !classYr || classYr === targetYr;
+      return matchDept && matchYr;
+    });
+
+    if (matched.length > 0) {
+      setSelectedClassCode(matched[0].code);
     } else {
-      const deptNorm = newDept.toLowerCase().trim();
-      const matched = classes.filter(c => {
-        const d = (c.dept || '').toLowerCase().trim();
-        return Boolean(d && (d === deptNorm || d.includes(deptNorm) || deptNorm.includes(d)));
-      });
-      if (matched.length > 0) {
-        setSelectedClassCode(matched[0].code);
-      } else {
-        setSelectedClassCode('ALL_DEPT');
-      }
+      setSelectedClassCode('ALL_DEPT');
     }
   };
 
-  // Effective students list: prefer the selected class roster first, then match by class year/section,
-  // and only fall back to department-wide students when no class-specific roster is available.
+  const handleYearChange = (newYear) => {
+    setSelectedYear(newYear);
+    setSearchQuery('');
+    const deptNorm = (selectedDepartment && selectedDepartment !== 'All') ? selectedDepartment.toLowerCase().trim() : '';
+    const targetYr = extractYearNumber(newYear);
+
+    const matched = classes.filter(c => {
+      const d = (c.dept || '').toLowerCase().trim();
+      const matchDept = !deptNorm || Boolean(d && (d === deptNorm || d.includes(deptNorm) || deptNorm.includes(d)));
+      const classYr = extractYearNumber(c.year);
+      const matchYr = !targetYr || !classYr || classYr === targetYr;
+      return matchDept && matchYr;
+    });
+
+    if (matched.length > 0) {
+      setSelectedClassCode(matched[0].code);
+    } else {
+      setSelectedClassCode('ALL_DEPT');
+    }
+  };
+
+  // Effective students list: applies BOTH department and year filters accurately.
   const effectiveStudents = useMemo(() => {
-    const normalizeText = (value) => String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
-    const yearMatch = (studentYear, classYear) => {
-      if (classYear === undefined || classYear === null || classYear === '') return true;
-      const studentText = normalizeText(studentYear);
-      const classText = normalizeText(classYear);
-      if (!studentText || !classText) return true;
-      if (studentText === classText) return true;
-      const studentDigits = studentText.match(/\d+/g);
-      const classDigits = classText.match(/\d+/g);
-      if (studentDigits && classDigits) {
-        return studentDigits[0] === classDigits[0];
-      }
-      return false;
-    };
+    const isAllDept = selectedClassCode === 'ALL_DEPT' || currentClass?.isAllDept;
 
-    // If user selected "All Department Students", return all students in that department
-    if (selectedClassCode === 'ALL_DEPT' || currentClass?.isAllDept) {
-      const deptNorm = (selectedDepartment !== 'All' ? selectedDepartment : '').toLowerCase().trim();
+    // 1. If "All Department Students" (General Attendance) is selected:
+    if (isAllDept || !currentClass) {
       return allRegisteredStudents.filter(s => {
-        if (!deptNorm) return true;
-        const d = (s.department || '').toLowerCase().trim();
-        const c = (s.course || '').toLowerCase().trim();
-        return Boolean(d && (d === deptNorm || d.includes(deptNorm) || deptNorm.includes(d))) ||
-               Boolean(c && (c === deptNorm || c.includes(deptNorm) || deptNorm.includes(c)));
-      }).map(s => ({
-        rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
-        name: s.name,
-        department: s.department || selectedDepartment,
-        phone: s.phone || '',
-        email: s.email || ''
-      }));
+        const matchDept = matchesStudentDept(s, selectedDepartment);
+        const matchYear = matchesStudentYear(s, selectedYear);
+        return matchDept && matchYear;
+      }).map(s => {
+        const yrNum = getStudentYearNumber(s);
+        const yrLabel = yrNum ? `${yrNum}st Year`.replace('1st Year', '1st Year').replace('2st Year', '2nd Year').replace('3st Year', '3rd Year').replace('4st Year', '4th Year') : (selectedYear !== 'All' ? selectedYear : '1st Year');
+        return {
+          rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
+          name: s.name,
+          department: s.department || selectedDepartment || 'General',
+          year: s.year || yrLabel,
+          phone: s.phone || '',
+          email: s.email || ''
+        };
+      });
     }
 
+    // 2. If a specific class is selected and has an enrolled roster:
     const classRoster = currentClass?.students || currentClass?.enrolledStudents || [];
-    if (currentClass && classRoster.length > 0) {
-      return classRoster.map(s => ({
-        rollNo: (s.rollNo || '').toUpperCase(),
-        name: s.name,
-        department: currentClass?.dept || s.department || 'General',
-        phone: s.phone || '',
-        email: s.email || ''
-      }));
-    }
-
-    if (currentClass) {
-      const deptNormalized = (currentClass.dept || selectedDepartment || '').trim().toLowerCase();
-      const classYear = currentClass.year;
-      const classSection = (currentClass.section || '').trim().toUpperCase();
-
-      const matchedReg = allRegisteredStudents.filter(s => {
-        const studentDept = (s.department || '').trim().toLowerCase();
-        const matchesDept = !deptNormalized || !studentDept || studentDept === deptNormalized || studentDept.includes(deptNormalized) || deptNormalized.includes(studentDept);
-        const matchesYear = yearMatch(s.year, classYear);
-        const matchesSection = !classSection || !s.section || String(s.section).trim().toUpperCase() === classSection;
-        return matchesDept && matchesYear && matchesSection;
-      }).map(s => ({
-        rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
-        name: s.name,
-        department: s.department || currentClass?.dept || selectedDepartment || 'General',
-        phone: s.phone || '',
-        email: s.email || ''
-      }));
-
-      if (matchedReg.length > 0) {
-        return matchedReg;
-      }
-    }
-
-    if (selectedDepartment && selectedDepartment !== 'All') {
-      const deptNormalized = selectedDepartment.toLowerCase().trim();
-      const matchedReg = allRegisteredStudents.filter(s => {
-        const d = (s.department || '').toLowerCase().trim();
-        const c = (s.course || '').toLowerCase().trim();
-        const matchesDept = Boolean(d && (d === deptNormalized || d.includes(deptNormalized) || deptNormalized.includes(d)));
-        const matchesCourse = Boolean(c && (c === deptNormalized || c.includes(deptNormalized) || deptNormalized.includes(c)));
-        return matchesDept || matchesCourse;
-      }).map(s => ({
-        rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
-        name: s.name,
-        department: s.department || selectedDepartment,
-        phone: s.phone || '',
-        email: s.email || ''
-      }));
-
-      const extraFromClasses = [];
-      filteredClasses.forEach(cls => {
-        (cls.students || cls.enrolledStudents || []).forEach(st => {
-          const r = (st.rollNo || '').toUpperCase();
-          if (r && !matchedReg.some(x => x.rollNo === r) && !extraFromClasses.some(x => x.rollNo === r)) {
-            extraFromClasses.push({
-              rollNo: r,
-              name: st.name,
-              department: cls.dept || selectedDepartment,
-              phone: st.phone || '',
-              email: st.email || ''
-            });
-          }
-        });
+    if (classRoster.length > 0) {
+      const filteredRoster = classRoster.filter(s => {
+        if (!selectedYear || selectedYear === 'All') return true;
+        const regStudent = allRegisteredStudents.find(
+          r => (r.rollNo || r.regNo || r.studentId || '').toUpperCase() === (s.rollNo || '').toUpperCase()
+        );
+        return matchesStudentYear(regStudent || s, selectedYear);
       });
 
-      return [...matchedReg, ...extraFromClasses];
+      return (filteredRoster.length > 0 ? filteredRoster : classRoster).map(s => {
+        const regStudent = allRegisteredStudents.find(
+          r => (r.rollNo || r.regNo || r.studentId || '').toUpperCase() === (s.rollNo || '').toUpperCase()
+        );
+        const yrNum = getStudentYearNumber(regStudent || s);
+        const yrLabel = yrNum
+          ? `${yrNum}st Year`.replace('1st Year', '1st Year').replace('2st Year', '2nd Year').replace('3st Year', '3rd Year').replace('4st Year', '4th Year')
+          : (currentClass?.year ? `${currentClass.year}st Year`.replace('1st Year', '1st Year').replace('2st Year', '2nd Year').replace('3st Year', '3rd Year').replace('4st Year', '4th Year') : (selectedYear !== 'All' ? selectedYear : ''));
+        return {
+          rollNo: (s.rollNo || '').toUpperCase(),
+          name: s.name,
+          department: currentClass?.dept || s.department || regStudent?.department || selectedDepartment || 'General',
+          year: s.year || regStudent?.year || yrLabel,
+          phone: s.phone || regStudent?.phone || '',
+          email: s.email || regStudent?.email || ''
+        };
+      });
     }
 
-    return allRegisteredStudents.map(s => ({
-      rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
-      name: s.name,
-      department: s.department || 'General',
-      phone: s.phone || '',
-      email: s.email || ''
-    }));
-  }, [selectedDepartment, allRegisteredStudents, filteredClasses, currentClass]);
+    // 3. Class has no pre-enrolled roster -> match registered students by class dept, class year, section, and selectedYear
+    const targetDept = currentClass.dept || selectedDepartment;
+    const targetYear = selectedYear !== 'All' ? selectedYear : (currentClass.year ? `${currentClass.year} Year` : 'All');
+    const classSection = (currentClass.section || '').trim().toUpperCase();
+
+    const matchedReg = allRegisteredStudents.filter(s => {
+      const matchDept = matchesStudentDept(s, targetDept);
+      const matchYear = matchesStudentYear(s, targetYear);
+      const matchSection = !classSection || !s.section || String(s.section).trim().toUpperCase() === classSection;
+      return matchDept && matchYear && matchSection;
+    }).map(s => {
+      const yrNum = getStudentYearNumber(s);
+      const yrLabel = yrNum ? `${yrNum}st Year`.replace('1st Year', '1st Year').replace('2st Year', '2nd Year').replace('3st Year', '3rd Year').replace('4st Year', '4th Year') : '1st Year';
+      return {
+        rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
+        name: s.name,
+        department: s.department || targetDept || 'General',
+        year: s.year || yrLabel,
+        phone: s.phone || '',
+        email: s.email || ''
+      };
+    });
+
+    if (matchedReg.length > 0) {
+      return matchedReg;
+    }
+
+    // Fallback: match by selectedDepartment & selectedYear
+    return allRegisteredStudents.filter(s => {
+      const matchDept = matchesStudentDept(s, selectedDepartment);
+      const matchYear = matchesStudentYear(s, selectedYear);
+      return matchDept && matchYear;
+    }).map(s => {
+      const yrNum = getStudentYearNumber(s);
+      const yrLabel = yrNum ? `${yrNum}st Year`.replace('1st Year', '1st Year').replace('2st Year', '2nd Year').replace('3st Year', '3rd Year').replace('4st Year', '4th Year') : (selectedYear !== 'All' ? selectedYear : '1st Year');
+      return {
+        rollNo: (s.rollNo || s.regNo || s.studentId || '').toUpperCase(),
+        name: s.name,
+        department: s.department || selectedDepartment || 'General',
+        year: s.year || yrLabel,
+        phone: s.phone || '',
+        email: s.email || ''
+      };
+    });
+  }, [selectedDepartment, selectedYear, selectedClassCode, currentClass, allRegisteredStudents]);
 
   // Check if an existing session is in historyList
   const existingSession = useMemo(() => {
-    const activeCode = currentClass?.code || selectedClassCode || (selectedDepartment !== 'All' ? selectedDepartment : '');
+    const isAllDept = selectedClassCode === 'ALL_DEPT' || currentClass?.isAllDept;
+    const yrDigits = (selectedYear && selectedYear !== 'All') ? selectedYear.match(/\d+/)?.[0] : null;
+    const yrSuffix = yrDigits ? `-Y${yrDigits}` : '';
+    const deptPrefix = (selectedDepartment !== 'All' ? selectedDepartment : 'ALL').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
+    const activeCode = isAllDept ? `${deptPrefix}${yrSuffix}-ALL` : (currentClass?.code || selectedClassCode);
+
     if (!activeCode || !selectedDate || !sessionSlot) return null;
     const cleanSlot = (sessionSlot || '').trim().toLowerCase();
     return historyList.find(s =>
-      (s.classCode === activeCode || s.classCode === selectedClassCode) &&
+      (s.classCode === activeCode || s.classCode === selectedClassCode || (isAllDept && s.classCode?.startsWith(deptPrefix) && s.classCode?.endsWith('-ALL'))) &&
       s.date === selectedDate &&
       ((s.slot || '').trim().toLowerCase() === cleanSlot || cleanSlot.includes((s.slot || '').trim().toLowerCase()))
     ) || null;
-  }, [historyList, currentClass, selectedClassCode, selectedDepartment, selectedDate, sessionSlot]);
+  }, [historyList, currentClass, selectedClassCode, selectedDepartment, selectedYear, selectedDate, sessionSlot]);
 
   // Sync attendance state whenever class, date, slot, effectiveStudents, or historyList changes
   useEffect(() => {
@@ -738,7 +889,7 @@ export default function StaffAttendance({ staffUser }) {
     setAttendanceState(newMap);
     setSavedSuccessMsg('');
     setSubmitError('');
-  }, [selectedClassCode, currentClass, selectedDepartment, selectedDate, sessionSlot, effectiveStudents, historyList]);
+  }, [selectedClassCode, currentClass, selectedDepartment, selectedYear, selectedDate, sessionSlot, effectiveStudents, historyList]);
 
   // Filter students based on search query
   const displayedStudents = useMemo(() => {
@@ -769,6 +920,34 @@ export default function StaffAttendance({ staffUser }) {
     return effectiveStudents.filter(s => isOnDutyStatus(attendanceState[s.rollNo])).length;
   }, [effectiveStudents, attendanceState]);
 
+  // Filtered History List by Department, Year, and Search
+  const filteredHistoryList = useMemo(() => {
+    return historyList.filter(record => {
+      if (historyDeptFilter && historyDeptFilter !== 'All') {
+        const cleanDept = historyDeptFilter.toLowerCase().trim();
+        const rDept = String(record.department || '').toLowerCase().trim();
+        const rName = String(record.className || '').toLowerCase().trim();
+        const rCode = String(record.classCode || '').toLowerCase().trim();
+        const match = rDept.includes(cleanDept) || cleanDept.includes(rDept) || rName.includes(cleanDept) || rCode.includes(cleanDept.slice(0, 4));
+        if (!match) return false;
+      }
+      if (historyYearFilter && historyYearFilter !== 'All') {
+        const targetYr = extractYearNumber(historyYearFilter);
+        const rYr = extractYearNumber(record.year || record.className || record.classCode);
+        if (targetYr && rYr && targetYr !== rYr) return false;
+      }
+      if (historySearchQuery && historySearchQuery.trim()) {
+        const q = historySearchQuery.toLowerCase().trim();
+        const matchesClass = String(record.classCode || '').toLowerCase().includes(q);
+        const matchesName = String(record.className || '').toLowerCase().includes(q);
+        const matchesDate = String(record.date || '').toLowerCase().includes(q);
+        const matchesSlot = String(record.slot || '').toLowerCase().includes(q);
+        if (!matchesClass && !matchesName && !matchesDate && !matchesSlot) return false;
+      }
+      return true;
+    });
+  }, [historyList, historyDeptFilter, historyYearFilter, historySearchQuery]);
+
   const handleMarkAll = (status) => {
     const updated = { ...attendanceState };
     effectiveStudents.forEach(s => {
@@ -790,6 +969,23 @@ export default function StaffAttendance({ staffUser }) {
     if (record.slot) {
       setSessionSlot(record.slot);
     }
+    if (record.department) {
+      setSelectedDepartment(record.department);
+    }
+    if (record.year) {
+      setSelectedYear(record.year);
+    } else {
+      const codeOrName = `${record.classCode || ''} ${record.className || ''}`.toLowerCase();
+      if (codeOrName.includes('-y1') || codeOrName.includes('1st year') || codeOrName.includes('year 1')) {
+        setSelectedYear('1st Year');
+      } else if (codeOrName.includes('-y2') || codeOrName.includes('2nd year') || codeOrName.includes('year 2')) {
+        setSelectedYear('2nd Year');
+      } else if (codeOrName.includes('-y3') || codeOrName.includes('3rd year') || codeOrName.includes('year 3')) {
+        setSelectedYear('3rd Year');
+      } else if (codeOrName.includes('-y4') || codeOrName.includes('4th year') || codeOrName.includes('year 4')) {
+        setSelectedYear('4th Year');
+      }
+    }
     setActiveTab('mark');
   };
 
@@ -800,17 +996,24 @@ export default function StaffAttendance({ staffUser }) {
     setSavedSuccessMsg('');
 
     if (effectiveStudents.length === 0) {
-      setSubmitError('No students found for this department. Please add or import students.');
+      setSubmitError('No students found for this department/year. Please add or import students.');
       return;
     }
 
     const isAllDept = selectedClassCode === 'ALL_DEPT' || currentClass?.isAllDept;
+    const yrDigits = (selectedYear && selectedYear !== 'All') ? selectedYear.match(/\d+/)?.[0] : null;
+    const yrSuffix = yrDigits ? `-Y${yrDigits}` : '';
+    const deptPrefix = (selectedDepartment !== 'All' ? selectedDepartment : 'ALL').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
+
     const activeCode = isAllDept
-      ? `${(selectedDepartment !== 'All' ? selectedDepartment : 'ALL').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase()}-ALL`
-      : (currentClass?.code || selectedClassCode || (selectedDepartment !== 'All' ? `${selectedDepartment.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase()}101` : 'ATT101'));
+      ? `${deptPrefix}${yrSuffix}-ALL`
+      : (currentClass?.code || selectedClassCode || `${deptPrefix}${yrSuffix}101`);
+
+    const deptTitle = selectedDepartment !== 'All' ? selectedDepartment : 'Department';
+    const yrTitle = (selectedYear && selectedYear !== 'All') ? ` - ${selectedYear}` : '';
     const activeName = isAllDept
-      ? `${selectedDepartment !== 'All' ? selectedDepartment : 'Department'} - All Students Attendance`
-      : (currentClass?.name || (selectedDepartment !== 'All' ? `${selectedDepartment} Attendance` : 'General Attendance'));
+      ? `${deptTitle}${yrTitle} - All Students Attendance`
+      : (currentClass?.name || `${deptTitle}${yrTitle} Attendance`);
 
     try {
       setIsSubmitting(true);
@@ -827,6 +1030,7 @@ export default function StaffAttendance({ staffUser }) {
         classCode: activeCode,
         className: activeName,
         department: selectedDepartment !== 'All' ? selectedDepartment : (currentClass?.dept || staffUser?.department || ''),
+        year: selectedYear !== 'All' ? selectedYear : (currentClass?.year ? `${currentClass.year} Year` : ''),
         date: selectedDate,
         slot: sessionSlot,
         records
@@ -994,16 +1198,19 @@ export default function StaffAttendance({ staffUser }) {
 
       {activeTab === 'mark' ? (
         <div className="space-y-6">
-          {/* Controls Bar - Always rendered so the user can freely switch departments */}
+          {/* Controls Bar - Department, Year of Study, Subject, Date, Slot */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
               {/* Department Selector */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Select Department</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Select Department</span>
+                </label>
                 <select
                   value={selectedDepartment}
                   onChange={(e) => handleDepartmentChange(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer"
                 >
                   <option value="All">All Departments</option>
                   {availableDepartments.map(dept => (
@@ -1014,16 +1221,38 @@ export default function StaffAttendance({ staffUser }) {
                 </select>
               </div>
 
+              {/* Year Filter */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Year of Study</span>
+                </label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => handleYearChange(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all cursor-pointer font-bold text-indigo-900"
+                >
+                  <option value="All">All Years</option>
+                  <option value="1st Year">1st Year (I Year)</option>
+                  <option value="2nd Year">2nd Year (II Year)</option>
+                  <option value="3rd Year">3rd Year (III Year)</option>
+                  <option value="4th Year">4th Year (IV Year)</option>
+                </select>
+              </div>
+
               {/* Subject Selector */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Select Subject</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Select Subject</span>
+                </label>
                 <select
                   value={selectedClassCode}
                   onChange={(e) => setSelectedClassCode(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all cursor-pointer"
                 >
                   <option value="ALL_DEPT">
-                    ★ All {selectedDepartment !== 'All' ? selectedDepartment : 'Department'} Students (General Attendance)
+                    ★ All {selectedDepartment !== 'All' ? selectedDepartment : 'Department'} {selectedYear !== 'All' ? `(${selectedYear}) ` : ''}Students
                   </option>
                   {filteredClasses.length > 0 ? (
                     filteredClasses.map(cls => (
@@ -1037,22 +1266,28 @@ export default function StaffAttendance({ staffUser }) {
 
               {/* Date Selector */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Session Date</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <CalendarIcon className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Session Date</span>
+                </label>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition-all cursor-pointer"
                 />
               </div>
 
               {/* Time Slot Selector */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Session Slot</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Session Slot</span>
+                </label>
                 <select
                   value={sessionSlot}
                   onChange={(e) => setSessionSlot(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition-all cursor-pointer"
                 >
                   <option value="9:30 AM">Period 1 (09:30 AM - 10:30 AM)</option>
                   <option value="10:30 AM">Period 2 (10:30 AM - 11:20 AM)</option>
@@ -1065,14 +1300,47 @@ export default function StaffAttendance({ staffUser }) {
                 </select>
               </div>
             </div>
+
+            {/* Active Filter Summary Strip */}
+            <div className="mt-3.5 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-slate-600">
+                <span className="font-bold text-slate-500">Active Roster Filter:</span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-200/60">
+                  <Building2 className="w-3 h-3 text-blue-600" />
+                  <span>{selectedDepartment !== 'All' ? selectedDepartment : 'All Departments'}</span>
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 font-bold border border-indigo-200/60">
+                  <GraduationCap className="w-3 h-3 text-indigo-600" />
+                  <span>{selectedYear !== 'All' ? selectedYear : 'All Years'}</span>
+                </span>
+                <span className="text-slate-400 font-medium">
+                  • Matching: <strong className="text-slate-800">{totalCount} student{totalCount === 1 ? '' : 's'}</strong>
+                </span>
+              </div>
+
+              {(selectedDepartment !== 'All' || selectedYear !== 'All') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDepartment('All');
+                    setSelectedYear('All');
+                    if (classes.length > 0) setSelectedClassCode(classes[0].code);
+                    else setSelectedClassCode('ALL_DEPT');
+                  }}
+                  className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                >
+                  Reset to All Depts & Years
+                </button>
+              )}
+            </div>
           </div>
 
           {loadingClasses ? (
             <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
               <p className="text-xs text-slate-400 font-bold">Loading your classes and students...</p>
             </div>
-          ) : (classes.length === 0 && effectiveStudents.length === 0 && (!selectedDepartment || selectedDepartment === 'All')) ? (
-            /* Empty classes banner — no classes AND no dept selected */
+          ) : (classes.length === 0 && effectiveStudents.length === 0 && (!selectedDepartment || selectedDepartment === 'All') && (!selectedYear || selectedYear === 'All')) ? (
+            /* Empty classes banner — no classes AND no dept/year selected */
             <div className="p-10 text-center bg-white rounded-3xl border border-slate-100 shadow-sm space-y-4">
               <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
                 <BookOpen className="w-7 h-7" />
@@ -1084,8 +1352,8 @@ export default function StaffAttendance({ staffUser }) {
                 </p>
               </div>
             </div>
-          ) : (effectiveStudents.length === 0 && selectedDepartment && selectedDepartment !== 'All') ? (
-            /* Department selected but no students registered under it */
+          ) : (effectiveStudents.length === 0 && (selectedDepartment !== 'All' || selectedYear !== 'All')) ? (
+            /* Department or Year selected but no students registered under it */
             <div className="p-10 text-center bg-white rounded-3xl border border-slate-100 shadow-sm space-y-4">
               <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto">
                 <Users className="w-7 h-7" />
@@ -1093,7 +1361,8 @@ export default function StaffAttendance({ staffUser }) {
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">No Students Found</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                  No students are registered under <strong>{selectedDepartment}</strong>. Please select another department or add students to this department.
+                  No students are registered under <strong>{selectedDepartment !== 'All' ? selectedDepartment : 'the selected criteria'}</strong>{selectedYear !== 'All' ? ` (${selectedYear})` : ''}.
+                  Please select another department/year or add students to this roster.
                 </p>
               </div>
             </div>
@@ -1272,7 +1541,7 @@ export default function StaffAttendance({ staffUser }) {
                           <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
                           <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Roll No.</th>
                           <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Student Name</th>
-                          <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Department</th>
+                          <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Dept & Year</th>
                           <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Contact</th>
                           <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Status</th>
                         </tr>
@@ -1286,7 +1555,14 @@ export default function StaffAttendance({ staffUser }) {
                               <td className="px-5 py-3 text-slate-400 font-medium">{idx + 1}</td>
                               <td className="px-5 py-3 font-bold text-slate-700">{student.rollNo}</td>
                               <td className="px-5 py-3 font-semibold text-slate-900">{student.name}</td>
-                              <td className="px-5 py-3 text-slate-600 hidden md:table-cell font-medium">{student.department || selectedDepartment || '—'}</td>
+                              <td className="px-5 py-3 text-slate-600 hidden md:table-cell font-medium">
+                                <div className="font-semibold text-slate-800">{student.department || selectedDepartment || '—'}</div>
+                                {student.year && (
+                                  <span className="inline-block mt-0.5 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded-md">
+                                    {student.year}
+                                  </span>
+                                )}
+                              </td>
                               <td className="px-5 py-3 text-slate-500 hidden sm:table-cell">{student.phone || '—'}</td>
                               <td className="px-5 py-3 text-center">
                                 <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl flex-wrap justify-center">
@@ -1367,25 +1643,63 @@ export default function StaffAttendance({ staffUser }) {
       ) : (
         /* Attendance History View */
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="font-extrabold text-slate-900 text-sm">Past Submitted Attendance Sessions</h3>
-            <button
-              onClick={fetchHistory}
-              className="text-xs font-bold text-blue-600 hover:underline"
-            >
-              Refresh Logs
-            </button>
+          <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-sm">Past Submitted Attendance Sessions</h3>
+              <p className="text-[11px] text-slate-500 font-medium">Filter past records by department and year, or click Load & Edit to modify</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={historyDeptFilter}
+                onChange={(e) => setHistoryDeptFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none"
+              >
+                <option value="All">All Departments</option>
+                {availableDepartments.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+
+              <select
+                value={historyYearFilter}
+                onChange={(e) => setHistoryYearFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none"
+              >
+                <option value="All">All Years</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+              </select>
+
+              <input
+                type="text"
+                placeholder="Search history..."
+                value={historySearchQuery}
+                onChange={(e) => setHistorySearchQuery(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none w-36"
+              />
+
+              <button
+                onClick={fetchHistory}
+                className="text-xs font-bold text-blue-600 hover:underline px-1 py-1"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
           {loadingHistory ? (
             <div className="p-10 text-center">
               <p className="text-xs text-slate-400 font-bold">Loading attendance history...</p>
             </div>
-          ) : historyList.length === 0 ? (
+          ) : filteredHistoryList.length === 0 ? (
             <div className="p-12 text-center space-y-2">
-              <p className="text-xs font-bold text-slate-700">No attendance sessions recorded yet</p>
+              <p className="text-xs font-bold text-slate-700">No attendance sessions found</p>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Once you mark and submit attendance for a class, your logs will appear here directly.
+                {historyList.length === 0
+                  ? 'Once you mark and submit attendance for a class, your logs will appear here directly.'
+                  : 'No records match the selected department/year filter.'}
               </p>
             </div>
           ) : (
@@ -1395,7 +1709,7 @@ export default function StaffAttendance({ staffUser }) {
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Date</th>
                     <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Slot / Time</th>
-                    <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Subject</th>
+                    <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Subject & Year</th>
                     <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Total</th>
                     <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Present</th>
                     <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Absent</th>
@@ -1404,7 +1718,7 @@ export default function StaffAttendance({ staffUser }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {historyList.map(record => {
+                  {filteredHistoryList.map(record => {
                     const total = record.totalStudents || (record.records ? record.records.length : 0);
                     const present = record.presentCount || 0;
                     const late = record.lateCount || 0;
@@ -1416,8 +1730,20 @@ export default function StaffAttendance({ staffUser }) {
                         <td className="px-5 py-3 font-bold text-slate-800">{record.date}</td>
                         <td className="px-5 py-3 text-slate-600">{record.slot || '—'}</td>
                         <td className="px-5 py-3 font-semibold text-slate-900">
-                          <span className="font-extrabold text-blue-600 mr-1.5">[{record.classCode}]</span>
-                          {record.className}
+                          <div>
+                            <span className="font-extrabold text-blue-600 mr-1.5">[{record.classCode}]</span>
+                            {record.className}
+                          </div>
+                          {(record.department || record.year) && (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {record.department && (
+                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">{record.department}</span>
+                              )}
+                              {record.year && (
+                                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded-md">{record.year}</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-5 py-3 text-center text-slate-700 font-bold">{total}</td>
                         <td className="px-5 py-3 text-center">

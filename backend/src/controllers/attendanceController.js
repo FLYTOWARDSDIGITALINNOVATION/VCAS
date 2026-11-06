@@ -126,6 +126,7 @@ exports.saveSession = async (req, res) => {
       classCode,
       className,
       department,
+      year,
       staffId,
       staffName,
       date,
@@ -150,14 +151,19 @@ exports.saveSession = async (req, res) => {
     let resolvedClassName = className ? className.trim() : '';
     let resolvedStaffName = staffName ? staffName.trim() : '';
     let resolvedDepartment = department ? department.trim() : '';
+    let resolvedYear = year ? String(year).trim() : '';
     let resolvedClassId = classId || null;
 
-    if (!resolvedClassName || !resolvedClassId || !resolvedDepartment) {
+    if (!resolvedClassName || !resolvedClassId || !resolvedDepartment || !resolvedYear) {
       const cls = await Class.findOne({ code: finalClassCode });
       if (cls) {
         if (!resolvedClassName) resolvedClassName = cls.name;
         if (!resolvedClassId) resolvedClassId = cls._id;
         if (!resolvedDepartment) resolvedDepartment = cls.dept || '';
+        if (!resolvedYear && cls.year) {
+          const yr = Number(cls.year);
+          resolvedYear = yr === 1 ? '1st Year' : yr === 2 ? '2nd Year' : yr === 3 ? '3rd Year' : yr === 4 ? '4th Year' : `${cls.year} Year`;
+        }
       }
     }
 
@@ -182,6 +188,7 @@ exports.saveSession = async (req, res) => {
       classId: resolvedClassId,
       className: resolvedClassName,
       department: resolvedDepartment,
+      year: resolvedYear,
       staffName: resolvedStaffName,
       topic: (topic || '').trim(),
       records: computed.records,
@@ -227,6 +234,8 @@ exports.updateSession = async (req, res) => {
     if (slot !== undefined) session.slot = slot.trim();
     if (topic !== undefined) session.topic = topic.trim();
     if (className !== undefined) session.className = className.trim();
+    if (req.body.year !== undefined) session.year = String(req.body.year).trim();
+    if (req.body.department !== undefined) session.department = String(req.body.department).trim();
 
     if (Array.isArray(records)) {
       const computed = computeCounts(records);
@@ -559,25 +568,48 @@ exports.getFilteredAttendance = async (req, res) => {
     const { department, year, batch, semester, classCode, startDate, endDate } = req.query;
 
     // 1. Build Student Filter if dept, batch, sem, year are supplied
-    const studentFilter = {};
+    const andClauses = [];
+
     if (department && department !== 'All' && department !== 'All Departments') {
-      studentFilter.department = { $regex: new RegExp(department.trim(), 'i') };
+      andClauses.push({
+        $or: [
+          { department: { $regex: new RegExp(department.trim(), 'i') } },
+          { course: { $regex: new RegExp(department.trim(), 'i') } },
+          { courseAdmitted: { $regex: new RegExp(department.trim(), 'i') } }
+        ]
+      });
     }
+
     if (batch && batch !== 'All') {
-      studentFilter.batch = { $regex: new RegExp(batch.trim(), 'i') };
+      andClauses.push({ batch: { $regex: new RegExp(batch.trim(), 'i') } });
     }
+
     if (semester && semester !== 'All') {
-      studentFilter.$or = [
-        { sem: { $regex: new RegExp(String(semester).trim(), 'i') } },
-        { semester: Number(semester) }
-      ];
+      andClauses.push({
+        $or: [
+          { sem: { $regex: new RegExp(String(semester).trim(), 'i') } },
+          { semester: Number(semester) }
+        ]
+      });
     }
+
     if (year && year !== 'All') {
-      studentFilter.$or = [
-        { year: { $regex: new RegExp(year.trim(), 'i') } },
-        { academicYear: { $regex: new RegExp(year.trim(), 'i') } }
-      ];
+      const yrDigits = String(year).match(/\d+/);
+      let pattern = year.trim();
+      if (yrDigits) {
+        const d = yrDigits[0];
+        const ord = d === '1' ? '1st|first|i\\b' : d === '2' ? '2nd|second|ii\\b' : d === '3' ? '3rd|third|iii\\b' : '4th|fourth|iv\\b';
+        pattern = `${d}|${ord}`;
+      }
+      andClauses.push({
+        $or: [
+          { year: { $regex: new RegExp(pattern, 'i') } },
+          { academicYear: { $regex: new RegExp(year.trim(), 'i') } }
+        ]
+      });
     }
+
+    const studentFilter = andClauses.length > 0 ? { $and: andClauses } : {};
 
     let targetStudents = [];
     let rollSet = null;

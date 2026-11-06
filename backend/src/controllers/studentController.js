@@ -10,11 +10,27 @@ const mongoose = require('mongoose');
 exports.getAllStudents = async (req, res) => {
   try {
 
-    const { department, feeStatus, status, search } = req.query;
+    const { department, year, feeStatus, status, search } = req.query;
     const filter = {};
 
-    if (department && department !== 'All Departments') {
-      filter.department = department;
+    if (department && department !== 'All Departments' && department !== 'All') {
+      filter.department = new RegExp(`^${department.trim()}$`, 'i');
+    }
+    if (year && year !== 'All') {
+      // Match e.g. "1st Year", "2nd Year" etc. stored in student.year
+      const yearNum = (() => {
+        const s = String(year).toLowerCase();
+        if (s.includes('1') || s.startsWith('first') || s.startsWith('i ') || s === 'i') return 1;
+        if (s.includes('2') || s.startsWith('second') || s.startsWith('ii ') || s === 'ii') return 2;
+        if (s.includes('3') || s.startsWith('third') || s.startsWith('iii')) return 3;
+        if (s.includes('4') || s.startsWith('fourth') || s.startsWith('iv')) return 4;
+        return null;
+      })();
+      if (yearNum) {
+        const ordinals = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
+        const ord = ordinals[yearNum];
+        filter.year = new RegExp(`^${ord}`, 'i');
+      }
     }
     if (feeStatus && feeStatus !== 'All Statuses') {
       filter.feeStatus = feeStatus;
