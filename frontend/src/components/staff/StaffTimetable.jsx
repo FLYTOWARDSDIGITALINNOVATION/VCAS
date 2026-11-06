@@ -28,6 +28,8 @@ const COLOR_MAP = {
   emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200/70',
   amber: 'bg-amber-50 text-amber-700 border-amber-200/70',
   rose: 'bg-rose-50 text-rose-700 border-rose-200/70',
+  orange: 'bg-orange-50 text-orange-700 border-orange-200/70',
+  violet: 'bg-violet-50 text-violet-700 border-violet-200/70',
 };
 
 const BADGE_COLOR_MAP = {
@@ -37,6 +39,8 @@ const BADGE_COLOR_MAP = {
   emerald: 'bg-emerald-600',
   amber: 'bg-amber-600',
   rose: 'bg-rose-600',
+  orange: 'bg-orange-600',
+  violet: 'bg-violet-600',
 };
 
 export default function StaffTimetable({ staffUser }) {
@@ -90,6 +94,9 @@ export default function StaffTimetable({ staffUser }) {
     color: 'blue',
     isContinuousLab: false,
     continuousHours: 3,
+    partTimeSchedule: 'before-break',
+    combinedDept: '',
+    combinedYear: '',
     staffId: currentStaffId
   });
 
@@ -206,9 +213,12 @@ export default function StaffTimetable({ staffUser }) {
         name: existing.name || '',
         room: existing.room === 'Lab' ? 'Lab' : 'Classroom',
         type: (existing.type || 'theory').toLowerCase(),
-        color: (existing.color || (existing.type === 'lab' ? 'emerald' : 'blue')).toLowerCase(),
+        color: (existing.color || (existing.type === 'lab' ? 'emerald' : existing.type === 'part-time' ? 'orange' : existing.type === 'combined' ? 'violet' : 'blue')).toLowerCase(),
         isContinuousLab: Boolean(existing.isContinuousLab || existing.type === 'lab'),
         continuousHours: matching.length > 0 ? matching.length : (Number(existing.labHours) || 3),
+        partTimeSchedule: existing.partTimeSchedule || 'before-break',
+        combinedDept: existing.combinedDept || '',
+        combinedYear: existing.combinedYear || '',
         staffId: selectedStaffId || currentStaffId
       });
     } else {
@@ -226,6 +236,9 @@ export default function StaffTimetable({ staffUser }) {
         color: isLab ? 'emerald' : 'blue',
         isContinuousLab: isLab,
         continuousHours: firstClass?.labHours || 3,
+        partTimeSchedule: 'before-break',
+        combinedDept: '',
+        combinedYear: '',
         staffId: selectedStaffId || currentStaffId
       });
     }
@@ -350,12 +363,15 @@ export default function StaffTimetable({ staffUser }) {
           name: slotForm.name.trim(),
           room: slotForm.room === 'Lab' ? 'Lab' : 'Classroom',
           type: slotForm.type,
-          color: slotForm.type === 'lab' ? 'emerald' : slotForm.color,
+          color: slotForm.type === 'lab' ? 'emerald' : slotForm.type === 'part-time' ? 'orange' : slotForm.type === 'combined' ? 'violet' : slotForm.color,
           isContinuousLab: isLabContinuous,
           labHours: parsedPeriods.length,
           continuousSlots: parsedPeriods,
           periods: parsedPeriods,
-          clearOtherDays: true
+          clearOtherDays: true,
+          partTimeSchedule: slotForm.type === 'part-time' ? (slotForm.partTimeSchedule || 'before-break') : undefined,
+          combinedDept: slotForm.type === 'combined' ? (slotForm.combinedDept || '') : undefined,
+          combinedYear: slotForm.type === 'combined' ? (slotForm.combinedYear || '') : undefined
         }
       };
 
@@ -740,6 +756,16 @@ export default function StaffTimetable({ staffUser }) {
                           >
                             <div className={`p-1.5 rounded-lg border text-[11px] font-bold truncate transition-all ${isHod ? 'hover:scale-[1.02]' : ''} ${COLOR_MAP[cell.color] || 'bg-slate-50'}`}>
                               <div>{cell.name || cell.code}</div>
+                              {cell.type === 'part-time' && (
+                                <div className="text-[8px] font-black text-orange-600 uppercase tracking-tight">
+                                  ⏰ Part-Time · {cell.partTimeSchedule === 'before-lunch' ? 'Pre-Lunch' : 'Pre-Break'}
+                                </div>
+                              )}
+                              {cell.type === 'combined' && (
+                                <div className="text-[8px] font-black text-violet-600 uppercase tracking-tight truncate" title={`Combined with ${cell.combinedDept || ''}`}>
+                                  🏫 Combined · {cell.combinedDept ? cell.combinedDept.split(' ')[0] : 'Multi-Dept'}
+                                </div>
+                              )}
                               <div className="text-[9px] opacity-75 font-normal truncate">{viewedStaffName}</div>
                             </div>
                           </td>
@@ -849,11 +875,16 @@ export default function StaffTimetable({ staffUser }) {
                       .filter(Boolean);
                     const isSelected = currentParts.includes(p);
                     const isAssigned = Boolean(schedule[slotForm.day]?.[String(p)]);
+                    const isPartTimeRestricted = slotForm.type === 'part-time' && (
+                      (slotForm.partTimeSchedule === 'before-break' && p > 2) ||
+                      (slotForm.partTimeSchedule === 'before-lunch' && p > 4)
+                    );
+                    const isDisabled = isAssigned || isPartTimeRestricted;
                     return (
                       <button
                         key={p}
                         type="button"
-                        disabled={isAssigned}
+                        disabled={isDisabled}
                         onClick={() => {
                           let next;
                           if (isSelected) {
@@ -864,12 +895,15 @@ export default function StaffTimetable({ staffUser }) {
                           setSlotForm({ ...slotForm, typedPeriods: next.join(', ') || String(p) });
                         }}
                         className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                          isAssigned
+                          isPartTimeRestricted
+                            ? 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed opacity-50'
+                            : isAssigned
                             ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-70'
                             : isSelected
                             ? 'bg-blue-600 text-white shadow-xs'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer'
                         }`}
+                        title={isPartTimeRestricted ? 'Restricted by Part-Time schedule' : isAssigned ? 'Already assigned' : `Select Period ${p}`}
                       >
                         P{p}
                       </button>
@@ -877,7 +911,11 @@ export default function StaffTimetable({ staffUser }) {
                   })}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  💡 Periods are scheduled continuously (1, 2, 3..) on {slotForm.day} and not scattered across other days.
+                  {slotForm.type === 'part-time'
+                    ? slotForm.partTimeSchedule === 'before-break'
+                      ? '⏰ Part-Time (Before Break): Only Period 1 and Period 2 can be assigned.'
+                      : '⏰ Part-Time (Before Lunch): Only Periods 1 to 4 can be assigned.'
+                    : '💡 Periods are scheduled continuously (1, 2, 3..) on ' + slotForm.day + ' and not scattered across other days.'}
                 </p>
               </div>
 
@@ -977,11 +1015,28 @@ export default function StaffTimetable({ staffUser }) {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Type</label>
                   <select
                     value={slotForm.type}
-                    onChange={(e) => setSlotForm({ ...slotForm, type: e.target.value })}
+                    onChange={(e) => {
+                      const t = e.target.value;
+                      let updatedTypedPeriods = slotForm.typedPeriods;
+                      if (t === 'part-time') {
+                        const parts = (slotForm.typedPeriods || '').split(/[,\s-]+/).map(Number).filter(Boolean);
+                        const limit = slotForm.partTimeSchedule === 'before-break' ? 2 : 4;
+                        const validParts = parts.filter(p => p <= limit);
+                        updatedTypedPeriods = validParts.length > 0 ? validParts.join(', ') : '1';
+                      }
+                      setSlotForm({
+                        ...slotForm,
+                        type: t,
+                        typedPeriods: updatedTypedPeriods,
+                        color: t === 'part-time' ? 'orange' : t === 'combined' ? 'violet' : t === 'lab' ? 'emerald' : slotForm.color
+                      });
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
                   >
                     <option value="theory">Theory Session</option>
                     <option value="lab">Practical / Lab</option>
+                    <option value="part-time">Part-Time Class</option>
+                    <option value="combined">Combined Class (Multi-Dept)</option>
                   </select>
                 </div>
 
@@ -998,6 +1053,8 @@ export default function StaffTimetable({ staffUser }) {
                     <option value="emerald">Emerald Green</option>
                     <option value="amber">Amber / Orange</option>
                     <option value="rose">Rose Red</option>
+                    <option value="orange">Orange</option>
+                    <option value="violet">Violet</option>
                   </select>
                 </div>
               </div>
@@ -1037,6 +1094,87 @@ export default function StaffTimetable({ staffUser }) {
                       <div className="w-1/2 text-[11px] font-bold text-emerald-900 bg-emerald-100/60 p-2 rounded-xl border border-emerald-200">
                         ⚡ Will occupy Period {slotForm.slot} to Period {Math.min(5, Number(slotForm.slot) + Number(slotForm.continuousHours) - 1)} consecutively.
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Part-Time Class Configuration */}
+              {slotForm.type === 'part-time' && (
+                <div className="p-3.5 bg-orange-50/80 border border-orange-300 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-orange-950">Part-Time Staff Teaching Period:</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-200 text-orange-900 border border-orange-300">
+                      Part-Time
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-orange-900 mb-1">Teaching Shift Window</label>
+                    <select
+                      value={slotForm.partTimeSchedule}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const parts = (slotForm.typedPeriods || '').split(/[,\s-]+/).map(Number).filter(Boolean);
+                        const limit = val === 'before-break' ? 2 : 4;
+                        const valid = parts.filter(p => p <= limit);
+                        setSlotForm(prev => ({
+                          ...prev,
+                          partTimeSchedule: val,
+                          typedPeriods: valid.length > 0 ? valid.join(', ') : '1'
+                        }));
+                      }}
+                      className="w-full bg-white border border-orange-300 rounded-xl px-3 py-2 text-xs font-bold text-orange-950 focus:outline-none focus:border-orange-500"
+                    >
+                      <option value="before-break">Before Break Alone (Periods 1 &amp; 2)</option>
+                      <option value="before-lunch">Before Lunch Alone (Periods 1 to 4)</option>
+                    </select>
+                  </div>
+                  <div className="text-[11px] font-medium text-orange-800 bg-white/80 p-2.5 rounded-xl border border-orange-200">
+                    {slotForm.partTimeSchedule === 'before-break'
+                      ? '⏰ Staff will be assigned only before tea break (Period 1 to Period 2). Periods after break are disabled.'
+                      : '⏰ Staff will be assigned only before lunch break (Period 1 to Period 4). Afternoon periods (P5, P6) are disabled.'}
+                  </div>
+                </div>
+              )}
+
+              {/* Combined Class (2 Departments Combined) */}
+              {slotForm.type === 'combined' && (
+                <div className="p-3.5 bg-violet-50/80 border border-violet-300 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-violet-950">Combined Class (Two Departments Merged):</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-200 text-violet-900 border border-violet-300">
+                      Multi-Dept
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-violet-900 mb-1">Second Department *</label>
+                      <select
+                        value={slotForm.combinedDept}
+                        onChange={(e) => setSlotForm({ ...slotForm, combinedDept: e.target.value })}
+                        className="w-full bg-white border border-violet-300 rounded-xl px-3 py-2 text-xs font-bold text-violet-950 focus:outline-none focus:border-violet-500"
+                        required
+                      >
+                        <option value="">-- Choose 2nd Department --</option>
+                        {departmentOptions.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-violet-900 mb-1">2nd Dept Year / Sem</label>
+                      <input
+                        type="text"
+                        value={slotForm.combinedYear}
+                        onChange={(e) => setSlotForm({ ...slotForm, combinedYear: e.target.value })}
+                        placeholder="e.g. 2nd Year / Sem 3"
+                        className="w-full bg-white border border-violet-300 rounded-xl px-3 py-2 text-xs font-medium text-violet-950 focus:outline-none focus:border-violet-500"
+                      />
+                    </div>
+                  </div>
+                  {slotForm.combinedDept && (
+                    <div className="text-[11px] font-medium text-violet-800 bg-white/80 p-2.5 rounded-xl border border-violet-200">
+                      🏫 <strong>Joint Department Class:</strong> Students from <strong>{slotForm.combinedDept}</strong> {slotForm.combinedYear ? `(${slotForm.combinedYear})` : ''} and this department are combined for this session.
                     </div>
                   )}
                 </div>

@@ -88,6 +88,26 @@ const classSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  classCategory: {
+    type: String,
+    enum: ['regular', 'part-time', 'combined'],
+    default: 'regular'
+  },
+  partTimeSchedule: {
+    type: String,
+    enum: ['before-break', 'before-lunch', ''],
+    default: ''
+  },
+  combinedDept: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  combinedYear: {
+    type: String,
+    default: '',
+    trim: true
+  },
   students: [studentSchema]
 }, {
   timestamps: true,

@@ -359,7 +359,11 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
       isContinuousLab: false,
       continuousHours: 3,
       room: availableVenues[0] || 'LH-101',
-      credits: 3
+      credits: 3,
+      classCategory: 'regular',
+      partTimeSchedule: 'before-break',
+      combinedDept: '',
+      combinedYear: ''
     });
     setIsAddClassModalOpen(true);
   };
@@ -420,7 +424,11 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
         staffId: classForm.staffId || staff.staffId,
         staffName: classForm.staffName || staff.name,
         room: classForm.room || 'LH-101',
-        academicYear: '2026-2027'
+        academicYear: '2026-2027',
+        classCategory: classForm.classCategory || 'regular',
+        partTimeSchedule: classForm.classCategory === 'part-time' ? (classForm.partTimeSchedule || 'before-break') : undefined,
+        combinedDept: classForm.classCategory === 'combined' ? (classForm.combinedDept || '') : undefined,
+        combinedYear: classForm.classCategory === 'combined' ? (classForm.combinedYear || '') : undefined
       };
 
       const res = await fetch(`${API_BASE}/classes`, {
@@ -2156,6 +2164,84 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
                   />
                   <span className="text-[10px] text-slate-500 font-medium">E.g., 3 continuous hours</span>
                 </div>
+              </div>
+
+              {/* Class Option / Schedule Type */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-800 mb-1">
+                    Class Category / Timetable Mode
+                  </label>
+                  <select
+                    value={classForm.classCategory || 'regular'}
+                    onChange={(e) => setClassForm({ ...classForm, classCategory: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:border-blue-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="regular">Regular Class (Standard 6-Period Schedule)</option>
+                    <option value="part-time">Part-Time Class (Before Break / Before Lunch Alone)</option>
+                    <option value="combined">Combined Class (Two Departments Merged)</option>
+                  </select>
+                </div>
+
+                {/* Part-Time Option Details */}
+                {classForm.classCategory === 'part-time' && (
+                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl space-y-2">
+                    <label className="block text-[11px] font-bold text-orange-950">
+                      Part-Time Shift / Teaching Period
+                    </label>
+                    <select
+                      value={classForm.partTimeSchedule || 'before-break'}
+                      onChange={(e) => setClassForm({ ...classForm, partTimeSchedule: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-orange-300 rounded-xl text-xs font-bold text-orange-950 focus:border-orange-500 focus:outline-none"
+                    >
+                      <option value="before-break">Before Break Alone (Periods 1 &amp; 2)</option>
+                      <option value="before-lunch">Before Lunch Alone (Periods 1 to 4)</option>
+                    </select>
+                    <p className="text-[10px] text-orange-800 font-medium">
+                      ⏰ Faculty will only take classes during this designated time window (P1–P2 or P1–P4).
+                    </p>
+                  </div>
+                )}
+
+                {/* Combined Class Option Details */}
+                {classForm.classCategory === 'combined' && (
+                  <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl space-y-2">
+                    <span className="block text-[11px] font-bold text-violet-950">
+                      Combined Class Details (2 Departments)
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-violet-900 mb-1">Second Department *</label>
+                        <select
+                          value={classForm.combinedDept || ''}
+                          onChange={(e) => setClassForm({ ...classForm, combinedDept: e.target.value })}
+                          className="w-full px-2.5 py-1.5 bg-white border border-violet-300 rounded-lg text-xs font-bold text-violet-950 focus:border-violet-500 focus:outline-none"
+                          required
+                        >
+                          <option value="">-- Choose 2nd Department --</option>
+                          {availableDepartments.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-violet-900 mb-1">2nd Dept Year / Sem</label>
+                        <input
+                          type="text"
+                          value={classForm.combinedYear || ''}
+                          onChange={(e) => setClassForm({ ...classForm, combinedYear: e.target.value })}
+                          placeholder="e.g. 2nd Year Sem 3"
+                          className="w-full px-2.5 py-1.5 bg-white border border-violet-300 rounded-lg text-xs font-medium text-violet-950 focus:border-violet-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    {classForm.combinedDept && (
+                      <p className="text-[10px] text-violet-800 font-semibold">
+                        🏫 Combined with <strong>{classForm.combinedDept}</strong>. Both departments attend together.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Continuous Lab Hours Block */}

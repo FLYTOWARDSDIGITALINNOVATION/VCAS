@@ -128,7 +128,10 @@ exports.updateSlot = async (req, res) => {
         type: (slotData.type || 'theory').toLowerCase(),
         color: (slotData.color || 'blue').toLowerCase(),
         isContinuousLab: Boolean(slotData.isContinuousLab || slotData.type === 'lab'),
-        labHours: Number(slotData.labHours) || 0
+        labHours: Number(slotData.labHours) || 0,
+        partTimeSchedule: slotData.partTimeSchedule || undefined,
+        combinedDept: slotData.combinedDept || undefined,
+        combinedYear: slotData.combinedYear || undefined
       };
 
       currentSchedule[day][String(slot)] = slotObj;
@@ -377,7 +380,11 @@ exports.autoGenerateTimetableSchedule = async ({
   staffName,
   room,
   day,
-  periods
+  periods,
+  classCategory,
+  partTimeSchedule,
+  combinedDept,
+  combinedYear
 }) => {
   try {
     const cleanCode = (code || '').trim().toUpperCase();
@@ -481,21 +488,32 @@ exports.autoGenerateTimetableSchedule = async ({
 
       if (periodsToAssign.length === 0) {
         // Continuous periods 1, 2, 3...
-        const totalContinuous = Math.min(6, numTheory);
+        let maxAllowedPeriod = 6;
+        if (classCategory === 'part-time') {
+          if (partTimeSchedule === 'before-break') maxAllowedPeriod = 2;
+          else if (partTimeSchedule === 'before-lunch') maxAllowedPeriod = 4;
+        }
+        const totalContinuous = Math.min(maxAllowedPeriod, numTheory);
         for (let p = 1; p <= totalContinuous; p++) {
           periodsToAssign.push(p);
         }
       }
+
+      const assignedType = classCategory === 'part-time' ? 'part-time' : classCategory === 'combined' ? 'combined' : 'theory';
+      const assignedColor = classCategory === 'part-time' ? 'orange' : classCategory === 'combined' ? 'violet' : 'blue';
 
       periodsToAssign.forEach(period => {
         daySlots[String(period)] = {
           code: cleanCode,
           name: (name || cleanCode).trim(),
           room: (room && !room.toLowerCase().includes('lab')) ? room.trim() : 'LH-101',
-          type: 'theory',
-          color: 'blue',
+          type: assignedType,
+          color: assignedColor,
           isContinuousLab: false,
-          labHours: 0
+          labHours: 0,
+          partTimeSchedule: classCategory === 'part-time' ? partTimeSchedule : undefined,
+          combinedDept: classCategory === 'combined' ? combinedDept : undefined,
+          combinedYear: classCategory === 'combined' ? combinedYear : undefined
         };
       });
 

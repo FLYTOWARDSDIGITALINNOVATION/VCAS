@@ -219,6 +219,10 @@ exports.addClass = async (req, res) => {
     const finalLabHours = Number(req.body.labHours) >= 0 ? Number(req.body.labHours) : 0;
     const finalIsContinuousLab = Boolean(req.body.isContinuousLab || finalLabHours > 0);
     const finalHoursStr = req.body.hours || (finalLabHours > 0 ? `${finalTheoryHours}h Theory + ${finalLabHours}h Lab` : `${finalTheoryHours} hrs/wk`);
+    const classCategory = req.body.classCategory || 'regular';
+    const partTimeSchedule = req.body.partTimeSchedule || '';
+    const combinedDept = req.body.combinedDept || '';
+    const combinedYear = req.body.combinedYear || '';
 
     // Check if class with this code already exists - if so, update (upsert)
     let newClass = await Class.findOne({ code: finalCode });
@@ -236,6 +240,10 @@ exports.addClass = async (req, res) => {
       newClass.staffId = resolvedStaffId;
       newClass.staffName = finalStaffName;
       newClass.room = (room || '').trim() || newClass.room;
+      newClass.classCategory = classCategory;
+      newClass.partTimeSchedule = partTimeSchedule;
+      newClass.combinedDept = combinedDept;
+      newClass.combinedYear = combinedYear;
       await newClass.save();
     } else {
       newClass = new Class({
@@ -254,6 +262,10 @@ exports.addClass = async (req, res) => {
         staffName: finalStaffName,
         room: (room || '').trim(),
         academicYear: (academicYear || '2025-2026').trim(),
+        classCategory,
+        partTimeSchedule,
+        combinedDept,
+        combinedYear,
         students: Array.isArray(students) ? students : []
       });
       await newClass.save();
@@ -272,7 +284,11 @@ exports.addClass = async (req, res) => {
         isContinuousLab: finalIsContinuousLab,
         staffId: finalStaffId,
         staffName: finalStaffName,
-        room: newClass.room
+        room: newClass.room,
+        classCategory,
+        partTimeSchedule,
+        combinedDept,
+        combinedYear
       });
     } catch (ttErr) {
       console.error('Auto timetable generation failed for class:', ttErr.message);

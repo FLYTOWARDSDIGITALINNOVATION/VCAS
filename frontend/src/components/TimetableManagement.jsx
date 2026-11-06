@@ -77,7 +77,9 @@ const COLOR_MAP = {
   tutorial: 'amber',
   library: 'teal',
   project: 'purple',
-  sports: 'emerald'
+  sports: 'emerald',
+  'part-time': 'orange',
+  combined: 'violet'
 };
 
 const STAFF_CATEGORIES = [
@@ -264,7 +266,10 @@ export default function TimetableManagement({ user }) {
     room: '',
     type: 'theory',
     isContinuousLab: false,
-    continuousHours: 3
+    continuousHours: 3,
+    partTimeSchedule: 'before-break',
+    combinedDept: '',
+    combinedYear: ''
   });
 
   const showToast = (msg) => {
@@ -550,7 +555,10 @@ export default function TimetableManagement({ user }) {
       room: currentSlot?.room || (allVenues[0] || ''),
       type: currentSlot?.type || (isLab ? 'lab' : 'theory'),
       isContinuousLab: Boolean(currentSlot?.isContinuousLab || isLab),
-      continuousHours: Number(currentSlot?.labHours) || 3
+      continuousHours: Number(currentSlot?.labHours) || 3,
+      partTimeSchedule: currentSlot?.partTimeSchedule || 'before-break',
+      combinedDept: currentSlot?.combinedDept || '',
+      combinedYear: currentSlot?.combinedYear || ''
     });
     setIsEditSlotOpen(true);
   };
@@ -708,7 +716,10 @@ export default function TimetableManagement({ user }) {
       type: slotForm.type,
       color: COLOR_MAP[slotForm.type] || (slotForm.type === 'lab' ? 'emerald' : 'blue'),
       isContinuousLab: isContinuous,
-      labHours: isContinuous ? continuousHoursCount : 0
+      labHours: isContinuous ? continuousHoursCount : 0,
+      partTimeSchedule: slotForm.type === 'part-time' ? (slotForm.partTimeSchedule || 'before-break') : undefined,
+      combinedDept: slotForm.type === 'combined' ? (slotForm.combinedDept || '') : undefined,
+      combinedYear: slotForm.type === 'combined' ? (slotForm.combinedYear || '') : undefined
     };
 
     if (viewMode === 'faculty') {
@@ -1628,6 +1639,12 @@ export default function TimetableManagement({ user }) {
             <span className="w-3 h-3 rounded bg-emerald-500"></span> Practical / Lab
           </span>
           <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+            <span className="w-3 h-3 rounded bg-orange-500"></span> Part-Time Class
+          </span>
+          <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+            <span className="w-3 h-3 rounded bg-violet-500"></span> Combined Class
+          </span>
+          <span className="flex items-center gap-1.5 font-semibold text-slate-700">
             <span className="w-3 h-3 rounded bg-purple-500"></span> Electives / Project
           </span>
           <span className="flex items-center gap-1.5 font-semibold text-slate-700">
@@ -1682,9 +1699,17 @@ export default function TimetableManagement({ user }) {
                     onChange={(e) => setSlotForm({ ...slotForm, period: Number(e.target.value) })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 cursor-pointer"
                   >
-                    {[1, 2, 3, 4, 5, 6].map(p => (
-                      <option key={p} value={p}>Period {p} {getPeriodTime(p) ? `(${getPeriodTime(p)})` : ''}</option>
-                    ))}
+                    {[1, 2, 3, 4, 5, 6]
+                      .filter(p => {
+                        if (slotForm.type === 'part-time') {
+                          if (slotForm.partTimeSchedule === 'before-break') return p <= 2;
+                          if (slotForm.partTimeSchedule === 'before-lunch') return p <= 4;
+                        }
+                        return true;
+                      })
+                      .map(p => (
+                        <option key={p} value={p}>Period {p} {getPeriodTime(p) ? `(${getPeriodTime(p)})` : ''}</option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -1758,9 +1783,15 @@ export default function TimetableManagement({ user }) {
                     value={slotForm.type}
                     onChange={(e) => {
                       const t = e.target.value;
+                      let adjustedPeriod = slotForm.period;
+                      if (t === 'part-time') {
+                        if (slotForm.partTimeSchedule === 'before-break' && adjustedPeriod > 2) adjustedPeriod = 1;
+                        if (slotForm.partTimeSchedule === 'before-lunch' && adjustedPeriod > 4) adjustedPeriod = 1;
+                      }
                       setSlotForm(prev => ({
                         ...prev,
                         type: t,
+                        period: adjustedPeriod,
                         isContinuousLab: t === 'lab' ? true : prev.isContinuousLab
                       }));
                     }}
@@ -1768,6 +1799,8 @@ export default function TimetableManagement({ user }) {
                   >
                     <option value="theory">Theory Lecture</option>
                     <option value="lab">Practical / Lab</option>
+                    <option value="part-time">Part-Time Class</option>
+                    <option value="combined">Combined Class (Multi-Dept)</option>
                     <option value="elective">Elective</option>
                     <option value="tutorial">Tutorial</option>
                     <option value="library">Library / Research</option>
@@ -1812,6 +1845,83 @@ export default function TimetableManagement({ user }) {
                       <div className="text-[11px] font-bold text-emerald-900 bg-white/80 p-2 rounded-xl border border-emerald-200">
                         ⚡ Consecutively allocates Period {slotForm.period} to Period {Math.min(5, Number(slotForm.period) + Number(slotForm.continuousHours) - 1)} without breaks.
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PART-TIME CLASS CONFIGURATION */}
+              {slotForm.type === 'part-time' && (
+                <div className="p-3.5 bg-orange-50/80 border border-orange-300 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-orange-950">Part-Time Teaching Window:</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-200 text-orange-900 border border-orange-300">
+                      Part-Time Mode
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-orange-900 mb-1">Shift / Availability</label>
+                    <select
+                      value={slotForm.partTimeSchedule}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        let p = slotForm.period;
+                        if (val === 'before-break' && p > 2) p = 1;
+                        if (val === 'before-lunch' && p > 4) p = 1;
+                        setSlotForm(prev => ({ ...prev, partTimeSchedule: val, period: p }));
+                      }}
+                      className="w-full bg-white border border-orange-300 rounded-xl px-3 py-2 text-xs font-bold text-orange-950 focus:outline-none focus:border-orange-500"
+                    >
+                      <option value="before-break">Before Break Only (Periods 1 &amp; 2)</option>
+                      <option value="before-lunch">Before Lunch Only (Periods 1, 2, 3 &amp; 4)</option>
+                    </select>
+                  </div>
+                  <div className="text-[11px] font-medium text-orange-800 bg-white/80 p-2 rounded-xl border border-orange-200">
+                    {slotForm.partTimeSchedule === 'before-break'
+                      ? '⏰ Staff teaches only before Morning Break (P1: 9:30 AM – 10:30 AM & P2: 10:30 AM – 11:20 AM).'
+                      : '⏰ Staff teaches only before Lunch Break (Periods 1 to 4: 9:30 AM – 1:00 PM).'}
+                  </div>
+                </div>
+              )}
+
+              {/* COMBINED CLASS (MULTI-DEPARTMENT) CONFIGURATION */}
+              {slotForm.type === 'combined' && (
+                <div className="p-3.5 bg-violet-50/80 border border-violet-300 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-violet-950">Combined Class (2 Departments Combined):</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-200 text-violet-900 border border-violet-300">
+                      Multi-Dept
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-violet-900 mb-1">Combined Department *</label>
+                      <select
+                        value={slotForm.combinedDept}
+                        onChange={(e) => setSlotForm({ ...slotForm, combinedDept: e.target.value })}
+                        className="w-full bg-white border border-violet-300 rounded-xl px-3 py-2 text-xs font-bold text-violet-950 focus:outline-none focus:border-violet-500"
+                        required
+                      >
+                        <option value="">-- Choose 2nd Department --</option>
+                        {availableDepartments.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-violet-900 mb-1">Combined Dept Year / Section</label>
+                      <input
+                        type="text"
+                        value={slotForm.combinedYear}
+                        onChange={(e) => setSlotForm({ ...slotForm, combinedYear: e.target.value })}
+                        placeholder="e.g. 2nd Year Section A"
+                        className="w-full bg-white border border-violet-300 rounded-xl px-3 py-2 text-xs font-medium text-violet-950 focus:outline-none focus:border-violet-500"
+                      />
+                    </div>
+                  </div>
+                  {slotForm.combinedDept && (
+                    <div className="text-[11px] font-medium text-violet-800 bg-white/80 p-2 rounded-xl border border-violet-200">
+                      🏫 <strong>Joint Session:</strong> Combined with <strong>{slotForm.combinedDept}</strong> {slotForm.combinedYear ? `(${slotForm.combinedYear})` : ''}. Single faculty teaches both departments together.
                     </div>
                   )}
                 </div>
@@ -2524,6 +2634,8 @@ function SlotCell({ slot, onEdit }) {
     emerald: 'bg-emerald-50/90 border-emerald-200 text-emerald-900 hover:border-emerald-400',
     amber: 'bg-amber-50/90 border-amber-200 text-amber-900 hover:border-amber-400',
     rose: 'bg-rose-50/90 border-rose-200 text-rose-900 hover:border-rose-400',
+    orange: 'bg-orange-50/90 border-orange-200 text-orange-900 hover:border-orange-400',
+    violet: 'bg-violet-50/90 border-violet-200 text-violet-900 hover:border-violet-400',
     cyan: 'bg-cyan-50/90 border-cyan-200 text-cyan-900 hover:border-cyan-400',
     teal: 'bg-teal-50/90 border-teal-200 text-teal-900 hover:border-teal-400',
     slate: 'bg-slate-50 border-slate-200 text-slate-600'
@@ -2541,11 +2653,23 @@ function SlotCell({ slot, onEdit }) {
           <span className="font-mono font-black text-[9px] bg-white/90 px-1 py-0.2 rounded shadow-xs">
             {slot.code}
           </span>
-          <span className="text-[8px] uppercase font-bold opacity-75">{slot.type}</span>
+          <span className="text-[8px] uppercase font-bold opacity-75">
+            {slot.type === 'part-time' ? 'Part-Time' : slot.type === 'combined' ? 'Combined' : slot.type}
+          </span>
         </div>
         <p className="font-extrabold text-[10px] leading-tight line-clamp-1 mt-0.5" title={slot.name}>
           {slot.name}
         </p>
+        {slot.type === 'part-time' && (
+          <div className="text-[8px] font-black text-orange-700 tracking-tight mt-0.5">
+            ⏰ {slot.partTimeSchedule === 'before-lunch' ? 'Pre-Lunch' : 'Pre-Break'}
+          </div>
+        )}
+        {slot.type === 'combined' && (
+          <div className="text-[8px] font-black text-violet-700 tracking-tight mt-0.5 truncate" title={`Combined with ${slot.combinedDept || ''}`}>
+            🏫 +{slot.combinedDept ? slot.combinedDept.split(' ')[0] : 'Dept'}
+          </div>
+        )}
       </div>
 
       <div className="pt-0.5 border-t border-black/5 flex items-center justify-between text-[9px] opacity-90 font-medium">
