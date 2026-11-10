@@ -28,8 +28,14 @@ exports.getAllClasses = async (req, res) => {
     const filter = {};
 
     if (dept) filter.dept = dept;
-    if (semester) filter.semester = Number(semester);
-    if (year) filter.year = Number(year);
+    if (semester) {
+      const s = Number(String(semester).replace(/\D/g, ''));
+      if (s) filter.semester = s;
+    }
+    if (year) {
+      const y = Number(String(year).replace(/\D/g, ''));
+      if (y) filter.year = y;
+    }
     if (staffId) filter.staffId = staffId.trim();
     if (section) filter.section = section.toUpperCase();
 

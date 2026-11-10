@@ -408,10 +408,40 @@ is authorized to export or issue this credential sheet.
   // Fetch real subjects matching the Subjects page
   const fetchSubjects = async () => {
     try {
-      const res = await fetch(`${API_BASE}/subjects`);
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.data)) {
-        const clean = data.data.filter(s => Boolean(s.code) && s.code !== 'CS101');
+      const [res, cRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/subjects`),
+        fetch(`${API_BASE}/classes`).catch(() => null)
+      ]);
+      let clean = [];
+      if (res.status === 'fulfilled' && res.value && res.value.ok) {
+        const data = await res.value.json();
+        const raw = Array.isArray(data.data) ? data.data : (Array.isArray(data.subjects) ? data.subjects : (Array.isArray(data) ? data : []));
+        clean = raw.filter(s => Boolean(s.code) && s.code !== 'CS101');
+      }
+      if (cRes.status === 'fulfilled' && cRes.value && cRes.value.ok) {
+        const cData = await cRes.value.json();
+        const classList = cData?.classes || cData?.data || (Array.isArray(cData) ? cData : []);
+        const seen = new Set(clean.map(s => (s.code || '').trim().toUpperCase()));
+        classList.forEach(cls => {
+          const code = (cls.code || cls.classCode || '').trim().toUpperCase();
+          if (!code || code === 'CS101' || seen.has(code)) return;
+          seen.add(code);
+          clean.push({
+            code,
+            name: cls.name || cls.className || code,
+            department: cls.dept || cls.department || 'General'
+          });
+        });
+      }
+      if (clean.length === 0) {
+        try {
+          const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+          if (Array.isArray(cached) && cached.length > 0) {
+            clean = cached.filter(s => Boolean(s.code) && s.code !== 'CS101');
+          }
+        } catch (_) {}
+      }
+      if (clean.length > 0) {
         setSubjectsList(clean);
         try {
           localStorage.setItem('vcas_subjects_cache', JSON.stringify(clean));
@@ -795,8 +825,23 @@ is authorized to export or issue this credential sheet.
         });
       }
     });
+    staffList.forEach(item => {
+      if (Array.isArray(item.classes)) {
+        item.classes.forEach(c => {
+          const code = (c.code || '').trim().toUpperCase();
+          if (!code || code === 'CS101') return;
+          if (!map.has(code)) {
+            map.set(code, {
+              code,
+              name: c.name || code,
+              department: c.dept || c.department || item.department || ''
+            });
+          }
+        });
+      }
+    });
     return Array.from(map.values());
-  }, [subjectsList]);
+  }, [subjectsList, staffList]);
 
   // Filtered staff list
   const filteredStaff = useMemo(() => {

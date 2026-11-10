@@ -78,7 +78,49 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
   const [yearFilter, setYearFilter] = useState('All');
+  const [semFilter, setSemFilter] = useState('All');
   const [feeFilter, setFeeFilter] = useState('All');
+
+  const normalizeYear = (val) => {
+    if (val === null || val === undefined) return 0;
+    const v = String(val).toLowerCase().trim();
+    if (v.includes('3') || v.includes('iii') || v.startsWith('third')) return 3;
+    if (v.includes('2') || v.includes('ii') || v.startsWith('second')) return 2;
+    if (v.includes('1') || v.includes('i ') || v === 'i' || v.startsWith('first')) return 1;
+    if (v.includes('4') || v.includes('iv') || v.startsWith('fourth')) return 4;
+    const match = v.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+  };
+
+  const normalizeSemester = (val) => {
+    if (val === null || val === undefined) return 0;
+    const s = String(val).toLowerCase().trim();
+    if (s.includes('6') || s === 'vi' || s.includes('6th') || s.includes('sem-6') || s.includes('semester 6')) return 6;
+    if (s.includes('5') || s === 'v' || s.includes('5th') || s.includes('sem-5') || s.includes('semester 5')) return 5;
+    if (s.includes('4') || s === 'iv' || s.includes('4th') || s.includes('sem-4') || s.includes('semester 4')) return 4;
+    if (s.includes('3') || s === 'iii' || s.includes('3rd') || s.includes('sem-3') || s.includes('semester 3')) return 3;
+    if (s.includes('2') || s === 'ii' || s.includes('2nd') || s.includes('sem-2') || s.includes('semester 2')) return 2;
+    if (s.includes('1') || s === 'i' || s.includes('1st') || s.includes('sem-1') || s.includes('semester 1')) return 1;
+    const match = s.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+  };
+
+  const availableSemesters = useMemo(() => {
+    if (yearFilter === '1st Year') return ['1st Sem', '2nd Sem'];
+    if (yearFilter === '2nd Year') return ['3rd Sem', '4th Sem'];
+    if (yearFilter === '3rd Year') return ['5th Sem', '6th Sem'];
+    return ['1st Sem', '2nd Sem', '3rd Sem', '4th Sem', '5th Sem', '6th Sem'];
+  }, [yearFilter]);
+
+  const handleYearFilterChange = (newYear) => {
+    setYearFilter(newYear);
+    if (semFilter && semFilter !== 'All') {
+      const num = normalizeSemester(semFilter);
+      if (newYear === '1st Year' && (num < 1 || num > 2)) setSemFilter('All');
+      else if (newYear === '2nd Year' && (num < 3 || num > 4)) setSemFilter('All');
+      else if (newYear === '3rd Year' && (num < 5 || num > 6)) setSemFilter('All');
+    }
+  };
 
   // Modals
   const [viewingStudent, setViewingStudent] = useState(null);
@@ -378,12 +420,20 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
       );
 
       const matchesDept = deptFilter === 'All' || s.department === deptFilter || s.course?.toLowerCase().includes(deptFilter.toLowerCase());
-      const matchesYear = yearFilter === 'All' || s.year === yearFilter;
+      
+      const selYearNum = normalizeYear(yearFilter);
+      const stuYearNum = normalizeYear(s.year) || Math.ceil(normalizeSemester(s.sem || s.semester) / 2) || 0;
+      const matchesYear = selYearNum === 0 || stuYearNum === selYearNum;
+
+      const selSemNum = normalizeSemester(semFilter);
+      const stuSemNum = normalizeSemester(s.sem || s.semester);
+      const matchesSem = selSemNum === 0 || stuSemNum === selSemNum;
+
       const matchesFee = feeFilter === 'All' || s.feeStatus === feeFilter;
 
-      return matchesSearch && matchesDept && matchesYear && matchesFee;
+      return matchesSearch && matchesDept && matchesYear && matchesSem && matchesFee;
     });
-  }, [students, searchQuery, deptFilter, yearFilter, feeFilter]);
+  }, [students, searchQuery, deptFilter, yearFilter, semFilter, feeFilter]);
 
   // Handle Form Change with Login ID auto-sync
   const handleChange = (e) => {
@@ -753,9 +803,22 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              {/* Department / Class Filter */}
+              <select
+                value={deptFilter}
+                onChange={(e) => setDeptFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none"
+              >
+                <option value="All">All Departments</option>
+                {departmentsList.map(d => (
+                  <option key={d._id || d.name} value={d.name}>{d.name}</option>
+                ))}
+              </select>
+
+              {/* Year Filter (3 Years) */}
               <select
                 value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
+                onChange={(e) => handleYearFilterChange(e.target.value)}
                 className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none"
               >
                 <option value="All">All Years</option>
@@ -764,6 +827,19 @@ export default function StaffStudentModule({ staffUser, onNavigate }) {
                 <option value="3rd Year">3rd Year</option>
               </select>
 
+              {/* Semester Filter (6 Semesters - 2 per Year) */}
+              <select
+                value={semFilter}
+                onChange={(e) => setSemFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none"
+              >
+                <option value="All">All Semesters</option>
+                {availableSemesters.map(sem => (
+                  <option key={sem} value={sem}>{sem}</option>
+                ))}
+              </select>
+
+              {/* Fee Filter */}
               <select
                 value={feeFilter}
                 onChange={(e) => setFeeFilter(e.target.value)}

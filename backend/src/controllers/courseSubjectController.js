@@ -14,12 +14,113 @@ const { autoGenerateTimetableSchedule } = require('./timetableController');
 
 exports.getCourses = async (req, res) => {
   try {
-    const courses = await Course.find().sort({ code: 1 });
+    let courses = await Course.find().sort({ code: 1 });
+
+    // Seed default degree programs for all core institutional departments if missing
+    const defaultPrograms = [
+      {
+        code: 'BSC-CS',
+        name: 'B.Sc. Computer Science',
+        degreeLevel: 'Undergraduate (UG)',
+        department: 'Computer Science',
+        regulation: 'Regulation 2024 (R24)',
+        durationYears: 3,
+        totalSemesters: 6,
+        totalCredits: 140,
+        coordinator: 'Latha V',
+        coordinatorEmail: 'latha.v@vcas.edu.in',
+        description: 'Bachelor of Science in Computer Science with focus on Cloud Architecture and Database Systems.'
+      },
+      {
+        code: 'BCOM',
+        name: 'Bachelor of Commerce (B.Com)',
+        degreeLevel: 'Undergraduate (UG)',
+        department: 'Commerce',
+        regulation: 'Regulation 2024 (R24)',
+        durationYears: 3,
+        totalSemesters: 6,
+        totalCredits: 140,
+        coordinator: 'K.DEEPA',
+        coordinatorEmail: 'k.deepa@vcas.edu.in',
+        description: 'Undergraduate Commerce program covering Financial Accounting, Banking, Taxation, and Corporate Law.'
+      },
+      {
+        code: 'BBA',
+        name: 'Bachelor of Business Administration (BBA)',
+        degreeLevel: 'Undergraduate (UG)',
+        department: 'Management',
+        regulation: 'Regulation 2024 (R24)',
+        durationYears: 3,
+        totalSemesters: 6,
+        totalCredits: 140,
+        coordinator: 'Dr.P.Thirumalaikumar',
+        coordinatorEmail: 'p.thirumalaikumar@vcas.edu.in',
+        description: 'Comprehensive business administration program focusing on Operations, Marketing, and Enterprise Management.'
+      },
+      {
+        code: 'BSC-AI',
+        name: 'B.Sc. Artificial Intelligence',
+        degreeLevel: 'Undergraduate (UG)',
+        department: 'Artificial Intelligence',
+        regulation: 'Regulation 2024 (R24)',
+        durationYears: 3,
+        totalSemesters: 6,
+        totalCredits: 140,
+        coordinator: 'PONMALATHI M',
+        coordinatorEmail: 'ponmalathi.m@vcas.edu.in',
+        description: 'Advanced curriculum in Machine Learning, Deep Neural Networks, Natural Language Processing, and Computer Vision.'
+      },
+      {
+        code: 'BSC-CFS',
+        name: 'B.Sc. Criminology and Forensic Science',
+        degreeLevel: 'Undergraduate (UG)',
+        department: 'Criminology and Forensic Science',
+        regulation: 'Regulation 2024 (R24)',
+        durationYears: 3,
+        totalSemesters: 6,
+        totalCredits: 140,
+        coordinator: 'Mr.M.DHANALINGAM',
+        coordinatorEmail: 'm.dhanalingam@vcas.edu.in',
+        description: 'Specialized program investigating Crime Scene Analysis, Forensic Ballistics, Criminal Psychology, and Cyber Forensics.'
+      }
+    ];
+
+    const existingCodes = new Set(courses.map(c => (c.code || '').toUpperCase().trim()));
+    let hasCreated = false;
+
+    for (const dp of defaultPrograms) {
+      if (!existingCodes.has(dp.code)) {
+        await Course.create({
+          ...dp,
+          establishedYear: '2026'
+        });
+        hasCreated = true;
+      }
+    }
+
+    if (hasCreated) {
+      courses = await Course.find().sort({ code: 1 });
+    }
+
+    // Enrich courses with real student enrollment & subject counts dynamically from database
+    const enriched = await Promise.all(courses.map(async (c) => {
+      const cObj = c.toObject ? c.toObject() : { ...c };
+      const deptRegex = new RegExp(`^${(c.department || '').trim()}$`, 'i');
+      
+      const [stuCount, subCount] = await Promise.all([
+        Student.countDocuments({ department: deptRegex }).catch(() => 0),
+        Subject.countDocuments({ department: deptRegex }).catch(() => 0)
+      ]);
+
+      cObj.enrolledStudents = stuCount > 0 ? stuCount : (cObj.enrolledStudents || 0);
+      cObj.totalSubjects = subCount > 0 ? subCount : (cObj.totalSubjects || cObj.durationYears * 10);
+      return cObj;
+    }));
 
     res.status(200).json({
       success: true,
-      count: courses.length,
-      data: courses
+      count: enriched.length,
+      data: enriched
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

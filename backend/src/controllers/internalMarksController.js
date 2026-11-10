@@ -744,11 +744,21 @@ const getFilteredInternalMarks = async (req, res) => {
       filter.subjectCode = { $regex: new RegExp(subjectCode.trim(), 'i') };
     }
     if (semester && semester !== 'All') {
-      filter.semester = Number(semester);
+      const semNum = Number(String(semester).replace(/\D/g, ''));
+      if (semNum) {
+        filter.semester = semNum;
+      }
     }
     if (year && year !== 'All') {
+      const yrDigits = String(year).match(/\d+/);
+      let pattern = year.trim();
+      if (yrDigits) {
+        const d = yrDigits[0];
+        const ord = d === '1' ? '1st|first|i\\b' : d === '2' ? '2nd|second|ii\\b' : d === '3' ? '3rd|third|iii\\b' : '4th|fourth|iv\\b';
+        pattern = `${d}|${ord}`;
+      }
       filter.$or = [
-        { year: { $regex: new RegExp(year.trim(), 'i') } },
+        { year: { $regex: new RegExp(pattern, 'i') } },
         { academicYear: { $regex: new RegExp(year.trim(), 'i') } }
       ];
     }

@@ -360,11 +360,16 @@ export default function ExaminationManagement({ user }) {
 
       // Build unified student examination and marks roster
       const studentMap = new Map();
+      const studentLookup = new Map(); // roll/reg/name lookup to unique student key
 
       // First add from registered students (st.attendance is dynamically calculated from attendance sessions)
       studentsData.forEach((st, idx) => {
-        const roll = (st.rollNo || st.regNo || st.admissionNo || st.admNo || st.studentId || (st._id ? String(st._id).slice(-6) : '') || `STU${idx + 1}`).trim().toUpperCase();
-        if (!roll) return;
+        // Guarantee 100% unique key per student so no duplicate roll numbers overwrite each other
+        const studentKey = String(st._id || st.id || st.regNo || `STU_${idx + 1}`);
+        const rawRoll = (st.rollNo || '').trim().toUpperCase();
+        const rawReg = (st.regNo || st.admissionNo || st.admNo || st.studentId || (st._id ? String(st._id).slice(-6) : '') || `REG2026${String(idx + 1).padStart(3, '0')}`).trim().toUpperCase();
+        const effectiveRoll = rawRoll || rawReg;
+
         const attNum = typeof st.attendance === 'number' ? st.attendance : parseFloat(st.attendance) || 0;
         
         // Fee check: must be explicitly Paid or marked feeCleared
@@ -385,10 +390,12 @@ export default function ExaminationManagement({ user }) {
         const rawDept = (st.department || 'General').trim();
         const effectiveDept = rawDept; // Keep the student's actual department from their profile!
 
-        studentMap.set(roll, {
-          id: st._id || st.id || idx + 1,
-          rollNo: st.rollNo || roll,
-          regNo: st.regNo || st.admissionNo || st.admNo || st.studentId || roll,
+        studentMap.set(studentKey, {
+          id: st._id || st.id || studentKey,
+          _id: st._id || st.id,
+          studentKey,
+          rollNo: effectiveRoll,
+          regNo: rawReg,
           name: st.name || st.fullName || 'Student',
           department: effectiveDept,
           batch: st.batch || st.academicYear || '',
@@ -424,15 +431,37 @@ export default function ExaminationManagement({ user }) {
           sgpa: Number(st.sgpa || 0),
           cgpa: Number(st.cgpa || 0)
         });
+
+        // Index for fast lookup by regNo, _id, or roll+department
+        if (rawReg) studentLookup.set(rawReg, studentKey);
+        if (st._id) studentLookup.set(String(st._id), studentKey);
+        if (st.id) studentLookup.set(String(st.id), studentKey);
+        if (rawRoll) {
+          studentLookup.set(`${rawRoll}__${effectiveDept.toUpperCase()}`, studentKey);
+          if (!studentLookup.has(rawRoll)) studentLookup.set(rawRoll, studentKey);
+        }
+        if (st.name) {
+          studentLookup.set(`${String(st.name).trim().toUpperCase()}__${effectiveDept.toUpperCase()}`, studentKey);
+        }
       });
 
       // Overlay real marks uploaded by staff
       staffMarksheets.forEach(sheet => {
         if (Array.isArray(sheet.students)) {
+          const sheetDept = (sheet.department || '').trim().toUpperCase();
           sheet.students.forEach(stMark => {
             const roll = (stMark.rollNo || '').trim().toUpperCase();
-            if (!roll || !studentMap.has(roll)) return;
-            const existing = studentMap.get(roll);
+            const reg = (stMark.regNo || '').trim().toUpperCase();
+            const sName = (stMark.name || '').trim().toUpperCase();
+            const targetKey = (reg && studentLookup.get(reg)) ||
+              (roll && sheetDept && studentLookup.get(`${roll}__${sheetDept}`)) ||
+              (roll && studentLookup.get(roll)) ||
+              (sName && sheetDept && studentLookup.get(`${sName}__${sheetDept}`)) ||
+              (stMark._id && studentLookup.get(String(stMark._id))) ||
+              (stMark.id && studentLookup.get(String(stMark.id)));
+
+            if (!targetKey || !studentMap.has(targetKey)) return;
+            const existing = studentMap.get(targetKey);
 
             // Use actual staff marks — null if not entered (no hardcoded fallbacks)
             const st1Val = (stMark.st1 !== null && stMark.st1 !== undefined) ? stMark.st1 : existing.st1;
@@ -473,7 +502,7 @@ export default function ExaminationManagement({ user }) {
               ? 'Eligible'
               : (!isFeeCleared ? 'Ineligible (Fee Pending)' : 'Blocked (Shortage <75%)');
 
-            studentMap.set(roll, {
+            studentMap.set(targetKey, {
               ...existing,
               name: stMark.name || existing.name,
               st1: st1Val,
@@ -515,11 +544,22 @@ export default function ExaminationManagement({ user }) {
             ? alloc.subjects
             : [];
 
+        const allocDept = (alloc.department || '').trim().toUpperCase();
+
         if (Array.isArray(alloc.students)) {
           alloc.students.forEach(st => {
             const roll = (st.rollNo || '').trim().toUpperCase();
-            if (roll && studentMap.has(roll)) {
-              const existing = studentMap.get(roll);
+            const reg = (st.regNo || '').trim().toUpperCase();
+            const name = (st.name || '').trim().toUpperCase();
+            const targetKey = (reg && studentLookup.get(reg)) ||
+              (roll && allocDept && studentLookup.get(`${roll}__${allocDept}`)) ||
+              (roll && studentLookup.get(roll)) ||
+              (name && allocDept && studentLookup.get(`${name}__${allocDept}`)) ||
+              (st._id && studentLookup.get(String(st._id))) ||
+              (st.id && studentLookup.get(String(st.id)));
+
+            if (targetKey && studentMap.has(targetKey)) {
+              const existing = studentMap.get(targetKey);
               const isElig = existing.attendance >= 75 || st.eligible === true || (st.hallNo && st.hallNo !== 'Unassigned' && st.hallNo !== 'TBA');
               const studentSubs = (Array.isArray(st.subjects) && st.subjects.length > 0)
                 ? st.subjects
@@ -527,7 +567,7 @@ export default function ExaminationManagement({ user }) {
                   ? commonSubs
                   : (existing.subjects || []);
 
-              studentMap.set(roll, {
+              studentMap.set(targetKey, {
                 ...existing,
                 hallNo: st.hallNo || existing.hallNo || 'Hall 101',
                 seatNo: st.seatNo || existing.seatNo || 'A1',
@@ -792,6 +832,8 @@ export default function ExaminationManagement({ user }) {
   // Admin Hall Ticket Allocation & Subject Setup State
   const [adminHtDept, setAdminHtDept] = useState(() => availableDepartments[0] || 'Computer Science');
   const [adminHtFilterDept, setAdminHtFilterDept] = useState('All Departments');
+  const [adminHtFilterYear, setAdminHtFilterYear] = useState('All');
+  const [adminHtFilterSem, setAdminHtFilterSem] = useState('All');
   const [adminHtSem, setAdminHtSem] = useState(1);
   const [adminHtExamTitle, setAdminHtExamTitle] = useState('Semester End Theory Examinations - 2026');
   const [adminHtNewCode, setAdminHtNewCode] = useState('');
@@ -1045,7 +1087,7 @@ export default function ExaminationManagement({ user }) {
     return Array.from(set);
   }, [hallsList, availableVenues]);
 
-  // Filtered Students specifically for the Hall Tickets Tab (Default: All Departments)
+  // Filtered Students specifically for the Hall Tickets Tab (Default: All Departments, All Years, All Semesters)
   const hallTicketStudents = useMemo(() => {
     const target = (adminHtFilterDept || 'All Departments').trim().toLowerCase();
     const isAll = !target || target === 'all' || target === 'all departments';
@@ -1059,27 +1101,67 @@ export default function ExaminationManagement({ user }) {
         String(s.department || '').toLowerCase().includes(q)
       );
 
-      if (isAll) return matchesSearch;
+      let matchesDept = isAll;
+      if (!isAll) {
+        const sDept = (s.department || '').toLowerCase().trim();
+        matchesDept =
+          sDept === target ||
+          sDept.includes(target) ||
+          target.includes(sDept) ||
+          (target.includes('computer') && (sDept.includes('cs') || sDept.includes('computer'))) ||
+          (target.includes('cs') && sDept.includes('cs')) ||
+          (target.includes('commerce') && (sDept.includes('commerce') || sDept.includes('bcom'))) ||
+          (target.includes('artificial') && (sDept.includes('ai') || sDept.includes('artificial'))) ||
+          (target.includes('criminology') && (sDept.includes('criminology') || sDept.includes('forensic'))) ||
+          (target.includes('management') && (sDept.includes('management') || sDept.includes('bba')));
+      }
 
-      const sDept = (s.department || '').toLowerCase().trim();
-      const origDept = (s.originalDepartment || '').toLowerCase().trim();
-      const matchesDept =
-        sDept === target ||
-        sDept.includes(target) ||
-        target.includes(sDept) ||
-        (target.includes('computer') && (sDept.includes('cs') || sDept.includes('computer'))) ||
-        (target.includes('cs') && sDept.includes('cs'));
+      // Year filter
+      let matchesYear = true;
+      if (adminHtFilterYear && adminHtFilterYear !== 'All') {
+        const parseY = (val) => {
+          const str = String(val || '').toLowerCase();
+          if (str.includes('3') || str.includes('iii') || str.includes('third')) return 3;
+          if (str.includes('2') || str.includes('ii') || str.includes('second')) return 2;
+          if (str.includes('1') || str.includes('i') || str.includes('first')) return 1;
+          return parseInt(str.replace(/\D/g, ''), 10) || 1;
+        };
+        matchesYear = parseY(s.year) === parseY(adminHtFilterYear);
+      }
 
-      return matchesSearch && matchesDept;
+      // Semester filter
+      let matchesSem = true;
+      if (adminHtFilterSem && adminHtFilterSem !== 'All') {
+        const sSem = parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0;
+        const fSem = parseInt(String(adminHtFilterSem).replace(/\D/g, ''), 10) || 0;
+        if (fSem > 0) {
+          matchesSem = sSem === fSem;
+        } else {
+          matchesSem = String(s.sem || s.semester || '').toLowerCase().includes(adminHtFilterSem.toLowerCase());
+        }
+      }
+
+      return matchesSearch && matchesDept && matchesYear && matchesSem;
     });
-  }, [studentMarksList, searchQuery, adminHtFilterDept]);
+  }, [studentMarksList, searchQuery, adminHtFilterDept, adminHtFilterYear, adminHtFilterSem]);
 
-  const handleStudentHallChange = (rollNo, chosenHall) => {
-    const existingStudent = studentMarksList.find(st => (st.rollNo || '').toUpperCase() === (rollNo || '').toUpperCase());
+  const handleStudentHallChange = (studentKeyOrId, chosenHall) => {
+    const existingStudent = studentMarksList.find(st =>
+      (st.id && String(st.id) === String(studentKeyOrId)) ||
+      (st._id && String(st._id) === String(studentKeyOrId)) ||
+      (st.studentKey && String(st.studentKey) === String(studentKeyOrId)) ||
+      (st.regNo && (st.regNo || '').toUpperCase() === String(studentKeyOrId).toUpperCase()) ||
+      (st.rollNo && (st.rollNo || '').toUpperCase() === String(studentKeyOrId).toUpperCase())
+    );
     const wasAlreadyAllocated = existingStudent && existingStudent.hallNo && existingStudent.hallNo !== 'TBA' && existingStudent.hallNo !== 'Unassigned' && existingStudent.hallNo !== chosenHall;
 
     const updated = studentMarksList.map((st, i) => {
-      if ((st.rollNo || '').toUpperCase() === (rollNo || '').toUpperCase()) {
+      const isMatch = (st.id && String(st.id) === String(studentKeyOrId)) ||
+        (st._id && String(st._id) === String(studentKeyOrId)) ||
+        (st.studentKey && String(st.studentKey) === String(studentKeyOrId)) ||
+        (st.regNo && (st.regNo || '').toUpperCase() === String(studentKeyOrId).toUpperCase()) ||
+        (!st.regNo && st.rollNo && (st.rollNo || '').toUpperCase() === String(studentKeyOrId).toUpperCase());
+      if (isMatch) {
         return {
           ...st,
           hallNo: chosenHall,
@@ -1091,9 +1173,9 @@ export default function ExaminationManagement({ user }) {
     setStudentMarksList(updated);
 
     if (wasAlreadyAllocated) {
-      showToast(`⚠️ Re-allocation: Roll ${rollNo} was already allocated to "${existingStudent.hallNo}". Updated to "${chosenHall}".`);
+      showToast(`⚠️ Re-allocation: Student ${existingStudent?.name || studentKeyOrId} was already allocated to "${existingStudent.hallNo}". Updated to "${chosenHall}".`);
     } else {
-      showToast(`Allocated "${chosenHall}" for Roll ${rollNo}`);
+      showToast(`Allocated "${chosenHall}" for ${existingStudent?.name || studentKeyOrId}`);
     }
 
     // Persist immediately to MongoDB
@@ -1348,15 +1430,22 @@ export default function ExaminationManagement({ user }) {
       }
       // Sem filter
       if (marksFilterSem !== 'All') {
-        const msSem = String(ms.semester || '');
-        const fSem = String(marksFilterSem);
-        if (msSem !== fSem) return;
+        const msSem = parseInt(String(ms.semester || '').replace(/\D/g, ''), 10) || 0;
+        const fSem = parseInt(String(marksFilterSem).replace(/\D/g, ''), 10) || 0;
+        if (fSem && msSem !== fSem) return;
       }
-      // Year filter
+      // Year filter (1st, 2nd, 3rd Year)
       if (marksFilterYear !== 'All') {
-        const msYear = String(ms.year || '');
-        const fYear = marksFilterYear.toLowerCase();
-        if (!msYear.toLowerCase().includes(fYear)) return;
+        const parseYear = (val) => {
+          const s = String(val || '').toLowerCase();
+          if (s.includes('3') || s.includes('iii')) return 3;
+          if (s.includes('2') || s.includes('ii')) return 2;
+          if (s.includes('1') || s.includes('i')) return 1;
+          return 0;
+        };
+        const msYearNum = parseYear(ms.year);
+        const fYearNum = parseYear(marksFilterYear);
+        if (fYearNum && msYearNum && msYearNum !== fYearNum) return;
       }
       // Subject filter
       if (marksFilterSubject !== 'All') {
@@ -1421,7 +1510,21 @@ export default function ExaminationManagement({ user }) {
     if (internalMarksheets.length === 0) {
       studentMarksList.forEach(s => {
         if (marksFilterDept !== 'All' && s.department !== marksFilterDept) return;
-        if (marksFilterYear !== 'All' && String(s.year) !== marksFilterYear.replace(/\D/g, '')) return;
+        if (marksFilterYear !== 'All') {
+          const parseYear = (val) => {
+            const str = String(val || '').toLowerCase();
+            if (str.includes('3') || str.includes('iii')) return 3;
+            if (str.includes('2') || str.includes('ii')) return 2;
+            if (str.includes('1') || str.includes('i')) return 1;
+            return 0;
+          };
+          if (parseYear(s.year) !== parseYear(marksFilterYear)) return;
+        }
+        if (marksFilterSem !== 'All') {
+          const sSem = parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0;
+          const fSem = parseInt(String(marksFilterSem).replace(/\D/g, ''), 10) || 0;
+          if (fSem && sSem !== fSem) return;
+        }
         if (marksFilterBatch !== 'All' && !String(s.batch || '').toLowerCase().includes(marksFilterBatch.toLowerCase())) return;
         const q = marksSearchQuery.toLowerCase().trim();
         if (q && !String(s.name || '').toLowerCase().includes(q) && !String(s.rollNo || '').toLowerCase().includes(q)) return;
@@ -2452,7 +2555,7 @@ export default function ExaminationManagement({ user }) {
             }`}
         >
           <QrCode className="w-4 h-4" />
-          <span>Hall Ticket & Eligibility ({filteredStudents.length})</span>
+          <span>Hall Ticket & Eligibility ({activeTab === 'hall-tickets' ? hallTicketStudents.length : studentMarksList.length})</span>
         </button>
 
         <button
@@ -2977,31 +3080,61 @@ export default function ExaminationManagement({ user }) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
                   <span>Hall Ticket Issuance &amp; Examination Hall Allocation</span>
                   <span className="text-xs font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">
-                    {hallTicketStudents.length} Students
+                    Showing {hallTicketStudents.length} of {studentMarksList.length} Students
                   </span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">Allocate exam halls from registered halls and verify attendance/fee eligibility</p>
               </div>
 
-              {/* Department View Filter */}
-              <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
-                <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Filter Dept:</span>
-                <select
-                  value={adminHtFilterDept}
-                  onChange={(e) => setAdminHtFilterDept(e.target.value)}
-                  className="text-xs font-bold px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
-                >
-                  <option value="All Departments">All Departments ({studentMarksList.length} Total)</option>
-                  {Array.from(new Set(studentMarksList.map(s => s.department).filter(Boolean))).map(deptName => (
-                    <option key={deptName} value={deptName}>{deptName}</option>
-                  ))}
-                </select>
+              {/* Department, Year & Semester View Filters */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                  <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Dept:</span>
+                  <select
+                    value={adminHtFilterDept}
+                    onChange={(e) => setAdminHtFilterDept(e.target.value)}
+                    className="text-xs font-bold px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
+                  >
+                    <option value="All Departments">All Departments ({studentMarksList.length} Total)</option>
+                    {Array.from(new Set(studentMarksList.map(s => s.department).filter(Boolean))).map(deptName => (
+                      <option key={deptName} value={deptName}>{deptName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                  <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Year:</span>
+                  <select
+                    value={adminHtFilterYear}
+                    onChange={(e) => setAdminHtFilterYear(e.target.value)}
+                    className="text-xs font-bold px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
+                  >
+                    <option value="All">All Years</option>
+                    <option value="1">1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                  <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Sem:</span>
+                  <select
+                    value={adminHtFilterSem}
+                    onChange={(e) => setAdminHtFilterSem(e.target.value)}
+                    className="text-xs font-bold px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
+                  >
+                    <option value="All">All Semesters</option>
+                    {['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5', 'Sem 6'].map(sem => (
+                      <option key={sem} value={sem}>{sem}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -3114,7 +3247,7 @@ export default function ExaminationManagement({ user }) {
                           <div className="space-y-1.5 max-w-[210px]">
                             <select
                               value={s.hallNo || ''}
-                              onChange={(e) => handleStudentHallChange(s.rollNo, e.target.value)}
+                              onChange={(e) => handleStudentHallChange(s.studentKey || s.id || s._id || s.regNo || s.rollNo, e.target.value)}
                               className="w-full text-xs font-bold px-2.5 py-1.5 bg-slate-50 border border-slate-300 hover:border-indigo-500 focus:border-indigo-600 focus:bg-white rounded-xl outline-none cursor-pointer transition-all"
                             >
                               <option value="">-- Choose Hall --</option>
@@ -3130,8 +3263,10 @@ export default function ExaminationManagement({ user }) {
                                 placeholder={`A${idx + 1}`}
                                 onChange={(e) => {
                                   const newSeat = e.target.value;
+                                  const targetIdentifier = s.studentKey || s.id || s._id || s.regNo;
                                   setStudentMarksList(prev => prev.map(item => 
-                                    (item.rollNo || '').toUpperCase() === (s.rollNo || '').toUpperCase() 
+                                    ((targetIdentifier && (item.studentKey === targetIdentifier || item.id === targetIdentifier || item._id === targetIdentifier || item.regNo === targetIdentifier)) ||
+                                     (!targetIdentifier && (item.rollNo || '').toUpperCase() === (s.rollNo || '').toUpperCase()))
                                       ? { ...item, seatNo: newSeat } 
                                       : item
                                   ));
@@ -3239,7 +3374,30 @@ export default function ExaminationManagement({ user }) {
                   {availableDepartments.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
-              {/* Semester */}
+              {/* Year (3 Years) */}
+              <div className="min-w-[110px]">
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Year</label>
+                <select
+                  value={marksFilterYear}
+                  onChange={e => {
+                    const yr = e.target.value;
+                    setMarksFilterYear(yr);
+                    if (marksFilterSem !== 'All') {
+                      const sem = Number(marksFilterSem);
+                      if (yr.includes('I') && !yr.includes('II') && !yr.includes('III') && (sem < 1 || sem > 2)) setMarksFilterSem('All');
+                      else if (yr.includes('II') && !yr.includes('III') && (sem < 3 || sem > 4)) setMarksFilterSem('All');
+                      else if (yr.includes('III') && (sem < 5 || sem > 6)) setMarksFilterSem('All');
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="All">All Years</option>
+                  <option value="I Year">I Year</option>
+                  <option value="II Year">II Year</option>
+                  <option value="III Year">III Year</option>
+                </select>
+              </div>
+              {/* Semester (2 per Year, 6 total) */}
               <div className="min-w-[110px]">
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Semester</label>
                 <select
@@ -3248,21 +3406,14 @@ export default function ExaminationManagement({ user }) {
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
                 >
                   <option value="All">All Sems</option>
-                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>Sem {n}</option>)}
-                </select>
-              </div>
-              {/* Year */}
-              <div className="min-w-[110px]">
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Year</label>
-                <select
-                  value={marksFilterYear}
-                  onChange={e => setMarksFilterYear(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
-                >
-                  <option value="All">All Years</option>
-                  <option value="I Year">I Year</option>
-                  <option value="II Year">II Year</option>
-                  <option value="III Year">III Year</option>
+                  {(() => {
+                    const yr = marksFilterYear;
+                    const list = yr === 'I Year' ? [1, 2] :
+                                 yr === 'II Year' ? [3, 4] :
+                                 yr === 'III Year' ? [5, 6] :
+                                 [1, 2, 3, 4, 5, 6];
+                    return list.map(n => <option key={n} value={n}>Sem {n}</option>);
+                  })()}
                 </select>
               </div>
               {/* Subject */}

@@ -266,55 +266,49 @@ export default function StaffDetailView({ staff, onBack, onEdit, user, onDownloa
 
       if (subRes && subRes.ok) {
         const subData = await subRes.json();
-        const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
-        const staffIdLower = String(staff?.staffId || staff?.employeeId || '').trim().toLowerCase();
-        const staffNameLower = String(staff?.name || '').trim().toLowerCase();
-        const staffDeptLower = String(staff?.department || '').trim().toLowerCase();
-        const isHod = Boolean(
-          staff?.isHod ||
-          String(staff?.role || '').toUpperCase().includes('HOD') ||
-          String(staff?.designation || '').toUpperCase().includes('HOD')
-        );
+        let rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
+        if (rawSubs.length === 0) {
+          try {
+            const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+            if (Array.isArray(cached) && cached.length > 0) rawSubs = cached;
+          } catch (_) {}
+        }
 
-        const matchesStaffScope = (s) => {
-          if (!s || !s.code) return false;
-          if (['CS401', 'CS402', 'SF76', 'CS2001', 'CS2005'].includes(String(s.code).toUpperCase())) return false;
+        // Include all created subjects in admin view so admin can assign any subject to this staff member
+        const map = new Map();
+        rawSubs.forEach(s => {
+          const code = (s.code || s.subjectCode || '').trim().toUpperCase();
+          if (!code || code === 'CS101') return;
+          if (!map.has(code)) {
+            map.set(code, {
+              code,
+              name: s.name || s.title || s.subjectName || code,
+              department: s.department || s.dept || '',
+              ...s
+            });
+          }
+        });
 
-          const faculty = String(s.faculty || s.staffName || '').trim().toLowerCase();
-          const staffIdField = String(s.staffId || s.employeeId || s.createdByStaffId || '').trim().toLowerCase();
-          const createdBy = String(s.createdBy || s.createdById || '').trim().toLowerCase();
-          const createdByName = String(s.createdByName || '').trim().toLowerCase();
-          const subjectDept = String(s.department || s.dept || '').trim().toLowerCase();
+        // Also incorporate any subjects from classes endpoint
+        if (cRes && cRes.ok) {
+          try {
+            const cData = await cRes.clone().json();
+            const clsArr = cData?.classes || cData?.data || (Array.isArray(cData) ? cData : []);
+            clsArr.forEach(c => {
+              const code = (c.code || c.classCode || '').trim().toUpperCase();
+              if (code && code !== 'CS101' && !map.has(code)) {
+                map.set(code, {
+                  code,
+                  name: c.name || c.className || code,
+                  department: c.dept || c.department || '',
+                  ...c
+                });
+              }
+            });
+          } catch (_) {}
+        }
 
-          const sameFaculty = Boolean(
-            faculty && (
-              faculty === staffIdLower ||
-              faculty === staffNameLower ||
-              faculty.includes(staffNameLower) ||
-              staffIdField === staffIdLower ||
-              staffIdField === staffNameLower
-            )
-          );
-
-          const sameCreatedBy = Boolean(
-            (createdBy && (createdBy === staffIdLower || createdBy === staffNameLower)) ||
-            (createdByName && (createdByName === staffNameLower || createdByName.includes(staffNameLower)))
-          );
-
-          // HOD: include ALL subjects from their department (use fuzzy match)
-          const sameDept = Boolean(
-            staffDeptLower && subjectDept && (
-              subjectDept === staffDeptLower ||
-              subjectDept.includes(staffDeptLower) ||
-              staffDeptLower.includes(subjectDept)
-            )
-          );
-          const departmentHodScope = isHod && sameDept;
-
-          return sameFaculty || sameCreatedBy || departmentHodScope;
-        };
-
-        setAvailableSubjects(rawSubs.filter(matchesStaffScope));
+        setAvailableSubjects(Array.from(map.values()));
       }
 
       if (sRes && sRes.ok) {

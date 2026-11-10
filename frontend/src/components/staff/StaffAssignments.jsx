@@ -203,14 +203,15 @@ export default function StaffAssignments({ staffUser }) {
             )
           : [];
 
+        // Combine all visible subjects for staff: their assigned classes, department subjects, and catalog
         const subjectByCode = new Map();
-        const visibleSubjects = isHodUser && staffDepartment
-          ? [...hodDepartmentSubjects, ...hodDepartmentClasses, ...scopedSubjectList, ...scopedStaffClasses]
-          : (scopedStaffClasses.length > 0
-              ? scopedStaffClasses
-              : (scopedSubjectList.length > 0 ? scopedSubjectList : subjectList));
+        const allPotentialSubjects = [
+          ...(Array.isArray(staffClasses) ? staffClasses : []),
+          ...(Array.isArray(departmentClasses) ? departmentClasses : []),
+          ...(Array.isArray(subjectList) ? subjectList : [])
+        ];
 
-        visibleSubjects.forEach((courseClass) => {
+        allPotentialSubjects.forEach((courseClass) => {
           const code = String(courseClass?.code || courseClass?.subjectCode || '').trim();
           const key = code.toUpperCase();
           if (!key || subjectByCode.has(key)) return;
@@ -218,6 +219,7 @@ export default function StaffAssignments({ staffUser }) {
           subjectByCode.set(key, {
             code,
             ...catalogSubject,
+            ...courseClass,
             name: courseClass?.name || courseClass?.subjectName || catalogSubject?.name || catalogSubject?.subjectName || code,
             department: courseClass?.dept || courseClass?.department || catalogSubject?.department || staffUser?.department || ''
           });

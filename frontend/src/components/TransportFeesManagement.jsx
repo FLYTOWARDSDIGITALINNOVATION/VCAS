@@ -163,7 +163,14 @@ export default function TransportFeesManagement({
         matchesDept = rDept.includes(fDept) || rCourse.includes(fDept) || (fDept.length >= 4 && (fDept.includes(rDept) || fDept.includes(rCourse)));
       }
     }
-    const matchesYear = tableYearFilter === 'All' || String(r.year || '').toLowerCase() === tableYearFilter.toLowerCase();
+    const parseYearNum = (v) => {
+      const s = String(v || '').toLowerCase().trim();
+      if (s === 'iii' || s.includes('3') || s.startsWith('third')) return 3;
+      if (s === 'ii' || s.includes('2') || s.startsWith('second')) return 2;
+      if (s === 'i' || s.includes('1') || s.startsWith('first')) return 1;
+      return 0;
+    };
+    const matchesYear = tableYearFilter === 'All' || parseYearNum(r.year) === parseYearNum(tableYearFilter);
     const matchesBatch = tableBatchFilter === 'All' || String(r.batch || r.academicYear || '').toLowerCase().includes(tableBatchFilter.toLowerCase());
     return matchesSearch && matchesDept && matchesYear && matchesBatch;
   });

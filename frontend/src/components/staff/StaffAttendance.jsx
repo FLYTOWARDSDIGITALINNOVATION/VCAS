@@ -153,7 +153,7 @@ export default function StaffAttendance({ staffUser }) {
         'Absent': s.absent,
         'Late': s.late,
         'Attendance %': `${s.percentage}%`
-      })) : sessions.flatMap((sess, sIdx) => 
+      })) : sessions.flatMap((sess, sIdx) =>
         (sess.records || []).map((r, rIdx) => ({
           'S.No': `${sIdx + 1}.${rIdx + 1}`,
           'Date': sess.date,
@@ -246,31 +246,31 @@ export default function StaffAttendance({ staffUser }) {
 
       const rowsToExport = summaries.length > 0
         ? summaries.map((s, idx) => ({
-            'S.No': idx + 1,
-            'Roll No': s.rollNo,
-            'Register No': s.regNo || '',
-            'Student Name': s.name,
-            'Department': s.department || deptToUse || '',
-            'Batch': s.batch || '',
-            'Semester': s.semester || '',
-            'Total Sessions': s.totalClasses,
-            'Present': s.present,
-            'Absent': s.absent,
-            'Late': s.late,
-            'Attendance %': `${s.percentage}%`
-          }))
+          'S.No': idx + 1,
+          'Roll No': s.rollNo,
+          'Register No': s.regNo || '',
+          'Student Name': s.name,
+          'Department': s.department || deptToUse || '',
+          'Batch': s.batch || '',
+          'Semester': s.semester || '',
+          'Total Sessions': s.totalClasses,
+          'Present': s.present,
+          'Absent': s.absent,
+          'Late': s.late,
+          'Attendance %': `${s.percentage}%`
+        }))
         : sessions.flatMap((sess, sIdx) =>
-            (sess.records || []).map((r, rIdx) => ({
-              'S.No': `${sIdx + 1}.${rIdx + 1}`,
-              'Date': sess.date,
-              'Slot': sess.slot,
-              'Class Code': sess.classCode,
-              'Roll No': r.rollNo,
-              'Student Name': r.name,
-              'Status': r.status,
-              'Remarks': r.remarks || ''
-            }))
-          );
+          (sess.records || []).map((r, rIdx) => ({
+            'S.No': `${sIdx + 1}.${rIdx + 1}`,
+            'Date': sess.date,
+            'Slot': sess.slot,
+            'Class Code': sess.classCode,
+            'Roll No': r.rollNo,
+            'Student Name': r.name,
+            'Status': r.status,
+            'Remarks': r.remarks || ''
+          }))
+        );
 
       const XLSX = await getSheetJS();
       if (XLSX) {
@@ -298,93 +298,51 @@ export default function StaffAttendance({ staffUser }) {
     try {
       setLoadingClasses(true);
 
-      let allDeptClasses = [];
-      if (isHodUser && staffUser?.department) {
-        // Load all classes for this department
-        const deptRes = await fetch(`${API_BASE}/classes?dept=${encodeURIComponent(staffUser.department)}`);
-        const deptData = await deptRes.json();
-        if (deptData.success && Array.isArray(deptData.classes)) {
-          allDeptClasses = deptData.classes;
-        }
-
-        // Also load subjects added by HOD from /subjects endpoint and convert to class-like shape
-        try {
-          const subRes = await fetch(`${API_BASE}/subjects`);
-          const subData = await subRes.json();
-          const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
-          const deptLower = staffUser.department.trim().toLowerCase();
-          const hodSubjectsAsClasses = rawSubs
-            .filter(s => {
-              if (!s || !s.code) return false;
-              const subDept = (s.department || s.dept || '').trim().toLowerCase();
-              return subDept && (subDept === deptLower || subDept.includes(deptLower) || deptLower.includes(subDept));
-            })
-            .map(s => ({
-              code: (s.code || '').trim().toUpperCase(),
-              name: s.name || s.code,
-              dept: s.department || s.dept || staffUser.department,
-              year: Number(s.year) || 1,
-              semester: s.sem ? (parseInt(String(s.sem).replace(/\D/g, ''), 10) || 1) : 1,
-              section: s.section || 'A',
-              credits: Number(s.credits) || 3,
-              theoryHours: Number(s.theoryHours) || 3,
-              labHours: Number(s.labHours) || 0,
-              staffId: s.faculty || s.staffId || staffUser.staffId,
-              staffName: s.staffName || s.faculty || staffUser.name || '',
-              students: s.students || [],
-              _fromSubjectsAPI: true
-            }));
-          allDeptClasses = [...allDeptClasses, ...hodSubjectsAsClasses];
-        } catch (_) {}
-      }
-
       const res = await fetch(`${API_BASE}/classes/staff/${staffUser.staffId}`);
       const data = await res.json();
       const staffClasses = data.success && Array.isArray(data.classes) ? data.classes : [];
 
-      // For non-HOD staff, also load their own subjects from /subjects so their own subjects appear
-      let ownSubjectsAsClasses = [];
-      if (!isHodUser) {
+      // Load all department classes and all subjects from /subjects so all subjects are available in dropdown
+      let allDeptClasses = [];
+      if (staffUser?.department) {
         try {
-          const subRes = await fetch(`${API_BASE}/subjects`);
-          const subData = await subRes.json();
-          const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
-          const staffIdLower = (staffUser.staffId || '').trim().toLowerCase();
-          const staffNameLower = (staffUser.name || '').trim().toLowerCase();
-          ownSubjectsAsClasses = rawSubs
-            .filter(s => {
-              if (!s || !s.code) return false;
-              const faculty = (s.faculty || s.staffName || s.staffId || '').trim().toLowerCase();
-              const createdBy = (s.createdBy || s.createdByName || '').trim().toLowerCase();
-              return (
-                faculty === staffIdLower ||
-                faculty === staffNameLower ||
-                faculty.includes(staffNameLower) ||
-                createdBy === staffIdLower ||
-                createdBy === staffNameLower
-              );
-            })
-            .map(s => ({
-              code: (s.code || '').trim().toUpperCase(),
-              name: s.name || s.code,
-              dept: s.department || s.dept || staffUser.department || '',
-              year: Number(s.year) || 1,
-              semester: s.sem ? (parseInt(String(s.sem).replace(/\D/g, ''), 10) || 1) : 1,
-              section: s.section || 'A',
-              credits: Number(s.credits) || 3,
-              theoryHours: Number(s.theoryHours) || 3,
-              labHours: Number(s.labHours) || 0,
-              staffId: staffUser.staffId,
-              staffName: staffUser.name || '',
-              students: s.students || [],
-              _fromSubjectsAPI: true
-            }));
-        } catch (_) {}
+          const deptRes = await fetch(`${API_BASE}/classes?dept=${encodeURIComponent(staffUser.department)}`);
+          const deptData = await deptRes.json();
+          if (deptData.success && Array.isArray(deptData.classes)) {
+            allDeptClasses = deptData.classes;
+          }
+        } catch (_) { }
       }
 
-      const mergedClasses = isHodUser && staffUser?.department
-        ? [...allDeptClasses, ...staffClasses]
-        : [...staffClasses, ...ownSubjectsAsClasses];
+      let allSubjectsAsClasses = [];
+      try {
+        const subRes = await fetch(`${API_BASE}/subjects`);
+        const subData = await subRes.json();
+        const rawSubs = subData?.subjects || subData?.data || (Array.isArray(subData) ? subData : []);
+        allSubjectsAsClasses = rawSubs
+          .filter(s => s && s.code)
+          .map(s => ({
+            code: (s.code || '').trim().toUpperCase(),
+            name: s.name || s.code,
+            dept: s.department || s.dept || staffUser.department || '',
+            year: Number(s.year) || 1,
+            semester: s.sem ? (parseInt(String(s.sem).replace(/\D/g, ''), 10) || 1) : 1,
+            section: s.section || 'A',
+            credits: Number(s.credits) || 3,
+            theoryHours: Number(s.theoryHours) || 3,
+            labHours: Number(s.labHours) || 0,
+            staffId: s.faculty || s.staffId || staffUser.staffId,
+            staffName: s.staffName || s.faculty || staffUser.name || '',
+            students: s.students || [],
+            _fromSubjectsAPI: true
+          }));
+      } catch (_) { }
+
+      const mergedClasses = [
+        ...staffClasses,
+        ...allDeptClasses,
+        ...allSubjectsAsClasses
+      ];
 
       // Deduplicate by subject code (keep existing class record over subjects-API stub)
       const seen = new Set();
@@ -397,10 +355,10 @@ export default function StaffAttendance({ staffUser }) {
 
       const departmentScopedClasses = isHodUser && staffUser?.department
         ? uniqueClasses.filter(cls => {
-            const clsDept = (cls.dept || '').trim().toLowerCase();
-            const userDept = (staffUser.department || '').trim().toLowerCase();
-            return !clsDept || !userDept || clsDept === userDept;
-          })
+          const clsDept = (cls.dept || '').trim().toLowerCase();
+          const userDept = (staffUser.department || '').trim().toLowerCase();
+          return !clsDept || !userDept || clsDept === userDept;
+        })
         : uniqueClasses;
 
       setClasses(departmentScopedClasses);
@@ -1068,6 +1026,12 @@ export default function StaffAttendance({ staffUser }) {
       }
 
       fetchHistory();
+      // Broadcast real-time update to office staff, accountant, and admin
+      try {
+        window.dispatchEvent(new CustomEvent('vcas_attendance_updated', { detail: { date: selectedDate } }));
+        localStorage.setItem('vcas_attendance_last_sync', Date.now().toString());
+        window.dispatchEvent(new Event('storage'));
+      } catch (_) {}
       setTimeout(() => setSavedSuccessMsg(''), 6000);
     } catch (err) {
       setSubmitError('Network error connecting to backend: ' + err.message);
@@ -1154,11 +1118,10 @@ export default function StaffAttendance({ staffUser }) {
           <div className="flex items-center gap-1 p-1 bg-slate-200/70 rounded-xl">
             <button
               onClick={() => setActiveTab('mark')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'mark'
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'mark'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
-              }`}
+                }`}
             >
               <CheckSquare className="w-3.5 h-3.5" />
               Mark Attendance
@@ -1168,11 +1131,10 @@ export default function StaffAttendance({ staffUser }) {
                 setActiveTab('history');
                 fetchHistory();
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'history'
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'history'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
-              }`}
+                }`}
             >
               <History className="w-3.5 h-3.5" />
               History ({historyList.length})
@@ -1236,7 +1198,6 @@ export default function StaffAttendance({ staffUser }) {
                   <option value="1st Year">1st Year (I Year)</option>
                   <option value="2nd Year">2nd Year (II Year)</option>
                   <option value="3rd Year">3rd Year (III Year)</option>
-                  <option value="4th Year">4th Year (IV Year)</option>
                 </select>
               </div>
 
@@ -1369,274 +1330,274 @@ export default function StaffAttendance({ staffUser }) {
           ) : (
             <>
 
-            {/* Active Session Status Banner */}
-            {existingSession ? (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-emerald-50/90 border border-emerald-200 text-emerald-900 rounded-2xl text-xs shadow-xs">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-bold">
-                    Saved Session Active: <span className="font-semibold text-emerald-700">{existingSession.presentCount} Present, {existingSession.absentCount} Absent{existingSession.lateCount ? `, ${existingSession.lateCount} Late` : ''}</span>
-                  </span>
-                </div>
-                <span className="text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-200 shadow-xs self-start sm:self-auto">
-                  Saved Record Loaded
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 border border-slate-200 text-slate-600 rounded-2xl text-xs">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>No attendance record saved yet for this session slot. Mark students and save to record.</span>
-                </div>
-                <span className="text-[11px] font-bold text-slate-500 bg-white px-2.5 py-0.5 rounded-lg border border-slate-200 shadow-xs self-start sm:self-auto">
-                  New Session
-                </span>
-              </div>
-            )}
-
-            {/* Quick Metrics & Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 mr-1">Roster Stats:</span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">
-                  Total: {totalCount}
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold">
-                  Present: {presentCount}
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold">
-                  Absent: {absentCount}
-                </span>
-                {lateCount > 0 && (
-                  <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-xs font-bold">
-                    Late: {lateCount}
-                  </span>
-                )}
-                {odCount > 0 && (
-                  <span className="px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold">
-                    OD: {odCount}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search student..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleMarkAll('Present')}
-                  className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                >
-                  Mark All Present
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMarkAll('Absent')}
-                  className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                >
-                  Mark All Absent
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMarkAll('OD')}
-                  className="px-3 py-1.5 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                >
-                  Mark All OD
-                </button>
-                <button
-                  type="button"
-                  disabled={isSubmitting || effectiveStudents.length === 0}
-                  onClick={handleSaveAttendance}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-extrabold shadow-sm disabled:opacity-50 transition-all cursor-pointer"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  {isSubmitting ? 'Saving...' : existingSession ? 'Save Update' : 'Save Attendance'}
-                </button>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowQuickAddDropdown(prev => !prev)}
-                    className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Student</span>
-                  </button>
-
-                  {showQuickAddDropdown && (
-                    <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 z-30 space-y-2 animate-in zoom-in-95 text-left">
-                      <p className="text-[11px] font-extrabold text-slate-800">Quick Add Registered Student</p>
-                      <select
-                        value={selectedQuickAddRoll}
-                        onChange={(e) => {
-                          setSelectedQuickAddRoll(e.target.value);
-                          if (e.target.value) handleQuickAddStudentToClass(e.target.value);
-                        }}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none"
-                      >
-                        <option value="">-- Choose student --</option>
-                        {allRegisteredStudents.map(st => {
-                          const roll = st.rollNo || st.regNo || st.studentId;
-                          return (
-                            <option key={st._id || roll} value={roll}>
-                              {roll} - {st.name}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowQuickAddDropdown(false)}
-                        className="w-full text-center text-[10px] text-slate-400 hover:text-slate-600 font-bold pt-1 cursor-pointer"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Student Roster Table */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-              {effectiveStudents.length === 0 ? (
-                <div className="p-10 text-center space-y-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
-                    <Users className="w-6 h-6" />
+              {/* Active Session Status Banner */}
+              {existingSession ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-emerald-50/90 border border-emerald-200 text-emerald-900 rounded-2xl text-xs shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-bold">
+                      Saved Session Active: <span className="font-semibold text-emerald-700">{existingSession.presentCount} Present, {existingSession.absentCount} Absent{existingSession.lateCount ? `, ${existingSession.lateCount} Late` : ''}</span>
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm font-extrabold text-slate-800">
-                      No students found for <strong>{currentClass ? currentClass.name : (selectedDepartment !== 'All' ? selectedDepartment : 'this selection')}</strong> yet.
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      You can add registered students to this roster using the button below.
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowQuickAddDropdown(true)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-2"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>+ Add Student to Class</span>
-                    </button>
-                  </div>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-200 shadow-xs self-start sm:self-auto">
+                    Saved Record Loaded
+                  </span>
                 </div>
               ) : (
-                <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-slate-50/80 border-b border-slate-100">
-                          <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
-                          <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Roll No.</th>
-                          <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Student Name</th>
-                          <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Dept & Year</th>
-                          <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Contact</th>
-                          <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {displayedStudents.map((student, idx) => {
-                          const status = attendanceState[student.rollNo] || 'Present';
-                          const normalizedStatus = status === 'On Duty' ? 'OD' : status;
-                          return (
-                            <tr key={student.rollNo} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="px-5 py-3 text-slate-400 font-medium">{idx + 1}</td>
-                              <td className="px-5 py-3 font-bold text-slate-700">{student.rollNo}</td>
-                              <td className="px-5 py-3 font-semibold text-slate-900">{student.name}</td>
-                              <td className="px-5 py-3 text-slate-600 hidden md:table-cell font-medium">
-                                <div className="font-semibold text-slate-800">{student.department || selectedDepartment || '—'}</div>
-                                {student.year && (
-                                  <span className="inline-block mt-0.5 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded-md">
-                                    {student.year}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-5 py-3 text-slate-500 hidden sm:table-cell">{student.phone || '—'}</td>
-                              <td className="px-5 py-3 text-center">
-                                <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl flex-wrap justify-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleStudentStatus(student.rollNo, 'Present')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Present'
-                                        ? 'bg-emerald-600 text-white shadow-xs'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                      }`}
-                                  >
-                                    Present
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleStudentStatus(student.rollNo, 'Absent')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Absent'
-                                        ? 'bg-rose-600 text-white shadow-xs'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                      }`}
-                                  >
-                                    Absent
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleStudentStatus(student.rollNo, 'Late')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Late'
-                                        ? 'bg-amber-600 text-white shadow-xs'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                      }`}
-                                  >
-                                    Late
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleStudentStatus(student.rollNo, 'OD')}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'OD'
-                                        ? 'bg-violet-600 text-white shadow-xs'
-                                        : 'text-slate-600 hover:text-slate-900'
-                                      }`}
-                                  >
-                                    OD
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 border border-slate-200 text-slate-600 rounded-2xl text-xs">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span>No attendance record saved yet for this session slot. Mark students and save to record.</span>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-500 bg-white px-2.5 py-0.5 rounded-lg border border-slate-200 shadow-xs self-start sm:self-auto">
+                    New Session
+                  </span>
+                </div>
+              )}
+
+              {/* Quick Metrics & Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 mr-1">Roster Stats:</span>
+                  <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">
+                    Total: {totalCount}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold">
+                    Present: {presentCount}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold">
+                    Absent: {absentCount}
+                  </span>
+                  {lateCount > 0 && (
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-xs font-bold">
+                      Late: {lateCount}
+                    </span>
+                  )}
+                  {odCount > 0 && (
+                    <span className="px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold">
+                      OD: {odCount}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search student..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                    />
                   </div>
 
-                  {/* Bottom Submit Bar */}
-                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-xs text-slate-500 font-medium">
-                      {presentCount + lateCount + odCount} of {totalCount} students marked present, late, or OD
-                    </span>
+                  <button
+                    type="button"
+                    onClick={() => handleMarkAll('Present')}
+                    className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Mark All Present
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMarkAll('Absent')}
+                    className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Mark All Absent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMarkAll('OD')}
+                    className="px-3 py-1.5 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Mark All OD
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting || effectiveStudents.length === 0}
+                    onClick={handleSaveAttendance}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-extrabold shadow-sm disabled:opacity-50 transition-all cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {isSubmitting ? 'Saving...' : existingSession ? 'Save Update' : 'Save Attendance'}
+                  </button>
+
+                  <div className="relative">
                     <button
                       type="button"
-                      disabled={isSubmitting || effectiveStudents.length === 0}
-                      onClick={handleSaveAttendance}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all"
+                      onClick={() => setShowQuickAddDropdown(prev => !prev)}
+                      className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <Save className="w-4 h-4" />
-                      {isSubmitting
-                        ? 'Saving Attendance...'
-                        : existingSession
-                          ? 'Update Attendance Session'
-                          : 'Submit Session Attendance'}
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add Student</span>
                     </button>
+
+                    {showQuickAddDropdown && (
+                      <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 z-30 space-y-2 animate-in zoom-in-95 text-left">
+                        <p className="text-[11px] font-extrabold text-slate-800">Quick Add Registered Student</p>
+                        <select
+                          value={selectedQuickAddRoll}
+                          onChange={(e) => {
+                            setSelectedQuickAddRoll(e.target.value);
+                            if (e.target.value) handleQuickAddStudentToClass(e.target.value);
+                          }}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none"
+                        >
+                          <option value="">-- Choose student --</option>
+                          {allRegisteredStudents.map(st => {
+                            const roll = st.rollNo || st.regNo || st.studentId;
+                            return (
+                              <option key={st._id || roll} value={roll}>
+                                {roll} - {st.name}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setShowQuickAddDropdown(false)}
+                          className="w-full text-center text-[10px] text-slate-400 hover:text-slate-600 font-bold pt-1 cursor-pointer"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+              </div>
+
+              {/* Student Roster Table */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                {effectiveStudents.length === 0 ? (
+                  <div className="p-10 text-center space-y-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold text-slate-800">
+                        No students found for <strong>{currentClass ? currentClass.name : (selectedDepartment !== 'All' ? selectedDepartment : 'this selection')}</strong> yet.
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        You can add registered students to this roster using the button below.
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickAddDropdown(true)}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-2"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ Add Student to Class</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-50/80 border-b border-slate-100">
+                            <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                            <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Roll No.</th>
+                            <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Student Name</th>
+                            <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Dept & Year</th>
+                            <th className="text-left px-5 py-3 font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Contact</th>
+                            <th className="text-center px-5 py-3 font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {displayedStudents.map((student, idx) => {
+                            const status = attendanceState[student.rollNo] || 'Present';
+                            const normalizedStatus = status === 'On Duty' ? 'OD' : status;
+                            return (
+                              <tr key={student.rollNo} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="px-5 py-3 text-slate-400 font-medium">{idx + 1}</td>
+                                <td className="px-5 py-3 font-bold text-slate-700">{student.rollNo}</td>
+                                <td className="px-5 py-3 font-semibold text-slate-900">{student.name}</td>
+                                <td className="px-5 py-3 text-slate-600 hidden md:table-cell font-medium">
+                                  <div className="font-semibold text-slate-800">{student.department || selectedDepartment || '—'}</div>
+                                  {student.year && (
+                                    <span className="inline-block mt-0.5 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded-md">
+                                      {student.year}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-5 py-3 text-slate-500 hidden sm:table-cell">{student.phone || '—'}</td>
+                                <td className="px-5 py-3 text-center">
+                                  <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl flex-wrap justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleStudentStatus(student.rollNo, 'Present')}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Present'
+                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                      Present
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleStudentStatus(student.rollNo, 'Absent')}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Absent'
+                                        ? 'bg-rose-600 text-white shadow-xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                      Absent
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleStudentStatus(student.rollNo, 'Late')}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'Late'
+                                        ? 'bg-amber-600 text-white shadow-xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                      Late
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleStudentStatus(student.rollNo, 'OD')}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${normalizedStatus === 'OD'
+                                        ? 'bg-violet-600 text-white shadow-xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                      OD
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Bottom Submit Bar */}
+                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-xs text-slate-500 font-medium">
+                        {presentCount + lateCount + odCount} of {totalCount} students marked present, late, or OD
+                      </span>
+                      <button
+                        type="button"
+                        disabled={isSubmitting || effectiveStudents.length === 0}
+                        onClick={handleSaveAttendance}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all"
+                      >
+                        <Save className="w-4 h-4" />
+                        {isSubmitting
+                          ? 'Saving Attendance...'
+                          : existingSession
+                            ? 'Update Attendance Session'
+                            : 'Submit Session Attendance'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -1669,7 +1630,6 @@ export default function StaffAttendance({ staffUser }) {
                 <option value="1st Year">1st Year</option>
                 <option value="2nd Year">2nd Year</option>
                 <option value="3rd Year">3rd Year</option>
-                <option value="4th Year">4th Year</option>
               </select>
 
               <input
@@ -1802,7 +1762,7 @@ export default function StaffAttendance({ staffUser }) {
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
             <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col">
-              
+
               {/* Header */}
               <div className="px-6 py-4.5 bg-gradient-to-r from-indigo-700 via-blue-700 to-slate-900 text-white flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1840,11 +1800,10 @@ export default function StaffAttendance({ staffUser }) {
                         key={tab.id}
                         type="button"
                         onClick={() => setDownloadMode(tab.id)}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border text-center ${
-                          downloadMode === tab.id
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border text-center ${downloadMode === tab.id
                             ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                             : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
+                          }`}
                       >
                         {tab.label}
                       </button>

@@ -34,6 +34,30 @@ function getStudentIdentifier(student) {
   return String(student.id || student.regNo || student.studentId || student._id || student.rollNo || '').trim();
 }
 
+export function normalizeYear(val) {
+  if (val === null || val === undefined) return 0;
+  const v = String(val).toLowerCase().trim();
+  if (v.includes('3') || v.includes('iii') || v.startsWith('third')) return 3;
+  if (v.includes('2') || v.includes('ii') || v.startsWith('second')) return 2;
+  if (v.includes('1') || v.includes('i ') || v === 'i' || v.startsWith('first')) return 1;
+  if (v.includes('4') || v.includes('iv') || v.startsWith('fourth')) return 4;
+  const match = v.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
+export function normalizeSemester(val) {
+  if (val === null || val === undefined) return 0;
+  const s = String(val).toLowerCase().trim();
+  if (s.includes('6') || s === 'vi' || s.includes('6th') || s.includes('sem-6') || s.includes('semester 6')) return 6;
+  if (s.includes('5') || s === 'v' || s.includes('5th') || s.includes('sem-5') || s.includes('semester 5')) return 5;
+  if (s.includes('4') || s === 'iv' || s.includes('4th') || s.includes('sem-4') || s.includes('semester 4')) return 4;
+  if (s.includes('3') || s === 'iii' || s.includes('3rd') || s.includes('sem-3') || s.includes('semester 3')) return 3;
+  if (s.includes('2') || s === 'ii' || s.includes('2nd') || s.includes('sem-2') || s.includes('semester 2')) return 2;
+  if (s.includes('1') || s === 'i' || s.includes('1st') || s.includes('sem-1') || s.includes('semester 1')) return 1;
+  const match = s.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
 function normalizeStudent(s) {
   if (!s) return null;
   const regNo = s.regNo || s.registerNo || s.studentId || s.id || s._id || '';
@@ -306,32 +330,38 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     return Array.from(bSet).sort().reverse();
   }, [students]);
 
+  // Always provide standard 3 years: 1st Year, 2nd Year, 3rd Year
   const uniqueYears = useMemo(() => {
-    // Normalize all year values to avoid duplicates like "1st Year" and "I Year" both appearing
-    const normalizeYear = (val) => {
-      const v = String(val || '').toLowerCase().trim();
-      if (v.includes('4') || v.includes('iv') || v.startsWith('fourth')) return '4th Year';
-      if (v.includes('3') || v.includes('iii') || v.startsWith('third')) return '3rd Year';
-      if (v.includes('2') || v.includes('ii') || v.startsWith('second')) return '2nd Year';
-      if (v.includes('1') || v.includes('i ') || v === 'i' || v.startsWith('first')) return '1st Year';
-      return val; // keep as-is if unrecognised
-    };
-    const ySet = new Set();
-    students.forEach(s => {
-      const y = (s.year || '').trim();
-      if (y) ySet.add(normalizeYear(y));
-    });
-    return Array.from(ySet).sort((a, b) => Number(String(a).match(/\d+/)?.[0] || 0) - Number(String(b).match(/\d+/)?.[0] || 0));
-  }, [students]);
+    return ['1st Year', '2nd Year', '3rd Year'];
+  }, []);
 
-  const uniqueSemesters = useMemo(() => {
-    const sSet = new Set();
-    students.forEach(s => {
-      const sem = (s.sem || s.semester || '').trim();
-      if (sem) sSet.add(sem);
-    });
-    return Array.from(sSet).sort((a, b) => (Number(String(a).match(/\d+/)?.[0] || 0) - Number(String(b).match(/\d+/)?.[0] || 0)));
-  }, [students]);
+  // Standard 6 semesters (2 per year):
+  // 1st Year -> 1st Sem, 2nd Sem
+  // 2nd Year -> 3rd Sem, 4th Sem
+  // 3rd Year -> 5th Sem, 6th Sem
+  const availableSemesters = useMemo(() => {
+    if (selectedYear === '1st Year') {
+      return ['1st Sem', '2nd Sem'];
+    }
+    if (selectedYear === '2nd Year') {
+      return ['3rd Sem', '4th Sem'];
+    }
+    if (selectedYear === '3rd Year') {
+      return ['5th Sem', '6th Sem'];
+    }
+    return ['1st Sem', '2nd Sem', '3rd Sem', '4th Sem', '5th Sem', '6th Sem'];
+  }, [selectedYear]);
+
+  // When year changes, reset semester filter if current selection is not valid for that year
+  const handleYearFilterChange = (newYear) => {
+    setSelectedYear(newYear);
+    if (selectedSemester && selectedSemester !== 'All Semesters') {
+      const semNum = normalizeSemester(selectedSemester);
+      if (newYear === '1st Year' && (semNum < 1 || semNum > 2)) setSelectedSemester('All Semesters');
+      else if (newYear === '2nd Year' && (semNum < 3 || semNum > 4)) setSelectedSemester('All Semesters');
+      else if (newYear === '3rd Year' && (semNum < 5 || semNum > 6)) setSelectedSemester('All Semesters');
+    }
+  };
 
   const normalizeFilterText = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9&\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -385,21 +415,13 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     const matchesDept = matchesDepartmentFilter(student);
     const matchesFee = !canViewFees || selectedFeeStatus === 'All Statuses' || student.feeStatus === selectedFeeStatus;
 
-    const normalizeYear = (val) => {
-      const v = String(val || '').toLowerCase().trim();
-      if (v.includes('4') || v.includes('iv') || v.startsWith('fourth')) return 4;
-      if (v.includes('3') || v.includes('iii') || v.startsWith('third')) return 3;
-      if (v.includes('2') || v.includes('ii') || v.startsWith('second')) return 2;
-      if (v.includes('1') || v.includes('i ') || v === 'i' || v.startsWith('first')) return 1;
-      return 0;
-    };
-    const matchesYear = selectedYear === 'All Years' ||
-      normalizeYear(student.year) === normalizeYear(selectedYear);
+    const selYearNum = normalizeYear(selectedYear);
+    const stuYearNum = normalizeYear(student.year) || Math.ceil(normalizeSemester(student.sem || student.semester) / 2) || 0;
+    const matchesYear = selYearNum === 0 || stuYearNum === selYearNum;
 
-    const studentSem = String(student.sem || student.semester || '').trim();
-    const matchesSemester = selectedSemester === 'All Semesters' ||
-      studentSem.toLowerCase() === selectedSemester.toLowerCase() ||
-      studentSem.toLowerCase().includes(selectedSemester.toLowerCase().replace('semester', 'sem'));
+    const selSemNum = normalizeSemester(selectedSemester);
+    const stuSemNum = normalizeSemester(student.sem || student.semester);
+    const matchesSemester = selSemNum === 0 || stuSemNum === selSemNum;
 
     const sBatch = (student.batch || '').replace('–', '-').trim().toLowerCase();
     const selBatch = (selectedBatch || '').replace('–', '-').trim().toLowerCase();
@@ -407,8 +429,8 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     const matchesBatch = isAllBatches || sBatch === selBatch || sBatch.includes(selBatch);
 
     let matchesSubject = true;
-    if (selectedSubject && selectedSubject !== 'All Subjects') {
-      const targetSub = selectedSubject.toLowerCase();
+    if (selectedSubject && selectedSubject !== 'All Subjects' && selectedSubject !== 'All Classes') {
+      const targetSub = selectedSubject.toLowerCase().trim();
       // Match against student's enrolled subjects array if present
       const hasEnrolledSub = Array.isArray(student.subjects) && student.subjects.some(sub => {
         const code = (sub.code || sub).toLowerCase();
@@ -418,25 +440,37 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
 
       // Match against class enrolled students list
       const matchedClass = classesList.find(c =>
-        (c.code || '').toLowerCase() === targetSub ||
-        (c.name || '').toLowerCase() === targetSub
+        (c.code || '').toLowerCase().trim() === targetSub ||
+        (c.name || '').toLowerCase().trim() === targetSub
       );
-      const inClass = matchedClass && Array.isArray(matchedClass.students) && matchedClass.students.some(st =>
-        (st.rollNo && st.rollNo.toUpperCase() === (student.rollNo || '').toUpperCase()) ||
-        (st.regNo && st.regNo.toUpperCase() === (student.regNo || '').toUpperCase())
+      const inClassRoster = matchedClass && Array.isArray(matchedClass.students) && matchedClass.students.length > 0 && matchedClass.students.some(st =>
+        (st.rollNo && (st.rollNo || '').toUpperCase() === (student.rollNo || '').toUpperCase()) ||
+        (st.regNo && (st.regNo || '').toUpperCase() === (student.regNo || '').toUpperCase())
       );
 
-      // Match against department or course association
+      // Match if class department, year, semester align with student
+      const matchesClassCriteria = matchedClass && Boolean(
+        (!matchedClass.dept || matchesDepartmentFilter({ ...student, department: student.department || student.course }, matchedClass.dept)) &&
+        (!matchedClass.year || stuYearNum === Number(matchedClass.year)) &&
+        (!matchedClass.semester || stuSemNum === Number(matchedClass.semester)) &&
+        (!matchedClass.section || !student.section || String(matchedClass.section).toUpperCase() === String(student.section).toUpperCase())
+      );
+
+      // Match against department or course association of subject doc
       const matchedSubDoc = subjectsList.find(s =>
-        (s.code || '').toLowerCase() === targetSub ||
-        (s.name || '').toLowerCase() === targetSub
+        (s.code || '').toLowerCase().trim() === targetSub ||
+        (s.name || '').toLowerCase().trim() === targetSub
       );
       const matchesDeptOfSub = matchedSubDoc?.department && (
         String(student.department || '').toLowerCase().includes(matchedSubDoc.department.toLowerCase()) ||
         String(student.course || student.courseAdmitted || '').toLowerCase().includes(matchedSubDoc.department.toLowerCase())
       );
 
-      matchesSubject = hasEnrolledSub || inClass || matchesDeptOfSub;
+      // Also check if target matches student's direct course / department text
+      const matchesDirectCourse = String(student.course || '').toLowerCase().includes(targetSub) ||
+        String(student.department || '').toLowerCase().includes(targetSub);
+
+      matchesSubject = hasEnrolledSub || inClassRoster || matchesClassCriteria || matchesDeptOfSub || matchesDirectCourse;
     }
 
     return matchesSearch && matchesDept && matchesFee && matchesSubject && matchesBatch && matchesYear && matchesSemester;
@@ -851,6 +885,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
         regNo: (editingStudent.regNo || editingStudent.registerNo || editingStudent.studentId || editingStudent.id || '').trim().toUpperCase(),
         rollNo: (editingStudent.rollNo || '').trim().toUpperCase(),
         year: editingStudent.year || '1st Year',
+        sem: editingStudent.sem || editingStudent.semester || '1st Sem',
+        semester: editingStudent.sem || editingStudent.semester || '1st Sem',
         batch: (editingStudent.batch || '2022-2026').replace('–', '-').trim(),
         loginId: (editingStudent.loginId || editingStudent.regNo || editingStudent.studentId || '').trim().toUpperCase(),
         password: editingStudent.dob,
@@ -1368,10 +1404,10 @@ Unauthorized reproduction or distribution is strictly prohibited.
               )}
             </select>
 
-            {/* Year Dropdown Filter */}
+            {/* Year Dropdown Filter (3 Years) */}
             <select
               value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
+              onChange={(e) => handleYearFilterChange(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10"
             >
               <option value="All Years">All Years</option>
@@ -1380,32 +1416,45 @@ Unauthorized reproduction or distribution is strictly prohibited.
               ))}
             </select>
 
-            {/* Semesters Filter */}
+            {/* Semesters Filter (6 Semesters - 2 per Year) */}
             <select
               value={selectedSemester}
               onChange={(e) => setSelectedSemester(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10"
             >
               <option value="All Semesters">All Semesters</option>
-              {uniqueSemesters.map(sem => (
+              {availableSemesters.map(sem => (
                 <option key={sem} value={sem}>{sem}</option>
               ))}
             </select>
 
-            {/* Subjects Filter (Replaces Courses with Real Subjects from DB) */}
+            {/* Class / Subject Filter */}
             <select
               value={selectedSubject}
               onChange={(e) => setSelectedSubject(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer h-10 min-w-[140px]"
             >
-              <option value="All Subjects">All Subjects</option>
-              {subjectsList
-                .filter(sub => (sub.code || '').toUpperCase().trim() !== 'CS101')
-                .map(sub => (
-                  <option key={sub._id || sub.code} value={sub.code || sub.name}>
-                    {sub.code ? `${sub.code} - ${sub.name}` : sub.name}
-                  </option>
-                ))}
+              <option value="All Subjects">All Classes</option>
+              {classesList.length > 0 && (
+                <optgroup label="Classes">
+                  {classesList.map(c => (
+                    <option key={c._id || c.code} value={c.code || c.name}>
+                      {c.code} - {c.name || 'Class'} {c.year ? `(Yr ${c.year}${c.semester ? ` Sem ${c.semester}` : ''})` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {subjectsList.filter(sub => (sub.code || '').toUpperCase().trim() !== 'CS101').length > 0 && (
+                <optgroup label="Subjects">
+                  {subjectsList
+                    .filter(sub => (sub.code || '').toUpperCase().trim() !== 'CS101')
+                    .map(sub => (
+                      <option key={sub._id || sub.code} value={sub.code || sub.name}>
+                        {sub.code ? `${sub.code} - ${sub.name}` : sub.name}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
             </select>
 
             {/* Fee Statuses Filter (Accountant & Office Staff Only) */}
@@ -1729,8 +1778,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
 
-              {/* Reg No, Roll No, Year & Batch */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
+              {/* Reg No, Roll No, Year, Semester & Batch */}
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
                 <div>
                   <label className="block font-black text-blue-900 mb-1">Register Number (Reg No) *</label>
                   <input
@@ -1757,16 +1806,40 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Year *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Year (1–3) *</label>
                   <select
                     value={editingStudent.year || '1st Year'}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
+                    onChange={(e) => {
+                      const yr = e.target.value;
+                      const yrNum = normalizeYear(yr);
+                      let defaultSem = editingStudent.sem || '1st Sem';
+                      if (yrNum === 1) defaultSem = '1st Sem';
+                      else if (yrNum === 2) defaultSem = '3rd Sem';
+                      else if (yrNum === 3) defaultSem = '5th Sem';
+                      setEditingStudent({ ...editingStudent, year: yr, sem: defaultSem, semester: defaultSem });
+                    }}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none"
                   >
                     <option value="1st Year">1st Year</option>
                     <option value="2nd Year">2nd Year</option>
                     <option value="3rd Year">3rd Year</option>
-                    <option value="4th Year">4th Year</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Semester (1–6) *</label>
+                  <select
+                    value={editingStudent.sem || editingStudent.semester || '1st Sem'}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, sem: e.target.value, semester: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none"
+                  >
+                    {(() => {
+                      const yrNum = normalizeYear(editingStudent.year);
+                      const sems = yrNum === 1 ? ['1st Sem', '2nd Sem'] :
+                                   yrNum === 2 ? ['3rd Sem', '4th Sem'] :
+                                   yrNum === 3 ? ['5th Sem', '6th Sem'] :
+                                   ['1st Sem', '2nd Sem', '3rd Sem', '4th Sem', '5th Sem', '6th Sem'];
+                      return sems.map(s => <option key={s} value={s}>{s}</option>);
+                    })()}
                   </select>
                 </div>
                 <div>

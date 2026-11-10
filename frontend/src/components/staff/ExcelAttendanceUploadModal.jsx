@@ -285,6 +285,11 @@ export default function ExcelAttendanceUploadModal({
           message: data.message || `Successfully imported attendance for ${validRows.length} students!`
         });
         if (onSuccess) onSuccess();
+        try {
+          window.dispatchEvent(new CustomEvent('vcas_attendance_updated', { detail: { date: targetDate } }));
+          localStorage.setItem('vcas_attendance_last_sync', Date.now().toString());
+          window.dispatchEvent(new Event('storage'));
+        } catch (_) {}
       } else {
         throw new Error(data.message || 'Failed to save bulk attendance.');
       }

@@ -802,7 +802,7 @@ export default function StaffMyClasses({ staffUser }) {
                     onChange={(e) => setEditForm({ ...editForm, year: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-amber-500"
                   >
-                    {[1, 2, 3, 4].map(y => <option key={y} value={y}>Year {y}</option>)}
+                    {[1, 2, 3].map(y => <option key={y} value={y}>Year {y}</option>)}
                   </select>
                 </div>
                 <div>

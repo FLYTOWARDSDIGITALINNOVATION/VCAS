@@ -620,7 +620,6 @@ export default function BonafideManagement({ user = {} }) {
                     <option value="I Year">I Year</option>
                     <option value="II Year">II Year</option>
                     <option value="III Year">III Year</option>
-                    <option value="IV Year">IV Year</option>
                   </select>
                 </div>
                 <div>

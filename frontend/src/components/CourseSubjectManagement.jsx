@@ -225,6 +225,17 @@ export default function CourseSubjectManagement({ user }) {
         }
       }
 
+      // Process degree programs from backend API
+      if (resCourses.status === 'fulfilled' && resCourses.value.ok) {
+        const cData = await resCourses.value.json();
+        if (cData.success && Array.isArray(cData.data) && cData.data.length > 0) {
+          setProgramsList(cData.data);
+          try {
+            localStorage.setItem('vcas_programs_cache', JSON.stringify(cData.data));
+          } catch (_) {}
+        }
+      }
+
       if (resStaff.status === 'fulfilled' && resStaff.value.ok) {
         const stData = await resStaff.value.json();
         if (stData.success && Array.isArray(stData.data)) {

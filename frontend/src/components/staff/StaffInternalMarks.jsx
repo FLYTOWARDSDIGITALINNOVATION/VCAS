@@ -276,15 +276,8 @@ export default function StaffInternalMarks({ staffUser }) {
   }, [adminDepartments, staffUser?.department]);
 
   const yearsList = useMemo(() => {
-    const set = new Set(['I Year', 'II Year', 'III Year']);
-    allRegisteredStudents.forEach(s => {
-      if (s.year) set.add(s.year);
-    });
-    students.forEach(s => {
-      if (s.year) set.add(s.year);
-    });
-    return Array.from(set);
-  }, [allRegisteredStudents, students]);
+    return ['1st Year', '2nd Year', '3rd Year'];
+  }, []);
 
   const batchesList = useMemo(() => {
     const set = new Set(['2025-2028', '2024-2027', '2023-2026', '2022-2026', '2021-2025']);
@@ -299,17 +292,22 @@ export default function StaffInternalMarks({ staffUser }) {
   }, [allRegisteredStudents, students]);
 
   const semestersList = useMemo(() => {
-    const set = new Set(['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6']);
-    allRegisteredStudents.forEach(s => {
-      const semNum = Number(String(s.sem || '').replace(/\D/g, '')) || (s.semester ? Number(s.semester) : 0);
-      if (semNum >= 1 && semNum <= 6) set.add(`Semester ${semNum}`);
-    });
-    return Array.from(set).sort((a, b) => {
-      const na = Number(a.replace(/\D/g, ''));
-      const nb = Number(b.replace(/\D/g, ''));
-      return na - nb;
-    });
-  }, [allRegisteredStudents]);
+    const yr = String(filterYear || '').toLowerCase();
+    if (yr.includes('1') || yr.includes('i')) return ['Semester 1', 'Semester 2'];
+    if (yr.includes('2') || yr.includes('ii')) return ['Semester 3', 'Semester 4'];
+    if (yr.includes('3') || yr.includes('iii')) return ['Semester 5', 'Semester 6'];
+    return ['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6'];
+  }, [filterYear]);
+
+  const handleYearFilterChange = (newYear) => {
+    setFilterYear(newYear);
+    if (filterSem && filterSem !== 'All') {
+      const num = parseInt(filterSem.replace(/\D/g, ''), 10) || 0;
+      if (newYear.includes('1') && (num < 1 || num > 2)) setFilterSem('All');
+      else if (newYear.includes('2') && (num < 3 || num > 4)) setFilterSem('All');
+      else if (newYear.includes('3') && (num < 5 || num > 6)) setFilterSem('All');
+    }
+  };
 
   // Merge each student with metadata from registered students collection
   const studentsWithMeta = useMemo(() => {
@@ -349,14 +347,19 @@ export default function StaffInternalMarks({ staffUser }) {
         if (d !== target && !d.includes(target) && !target.includes(d)) return false;
       }
 
-      // Year filter
+      // Year filter (1st, 2nd, 3rd Year)
       if (filterYear && filterYear !== 'All') {
-        const romanYearMap = { 'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', '1': '1', '2': '2', '3': '3', '4': '4' };
-        const y = String(s.year || '').toLowerCase().trim();
-        const target = filterYear.toLowerCase().trim();
-        const normY = romanYearMap[y.replace(/year/g, '').replace(/[^a-z0-9]/g, '')] || y.replace(/\D/g, '') || y;
-        const normT = romanYearMap[target.replace(/year/g, '').replace(/[^a-z0-9]/g, '')] || target.replace(/\D/g, '') || target;
-        if (normY !== normT && !y.includes(target) && !target.includes(y)) return false;
+        const getYearNum = (v) => {
+          const str = String(v || '').toLowerCase().trim();
+          if (str.includes('3') || str.includes('iii') || str.startsWith('third')) return 3;
+          if (str.includes('2') || str.includes('ii') || str.startsWith('second')) return 2;
+          if (str.includes('1') || str.includes('i') || str.startsWith('first')) return 1;
+          const m = str.match(/\d+/);
+          return m ? parseInt(m[0], 10) : 0;
+        };
+        const yNum = getYearNum(s.year) || Math.ceil((parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0) / 2);
+        const targetNum = getYearNum(filterYear);
+        if (targetNum && yNum !== targetNum) return false;
       }
 
       // Batch filter
@@ -366,17 +369,11 @@ export default function StaffInternalMarks({ staffUser }) {
         if (b !== target && !b.includes(target)) return false;
       }
 
-      // Semester filter
+      // Semester filter (1 to 6)
       if (filterSem && filterSem !== 'All') {
-        const sVal = String(s.sem || s.semester || '').toLowerCase().trim();
-        const target = filterSem.toLowerCase().trim();
-        const numS = sVal.replace(/[^0-9]/g, '');
-        const numT = target.replace(/[^0-9]/g, '');
-        if (numS && numT && numS === numT) {
-          // match
-        } else if (!sVal.includes(target) && !target.includes(sVal)) {
-          return false;
-        }
+        const numS = parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0;
+        const numT = parseInt(String(filterSem).replace(/\D/g, ''), 10) || 0;
+        if (numT && numS !== numT) return false;
       }
 
       // Subject filter
@@ -581,16 +578,19 @@ export default function StaffInternalMarks({ staffUser }) {
           staffIdNorm.includes(candidateNorm);
       };
 
+      // Allow subjects belonging to staff's department or assigned to staff, or if none, allow all catalog subjects
       const permittedSubjects = allSubjects.filter(s => {
         if (!s.code) return false;
         if (isPrincipalOrAdmin) return true;
         const subjectDept = String(s.department || s.dept || '').trim().toLowerCase();
-        if (isHodUser) return Boolean(staffDepartment && subjectDept === staffDepartment);
+        if (staffDepartment && subjectDept === staffDepartment) return true;
         return [s.faculty, s.staffName, s.staffId, s.employeeId, s.createdBy, s.createdById, s.createdByName, s.createdByStaffId]
           .some(matchesStaffIdentity);
       });
 
-      permittedSubjects.forEach(s => addSub(s.code, s.name));
+      // If no department match found, fallback to showing all valid subjects
+      const effectivePermitted = permittedSubjects.length > 0 ? permittedSubjects : allSubjects;
+      effectivePermitted.forEach(s => addSub(s.code, s.name));
 
       const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
       staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
@@ -1660,7 +1660,7 @@ export default function StaffInternalMarks({ staffUser }) {
                 </label>
                 <select
                   value={filterYear}
-                  onChange={(e) => setFilterYear(e.target.value)}
+                  onChange={(e) => handleYearFilterChange(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
                 >
                   <option value="All">All Years</option>
@@ -2617,7 +2617,6 @@ export default function StaffInternalMarks({ staffUser }) {
                         <option value="I Year">I Year (First Year)</option>
                         <option value="II Year">II Year (Second Year)</option>
                         <option value="III Year">III Year (Third Year)</option>
-                        <option value="IV Year">IV Year (Fourth Year)</option>
                       </select>
                     </div>
                     <div>
