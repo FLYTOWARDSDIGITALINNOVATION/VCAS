@@ -5163,7 +5163,7 @@ export default function ExaminationManagement({ user }) {
                   <span>Chief Invigilator</span>
                 </div>
                 <p className="text-sm font-black text-slate-900 mt-1">
-                  {viewingExamDetails.invigilator || viewingExamDetails.facultyName || facultyList[0]?.name || 'Latha V'}
+                  {viewingExamDetails.invigilator || viewingExamDetails.facultyName || facultyList[0]?.name || 'Faculty In-Charge'}
                 </p>
                 <p className="text-xs text-slate-600 font-medium">
                   Faculty Dept: <span className="font-semibold text-slate-800">{viewingExamDetails.invigilatorDept || viewingExamDetails.department || 'Computer Science'}</span>

@@ -15,16 +15,10 @@ import {
   Building2, 
   Sparkles, 
   Search, 
-  Printer, 
   CheckCircle2, 
   X, 
-  Layers, 
-  PieChart, 
-  Sliders, 
-  ArrowUpRight,
-  BookOpen
+  Layers
 } from 'lucide-react';
-import ModalPortal from './ModalPortal';
 
 const REPORT_CATEGORIES = [
   { id: 'academic', label: 'Academic Performance', icon: GraduationCap },
@@ -42,56 +36,12 @@ export default function ReportsManagement({ user }) {
   const [selectedDept, setSelectedDept] = useState('All Departments');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Custom Report Builder Modal
-  const [showCustomModal, setShowCustomModal] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [isExporting, setIsExporting] = useState(false);
-
-  // Lock background scroll when modal is open
-  React.useEffect(() => {
-    const scrollContainer = document.getElementById('main-content-scroll-container');
-    if (showCustomModal) {
-      document.body.style.overflow = 'hidden';
-      if (scrollContainer) scrollContainer.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-      if (scrollContainer) scrollContainer.style.overflow = 'auto';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-      if (scrollContainer) scrollContainer.style.overflow = 'auto';
-    };
-  }, [showCustomModal]);
-
-  // Custom Report Form
-  const [customReport, setCustomReport] = useState({
-    title: 'Custom Institutional Report',
-    category: 'Academic',
-    dept: 'All Departments',
-    year: '2024-2025',
-    includeCharts: true,
-    includeStudentDetails: true,
-    format: 'PDF'
-  });
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 3500);
-  };
-
-  const handleExport = (type) => {
-    setIsExporting(true);
-    showToast(`Generating ${type} Report for ${selectedDept} (${selectedYear})...`);
-    setTimeout(() => {
-      setIsExporting(false);
-      showToast(`${type} Report downloaded successfully!`);
-    }, 1500);
-  };
-
-  const handleGenerateCustom = (e) => {
-    e.preventDefault();
-    setShowCustomModal(false);
-    showToast(`Custom Report "${customReport.title}" generated in ${customReport.format} format!`);
   };
 
   // Live Backend Data States
@@ -128,7 +78,9 @@ export default function ReportsManagement({ user }) {
 
       if (resAttendance.status === 'fulfilled' && resAttendance.value.ok) {
         const d = await resAttendance.value.json();
-        if (d.success && Array.isArray(d.sessions)) setAttendanceSessions(d.sessions);
+        // Support both response shapes: {sessions:[]} or {data:[]} or []
+        const sessions = d.sessions || d.data || (Array.isArray(d) ? d : []);
+        setAttendanceSessions(sessions);
       }
 
       if (resDepts.status === 'fulfilled' && resDepts.value.ok) {
@@ -156,100 +108,86 @@ export default function ReportsManagement({ user }) {
     fetchRealTimeReportsData();
   }, []);
 
-  // Compute live departmental academic results from real students and marks
-  const academicDeptResults = useMemo(() => {
-    const validDepts = (departments && departments.length > 0)
-      ? departments.map(d => d.name)
-      : ['BSc. Computer science', 'computer application'];
-
-    const deptMap = new Map();
-    validDepts.forEach(dName => {
-      deptMap.set(dName, {
-        dept: dName,
-        students: 0,
-        distinctions: 0,
-        backlogs: 0,
-        passCount: 0,
-        topperName: 'None',
-        topperScore: 0
+  // Build a per-student attendance map from live attendance sessions
+  const studentAttendanceMap = useMemo(() => {
+    const map = new Map(); // key: normalized rollNo/regNo/name → { total, attended }
+    attendanceSessions.forEach(sess => {
+      (sess.records || []).forEach(r => {
+        const roll = (r.rollNo || '').trim().toUpperCase();
+        const name = (r.name || '').trim().toUpperCase();
+        const status = String(r.status || '').trim().toLowerCase();
+        const isPresent = status === 'present' || status === 'late' || status === 'on duty' || status === 'od';
+        [roll, name].filter(Boolean).forEach(k => {
+          if (!map.has(k)) map.set(k, { total: 0, attended: 0 });
+          const e = map.get(k);
+          e.total++;
+          if (isPresent) e.attended++;
+        });
       });
     });
+    return map;
+  }, [attendanceSessions]);
 
-    students.forEach(st => {
-      const rawDept = (st.department || '').toLowerCase().trim();
-      let matchedDept = validDepts[0];
-
-      if (rawDept.includes('app') || rawDept.includes('bca') || rawDept.includes('ca')) {
-        matchedDept = validDepts.find(d => d.toLowerCase().includes('app') || d.toLowerCase().includes('bca') || d.toLowerCase().includes('ca')) || validDepts[1] || validDepts[0];
-      } else if (rawDept.includes('comp') || rawDept.includes('cs') || rawDept.includes('b.sc')) {
-        matchedDept = validDepts.find(d => d.toLowerCase().includes('comp') || d.toLowerCase().includes('cs') || d.toLowerCase().includes('b.sc')) || validDepts[0];
-      } else {
-        matchedDept = validDepts.find(d => d.toLowerCase() === rawDept) || validDepts[0];
-      }
-
-      const entry = deptMap.get(matchedDept);
-      if (entry) {
-        entry.students++;
-        const gpa = Number(st.cgpa) || 8.2;
-        if (gpa >= 8.5) entry.distinctions++;
-        if (gpa >= 5.0) entry.passCount++;
-        else entry.backlogs++;
-
-        if (gpa > entry.topperScore) {
-          entry.topperScore = gpa;
-          entry.topperName = st.name || st.fullName || 'Student';
+  // Enrich students with real attendance % from sessions (falls back to stored value)
+  const enrichedStudents = useMemo(() => {
+    return students.map(s => {
+      const keys = [s.rollNo, s.regNo, s.studentId, s.admNo, s.name]
+        .map(k => (k || '').trim().toUpperCase())
+        .filter(Boolean);
+      let realAtt = null;
+      for (const k of keys) {
+        if (studentAttendanceMap.has(k)) {
+          const { total, attended } = studentAttendanceMap.get(k);
+          if (total > 0) {
+            realAtt = parseFloat(((attended / total) * 100).toFixed(1));
+            break;
+          }
         }
       }
+      // Use real attendance if available, otherwise fall back to stored value (not 85 default)
+      const att = realAtt !== null ? realAtt : (s.attendance !== undefined ? Number(s.attendance) : null);
+      return { ...s, attendance: att };
     });
+  }, [students, studentAttendanceMap]);
 
-    return Array.from(deptMap.values()).map(d => ({
-      dept: d.dept,
-      students: d.students,
-      passRate: d.students > 0 ? parseFloat(((d.passCount / d.students) * 100).toFixed(1)) : 100,
-      distinctions: d.distinctions,
-      backlogs: d.backlogs,
-      topper: d.topperName === 'None' ? '--' : d.topperName
-    }));
-  }, [students, departments]);
-
-  // Compute live attendance defaulters from real students (< 75%)
+  // Compute live attendance defaulters from real data (<75%)
   const defaultersList = useMemo(() => {
-    return students
-      .filter(s => {
-        const att = s.attendance !== undefined ? Number(s.attendance) : 95;
-        return att < 75;
-      })
+    return enrichedStudents
+      .filter(s => s.attendance !== null && s.attendance < 75)
       .map(s => {
-        const att = s.attendance !== undefined ? Number(s.attendance) : 95;
+        const att = Number(s.attendance);
         return {
-          rollNo: s.rollNo || s.studentId,
+          rollNo: s.regNo || s.rollNo || s.studentId,
           name: s.name || s.fullName,
-          dept: s.department || 'Computer Science',
-          year: s.sem || s.semester || '3rd Sem',
+          dept: s.department || 'N/A',
+          year: s.sem || s.semester || s.year || 'N/A',
           att: `${att}%`,
           missedClasses: Math.max(0, Math.round(40 * ((100 - att) / 100))),
           parentContact: s.fatherMobile || s.motherMobile || s.phone || 'N/A',
           status: att < 65 ? 'Critical Shortage' : 'Warning Issued'
         };
       });
-  }, [students]);
+  }, [enrichedStudents]);
 
-  // Real-time Overall KPIs
+  // Real-time Overall KPIs – only count students with known attendance
   const overallKpis = useMemo(() => {
-    const totalStudents = students.length || 1;
-    const avgAttendance = students.reduce((acc, s) => acc + (Number(s.attendance) || 92), 0) / totalStudents;
-    const avgCgpa = students.reduce((acc, s) => acc + (Number(s.cgpa) || 8.0), 0) / totalStudents;
-    const distinctions = students.filter(s => (Number(s.cgpa) || 8.0) >= 8.5).length;
+    const totalStudents = enrichedStudents.length || 1;
+    const studentsWithAtt = enrichedStudents.filter(s => s.attendance !== null);
+    const avgAttendance = studentsWithAtt.length > 0
+      ? studentsWithAtt.reduce((acc, s) => acc + Number(s.attendance), 0) / studentsWithAtt.length
+      : 0;
+    const avgCgpa = enrichedStudents.reduce((acc, s) => acc + (Number(s.cgpa) || 0), 0) / totalStudents;
+    const distinctions = enrichedStudents.filter(s => (Number(s.cgpa) || 0) >= 8.5).length;
     const defaultersCount = defaultersList.length;
-    const highAttendanceCount = students.filter(s => (Number(s.attendance) || 92) >= 90).length;
+    const highAttendanceCount = studentsWithAtt.filter(s => Number(s.attendance) >= 90).length;
 
-    // Fees
-    const paidStudents = students.filter(s => (s.feeStatus || '').toLowerCase() === 'paid').length;
-    const pendingStudents = students.filter(s => (s.feeStatus || '').toLowerCase() !== 'paid').length;
+    // Fees — use actual paidFee stored in student doc
+    const paidStudents = enrichedStudents.filter(s => (s.feeStatus || '').toLowerCase() === 'paid').length;
+    const pendingStudents = enrichedStudents.filter(s => (s.feeStatus || '').toLowerCase() !== 'paid').length;
 
     return {
       totalStudents,
-      avgAttendance: avgAttendance.toFixed(1),
+      avgAttendance: studentsWithAtt.length > 0 ? avgAttendance.toFixed(1) : 'N/A',
       avgCgpa: avgCgpa.toFixed(2),
       distinctions,
       defaultersCount,
@@ -258,42 +196,43 @@ export default function ReportsManagement({ user }) {
       pendingStudents,
       totalFaculty: staff.length
     };
-  }, [students, staff, defaultersList]);
+  }, [enrichedStudents, staff, defaultersList]);
 
-  // Dynamic Finance & Fee Collections KPIs calculated from live registered students
+  // Real Finance & Fee Collections from actual student fee records
   const financeData = useMemo(() => {
-    const totalStudents = students.length;
-    const paidCount = students.filter(s => (s.feeStatus || '').toLowerCase() === 'paid').length;
+    const totalStudents = enrichedStudents.length;
+    // Use actual totalFee, paidFee, pendingFee from student records
+    const totalBilled = enrichedStudents.reduce((acc, s) => acc + (Number(s.totalFee) || 0), 0);
+    const collected = enrichedStudents.reduce((acc, s) => acc + (Number(s.paidFee) || 0), 0);
+    const outstanding = enrichedStudents.reduce((acc, s) => acc + (Number(s.pendingFee) || 0), 0);
+    const paidCount = enrichedStudents.filter(s => (s.feeStatus || '').toLowerCase() === 'paid').length;
+    const partialCount = enrichedStudents.filter(s => (s.feeStatus || '').toLowerCase() === 'partial').length;
     const pendingCount = totalStudents - paidCount;
-
-    // Standard annual fee per student (Tuition + Lab/Reg/Exam) = ₹35,000
-    const annualFeePerStudent = 35000;
-    const totalBilled = totalStudents * annualFeePerStudent;
-    const collected = paidCount * annualFeePerStudent;
-    const outstanding = pendingCount * annualFeePerStudent;
-    const collectionRate = totalBilled > 0 ? ((collected / totalBilled) * 100).toFixed(1) : '100.0';
+    const collectionRate = totalBilled > 0 ? ((collected / totalBilled) * 100).toFixed(1) : '0.0';
 
     // Merit scholarships (students with CGPA >= 8.5)
-    const meritStudents = students.filter(s => (Number(s.cgpa) || 0) >= 8.5).length;
+    const meritStudents = enrichedStudents.filter(s => (Number(s.cgpa) || 0) >= 8.5).length;
     const scholarshipWaivers = meritStudents * 5000;
 
     const formatINR = (val) => {
+      if (!val || isNaN(val)) return '₹0';
       if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)} Cr`;
       if (val >= 100000) return `₹${(val / 100000).toFixed(2)} L`;
-      return `₹${val.toLocaleString('en-IN')}`;
+      return `₹${Number(val).toLocaleString('en-IN')}`;
     };
 
+    // Split collected proportionally across fee heads
     const tuitionTotal = Math.round(totalBilled * 0.70);
     const tuitionCollected = Math.round(collected * 0.70);
-    const tuitionPct = tuitionTotal > 0 ? Math.round((tuitionCollected / tuitionTotal) * 100) : (totalStudents > 0 ? 100 : 0);
+    const tuitionPct = tuitionTotal > 0 ? Math.round((tuitionCollected / tuitionTotal) * 100) : 0;
 
     const facilitiesTotal = Math.round(totalBilled * 0.20);
     const facilitiesCollected = Math.round(collected * 0.20);
-    const facilitiesPct = facilitiesTotal > 0 ? Math.round((facilitiesCollected / facilitiesTotal) * 100) : (totalStudents > 0 ? 100 : 0);
+    const facilitiesPct = facilitiesTotal > 0 ? Math.round((facilitiesCollected / facilitiesTotal) * 100) : 0;
 
     const examTotal = Math.round(totalBilled * 0.10);
     const examCollected = Math.round(collected * 0.10);
-    const examPct = examTotal > 0 ? Math.round((examCollected / examTotal) * 100) : (totalStudents > 0 ? 100 : 0);
+    const examPct = examTotal > 0 ? Math.round((examCollected / examTotal) * 100) : 0;
 
     return {
       totalBilledStr: formatINR(totalBilled),
@@ -302,6 +241,7 @@ export default function ReportsManagement({ user }) {
       scholarshipStr: formatINR(scholarshipWaivers),
       collectionRate,
       paidCount,
+      partialCount,
       pendingCount,
       totalStudents,
       feeHeads: [
@@ -310,7 +250,43 @@ export default function ReportsManagement({ user }) {
         { head: 'Examination & Library', collected: formatINR(examCollected), total: formatINR(examTotal), pct: examPct }
       ]
     };
-  }, [students]);
+  }, [enrichedStudents]);
+
+  // Academic Department Results Summary
+  const academicDeptResults = useMemo(() => {
+    const validDepts = (departments && departments.length > 0)
+      ? departments.map(d => d.name)
+      : getKnownDepartments();
+    const deptMap = new Map();
+    validDepts.forEach(dName => {
+      deptMap.set(dName, { dept: dName, students: 0, distinctions: 0, backlogs: 0, passCount: 0, topperName: 'None', topperScore: 0 });
+    });
+    enrichedStudents.forEach(st => {
+      const rawDept = (st.department || '').toLowerCase().trim();
+      let matchedDept = validDepts.find(d => d.toLowerCase().includes(rawDept) || rawDept.includes(d.toLowerCase())) || validDepts[0];
+      if (!matchedDept) return;
+      const entry = deptMap.get(matchedDept);
+      if (entry) {
+        entry.students++;
+        const gpa = Number(st.cgpa) || 0;
+        if (gpa >= 8.5) entry.distinctions++;
+        if (gpa >= 5.0) entry.passCount++;
+        else entry.backlogs++;
+        if (gpa > entry.topperScore) {
+          entry.topperScore = gpa;
+          entry.topperName = st.name || st.fullName || 'Student';
+        }
+      }
+    });
+    return Array.from(deptMap.values()).map(d => ({
+      dept: d.dept,
+      students: d.students,
+      passRate: d.students > 0 ? parseFloat(((d.passCount / d.students) * 100).toFixed(1)) : 0,
+      distinctions: d.distinctions,
+      backlogs: d.backlogs,
+      topper: d.topperName === 'None' ? '--' : d.topperName
+    }));
+  }, [enrichedStudents, departments]);
 
   // Filtered Academic Results
   const filteredResults = useMemo(() => {
@@ -336,20 +312,20 @@ export default function ReportsManagement({ user }) {
     });
   }, [defaultersList, searchTerm, selectedDept]);
 
-  // Filtered Students for Enrollment tab
+  // Filtered Students for Enrollment tab – use enrichedStudents for real attendance
   const filteredEnrollmentStudents = useMemo(() => {
-    return students.filter(s => {
+    return enrichedStudents.filter(s => {
       const q = (searchTerm || '').toLowerCase().trim();
       const matchSearch = !q || (
         String(s.name || s.fullName || '').toLowerCase().includes(q) ||
-        String(s.rollNo || '').toLowerCase().includes(q) ||
+        String(s.rollNo || s.regNo || '').toLowerCase().includes(q) ||
         String(s.department || '').toLowerCase().includes(q) ||
         String(s.phone || '').toLowerCase().includes(q)
       );
       const matchDept = selectedDept === 'All Departments' || s.department === selectedDept;
       return matchSearch && matchDept;
     });
-  }, [students, searchTerm, selectedDept]);
+  }, [enrichedStudents, searchTerm, selectedDept]);
 
   // Filtered Staff for Faculty tab
   const filteredStaffList = useMemo(() => {
@@ -367,43 +343,53 @@ export default function ReportsManagement({ user }) {
     });
   }, [staff, searchTerm, selectedDept]);
 
-  // Export live CSV
+  // Export live CSV – uses enrichedStudents for real attendance values
   const handleExportLiveCSV = () => {
     let headers = [];
     let rows = [];
 
     if (activeCategory === 'attendance') {
       headers = ['Roll No', 'Student Name', 'Department', 'Semester', 'Attendance %', 'Parent Contact', 'Status'];
-      rows = (defaultersList.length > 0 ? defaultersList : students).map(s => [
-        `"${s.rollNo}"`,
-        `"${s.name}"`,
-        `"${s.dept || s.department}"`,
-        `"${s.year || s.sem}"`,
-        `"${s.att || (s.attendance + '%')}"`,
-        `"${s.parentContact || s.phone}"`,
-        `"${s.status || 'Active'}"`
+      const dataSource = filteredDefaulters.length > 0 ? filteredDefaulters : enrichedStudents.map(s => ({
+        rollNo: s.regNo || s.rollNo || s.studentId || '',
+        name: s.name || s.fullName || '',
+        dept: s.department || '',
+        year: s.sem || s.semester || s.year || '',
+        att: s.attendance !== null && s.attendance !== undefined ? `${s.attendance}%` : 'N/A',
+        parentContact: s.fatherMobile || s.motherMobile || s.phone || 'N/A',
+        status: s.attendance !== null && s.attendance < 75 ? (s.attendance < 65 ? 'Critical Shortage' : 'Warning Issued') : 'Regular'
+      }));
+      rows = dataSource.map(s => [
+        `"${s.rollNo || ''}"`,
+        `"${s.name || ''}"`,
+        `"${s.dept || s.department || ''}"`,
+        `"${s.year || s.sem || ''}"`,
+        `"${s.att || (s.attendance !== null && s.attendance !== undefined ? s.attendance + '%' : 'N/A')}"`,
+        `"${s.parentContact || s.phone || 'N/A'}"`,
+        `"${s.status || 'Regular'}"`
       ]);
     } else if (activeCategory === 'faculty') {
       headers = ['Staff ID', 'Name', 'Department', 'Designation', 'Category', 'Email', 'Phone'];
       rows = staff.map(st => [
-        `"${st.staffId || st.empId}"`,
-        `"${st.name}"`,
-        `"${st.department}"`,
-        `"${st.designation}"`,
+        `"${st.staffId || st.empId || ''}"`,
+        `"${st.name || ''}"`,
+        `"${st.department || ''}"`,
+        `"${st.designation || ''}"`,
         `"${st.role || 'Faculty'}"`,
-        `"${st.email}"`,
-        `"${st.phone || st.mobile}"`
+        `"${st.email || ''}"`,
+        `"${st.phone || st.mobile || ''}"`
       ]);
     } else {
+      // For all other tabs: include real attendance from enrichedStudents
       headers = ['Roll No', 'Name', 'Department', 'Semester', 'CGPA', 'Attendance %', 'Fee Status'];
-      rows = students.map(s => [
-        `"${s.rollNo}"`,
-        `"${s.name || s.fullName}"`,
-        `"${s.department}"`,
-        `"${s.sem || s.semester}"`,
-        `"${s.cgpa || '8.0'}"`,
-        `"${s.attendance || '90'}%"`,
-        `"${s.feeStatus || 'Paid'}"`
+      rows = enrichedStudents.map(s => [
+        `"${s.regNo || s.rollNo || s.studentId || ''}"`,
+        `"${s.name || s.fullName || ''}"`,
+        `"${s.department || ''}"`,
+        `"${s.sem || s.semester || ''}"`,
+        `"${s.cgpa !== undefined && s.cgpa !== null ? s.cgpa : ''}"`,
+        `"${s.attendance !== null && s.attendance !== undefined ? s.attendance + '%' : 'N/A'}"`,
+        `"${s.feeStatus || 'Pending'}"`
       ]);
     }
 
@@ -415,7 +401,7 @@ export default function ReportsManagement({ user }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast(`Live ${activeCategory} report exported as CSV!`);
+    showToast(`Live ${activeCategory} report exported as Excel!`);
   };
 
   return (
@@ -455,34 +441,15 @@ export default function ReportsManagement({ user }) {
           </button>
 
           {isSuperAdmin && (
-          <>
             <button
-            onClick={() => handleExport('PDF')}
-            disabled={isExporting}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-slate-500" />
-            <span>Export PDF</span>
-          </button>
-
-          <button
-            onClick={handleExportLiveCSV}
-            disabled={isExporting}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all cursor-pointer"
-          >
-            <FileText className="w-4 h-4 text-emerald-600" />
-            <span>Export Excel</span>
-          </button>
-          </>
-        )}
-
-          <button
-            onClick={() => setShowCustomModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 transition-all cursor-pointer"
-          >
-            <Sliders className="w-4 h-4" />
-            <span>Custom Report</span>
-          </button>
+              onClick={handleExportLiveCSV}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-emerald-600" />
+              <span>Export Excel</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -684,10 +651,9 @@ export default function ReportsManagement({ user }) {
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Average Campus Attendance</p>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-3xl font-black text-slate-900">{overallKpis.avgAttendance}%</span>
-                <span className="text-xs font-bold text-emerald-600">+1.1%</span>
+                <span className="text-3xl font-black text-slate-900">{overallKpis.avgAttendance !== 'N/A' ? `${overallKpis.avgAttendance}%` : 'N/A'}</span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">Target Threshold: 85.0%</p>
+              <p className="text-[11px] text-slate-500 mt-1">Target Threshold: 75%</p>
             </div>
 
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
@@ -698,8 +664,8 @@ export default function ReportsManagement({ user }) {
 
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Warning Zone (75-80%)</p>
-              <span className="text-3xl font-black text-amber-600 mt-1 block">118</span>
-              <p className="text-[11px] text-slate-500 mt-1">SMS alert sent to guardians</p>
+              <span className="text-3xl font-black text-amber-600 mt-1 block">{enrichedStudents.filter(s => s.attendance !== null && Number(s.attendance) >= 75 && Number(s.attendance) < 80).length}</span>
+              <p className="text-[11px] text-slate-500 mt-1">Needs monitoring</p>
             </div>
 
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
@@ -717,7 +683,7 @@ export default function ReportsManagement({ user }) {
                 <p className="text-xs text-slate-400">Students facing exam condonation requirement</p>
               </div>
               <button
-                onClick={() => showToast('Dispatched SMS alerts to all 48 parent contacts!')}
+                onClick={() => showToast(`Dispatched SMS alerts to ${filteredDefaulters.length} parent contacts!`)}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs"
               >
                 Broadcast Alert to All Parents
@@ -738,7 +704,11 @@ export default function ReportsManagement({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {filteredDefaulters.map((d, i) => (
+                  {filteredDefaulters.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-10 text-center text-slate-400 text-xs font-semibold">No attendance defaulters found</td>
+                    </tr>
+                  ) : filteredDefaulters.map((d, i) => (
                     <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{d.rollNo}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900">{d.name}</td>
@@ -862,12 +832,14 @@ export default function ReportsManagement({ user }) {
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {filteredEnrollmentStudents.map((s, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{s.rollNo}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{s.regNo || s.rollNo || s.studentId || '—'}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900">{s.name || s.fullName}</td>
                       <td className="py-3.5 px-4">{s.department}</td>
                       <td className="py-3.5 px-4">{s.sem || s.semester}</td>
                       <td className="py-3.5 px-4 font-mono">{s.phone || s.mobile || 'N/A'}</td>
-                      <td className="py-3.5 px-4 font-bold text-emerald-600">{s.attendance || 90}%</td>
+                      <td className={`py-3.5 px-4 font-bold ${s.attendance !== null && s.attendance !== undefined ? (s.attendance >= 75 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-400'}`}>
+                        {s.attendance !== null && s.attendance !== undefined ? `${s.attendance}%` : 'N/A'}
+                      </td>
                       <td className="py-3.5 px-4">
                         <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
                           (s.feeStatus || '').toLowerCase() === 'paid'
@@ -975,122 +947,7 @@ export default function ReportsManagement({ user }) {
                 : '84 Full-time Faculty Members • Faculty-to-Student Ratio 1:17 • 38 Research Publications Indexed in Scopus in 2024-25'}
             </p>
           </div>
-          <div className="flex items-center justify-center gap-3 pt-2">
-            {isSuperAdmin && (
-            <button
-              onClick={() => handleExport(activeCategory === 'admissions' ? 'Admissions' : 'Faculty')}
-              className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20"
-            >
-              Export Complete {activeCategory === 'admissions' ? 'Demographics' : 'Faculty'} Dossier (PDF)
-            </button>
-          )}
-          </div>
         </div>
-      )}
-
-      {/* MODAL: CUSTOM REPORT GENERATOR */}
-      {showCustomModal && (
-        <ModalPortal isOpen={showCustomModal} onClose={() => setShowCustomModal(false)}>
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-5 my-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-cyan-100 text-cyan-600 flex items-center justify-center font-bold">
-                  <Sliders className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-extrabold text-slate-900">Custom Report Builder</h2>
-                  <p className="text-[11px] text-slate-500">Configure parameters and compile tailored report</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowCustomModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleGenerateCustom} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Report Heading *</label>
-                <input
-                  type="text"
-                  required
-                  value={customReport.title}
-                  onChange={(e) => setCustomReport({ ...customReport, title: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-cyan-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Primary Domain</label>
-                  <select
-                    value={customReport.category}
-                    onChange={(e) => setCustomReport({ ...customReport, category: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-cyan-500"
-                  >
-                    <option value="Academic">Academic Results</option>
-                    <option value="Attendance">Attendance Analytics</option>
-                    <option value="Finance">Financial Accounts</option>
-                    <option value="Admissions">Admissions & Intake</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Export Format</label>
-                  <select
-                    value={customReport.format}
-                    onChange={(e) => setCustomReport({ ...customReport, format: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-cyan-500"
-                  >
-                    <option value="PDF">PDF (.pdf document)</option>
-                    <option value="Excel">Excel (.xlsx spreadsheet)</option>
-                    <option value="CSV">CSV (.csv data file)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={customReport.includeCharts}
-                    onChange={(e) => setCustomReport({ ...customReport, includeCharts: e.target.checked })}
-                    className="rounded text-cyan-600 focus:ring-cyan-500 w-4 h-4"
-                  />
-                  <span>Include Visual Charts & Graphs</span>
-                </label>
-
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={customReport.includeStudentDetails}
-                    onChange={(e) => setCustomReport({ ...customReport, includeStudentDetails: e.target.checked })}
-                    className="rounded text-cyan-600 focus:ring-cyan-500 w-4 h-4"
-                  />
-                  <span>Include Student-level Breakdown</span>
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowCustomModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20"
-                >
-                  Generate & Download
-                </button>
-              </div>
-            </form>
-          </div>
-        </ModalPortal>
       )}
 
     </div>

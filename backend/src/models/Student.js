@@ -171,6 +171,22 @@ const studentSchema = new mongoose.Schema({
     type: String,
     default: '2022-2026'
   },
+  batchStartYear: {
+    type: Number,
+    default: null
+  },
+  courseDurationYears: {
+    type: Number,
+    default: 3
+  },
+  isLateralEntry: {
+    type: Boolean,
+    default: false
+  },
+  detainedYears: {
+    type: Number,
+    default: 0
+  },
   academicYear: {
     type: String,
     default: '2025-2026'
@@ -460,6 +476,83 @@ studentSchema.pre('validate', function(next) {
   }
   next();
 });
+
+// ─── Batch-based dynamic year/semester virtuals ───────────────────────────────
+
+/**
+ * Helper: get the current academic year start (June = new academic year).
+ * e.g. Oct 2026 → 2026 | Feb 2027 → 2026
+ */
+function getCurrentAcademicYearStart() {
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1–12
+  return month >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+/**
+ * Virtual: current year of study calculated from batchStartYear.
+ * Falls back to parsing the stored `batch` string if batchStartYear is unset.
+ */
+studentSchema.virtual('currentYearOfStudy').get(function () {
+  let startYear = this.batchStartYear;
+  if (!startYear && this.batch && this.batch.includes('-')) {
+    startYear = parseInt(this.batch.split('-')[0], 10) || null;
+  }
+  if (!startYear) return null;
+
+  const academicNow = getCurrentAcademicYearStart();
+  let yr = academicNow - startYear + 1 - (this.detainedYears || 0);
+  if (this.isLateralEntry) yr += 1;
+  return yr;
+});
+
+/**
+ * Virtual: current semester number (1-based).
+ * Jun–Nov → odd  (1,3,5,…)
+ * Dec–May → even (2,4,6,…)
+ */
+studentSchema.virtual('currentSemNumber').get(function () {
+  const yr = this.currentYearOfStudy;
+  if (!yr || yr < 1) return null;
+
+  const month = new Date().getMonth() + 1;
+  const term  = (month >= 6 && month <= 11) ? 1 : 2;
+  const sem   = (yr - 1) * 2 + term;
+  return Math.min(sem, (this.courseDurationYears || 3) * 2);
+});
+
+/**
+ * Virtual: current semester as a formatted string, e.g. "3rd Sem".
+ */
+studentSchema.virtual('currentSemLabel').get(function () {
+  const n = this.currentSemNumber;
+  if (!n) return null;
+  const suffixes = ['st','nd','rd'];
+  const suffix = n <= 3 ? suffixes[n - 1] : 'th';
+  return `${n}${suffix} Sem`;
+});
+
+/**
+ * Virtual: current year label, e.g. "2nd Year".
+ */
+studentSchema.virtual('currentYearLabel').get(function () {
+  const n = this.currentYearOfStudy;
+  if (!n) return null;
+  const suffixes = ['st','nd','rd'];
+  const suffix = n <= 3 ? suffixes[n - 1] : 'th';
+  return `${n}${suffix} Year`;
+});
+
+/**
+ * Virtual: 'Active' | 'Alumni' based on course completion.
+ */
+studentSchema.virtual('dynamicStatus').get(function () {
+  const yr = this.currentYearOfStudy;
+  if (yr && yr > (this.courseDurationYears || 3)) return 'Alumni';
+  return this.status || 'Active';
+});
+
+// ─── End batch-based virtuals ─────────────────────────────────────────────────
 
 // Virtual aliases for frontend compatibility
 studentSchema.virtual('id').get(function () {

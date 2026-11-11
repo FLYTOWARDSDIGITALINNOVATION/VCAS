@@ -17,7 +17,9 @@ const {
   bulkDeleteStudents,
   getStudentCredentials,
   bulkImportStudents,
-  uploadExcelStudents
+  uploadExcelStudents,
+  getSemesterInfo,
+  migrateBatchFields
 } = require('../controllers/studentController');
 
 router.route('/')
@@ -30,8 +32,16 @@ router.post('/bulk-delete', bulkDeleteStudents);
 router.delete('/bulk', bulkDeleteStudents);
 router.post('/upload-excel', upload.single('file'), uploadExcelStudents);
 
+// One-time migration: backfill batch fields for existing students
+// Supports both GET (browser-friendly) and POST
+router.get('/migrate-batch-fields', migrateBatchFields);
+router.post('/migrate-batch-fields', migrateBatchFields);
+
 router.route('/:id/credentials')
   .get(getStudentCredentials);
+
+router.route('/:id/semester-info')
+  .get(getSemesterInfo);
 
 router.route('/:id')
   .get(getStudentById)

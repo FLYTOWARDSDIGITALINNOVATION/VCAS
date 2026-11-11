@@ -236,6 +236,21 @@ exports.createStudent = async (req, res) => {
       umisNumber: (body.umisNumber || body.umis || '').trim().toUpperCase(),
       year: body.year || '1st Year',
       batch: (body.batch || '2022-2026').replace('–', '-').trim(),
+      batchStartYear: body.batchStartYear || (() => {
+        const b = (body.batch || '').replace('–', '-').trim();
+        return b.includes('-') ? (parseInt(b.split('-')[0], 10) || null) : null;
+      })(),
+      courseDurationYears: body.courseDurationYears || (() => {
+        const b = (body.batch || '').replace('–', '-').trim();
+        if (b.includes('-')) {
+          const parts = b.split('-');
+          const dur = parseInt(parts[1], 10) - parseInt(parts[0], 10);
+          return (dur > 0 && dur <= 6) ? dur : 3;
+        }
+        return 3;
+      })(),
+      isLateralEntry: body.isLateralEntry || false,
+      detainedYears: body.detainedYears || 0,
       loginId: (body.loginId || finalRegNo).trim().toUpperCase(),
       name: studentName.trim(),
       sem: body.sem || body.semester || '1st Sem',
@@ -439,7 +454,22 @@ exports.updateStudent = async (req, res) => {
     if (updates.state) student.state = updates.state;
     if (updates.pinCode) student.pinCode = updates.pinCode;
     if (updates.country) student.country = updates.country;
-    if (updates.batch) student.batch = String(updates.batch).replace('–', '-').trim();
+    if (updates.batch) {
+      const cleanBatch = String(updates.batch).replace('–', '-').trim();
+      student.batch = cleanBatch;
+      // Auto-update batchStartYear & courseDurationYears when batch is updated
+      if (cleanBatch.includes('-')) {
+        const parts = cleanBatch.split('-');
+        const s = parseInt(parts[0], 10);
+        const e = parseInt(parts[1], 10);
+        if (!isNaN(s)) student.batchStartYear = s;
+        if (!isNaN(s) && !isNaN(e) && e - s > 0 && e - s <= 6) student.courseDurationYears = e - s;
+      }
+    }
+    if (updates.batchStartYear != null) student.batchStartYear = Number(updates.batchStartYear);
+    if (updates.courseDurationYears != null) student.courseDurationYears = Number(updates.courseDurationYears);
+    if (updates.isLateralEntry != null) student.isLateralEntry = Boolean(updates.isLateralEntry);
+    if (updates.detainedYears != null) student.detainedYears = Number(updates.detainedYears);
     if (updates.academicYear) student.academicYear = updates.academicYear;
     if (updates.section) student.section = updates.section;
     if (updates.cgpa) student.cgpa = updates.cgpa;
@@ -785,6 +815,9 @@ function normalizeStudentRow(rawRow) {
 
   // 4. Batch & Academic Year
   let batch = String(getVal('batch', 'batchyear')).replace('–', '-').trim();
+  let batchStartYear = null;
+  let courseDurationYears = 3;
+
   if (!batch) {
     let startYear = null;
     if (rawDoa) {
@@ -808,6 +841,23 @@ function normalizeStudentRow(rawRow) {
     if (!startYear) startYear = 2024;
     const duration = (String(getVal('coursetype') || '').toUpperCase().includes('PG') || course.toUpperCase().startsWith('M.')) ? 2 : 3;
     batch = `${startYear}-${startYear + duration}`;
+    batchStartYear = startYear;
+    courseDurationYears = duration;
+  } else {
+    // Parse batchStartYear & courseDurationYears from existing batch string e.g. "2024-2027"
+    const batchParts = batch.split('-');
+    if (batchParts.length >= 2) {
+      const s = parseInt(batchParts[0], 10);
+      const e = parseInt(batchParts[1], 10);
+      if (!isNaN(s)) batchStartYear = s;
+      if (!isNaN(s) && !isNaN(e)) courseDurationYears = e - s;
+    }
+  }
+
+  // Auto-detect PG/UG duration from course name if not set properly
+  if (courseDurationYears <= 0 || courseDurationYears > 6) {
+    const isPG = String(getVal('coursetype') || '').toUpperCase().includes('PG') || course.toUpperCase().startsWith('M.');
+    courseDurationYears = isPG ? 2 : 3;
   }
 
   const academicYear = String(getVal('academicyear', 'session') || '2025-2026').replace('–', '-').trim();
@@ -975,6 +1025,8 @@ function normalizeStudentRow(rawRow) {
     sem,
     year,
     batch,
+    batchStartYear,
+    courseDurationYears,
     academicYear,
     section,
     gender,
@@ -1530,6 +1582,136 @@ exports.uploadExcelStudents = async (req, res) => {
   } catch (error) {
     console.error('Error in uploadExcelStudents:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── One-time Migration: backfill batchStartYear & courseDurationYears ────────
+
+/**
+ * POST /api/students/migrate-batch-fields
+ * Backfills batchStartYear & courseDurationYears for all existing students
+ * that don't yet have these fields set. Safe to run multiple times.
+ */
+exports.migrateBatchFields = async (req, res) => {
+  try {
+    const students = await Student.find(
+      { $or: [{ batchStartYear: null }, { batchStartYear: { $exists: false } }] },
+      'batch course courseDurationYears batchStartYear'
+    ).lean();
+
+    if (students.length === 0) {
+      return res.json({ success: true, message: 'Nothing to migrate — all students already have batch fields.', updated: 0 });
+    }
+
+    const bulkOps = [];
+    const skipped = [];
+
+    for (const s of students) {
+      const batch = (s.batch || '').replace('–', '-').trim();
+      let startYear = null;
+      let duration  = 3;
+
+      if (batch.includes('-')) {
+        const parts = batch.split('-');
+        const start = parseInt(parts[0], 10);
+        const end   = parseInt(parts[1], 10);
+        if (!isNaN(start) && start >= 2000 && start <= 2100) startYear = start;
+        if (!isNaN(start) && !isNaN(end) && end - start > 0 && end - start <= 6) duration = end - start;
+      }
+
+      if (!startYear) {
+        skipped.push({ id: s._id, batch: s.batch });
+        continue;
+      }
+
+      // Auto-detect PG/UG duration from course name
+      if (s.course) {
+        const c = s.course.toUpperCase();
+        if (c.startsWith('M.') || c.includes('MBA') || c.includes('MCA') || c.includes(' PG')) {
+          duration = 2;
+        } else if (c.includes('B.E') || c.includes('B.TECH') || c.includes('B.ARCH')) {
+          duration = 4;
+        }
+      }
+
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: s._id },
+          update: { $set: { batchStartYear: startYear, courseDurationYears: duration } }
+        }
+      });
+    }
+
+    let modifiedCount = 0;
+    if (bulkOps.length > 0) {
+      const result = await Student.bulkWrite(bulkOps, { ordered: false });
+      modifiedCount = result.modifiedCount;
+    }
+
+    res.json({
+      success: true,
+      message: `Migration complete: ${modifiedCount} students updated, ${skipped.length} skipped (unparseable batch).`,
+      updated: modifiedCount,
+      skipped: skipped.length,
+      skippedList: skipped
+    });
+  } catch (err) {
+    console.error('migrateBatchFields error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── Batch-based Semester Info ────────────────────────────────────────────────
+
+/**
+ * GET /api/students/:id/semester-info
+ * Returns dynamically calculated year/semester for a student.
+ */
+exports.getSemesterInfo = async (req, res) => {
+  try {
+    const id = req.params.id;
+    let student = null;
+
+    // Try MongoDB ObjectId first
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      student = await Student.findById(id);
+    }
+    // Then try all identifier fields (same logic as getStudentById)
+    if (!student) {
+      student = await Student.findOne({
+        $or: [
+          { regNo: id.toUpperCase() },
+          { studentId: id.toUpperCase() },
+          { admNo: id.toUpperCase() },
+          { rollNo: id.toUpperCase() },
+          { emisNumber: id.toUpperCase() },
+          { umisNumber: id.toUpperCase() }
+        ]
+      });
+    }
+    if (!student) return res.status(404).json({ success: false, message: `Student not found for id: "${id}"` });
+
+    res.json({
+      success: true,
+      data: {
+        name:                student.name,
+        batch:               student.batch,
+        batchStartYear:      student.batchStartYear,
+        courseDurationYears: student.courseDurationYears,
+        isLateralEntry:      student.isLateralEntry,
+        detainedYears:       student.detainedYears,
+        currentYearOfStudy:  student.currentYearOfStudy,
+        currentYearLabel:    student.currentYearLabel,
+        currentSemNumber:    student.currentSemNumber,
+        currentSemLabel:     student.currentSemLabel,
+        dynamicStatus:       student.dynamicStatus,
+        // Stored (manual) values for reference
+        storedYear:          student.year,
+        storedSem:           student.sem
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 

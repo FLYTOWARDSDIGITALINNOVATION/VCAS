@@ -27,8 +27,8 @@ exports.getCourses = async (req, res) => {
         durationYears: 3,
         totalSemesters: 6,
         totalCredits: 140,
-        coordinator: 'Latha V',
-        coordinatorEmail: 'latha.v@vcas.edu.in',
+        coordinator: 'SASIKALA',
+        coordinatorEmail: 'bsccshodvcas@gmail.com',
         description: 'Bachelor of Science in Computer Science with focus on Cloud Architecture and Database Systems.'
       },
       {
@@ -102,15 +102,43 @@ exports.getCourses = async (req, res) => {
       courses = await Course.find().sort({ code: 1 });
     }
 
-    // Enrich courses with real student enrollment & subject counts dynamically from database
+    // Enrich courses with real student enrollment, subject counts, and actual department HOD/Coordinator dynamically from database
     const enriched = await Promise.all(courses.map(async (c) => {
       const cObj = c.toObject ? c.toObject() : { ...c };
       const deptRegex = new RegExp(`^${(c.department || '').trim()}$`, 'i');
       
-      const [stuCount, subCount] = await Promise.all([
+      const [stuCount, subCount, realHod] = await Promise.all([
         Student.countDocuments({ department: deptRegex }).catch(() => 0),
-        Subject.countDocuments({ department: deptRegex }).catch(() => 0)
+        Subject.countDocuments({ department: deptRegex }).catch(() => 0),
+        Staff.findOne({
+          department: deptRegex,
+          role: { $regex: /hod/i },
+          name: { $not: /test/i }
+        }).sort({ createdAt: -1 }).catch(() => null)
       ]);
+
+      // Automatically assign the real Department HOD from the Staff collection if coordinator is empty or placeholder
+      const isPlaceholder = !c.coordinator || c.coordinator === 'Latha V' || c.coordinator.toLowerCase().includes('placeholder');
+      if (isPlaceholder) {
+        const realHod = await Staff.findOne({
+          department: deptRegex,
+          role: { $regex: /hod/i },
+          name: { $not: /test/i }
+        }).sort({ createdAt: -1 }).catch(() => null);
+
+        const realStaff = realHod || await Staff.findOne({
+          department: deptRegex,
+          name: { $not: /test/i }
+        }).sort({ createdAt: 1 }).catch(() => null);
+
+        if (realStaff && realStaff.name) {
+          cObj.coordinator = realStaff.name;
+          cObj.coordinatorEmail = realStaff.email || `${realStaff.name.toLowerCase().replace(/\s+/g, '')}@vcas.edu.in`;
+          if (c.coordinator !== realStaff.name) {
+            Course.updateOne({ _id: c._id }, { $set: { coordinator: realStaff.name, coordinatorEmail: cObj.coordinatorEmail } }).catch(() => {});
+          }
+        }
+      }
 
       cObj.enrolledStudents = stuCount > 0 ? stuCount : (cObj.enrolledStudents || 0);
       cObj.totalSubjects = subCount > 0 ? subCount : (cObj.totalSubjects || cObj.durationYears * 10);

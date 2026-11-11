@@ -494,6 +494,24 @@ export default function TimetableManagement({ user }) {
     return result;
   }, [availableRooms, allTimetables]);
 
+  // Derive count and list of assigned classrooms
+  const assignedRoomsList = useMemo(() => {
+    const set = new Set();
+    allTimetables.forEach(t => {
+      const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
+      Object.values(sched).forEach(day => {
+        if (day && typeof day === 'object') {
+          Object.values(day).forEach(slot => {
+            if (slot?.room && typeof slot.room === 'string' && slot.room.trim()) {
+              set.add(slot.room.trim());
+            }
+          });
+        }
+      });
+    });
+    return Array.from(set);
+  }, [allTimetables]);
+
   // Get active schedule for Class View: aggregates live assigned slots across faculty + class overrides
   const activeClassSchedule = useMemo(() => {
     const userDeptSchedule = schedules[selectedDept]?.[selectedYear] || {};
@@ -1404,9 +1422,9 @@ export default function TimetableManagement({ user }) {
 
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Smart Classrooms</span>
-                <p className="text-2xl font-black text-emerald-600">{classMetrics.smartClassrooms}</p>
-                <p className="text-[11px] text-emerald-600 font-bold mt-1">{classMetrics.smartClassroomsSub}</p>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Classroom</span>
+                <p className="text-2xl font-black text-emerald-600">{assignedRoomsList.length} {assignedRoomsList.length === 1 ? 'Room' : 'Rooms'}</p>
+                <p className="text-[11px] text-emerald-600 font-bold mt-1">{assignedRoomsList.length} Assigned</p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
                 <Building2 className="w-5 h-5" />
@@ -1438,7 +1456,7 @@ export default function TimetableManagement({ user }) {
 
           {/* CLASS SELECTORS BAR */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department</label>
                 <select
@@ -1470,18 +1488,6 @@ export default function TimetableManagement({ user }) {
                   <option value={1}>1st Year (Sem 1 & 2)</option>
                   <option value={2}>2nd Year (Sem 3 & 4)</option>
                   <option value={3}>3rd Year (Sem 5 & 6)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Section</label>
-                <select
-                  value={selectedSection}
-                  onChange={(e) => setSelectedSection(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
-                >
-                  <option value="Section A">Section A (60 Students)</option>
-                  <option value="Section B">Section B (60 Students)</option>
                 </select>
               </div>
             </div>
@@ -2120,7 +2126,7 @@ export default function TimetableManagement({ user }) {
                 <h4 className="text-base font-black text-slate-900 mt-0.5">
                   {viewMode === 'faculty'
                     ? `${currentStaff?.name} (${currentStaff?.staffId || selectedStaffId})`
-                    : `Bachelor of Technology • Year ${selectedYear} (${selectedSem}) • ${selectedSection}`}
+                    : `Bachelor of Technology • Year ${selectedYear} (${selectedSem})`}
                 </h4>
               </div>
 
@@ -2292,7 +2298,7 @@ export default function TimetableManagement({ user }) {
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-emerald-600" />
-                    <span className="text-xs font-extrabold text-slate-800">Smart Classrooms Metric</span>
+                    <span className="text-xs font-extrabold text-slate-800">Classrooms Metric</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>

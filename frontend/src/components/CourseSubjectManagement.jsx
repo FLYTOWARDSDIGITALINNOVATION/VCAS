@@ -21,6 +21,8 @@ import {
   Filter, 
   Users, 
   ChevronRight, 
+  ChevronDown,
+  ChevronUp,
   AlertTriangle,
   Sparkles,
   BookMarked,
@@ -286,6 +288,15 @@ export default function CourseSubjectManagement({ user }) {
   const [deletingSubject, setDeletingSubject] = useState(null);
   const [deletingProgram, setDeletingProgram] = useState(null);
 
+  // Expanded faculty card tracking for Teaching Lead
+  const [expandedFaculty, setExpandedFaculty] = useState({});
+  const toggleExpandFaculty = (facName) => {
+    setExpandedFaculty(prev => ({
+      ...prev,
+      [facName]: !prev[facName]
+    }));
+  };
+
   // Lock background scroll when any modal is open
   React.useEffect(() => {
     const isAnyModalOpen = Boolean(
@@ -545,7 +556,7 @@ export default function CourseSubjectManagement({ user }) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Vidyapeeth_Curriculum_Catalog_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `Vivekananda_Curriculum_Catalog_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1744,9 +1755,17 @@ export default function CourseSubjectManagement({ user }) {
                   const deptMatch = !progDept || sDept.toLowerCase() === progDept.toLowerCase() || 
                     String(s.department || '').toLowerCase() === String(activeMatrixProgram?.department || '').toLowerCase() ||
                     String(s.course || '').toLowerCase() === String(activeMatrixProgram?.code || '').toLowerCase();
+                  
                   const sSemClean = String(s.sem || '').toLowerCase().replace(/[^a-z0-9]/g, '');
                   const semLabelClean = semLabel.toLowerCase().replace(/[^a-z0-9]/g, '');
-                  const semMatch = sSemClean === semLabelClean || Number(s.semester) === semNumber || Number(s.year) === Math.ceil(semNumber / 2);
+                  const subjSemNum = s.semester != null && !isNaN(Number(s.semester)) && Number(s.semester) > 0
+                    ? Number(s.semester)
+                    : (String(s.sem || '').match(/\d+/) ? parseInt(String(s.sem).match(/\d+/)[0], 10) : null);
+                  
+                  const semMatch = subjSemNum !== null
+                    ? subjSemNum === semNumber
+                    : (sSemClean ? sSemClean === semLabelClean : false);
+                    
                   return deptMatch && semMatch;
                 });
                 const totalSemCredits = semSubjects.reduce((acc, curr) => acc + (Number(curr.credits) || 0), 0);
@@ -1777,10 +1796,9 @@ export default function CourseSubjectManagement({ user }) {
                         semSubjects.map(sub => (
                           <div 
                             key={sub.id} 
-                            onClick={() => setViewingSubject(sub)}
                             className="p-3 bg-slate-50 hover:bg-blue-50/50 rounded-xl border border-slate-100 text-xs flex items-center justify-between cursor-pointer transition-all group"
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex items-center gap-2.5 min-w-0" onClick={() => setViewingSubject(sub)}>
                               <span className="font-mono font-bold text-[11px] text-blue-700 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
                                 {sub.code}
                               </span>
@@ -1794,6 +1812,13 @@ export default function CourseSubjectManagement({ user }) {
                               }`}>
                                 {sub.credits}C
                               </span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeletingSubject(sub); }}
+                                title="Delete Subject"
+                                className="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
                         ))
@@ -1841,53 +1866,88 @@ export default function CourseSubjectManagement({ user }) {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {facultyWorkload.map((fac, idx) => (
-                  <div key={idx} className="p-5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
+                {facultyWorkload.map((fac, idx) => {
+                  const isExpanded = Boolean(expandedFaculty[fac.name]);
+                  const MAX_VISIBLE = 2;
+                  const hasMore = fac.subjects.length > MAX_VISIBLE;
+                  const displayedSubjects = isExpanded ? fac.subjects : fac.subjects.slice(0, MAX_VISIBLE);
+
+                  return (
+                    <div 
+                      key={fac.name || idx} 
+                      className="p-5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between h-full min-h-[310px] shadow-xs hover:shadow-sm transition-all"
+                    >
+                      <div className="space-y-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-sm shadow-xs">
+                          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-sm shadow-xs shrink-0">
                             {fac.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                           </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-extrabold text-sm text-slate-900 leading-tight truncate" title={fac.name}>{fac.name}</h4>
+                            <span className="text-[11px] font-semibold text-slate-500 truncate block">{normalizeDeptName(fac.department)}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 bg-white p-3 rounded-xl border border-slate-200/70 text-center text-xs">
                           <div>
-                            <h4 className="font-extrabold text-sm text-slate-900 leading-tight">{fac.name}</h4>
-                            <span className="text-[11px] font-semibold text-slate-500">{normalizeDeptName(fac.department)}</span>
+                            <span className="font-black text-blue-600 text-base leading-none block">{fac.totalCredits}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">Teaching Credits</span>
+                          </div>
+                          <div>
+                            <span className="font-black text-emerald-600 text-base leading-none block">{fac.totalStudents}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">Enrolled</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Assigned Subjects ({fac.subjects.length}):
+                          </span>
+                          <div className={`space-y-1.5 ${isExpanded ? 'max-h-48 overflow-y-auto pr-1' : ''}`}>
+                            {displayedSubjects.map(s => (
+                              <div key={s.id || s.code} className="text-xs p-2 bg-white rounded-lg border border-slate-100 flex items-center justify-between gap-2 shadow-2xs">
+                                <span className="font-bold text-slate-800 truncate" title={`${s.code} – ${s.name}`}>
+                                  {s.code} – {s.name}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    setReallocatingSubject(s);
+                                    setNewFacultyName(s.faculty);
+                                  }}
+                                  title="Reallocate Faculty"
+                                  className="text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline shrink-0 cursor-pointer"
+                                >
+                                  Reassign
+                                </button>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 bg-white p-3 rounded-xl border border-slate-200/70 text-center text-xs my-3">
-                        <div>
-                          <span className="font-black text-blue-600 text-base leading-none block">{fac.totalCredits}</span>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase">Teaching Credits</span>
-                        </div>
-                        <div>
-                          <span className="font-black text-emerald-600 text-base leading-none block">{fac.totalStudents}</span>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase">Enrolled</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Subjects:</span>
-                        {fac.subjects.map(s => (
-                          <div key={s.id} className="text-xs p-2 bg-white rounded-lg border border-slate-100 flex items-center justify-between">
-                            <span className="font-bold text-slate-800 truncate mr-2">{s.code} - {s.name}</span>
-                            <button
-                              onClick={() => {
-                                setReallocatingSubject(s);
-                                setNewFacultyName(s.faculty);
-                              }}
-                              title="Reallocate Faculty"
-                              className="text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline shrink-0"
-                            >
-                              Reassign
-                            </button>
-                          </div>
-                        ))}
+                      {/* Uniform card footer with View More / View Less */}
+                      <div className="pt-3 mt-3 border-t border-slate-200/70 flex items-center justify-between">
+                        {hasMore ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandFaculty(fac.name)}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <span>{isExpanded ? 'View less' : `View more (+${fac.subjects.length - MAX_VISIBLE})`}</span>
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            {fac.subjects.length === 1 ? '1 subject allocated' : `${fac.subjects.length} subjects allocated`}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Load: {fac.totalCredits >= 18 ? 'Heavy' : fac.totalCredits >= 12 ? 'Standard' : 'Light'}
+                        </span>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -2473,6 +2533,41 @@ export default function CourseSubjectManagement({ user }) {
                 />
               </div>
 
+              {/* Lead Coordinator */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Lead Coordinator / Faculty In-Charge</label>
+                <select
+                  value={programForm.coordinator}
+                  onChange={(e) => {
+                    const selectedName = e.target.value;
+                    const foundStaff = facultyList.find(f => (f.name || f.staffName) === selectedName);
+                    setProgramForm({
+                      ...programForm,
+                      coordinator: selectedName,
+                      coordinatorEmail: foundStaff?.email || (selectedName ? `${selectedName.toLowerCase().replace(/[^a-z]/g, '')}@vcas.edu.in` : '')
+                    });
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="">-- Auto-assign Department HOD --</option>
+                  {facultyList
+                    .filter(f => !programForm.department || f.department === programForm.department)
+                    .map(f => (
+                      <option key={f.staffId || f._id || f.name} value={f.name}>
+                        {f.name} ({f.role || f.designation || 'Faculty'})
+                      </option>
+                    ))}
+                  {/* Fallback to show all faculty if needed */}
+                  {facultyList.filter(f => f.department === programForm.department).length === 0 && (
+                    facultyList.map(f => (
+                      <option key={f.staffId || f._id || f.name} value={f.name}>
+                        {f.name} ({f.department || 'General'} - {f.role || f.designation || 'Faculty'})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
               {/* Buttons */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
@@ -2530,13 +2625,22 @@ export default function CourseSubjectManagement({ user }) {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Select New Faculty In-Charge *</label>
-              <input
-                type="text"
+              <select
                 value={newFacultyName}
                 onChange={(e) => setNewFacultyName(e.target.value)}
-                placeholder="e.g. Prof. Ramesh Kumar"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
-              />
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
+              >
+                <option value="">-- Select Faculty In-Charge --</option>
+                {facultyList && facultyList.length > 0 ? (
+                  facultyList.map((fac) => (
+                    <option key={fac._id || fac.id || fac.name} value={fac.name || fac.staffName}>
+                      {fac.name || fac.staffName} {fac.designation ? `(${fac.designation})` : fac.role ? `(${fac.role})` : ''}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>No staff records found</option>
+                )}
+              </select>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">

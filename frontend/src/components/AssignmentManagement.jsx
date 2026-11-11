@@ -297,6 +297,23 @@ export default function AssignmentManagement({ user }) {
     fetchAssignments();
   }, []);
 
+  // New Assignment Form State
+  const [assignmentForm, setAssignmentForm] = useState({
+    title: '',
+    code: '',
+    subject: '',
+    department: '',
+    year: 1,
+    sem: 'Sem 1',
+    faculty: '',
+    dueDate: '',
+    dueTime: '',
+    maxMarks: '',
+    weightage: '',
+    description: '',
+    type: 'Code & Report'
+  });
+
   useEffect(() => {
     if (!isSuperAdmin && !isAdminUser && currentUserDept && !scopedDepartments.includes(assignmentForm.department)) {
       setAssignmentForm(prev => ({ ...prev, department: currentUserDept }));
@@ -319,23 +336,6 @@ export default function AssignmentManagement({ user }) {
       if (scrollContainer) scrollContainer.style.overflow = 'auto';
     };
   }, [isAddAssignmentOpen, gradingSubmission]);
-
-  // New Assignment Form State
-  const [assignmentForm, setAssignmentForm] = useState({
-    title: '',
-    code: '',
-    subject: '',
-    department: '',
-    year: 1,
-    sem: 'Sem 1',
-    faculty: '',
-    dueDate: '',
-    dueTime: '',
-    maxMarks: '',
-    weightage: '',
-    description: '',
-    type: 'Code & Report'
-  });
 
   // Grading form state inside modal
   const [gradeInput, setGradeInput] = useState(0);

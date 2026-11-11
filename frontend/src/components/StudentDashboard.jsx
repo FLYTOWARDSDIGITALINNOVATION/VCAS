@@ -188,14 +188,14 @@ export default function StudentDashboard({ student, onLogout }) {
   // Student fields with safe defaults
   const regNo = student?.regNo || student?.studentId || student?.id || 'REG2026001';
   const rollNo = student?.rollNo || '—';
-  const year = student?.year || '1st Year';
+  const year = student?.currentYearLabel || student?.year || '1st Year';
   const loginId = student?.loginId || regNo;
   const name = student?.name || student?.fullName || 'Student Name';
   const dob = student?.dob || '—';
   const department = student?.department || student?.course || 'Computer Science';
   const course = student?.course || 'B.Sc. COMPUTER SCIENCE';
-  const sem = student?.sem || student?.semester || '1st Sem';
-  const status = student?.status || 'Active';
+  const sem = student?.currentSemLabel || student?.sem || student?.semester || '1st Sem';
+  const status = student?.dynamicStatus || student?.status || 'Active';
   const fallbackAttendance = student?.attendance !== undefined ? student.attendance : 85;
   const attendance = attSummary.totalClasses > 0 ? attSummary.percentage : fallbackAttendance;
   const feeStatus = student?.feeStatus || 'Paid';
