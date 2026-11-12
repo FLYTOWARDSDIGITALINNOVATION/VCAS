@@ -179,7 +179,7 @@ export default function AssignmentManagement({ user }) {
       department: a.department || 'Computer Science',
       year: a.year || (a.semester ? Math.ceil(a.semester / 2) : 3),
       sem: a.sem || (a.semester ? `Sem ${a.semester}` : 'Sem 5'),
-      faculty: a.staffName || (a.staffId ? `Staff (${a.staffId})` : 'Faculty'),
+      faculty: (a.staffId === 'ADMIN' && !a.staffName) ? (currentUser?.name || currentUser?.fullName || 'Admin') : (a.staffName || (a.staffId ? `Staff (${a.staffId})` : 'Faculty')),
       staffId: a.staffId || '',
       staffName: a.staffName || '',
       dueDate: a.dueDate || '',
@@ -360,7 +360,7 @@ export default function AssignmentManagement({ user }) {
     batch: '2024-2027',
     year: '1st Year',
     sem: 'Sem 1',
-    faculty: 'Admin',
+    faculty: currentUser?.name || currentUser?.fullName || 'Admin',
     dueDate: '',
     dueTime: '11:59 PM',
     maxMarks: 20,
@@ -513,7 +513,7 @@ export default function AssignmentManagement({ user }) {
     batch: '2024-2027',
     year: '1st Year',
     sem: 'Sem 1',
-    faculty: 'Admin',
+    faculty: currentUser?.name || currentUser?.fullName || 'Admin',
     dueDate: '',
     dueTime: '11:59 PM',
     maxMarks: 20,
@@ -647,8 +647,8 @@ export default function AssignmentManagement({ user }) {
       description: assignmentForm.description || '',
       category: assignmentForm.category || 'Regular',
       projectPhase: assignmentForm.category === 'Project' ? (assignmentForm.projectPhase || 'Phase 1 - Topic & Problem Statement') : '',
-      staffName: assignmentForm.faculty || 'Admin',
-      staffId: 'ADMIN',
+      staffName: currentUser?.name || currentUser?.fullName || 'Admin',
+      staffId: currentUser?.staffId || currentUser?.id || currentUser?.username || 'ADMIN',
       attachmentName: assignmentForm.attachmentName || '',
       attachmentData: assignmentForm.attachmentData || '',
       attachmentSize: assignmentForm.attachmentSize || '',
@@ -1302,7 +1302,7 @@ export default function AssignmentManagement({ user }) {
                         {a.staffId && (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-200">
                             <Users className="w-3 h-3 text-purple-500" />
-                            Staff: {a.staffName || a.faculty} ({a.staffId})
+                            Staff: {a.staffName || a.faculty} {a.staffId && a.staffId !== 'ADMIN' ? `(${a.staffId})` : ''}
                           </span>
                         )}
                       </div>
@@ -1555,7 +1555,7 @@ export default function AssignmentManagement({ user }) {
                   <h4 className="text-xs sm:text-sm font-extrabold text-purple-950 flex flex-wrap items-center gap-2">
                     <span>Staff Assigned Coursework — View-Only Mode</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-200/60 text-purple-800 rounded-md border border-purple-300/60">
-                      Faculty: {currentAssignment?.staffName || currentAssignment?.faculty} {currentAssignment?.staffId ? `(${currentAssignment.staffId})` : ''}
+                      Faculty: {currentAssignment?.staffName || currentAssignment?.faculty} {currentAssignment?.staffId && currentAssignment.staffId !== 'ADMIN' ? `(${currentAssignment.staffId})` : ''}
                     </span>
                   </h4>
                   <p className="text-[11px] text-purple-800/80 font-medium mt-0.5">
@@ -2012,7 +2012,7 @@ export default function AssignmentManagement({ user }) {
                         subject: chosen,
                         code: matched ? (matched.code || matched.subjectCode || prev.code) : prev.code,
                         department: (matched && (matched.department || matched.dept)) ? (matched.department || matched.dept) : prev.department,
-                        faculty: (matched && (matched.faculty || matched.staffName)) ? (matched.faculty || matched.staffName) : prev.faculty
+                        faculty: prev.faculty // keep creator identity; do not overwrite from subject catalog
                       }));
                     }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
