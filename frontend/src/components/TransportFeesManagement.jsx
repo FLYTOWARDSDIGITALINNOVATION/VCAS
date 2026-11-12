@@ -16,6 +16,7 @@ export default function TransportFeesManagement({
   const [tableSearchTerm, setTableSearchTerm] = useState('');
   const [tableDeptFilter, setTableDeptFilter] = useState('All');
   const [tableYearFilter, setTableYearFilter] = useState('All');
+  const [tableSemFilter, setTableSemFilter] = useState('All');
   const [tableBatchFilter, setTableBatchFilter] = useState('All');
 
   // Fetch only admin-added departments
@@ -58,13 +59,15 @@ export default function TransportFeesManagement({
       setEntryFormData(prev => ({
         ...prev,
         studentName: '',
-        rollNo: ''
+        rollNo: '',
+        studentKey: '',
+        studentMongoId: ''
       }));
       return;
     }
 
     const found = (studentOptions || []).find(s => 
-      s.rollNo === selectedKey || s.id === selectedKey || s.name === selectedKey
+      s.mongoId === selectedKey || s._id === selectedKey || s.rollNo === selectedKey || s.id === selectedKey || s.name === selectedKey
     );
 
     if (found) {
@@ -85,6 +88,8 @@ export default function TransportFeesManagement({
         ...prev,
         studentName: found.name,
         rollNo: found.rollNo || found.id,
+        studentKey: found.mongoId || found._id || found.rollNo || found.id,
+        studentMongoId: found.mongoId || found._id || '',
         course: courseValue,
         department: departmentValue,
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
@@ -170,9 +175,23 @@ export default function TransportFeesManagement({
       if (s === 'i' || s.includes('1') || s.startsWith('first')) return 1;
       return 0;
     };
+    const parseSemNum = (v) => {
+      if (!v) return 0;
+      const s = String(v).toLowerCase().trim();
+      const m = s.match(/(?:sem(?:ester)?\s*|[^\d]*)(\d+)/i);
+      if (m && m[1]) return parseInt(m[1], 10);
+      if (s.includes('vi') || s.includes('6')) return 6;
+      if (s.includes('v') || s.includes('5')) return 5;
+      if (s.includes('iv') || s.includes('4')) return 4;
+      if (s.includes('iii') || s.includes('3')) return 3;
+      if (s.includes('ii') || s.includes('2')) return 2;
+      if (s.includes('i') || s.includes('1')) return 1;
+      return 0;
+    };
     const matchesYear = tableYearFilter === 'All' || parseYearNum(r.year) === parseYearNum(tableYearFilter);
+    const matchesSem = tableSemFilter === 'All' || parseSemNum(r.sem || r.semester || (r.year ? (parseYearNum(r.year) * 2 - 1) : 1)) === parseSemNum(tableSemFilter);
     const matchesBatch = tableBatchFilter === 'All' || String(r.batch || r.academicYear || '').toLowerCase().includes(tableBatchFilter.toLowerCase());
-    return matchesSearch && matchesDept && matchesYear && matchesBatch;
+    return matchesSearch && matchesDept && matchesYear && matchesSem && matchesBatch;
   });
 
   const handleDownloadReceipt = (r) => {
@@ -367,14 +386,14 @@ export default function TransportFeesManagement({
                     )}
                   </div>
                   <select
-                    value={entryFormData.rollNo || ''}
+                    value={entryFormData.studentKey || entryFormData.studentMongoId || entryFormData.rollNo || ''}
                     onChange={(e) => handleStudentSelect(e.target.value)}
                     className="w-full p-2.5 bg-emerald-50/50 border border-emerald-300 rounded-xl text-slate-900 font-bold focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
                     required
                   >
                     <option value="">-- Select Student ({filteredStudentOptions.length} available) --</option>
                     {filteredStudentOptions.map((s, idx) => (
-                      <option key={idx} value={s.rollNo || s.id}>
+                      <option key={s.mongoId || s._id || idx} value={s.mongoId || s._id || s.rollNo || s.id}>
                         {s.name} ({s.rollNo || s.id}) • {s.course}
                       </option>
                     ))}
@@ -778,6 +797,21 @@ export default function TransportFeesManagement({
               <option value="I">I Year</option>
               <option value="II">II Year</option>
               <option value="III">III Year</option>
+            </select>
+
+            {/* Semester Filter */}
+            <select
+              value={tableSemFilter}
+              onChange={(e) => setTableSemFilter(e.target.value)}
+              className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Sems</option>
+              <option value="1">1st Sem</option>
+              <option value="2">2nd Sem</option>
+              <option value="3">3rd Sem</option>
+              <option value="4">4th Sem</option>
+              <option value="5">5th Sem</option>
+              <option value="6">6th Sem</option>
             </select>
 
             {/* Batch Filter */}

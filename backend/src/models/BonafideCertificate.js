@@ -50,6 +50,18 @@ const bonafideCertificateSchema = new mongoose.Schema({
     type: String,
     default: 'D/o' // 'D/o' or 'S/o'
   },
+  parentType: {
+    type: String,
+    default: 'Father'
+  },
+  fatherName: {
+    type: String,
+    default: ''
+  },
+  motherName: {
+    type: String,
+    default: ''
+  },
   parentName: {
     type: String,
     required: [true, 'Parent Name is required'],

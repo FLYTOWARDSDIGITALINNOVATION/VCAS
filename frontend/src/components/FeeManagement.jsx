@@ -42,6 +42,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   const [courseFilter, setCourseFilter] = useState('All');
   const [feeTypeFilter, setFeeTypeFilter] = useState('All');
   const [yearFilter, setYearFilter] = useState('All');
+  const [semFilter, setSemFilter] = useState('All');
   const [batchFilter, setBatchFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('All');
@@ -192,16 +193,22 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
             const rawYear = st.year || st.academicYearNum || (st.semester ? Math.ceil(Number(st.semester) / 2) : 1);
             const rawBatch = st.batch || st.academicYear || (rawYear === 1 ? '2025-2028' : rawYear === 2 ? '2024-2027' : '2023-2026');
             const rawDept = st.department || st.course || 'Computer Science';
+            const rawSem = st.sem || st.semester || (rawYear === 1 ? '1st Sem' : rawYear === 2 ? '3rd Sem' : '5th Sem');
 
             return {
               id: sid,
-              mongoId: st._id || st.id,
+              mongoId: String(st._id || st.id || `student_${idx}`),
               rollNo: st.rollNo,
+              regNo: st.regNo,
+              studentId: st.studentId,
+              admNo: st.admNo,
               name: st.name || st.fullName || 'Student',
               avatar: (st.name || 'S').charAt(0).toUpperCase(),
               course: rawDept,
               department: rawDept,
               year: rawYear,
+              sem: rawSem,
+              semester: rawSem,
               batch: rawBatch,
               academicYear: rawBatch,
               feeType: 'Tuition Fees',
@@ -220,13 +227,13 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           });
 
           const mergedMap = new Map();
-          mapped.forEach(rec => {
-            const key = String(rec.rollNo || rec.id || rec.name || '').trim().toLowerCase();
+          mapped.forEach((rec, idx) => {
+            const key = String(rec.mongoId || rec._id || rec.studentId || rec.regNo || `${rec.rollNo}_${rec.name}_${idx}`).trim().toLowerCase();
             if (key) mergedMap.set(key, rec);
           });
 
-          savedLocalRecords.forEach(rec => {
-            const key = String(rec.rollNo || rec.id || rec.name || '').trim().toLowerCase();
+          savedLocalRecords.forEach((rec, idx) => {
+            const key = String(rec.mongoId || rec._id || rec.studentId || rec.regNo || `${rec.rollNo}_${rec.name}_${idx}`).trim().toLowerCase();
             if (!key) return;
             const existing = mergedMap.get(key);
 
@@ -237,15 +244,18 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 id: existing.id || rec.id,
                 mongoId: existing.mongoId || rec.mongoId,
                 rollNo: existing.rollNo || rec.rollNo,
+                regNo: existing.regNo || rec.regNo,
                 name: existing.name || rec.name,
                 department: existing.department || rec.department,
                 course: existing.course || rec.course,
                 batch: existing.batch || rec.batch,
                 academicYear: existing.academicYear || rec.academicYear,
                 year: existing.year || rec.year,
+                sem: existing.sem || rec.sem,
+                semester: existing.semester || rec.semester,
                 feeBreakdown: rec.feeBreakdown || existing.feeBreakdown,
               });
-            } else {
+            } else if (rec.mongoId) {
               mergedMap.set(key, rec);
             }
           });
@@ -375,9 +385,13 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       rollNo: row.rollNo || row.id || '',
       course: row.course || '',
       department: row.department || row.course || '',
+      feeType: row.feeType || 'Tuition Fees',
       tuition: Number(row.feeBreakdown?.tuition?.paid || row.paidFee || 0),
       exam: Number(row.feeBreakdown?.exam?.paid || 0),
       transport: Number(row.feeBreakdown?.transport?.paid || 0),
+      totalFee: Number(row.totalFee || 0),
+      paidFee: Number(row.paidFee || 0),
+      pendingFee: Number(row.pendingFee || 0),
       dueDate: row.dueDate || '',
       status: row.status || 'Pending'
     });
@@ -398,11 +412,12 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       const tuitionPaid = Number(inlineEditState.tuition || 0);
       const examPaid = Number(inlineEditState.exam || 0);
       const transportPaid = Number(inlineEditState.transport || 0);
-      const totalPaid = tuitionPaid + examPaid + transportPaid;
+      const computedTotal = tuitionPaid + examPaid + transportPaid;
+      const explicitTotal = inlineEditState.totalFee !== undefined && inlineEditState.totalFee !== '' ? Number(inlineEditState.totalFee) : (rec.totalFee || computedTotal);
+      const explicitPaid = inlineEditState.paidFee !== undefined && inlineEditState.paidFee !== '' ? Number(inlineEditState.paidFee) : computedTotal;
+      const explicitPending = Math.max(0, explicitTotal - explicitPaid);
       const rawStatus = String(inlineEditState.status || '').toLowerCase();
-      const nextStatus = rawStatus === 'paid' ? 'Paid' : rawStatus === 'pending' ? 'Pending' : (totalPaid > 0 ? 'Pending' : 'Paid');
-      const effectivePaid = nextStatus === 'Pending' ? 0 : totalPaid;
-      const effectivePending = nextStatus === 'Pending' ? totalPaid : 0;
+      const nextStatus = rawStatus === 'paid' ? 'Paid' : rawStatus === 'pending' ? 'Pending' : (rawStatus === 'overdue' ? 'Overdue' : (explicitPaid >= explicitTotal && explicitTotal > 0 ? 'Paid' : 'Pending'));
 
       return {
         ...rec,
@@ -411,12 +426,13 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         rollNo: inlineEditState.rollNo || rec.rollNo || inlineEditState.id || rec.id,
         course: inlineEditState.course || rec.course || rec.department || 'UG Program',
         department: inlineEditState.department || rec.department || rec.course || 'UG Program',
-        paidFee: effectivePaid,
-        paidFeeDisplay: formatINR(effectivePaid),
-        totalFee: totalPaid,
-        totalFeeDisplay: formatINR(totalPaid),
-        pendingFee: effectivePending,
-        pendingFeeDisplay: effectivePending > 0 ? formatINR(effectivePending) : '₹0',
+        feeType: inlineEditState.feeType || rec.feeType || 'Tuition Fees',
+        paidFee: explicitPaid,
+        paidFeeDisplay: formatINR(explicitPaid),
+        totalFee: explicitTotal,
+        totalFeeDisplay: formatINR(explicitTotal),
+        pendingFee: explicitPending,
+        pendingFeeDisplay: explicitPending > 0 ? formatINR(explicitPending) : '₹0',
         dueDate: inlineEditState.dueDate || rec.dueDate || '',
         status: nextStatus,
         feeBreakdown: {
@@ -1133,6 +1149,32 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                     recYearRaw.includes(yearFilter.toLowerCase());
     }
 
+    let matchesSem = true;
+    if (semFilter !== 'All') {
+      const parseSemNum = (v) => {
+        if (!v) return 0;
+        const s = String(v).toLowerCase().trim();
+        const m = s.match(/(?:sem(?:ester)?\s*|[^\d]*)(\d+)/i);
+        if (m && m[1]) return parseInt(m[1], 10);
+        if (s.includes('vi') || s.includes('6')) return 6;
+        if (s.includes('v') || s.includes('5')) return 5;
+        if (s.includes('iv') || s.includes('4')) return 4;
+        if (s.includes('iii') || s.includes('3')) return 3;
+        if (s.includes('ii') || s.includes('2')) return 2;
+        if (s.includes('i') || s.includes('1')) return 1;
+        return 0;
+      };
+      const parseYearNum = (v) => {
+        const s = String(v || '').toLowerCase().trim();
+        if (s === 'iii' || s.includes('3') || s.startsWith('third')) return 3;
+        if (s === 'ii' || s.includes('2') || s.startsWith('second')) return 2;
+        if (s === 'i' || s.includes('1') || s.startsWith('first')) return 1;
+        return 0;
+      };
+      const recSemNum = parseSemNum(rec.sem || rec.semester || (rec.year ? (parseYearNum(rec.year) * 2 - 1) : 1));
+      matchesSem = recSemNum === parseSemNum(semFilter);
+    }
+
     let matchesBatch = true;
     if (batchFilter !== 'All') {
       const bFilter = batchFilter.replace(/[^0-9]/g, '');
@@ -1162,7 +1204,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       }
     }
 
-    return matchesSearch && matchesStatus && matchesCourse && matchesFeeType && matchesYear && matchesBatch && matchesDate && matchesPayment;
+    return matchesSearch && matchesStatus && matchesCourse && matchesFeeType && matchesYear && matchesSem && matchesBatch && matchesDate && matchesPayment;
   });
 
   return (
@@ -1489,6 +1531,23 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               </div>
 
               <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Sem:</span>
+                <select
+                  value={semFilter}
+                  onChange={(e) => setSemFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="All">All Semesters</option>
+                  <option value="1">1st Sem</option>
+                  <option value="2">2nd Sem</option>
+                  <option value="3">3rd Sem</option>
+                  <option value="4">4th Sem</option>
+                  <option value="5">5th Sem</option>
+                  <option value="6">6th Sem</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500 font-medium">Batch:</span>
                 <select
                   value={batchFilter}
@@ -1530,7 +1589,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 </select>
               </div>
 
-              {(searchTerm || feeTypeFilter !== 'All' || statusFilter !== 'All' || courseFilter !== 'All' || yearFilter !== 'All' || batchFilter !== 'All' || dateFilter || paymentFilter !== 'All') && (
+              {(searchTerm || feeTypeFilter !== 'All' || statusFilter !== 'All' || courseFilter !== 'All' || yearFilter !== 'All' || semFilter !== 'All' || batchFilter !== 'All' || dateFilter || paymentFilter !== 'All') && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1539,6 +1598,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                     setStatusFilter('All');
                     setCourseFilter('All');
                     setYearFilter('All');
+                    setSemFilter('All');
                     setBatchFilter('All');
                     setDateFilter('');
                     setPaymentFilter('All');
@@ -1583,46 +1643,126 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                         <tr key={rowKey} className="bg-amber-50/60">
                           <td colSpan="12" className="p-4">
                             <div className="rounded-2xl border border-amber-200 bg-white p-4 shadow-xs">
-                              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 mb-4">
-                                <input
-                                  value={inlineEditState.name || ''}
-                                  onChange={(e) => handleInlineEditChange('name', e.target.value)}
-                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
-                                  placeholder="Student name"
-                                />
-                                <input
-                                  value={inlineEditState.rollNo || ''}
-                                  onChange={(e) => handleInlineEditChange('rollNo', e.target.value)}
-                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
-                                  placeholder="Roll no"
-                                />
-                                <input
-                                  value={inlineEditState.course || ''}
-                                  onChange={(e) => handleInlineEditChange('course', e.target.value)}
-                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
-                                  placeholder="Course"
-                                />
-                                <input
-                                  type="number"
-                                  value={inlineEditState.tuition || 0}
-                                  onChange={(e) => handleInlineEditChange('tuition', Number(e.target.value))}
-                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
-                                  placeholder="Tuition"
-                                />
-                                <input
-                                  type="number"
-                                  value={inlineEditState.exam || 0}
-                                  onChange={(e) => handleInlineEditChange('exam', Number(e.target.value))}
-                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
-                                  placeholder="Exam"
-                                />
-                                <input
-                                  type="number"
-                                  value={inlineEditState.transport || 0}
-                                  onChange={(e) => handleInlineEditChange('transport', Number(e.target.value))}
-                                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
-                                  placeholder="Transport"
-                                />
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Student Name</label>
+                                  <input
+                                    value={inlineEditState.name || ''}
+                                    onChange={(e) => handleInlineEditChange('name', e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                    placeholder="Student name"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Roll No</label>
+                                  <input
+                                    value={inlineEditState.rollNo || ''}
+                                    onChange={(e) => handleInlineEditChange('rollNo', e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                    placeholder="Roll no"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Course / Dept</label>
+                                  <input
+                                    value={inlineEditState.course || ''}
+                                    onChange={(e) => handleInlineEditChange('course', e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                    placeholder="Course"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Fee Type</label>
+                                  <select
+                                    value={inlineEditState.feeType || 'Tuition Fees'}
+                                    onChange={(e) => handleInlineEditChange('feeType', e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500 cursor-pointer"
+                                  >
+                                    <option value="Tuition Fees">Tuition Fees</option>
+                                    <option value="Exam Fees">Exam Fees</option>
+                                    <option value="Transport Fees">Transport Fees</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Tuition (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={inlineEditState.tuition || 0}
+                                    onChange={(e) => handleInlineEditChange('tuition', Number(e.target.value))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                    placeholder="Tuition"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Exam (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={inlineEditState.exam || 0}
+                                    onChange={(e) => handleInlineEditChange('exam', Number(e.target.value))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                    placeholder="Exam"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Transport (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={inlineEditState.transport || 0}
+                                    onChange={(e) => handleInlineEditChange('transport', Number(e.target.value))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                    placeholder="Transport"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Total Fee (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={inlineEditState.totalFee !== undefined ? inlineEditState.totalFee : ((Number(inlineEditState.tuition) || 0) + (Number(inlineEditState.exam) || 0) + (Number(inlineEditState.transport) || 0))}
+                                    onChange={(e) => handleInlineEditChange('totalFee', Number(e.target.value))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                    placeholder="Total Fee"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Paid Fee (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={inlineEditState.paidFee !== undefined ? inlineEditState.paidFee : ((Number(inlineEditState.tuition) || 0) + (Number(inlineEditState.exam) || 0) + (Number(inlineEditState.transport) || 0))}
+                                    onChange={(e) => handleInlineEditChange('paidFee', Number(e.target.value))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500"
+                                    placeholder="Paid Fee"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Pending Fee (₹)</label>
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    value={`₹${Math.max(0, (Number(inlineEditState.totalFee ?? ((Number(inlineEditState.tuition) || 0) + (Number(inlineEditState.exam) || 0) + (Number(inlineEditState.transport) || 0))) - Number(inlineEditState.paidFee ?? ((Number(inlineEditState.tuition) || 0) + (Number(inlineEditState.exam) || 0) + (Number(inlineEditState.transport) || 0))))).toLocaleString('en-IN')}`}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-rose-600 bg-rose-50/50 cursor-not-allowed"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Due Date</label>
+                                  <input
+                                    type="date"
+                                    value={inlineEditState.dueDate || ''}
+                                    onChange={(e) => handleInlineEditChange('dueDate', e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500 cursor-pointer"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Status</label>
+                                  <select
+                                    value={inlineEditState.status || 'Pending'}
+                                    onChange={(e) => handleInlineEditChange('status', e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:border-blue-500 cursor-pointer"
+                                  >
+                                    <option value="Paid">✓ Paid</option>
+                                    <option value="Pending">⏳ Pending</option>
+                                    <option value="Overdue">Overdue</option>
+                                  </select>
+                                </div>
                               </div>
                               <div className="flex justify-end gap-2">
                                 <button
