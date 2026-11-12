@@ -46,12 +46,21 @@ exports.createPlan = async (req, res) => {
       subjectCode,
       academicYear,
       yearSemester,
-      topics
+      topics,
+      status
     } = req.body;
 
     if (!staffId || !subjectName) {
       return res.status(400).json({ success: false, message: 'Staff ID and Subject Name are required' });
     }
+
+    const sanitizedTopics = Array.isArray(topics)
+      ? topics.map(t => ({
+          ...t,
+          sign: t.sign || t.status || 'Pending',
+          status: t.status || t.sign || 'Pending'
+        }))
+      : [];
 
     const newPlan = await CoursePlan.create({
       staffId,
@@ -61,7 +70,8 @@ exports.createPlan = async (req, res) => {
       subjectCode: subjectCode || '',
       academicYear: academicYear || '2026-2027',
       yearSemester: yearSemester || 'I / I',
-      topics: Array.isArray(topics) ? topics : []
+      status: status || 'In Progress',
+      topics: sanitizedTopics
     });
 
     res.status(201).json({ success: true, data: newPlan, message: 'Course Plan created successfully' });
@@ -73,9 +83,17 @@ exports.createPlan = async (req, res) => {
 // PUT /api/course-plans/:id
 exports.updatePlan = async (req, res) => {
   try {
+    const updateData = { ...req.body };
+    if (Array.isArray(updateData.topics)) {
+      updateData.topics = updateData.topics.map(t => ({
+        ...t,
+        sign: t.sign || t.status || 'Pending',
+        status: t.status || t.sign || 'Pending'
+      }));
+    }
     const updated = await CoursePlan.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: updateData },
       { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ success: false, message: 'Course Plan not found' });

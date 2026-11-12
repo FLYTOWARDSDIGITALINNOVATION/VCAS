@@ -4,11 +4,12 @@ const topicEntrySchema = new mongoose.Schema({
   sNo:            { type: Number, default: 1 },
   plannedDate:    { type: String, default: '' },
   noOfHours:      { type: Number, default: 1 },
-  topic:          { type: String, required: true },
+  topic:          { type: String, default: '' },
   executionDate:  { type: String, default: '' },
   executionHours: { type: Number, default: 0 },
   deviation:      { type: String, default: '' },
-  sign:           { type: String, default: 'Pending' }
+  sign:           { type: String, default: 'Pending' },
+  status:         { type: String, default: 'Pending' }
 }, { _id: true });
 
 const coursePlanSchema = new mongoose.Schema({
@@ -19,6 +20,7 @@ const coursePlanSchema = new mongoose.Schema({
   subjectCode:  { type: String, default: '' },
   academicYear: { type: String, default: '2026-2027' },
   yearSemester: { type: String, default: 'I / I' },
+  status:       { type: String, default: 'In Progress' },
   topics:       [topicEntrySchema]
 }, { timestamps: true });
 

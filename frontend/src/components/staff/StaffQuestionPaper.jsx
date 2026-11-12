@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { API_BASE, BACKEND_URL } from '../../apiConfig';
+import React, { useState, useEffect, useMemo } from "react";
+import { API_BASE, BACKEND_URL, getKnownDepartments } from '../../apiConfig';
 import {
   FileText, Plus, Trash2, Edit3, Eye, Save, CheckCircle,
   ChevronDown, ChevronRight, BookOpen, Layers, X, AlertCircle,
   Archive, Send, RotateCcw, List, Clock, Award, Download,
   Table as TableIcon, Image as ImageIcon, UploadCloud, Check,
-  MinusCircle, PlusCircle
+  MinusCircle, PlusCircle, Filter, Search
 } from "lucide-react";
 
 const API = `${API_BASE}/question-papers`;
@@ -20,6 +20,14 @@ const EXAM_TYPE_OPTIONS = [
 ];
 const EXAM_TYPES = EXAM_TYPE_OPTIONS.map(o => o.value);
 const QUESTION_TYPES = ["MCQ", "5 Mark", "8 Mark"];
+
+const YEAR_OPTIONS = [
+  { value: 1, label: "1st Year (Year 1)" },
+  { value: 2, label: "2nd Year (Year 2)" },
+  { value: 3, label: "3rd Year (Year 3)" },
+  { value: 4, label: "4th Year (Year 4)" }
+];
+
 const STATUS_COLORS = {
   Draft:     "bg-amber-100 text-amber-700 border-amber-200",
   Published: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -79,8 +87,110 @@ export default function StaffQuestionPaper({ staffUser }) {
   const [toast, setToast] = useState(null);
   const [expandedSection, setExpandedSection] = useState(0);
   const [deleteId, setDeleteId] = useState(null);
+  const [subjectCatalog, setSubjectCatalog] = useState([]);
+  const [customSubjectCodeMode, setCustomSubjectCodeMode] = useState(false);
+  const [customSubjectNameMode, setCustomSubjectNameMode] = useState(false);
 
-  useEffect(() => { fetchPapers(); }, []);
+  // Department and Year dropdown state
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [customDeptMode, setCustomDeptMode] = useState(false);
+
+  // Filter dropdown state for Question Paper list
+  const [filterDepartment, setFilterDepartment] = useState("ALL");
+  const [filterYear, setFilterYear] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    fetchPapers();
+    fetchSubjectsCatalog();
+  }, [staffUser?.staffId]);
+
+  const fetchSubjectsCatalog = async () => {
+    try {
+      const staffId = staffUser?.staffId || '';
+      const dept = staffUser?.department || '';
+      const [subjectsRes, classesRes, deptClassesRes, allClassesRes, deptsRes] = await Promise.all([
+        fetch(`${API_BASE}/subjects`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
+        fetch(`${API_BASE}/classes/staff/${encodeURIComponent(staffId)}`).then(r => r.json()).catch(() => ({ success: false, classes: [] })),
+        fetch(`${API_BASE}/classes?dept=${encodeURIComponent(dept)}`).then(r => r.json()).catch(() => ({ success: false, classes: [] })),
+        fetch(`${API_BASE}/classes`).then(r => r.json()).catch(() => ({ success: false, classes: [] })),
+        fetch(`${API_BASE}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] }))
+      ]);
+
+      const depts = Array.isArray(deptsRes?.data) ? deptsRes.data : (Array.isArray(deptsRes) ? deptsRes : []);
+      const deptNames = depts.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean);
+      if (deptNames.length > 0) {
+        setDepartmentsList(deptNames);
+      }
+
+      const subjectsList = Array.isArray(subjectsRes?.data) ? subjectsRes.data : (Array.isArray(subjectsRes) ? subjectsRes : []);
+      const staffClasses = Array.isArray(classesRes?.classes) ? classesRes.classes : (Array.isArray(classesRes?.data) ? classesRes.data : []);
+      const deptClasses = Array.isArray(deptClassesRes?.classes) ? deptClassesRes.classes : (Array.isArray(deptClassesRes?.data) ? deptClassesRes.data : []);
+      const allClasses = Array.isArray(allClassesRes?.classes) ? allClassesRes.classes : (Array.isArray(allClassesRes?.data) ? allClassesRes.data : []);
+
+      const subMap = new Map();
+      [...staffClasses, ...deptClasses, ...allClasses].forEach(c => {
+        const code = String(c?.code || c?.subjectCode || '').trim().toUpperCase();
+        if (code) {
+          subMap.set(code, {
+            code,
+            name: c.name || c.subjectName || code,
+            department: c.dept || c.department || dept,
+            semester: c.semester || 1
+          });
+        }
+      });
+      subjectsList.forEach(s => {
+        const code = String(s?.code || s?.subjectCode || '').trim().toUpperCase();
+        if (code && !subMap.has(code)) {
+          subMap.set(code, {
+            code,
+            name: s.name || s.subjectName || code,
+            department: s.department || s.dept || dept,
+            semester: s.sem ? parseInt(String(s.sem).replace(/\D/g, '')) || 1 : (s.semester || 1)
+          });
+        }
+      });
+      setSubjectCatalog(Array.from(subMap.values()));
+    } catch (e) {
+      console.warn("Could not load subject catalog for question papers", e);
+    }
+  };
+
+  // Dynamically aggregate all available departments for dropdowns
+  const allDepartments = useMemo(() => {
+    const set = new Set();
+    getKnownDepartments().forEach(d => { if (d) set.add(d); });
+    if (staffUser?.department) set.add(staffUser.department);
+    departmentsList.forEach(d => { if (d) set.add(typeof d === 'string' ? d : d?.name); });
+    subjectCatalog.forEach(s => { if (s.department) set.add(s.department); });
+    papers.forEach(p => { if (p.department) set.add(p.department); });
+    if (set.size === 0) {
+      ["Computer Science", "Information Technology", "Commerce", "Business Administration", "Mathematics", "English", "Physics", "Chemistry"].forEach(d => set.add(d));
+    }
+    return Array.from(set).filter(Boolean).sort();
+  }, [staffUser?.department, departmentsList, subjectCatalog, papers]);
+
+  // Filtered Question Papers based on Department, Year, Status, and Search
+  const filteredPapers = useMemo(() => {
+    return papers.filter(p => {
+      if (filterDepartment !== "ALL" && p.department !== filterDepartment) return false;
+      if (filterYear !== "ALL") {
+        const pYear = String(p.year || (p.semester <= 2 ? 1 : p.semester <= 4 ? 2 : p.semester <= 6 ? 3 : 4));
+        if (pYear !== String(filterYear)) return false;
+      }
+      if (filterStatus !== "ALL" && p.status !== filterStatus) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const code = (p.subjectCode || "").toLowerCase();
+        const name = (p.subjectName || "").toLowerCase();
+        const dept = (p.department || "").toLowerCase();
+        if (!code.includes(q) && !name.includes(q) && !dept.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [papers, filterDepartment, filterYear, filterStatus, searchQuery]);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -360,12 +470,126 @@ export default function StaffQuestionPaper({ staffUser }) {
           <h3 className="text-xs font-extrabold uppercase text-slate-400 tracking-wider">Exam Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
             <div>
-              <label className="block text-slate-700 font-bold mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
-              <input value={current.subjectCode} onChange={e => updateField("subjectCode", e.target.value.toUpperCase())} placeholder="e.g. CS301 (optional)" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase" />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-slate-700 font-bold">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
+                <button
+                  type="button"
+                  onClick={() => setCustomSubjectCodeMode(prev => !prev)}
+                  className="text-[10px] text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
+                >
+                  {customSubjectCodeMode ? 'Choose from list' : 'Custom code'}
+                </button>
+              </div>
+              {customSubjectCodeMode ? (
+                <input
+                  value={current.subjectCode}
+                  onChange={e => updateField("subjectCode", e.target.value.toUpperCase())}
+                  placeholder="e.g. CS301 (optional)"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase text-xs"
+                />
+              ) : (
+                <select
+                  value={current.subjectCode}
+                  onChange={e => {
+                    const chosenCode = e.target.value;
+                    if (chosenCode === '__CUSTOM__') {
+                      setCustomSubjectCodeMode(true);
+                      return;
+                    }
+                    const matched = subjectCatalog.find(
+                      s => (s.code || s.subjectCode || '').toUpperCase() === chosenCode.toUpperCase()
+                    );
+                    updateField("subjectCode", chosenCode);
+                    if (matched) {
+                      if (matched.name || matched.subjectName) {
+                        updateField("subjectName", matched.name || matched.subjectName);
+                      }
+                      if (matched.department || matched.dept) {
+                        updateField("department", matched.department || matched.dept);
+                      }
+                      if (matched.semester) {
+                        updateField("semester", Number(matched.semester));
+                      }
+                    }
+                  }}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                >
+                  <option value="">-- Select Subject Code --</option>
+                  {Array.from(new Set(subjectCatalog.map(s => (s.code || s.subjectCode || '').toUpperCase()).filter(Boolean))).map(code => {
+                    const matched = subjectCatalog.find(s => (s.code || s.subjectCode || '').toUpperCase() === code);
+                    return (
+                      <option key={code} value={code}>
+                        {code} {matched?.name ? `(${matched.name})` : ''}
+                      </option>
+                    );
+                  })}
+                  {current.subjectCode && !subjectCatalog.some(s => (s.code || s.subjectCode || '').toUpperCase() === current.subjectCode.toUpperCase()) && (
+                    <option value={current.subjectCode}>{current.subjectCode}</option>
+                  )}
+                  <option value="__CUSTOM__">+ Enter custom code...</option>
+                </select>
+              )}
             </div>
+
             <div>
-              <label className="block text-slate-700 font-bold mb-1">Subject Name *</label>
-              <input value={current.subjectName} onChange={e => updateField("subjectName", e.target.value)} placeholder="e.g. Data Structures & Algorithms" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" required />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-slate-700 font-bold">Subject Name *</label>
+                <button
+                  type="button"
+                  onClick={() => setCustomSubjectNameMode(prev => !prev)}
+                  className="text-[10px] text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
+                >
+                  {customSubjectNameMode ? 'Choose from list' : 'Custom name'}
+                </button>
+              </div>
+              {customSubjectNameMode ? (
+                <input
+                  value={current.subjectName}
+                  onChange={e => updateField("subjectName", e.target.value)}
+                  placeholder="e.g. Data Structures & Algorithms"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                  required
+                />
+              ) : (
+                <select
+                  value={current.subjectName}
+                  onChange={e => {
+                    const chosenName = e.target.value;
+                    if (chosenName === '__CUSTOM__') {
+                      setCustomSubjectNameMode(true);
+                      return;
+                    }
+                    const matched = subjectCatalog.find(
+                      s => (s.name || s.subjectName) === chosenName || (s.code || s.subjectCode) === chosenName
+                    );
+                    updateField("subjectName", chosenName);
+                    if (matched) {
+                      if (matched.code || matched.subjectCode) {
+                        updateField("subjectCode", (matched.code || matched.subjectCode).toUpperCase());
+                      }
+                      if (matched.department || matched.dept) {
+                        updateField("department", matched.department || matched.dept);
+                      }
+                      if (matched.semester) {
+                        updateField("semester", Number(matched.semester));
+                      }
+                    }
+                  }}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  required
+                >
+                  <option value="">-- Select Subject Name --</option>
+                  {subjectCatalog.map((sub, idx) => (
+                    <option key={sub._id || sub.code || idx} value={sub.name || sub.subjectName || sub.code}>
+                      {(sub.code || sub.subjectCode ? `${sub.code || sub.subjectCode} - ` : '') + (sub.name || sub.subjectName || '')}
+                    </option>
+                  ))}
+                  {current.subjectName && !subjectCatalog.some(s => (s.name || s.subjectName) === current.subjectName) && (
+                    <option value={current.subjectName}>{current.subjectName}</option>
+                  )}
+                  <option value="__CUSTOM__">+ Enter custom name...</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="block text-slate-700 font-bold mb-1">Exam Type</label>
@@ -374,13 +598,76 @@ export default function StaffQuestionPaper({ staffUser }) {
               </select>
             </div>
             <div>
-              <label className="block text-slate-700 font-bold mb-1">Department</label>
-              <input value={current.department} onChange={e => updateField("department", e.target.value)} placeholder="e.g. Computer Science" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold" />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-slate-700 font-bold">Department *</label>
+                <button
+                  type="button"
+                  onClick={() => setCustomDeptMode(prev => !prev)}
+                  className="text-[10px] text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
+                >
+                  {customDeptMode ? 'Choose from list' : 'Custom dept'}
+                </button>
+              </div>
+              {customDeptMode ? (
+                <input
+                  value={current.department || ''}
+                  onChange={e => updateField("department", e.target.value)}
+                  placeholder="e.g. Computer Science"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                  required
+                />
+              ) : (
+                <select
+                  value={current.department || ''}
+                  onChange={e => {
+                    const chosen = e.target.value;
+                    if (chosen === '__CUSTOM__') {
+                      setCustomDeptMode(true);
+                      return;
+                    }
+                    updateField("department", chosen);
+                  }}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  required
+                >
+                  <option value="">-- Select Department --</option>
+                  {allDepartments.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                  {current.department && !allDepartments.includes(current.department) && (
+                    <option value={current.department}>{current.department}</option>
+                  )}
+                  <option value="__CUSTOM__">+ Enter custom department...</option>
+                </select>
+              )}
             </div>
             <div>
-              <label className="block text-slate-700 font-bold mb-1">Semester</label>
-              <select value={current.semester} onChange={e => updateField("semester", Number(e.target.value))} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer">
-                {[1,2,3,4,5,6].map(s => <option key={s} value={s}>Semester {s}</option>)}
+              <label className="block text-slate-700 font-bold mb-1">Year *</label>
+              <select
+                value={Number(current.year) || 1}
+                onChange={e => updateField("year", Number(e.target.value))}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                required
+              >
+                {YEAR_OPTIONS.map(y => (
+                  <option key={y.value} value={y.value}>{y.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-slate-700 font-bold mb-1">Semester *</label>
+              <select
+                value={current.semester}
+                onChange={e => {
+                  const s = Number(e.target.value);
+                  updateField("semester", s);
+                  const suggestedYear = s <= 2 ? 1 : s <= 4 ? 2 : s <= 6 ? 3 : 4;
+                  updateField("year", suggestedYear);
+                }}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                required
+              >
+                {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Semester {s}</option>)}
               </select>
             </div>
             <div>
@@ -811,6 +1098,83 @@ export default function StaffQuestionPaper({ staffUser }) {
         ))}
       </div>
 
+      {/* Filter Bar with Department and Year Dropdowns */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mr-1">
+              <Filter className="w-3.5 h-3.5 text-blue-600" />
+              <span>Filter By:</span>
+            </div>
+
+            {/* Department Dropdown Filter */}
+            <select
+              value={filterDepartment}
+              onChange={e => setFilterDepartment(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 min-w-[170px] cursor-pointer"
+            >
+              <option value="ALL">All Departments</option>
+              {allDepartments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+
+            {/* Year Dropdown Filter */}
+            <select
+              value={filterYear}
+              onChange={e => setFilterYear(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 min-w-[130px] cursor-pointer"
+            >
+              <option value="ALL">All Years</option>
+              {YEAR_OPTIONS.map(y => (
+                <option key={y.value} value={String(y.value)}>{y.label}</option>
+              ))}
+            </select>
+
+            {/* Status Dropdown Filter */}
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 min-w-[120px] cursor-pointer"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="Draft">Draft</option>
+              <option value="Published">Published</option>
+              <option value="Archived">Archived</option>
+            </select>
+          </div>
+
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search code, name, department..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+          </div>
+        </div>
+
+        {(filterDepartment !== "ALL" || filterYear !== "ALL" || filterStatus !== "ALL" || searchQuery) && (
+          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 text-slate-500 font-medium">
+            <span>Showing {filteredPapers.length} of {papers.length} question papers</span>
+            <button
+              onClick={() => {
+                setFilterDepartment("ALL");
+                setFilterYear("ALL");
+                setFilterStatus("ALL");
+                setSearchQuery("");
+              }}
+              className="text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
+            >
+              Reset Filters
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Papers List */}
       {loading ? (
         <div className="py-16 text-center text-slate-400">
@@ -831,11 +1195,31 @@ export default function StaffQuestionPaper({ staffUser }) {
             Create Question Paper
           </button>
         </div>
+      ) : filteredPapers.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs space-y-3">
+          <Filter className="w-10 h-10 mx-auto text-slate-300" />
+          <h3 className="text-base font-bold text-slate-800">No Question Papers Match Your Filters</h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            Try resetting your department, year, status, or search query filters.
+          </p>
+          <button
+            onClick={() => {
+              setFilterDepartment("ALL");
+              setFilterYear("ALL");
+              setFilterStatus("ALL");
+              setSearchQuery("");
+            }}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+          >
+            Clear All Filters
+          </button>
+        </div>
       ) : (
         <div className="space-y-3.5">
-          {papers.map(paper => {
+          {filteredPapers.map(paper => {
             const StatusIcon = STATUS_ICONS[paper.status] || Edit3;
             const totalQ = (paper.sections || []).reduce((a, s) => a + s.questions.length, 0);
+            const paperYear = paper.year || (paper.semester <= 2 ? 1 : paper.semester <= 4 ? 2 : paper.semester <= 6 ? 3 : 4);
 
             return (
               <div key={paper._id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md hover:border-blue-200 transition">
@@ -853,7 +1237,10 @@ export default function StaffQuestionPaper({ staffUser }) {
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 font-medium">
-                        {paper.subjectCode} · {paper.examType} · Semester {paper.semester}
+                        <span className="font-bold text-slate-700">{paper.subjectCode || "NO CODE"}</span>
+                        {paper.department && ` · ${paper.department}`}
+                        {` · Year ${paperYear} (Sem ${paper.semester})`}
+                        {` · ${paper.examType}`}
                       </p>
                       <div className="flex flex-wrap gap-3 mt-2 text-[11px] text-slate-400">
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{paper.duration}</span>
@@ -1025,11 +1412,11 @@ function PreviewView({ paper, onBack }) {
           <table class="meta-table">
             <tr>
               <td>Subject: ${paper.subjectCode} – ${paper.subjectName}</td>
-              <td style="text-align: right;">Semester: ${paper.semester}</td>
+              <td style="text-align: right;">Department: ${paper.department || "-"}</td>
             </tr>
             <tr>
-              <td>Duration: ${paper.duration}</td>
-              <td style="text-align: right;">Max. Marks: ${paper.totalMarks}</td>
+              <td>Year: ${paper.year || (paper.semester <= 2 ? 1 : paper.semester <= 4 ? 2 : paper.semester <= 6 ? 3 : 4)} | Semester: ${paper.semester}</td>
+              <td style="text-align: right;">Duration: ${paper.duration} | Max. Marks: ${paper.totalMarks}</td>
             </tr>
           </table>
         </div>
@@ -1053,7 +1440,7 @@ function PreviewView({ paper, onBack }) {
           </button>
           <div>
             <h2 className="font-extrabold text-slate-900 text-base">{paper.subjectName}</h2>
-            <p className="text-xs text-slate-500">{paper.subjectCode} · {paper.examType}</p>
+            <p className="text-xs text-slate-500">{paper.subjectCode} · {paper.department} · Year {paper.year || (paper.semester <= 2 ? 1 : paper.semester <= 4 ? 2 : paper.semester <= 6 ? 3 : 4)} · {paper.examType}</p>
           </div>
         </div>
         <button
@@ -1077,8 +1464,10 @@ function PreviewView({ paper, onBack }) {
             <h2 className="text-base font-bold text-slate-700">
               {paper.examType} Examination — {paper.academicYear || "2025-2026"}
             </h2>
-            <div className="flex flex-wrap items-center justify-between pt-3 text-xs font-bold text-slate-700 border-t border-slate-200 mt-3 font-sans">
+            <div className="flex flex-wrap items-center justify-between gap-y-1 pt-3 text-xs font-bold text-slate-700 border-t border-slate-200 mt-3 font-sans">
               <span>Subject: {paper.subjectCode} – {paper.subjectName}</span>
+              <span>Department: {paper.department}</span>
+              <span>Year: {paper.year || (paper.semester <= 2 ? 1 : paper.semester <= 4 ? 2 : paper.semester <= 6 ? 3 : 4)}</span>
               <span>Semester: {paper.semester}</span>
               <span>Duration: {paper.duration}</span>
               <span>Max Marks: {paper.totalMarks}</span>

@@ -43,6 +43,7 @@ export default function StaffCoursePlan({ staffUser }) {
     subjectName: '',
     subjectCode: '',
     department: department,
+    status: 'In Progress',
     topics: [
       {
         sNo: 1,
@@ -52,23 +53,60 @@ export default function StaffCoursePlan({ staffUser }) {
         executionDate: '',
         executionHours: '',
         deviation: '',
-        sign: 'Pending'
+        sign: 'Pending',
+        status: 'Pending'
       }
     ]
   });
 
   const [planForm, setPlanForm] = useState(createEmptyPlan());
 
+  const loadPlanIntoState = (plan) => {
+    if (!plan) return;
+    setSelectedPlanId(plan._id);
+    try {
+      localStorage.setItem(`vcas_course_plan_${staffId}`, plan._id);
+    } catch (e) {}
+
+    setPlanForm({
+      academicYear: plan.academicYear || '2026-2027',
+      yearSemester: plan.yearSemester || 'I / I',
+      subjectName: plan.subjectName || '',
+      subjectCode: plan.subjectCode || '',
+      department: plan.department || department,
+      status: plan.status || 'In Progress',
+      topics: (plan.topics && plan.topics.length > 0)
+        ? plan.topics.map(t => ({
+            sNo: t.sNo,
+            plannedDate: t.plannedDate || '',
+            noOfHours: t.noOfHours ?? '',
+            topic: t.topic || '',
+            executionDate: t.executionDate || '',
+            executionHours: t.executionHours ?? '',
+            deviation: t.deviation || '',
+            sign: t.sign || t.status || 'Pending',
+            status: t.status || t.sign || 'Pending'
+          }))
+        : [{ sNo: 1, plannedDate: '', noOfHours: '', topic: '', executionDate: '', executionHours: '', deviation: '', sign: 'Pending', status: 'Pending' }]
+    });
+  };
+
   // Fetch all plans for this faculty
-  const fetchPlans = async () => {
+  const fetchPlans = async (targetIdToSelect) => {
     try {
       setLoading(true);
       const res = await fetch(`${API_BASE}/api/course-plans/${staffId}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
         setCoursePlans(data.data);
-        if (data.data.length > 0 && selectedPlanId === 'NEW') {
-          loadPlanIntoState(data.data[0]);
+        if (data.data.length > 0) {
+          const cachedPlanId = targetIdToSelect || localStorage.getItem(`vcas_course_plan_${staffId}`) || selectedPlanId;
+          const matchedPlan = data.data.find(p => p._id === cachedPlanId);
+          if (matchedPlan) {
+            loadPlanIntoState(matchedPlan);
+          } else if (selectedPlanId === 'NEW' && !targetIdToSelect) {
+            loadPlanIntoState(data.data[0]);
+          }
         }
       }
     } catch (err) {
@@ -82,22 +120,11 @@ export default function StaffCoursePlan({ staffUser }) {
     fetchPlans();
   }, [staffId]);
 
-  const loadPlanIntoState = (plan) => {
-    setSelectedPlanId(plan._id);
-    setPlanForm({
-      academicYear: plan.academicYear || '2026-2027',
-      yearSemester: plan.yearSemester || 'I / I',
-      subjectName: plan.subjectName || '',
-      subjectCode: plan.subjectCode || '',
-      department: plan.department || department,
-      topics: (plan.topics && plan.topics.length > 0)
-        ? plan.topics
-        : [{ sNo: 1, plannedDate: '', noOfHours: '', topic: '', executionDate: '', executionHours: '', deviation: '', sign: 'Pending' }]
-    });
-  };
-
   const handleStartNewPlan = () => {
     setSelectedPlanId('NEW');
+    try {
+      localStorage.removeItem(`vcas_course_plan_${staffId}`);
+    } catch (e) {}
     setPlanForm(createEmptyPlan());
     setSuccessMsg('');
     setErrorMsg('');
@@ -119,7 +146,8 @@ export default function StaffCoursePlan({ staffUser }) {
             executionDate: '',
             executionHours: '',
             deviation: '',
-            sign: 'Pending'
+            sign: 'Pending',
+            status: 'Pending'
           }
         ]
       };
@@ -134,13 +162,17 @@ export default function StaffCoursePlan({ staffUser }) {
         sNo: idx + 1
       }));
       return { ...prev, topics: updated.length > 0 ? updated : [
-        { sNo: 1, plannedDate: '', noOfHours: '', topic: '', executionDate: '', executionHours: '', deviation: '', sign: 'Pending' }
+        { sNo: 1, plannedDate: '', noOfHours: '', topic: '', executionDate: '', executionHours: '', deviation: '', sign: 'Pending', status: 'Pending' }
       ]};
     });
   };
 
   // Update Topic Field
   const handleTopicChange = (index, field, value) => {
+    if (field === 'sign' || field === 'status') {
+      handleStatusChangeInActionPlan(index, value);
+      return;
+    }
     setPlanForm(prev => {
       const updated = [...prev.topics];
       updated[index] = { ...updated[index], [field]: value };
@@ -148,24 +180,62 @@ export default function StaffCoursePlan({ staffUser }) {
     });
   };
 
-  // Quick Portion Completion Status Update
-  const handleUpdatePortionStatus = (index, newStatus) => {
-    setPlanForm(prev => {
-      const updated = [...prev.topics];
-      const today = new Date();
-      const dd = String(today.getDate()).padStart(2, '0');
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const yy = String(today.getFullYear()).slice(-2);
-      const todayStr = `${dd}.${mm}.${yy}`;
+  // Status Change in Action Plan and Portion Completion with backend persistence
+  const handleStatusChangeInActionPlan = async (index, newStatus) => {
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yy = String(today.getFullYear()).slice(-2);
+    const todayStr = `${dd}.${mm}.${yy}`;
 
-      updated[index] = {
-        ...updated[index],
+    const updatedTopics = planForm.topics.map((item, idx) => {
+      if (idx !== index) return item;
+      return {
+        ...item,
         sign: newStatus,
-        executionDate: newStatus === 'Completed' && !updated[index].executionDate ? todayStr : updated[index].executionDate,
-        executionHours: newStatus === 'Completed' && (!updated[index].executionHours || updated[index].executionHours === 0) ? (updated[index].noOfHours || 1) : updated[index].executionHours
+        status: newStatus,
+        executionDate: (newStatus === 'Completed' || newStatus === 'Signed') && !item.executionDate ? todayStr : item.executionDate,
+        executionHours: (newStatus === 'Completed' || newStatus === 'Signed') && (!item.executionHours || Number(item.executionHours) === 0) ? (Number(item.noOfHours) || 1) : item.executionHours
       };
-      return { ...prev, topics: updated };
     });
+
+    setPlanForm(prev => ({ ...prev, topics: updatedTopics }));
+
+    // If an existing plan is selected, auto-save to backend immediately so reload retains it
+    if (selectedPlanId && selectedPlanId !== 'NEW') {
+      try {
+        const sanitized = updatedTopics.map(t => ({
+          ...t,
+          sNo: Number(t.sNo) || 1,
+          plannedDate: String(t.plannedDate || ''),
+          noOfHours: t.noOfHours === '' ? 1 : (Number(t.noOfHours) || 1),
+          topic: String(t.topic || ''),
+          executionDate: String(t.executionDate || ''),
+          executionHours: t.executionHours === '' ? 0 : (Number(t.executionHours) || 0),
+          deviation: String(t.deviation || ''),
+          sign: t.sign || t.status || 'Pending',
+          status: t.status || t.sign || 'Pending'
+        }));
+        const res = await fetch(`${API_BASE}/api/course-plans/${selectedPlanId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topics: sanitized })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSuccessMsg(`Status updated to "${newStatus}" and saved!`);
+          setTimeout(() => setSuccessMsg(''), 2500);
+          setCoursePlans(prev => prev.map(p => p._id === selectedPlanId ? { ...p, topics: sanitized } : p));
+        }
+      } catch (err) {
+        console.warn('Auto-save status failed:', err);
+      }
+    }
+  };
+
+  // Quick Portion Completion Status Update with automatic backend persistence
+  const handleUpdatePortionStatus = async (index, newStatus) => {
+    await handleStatusChangeInActionPlan(index, newStatus);
   };
 
   // Save / Update Plan
@@ -180,6 +250,19 @@ export default function StaffCoursePlan({ staffUser }) {
       setErrorMsg('');
       setSuccessMsg('');
 
+      const sanitizedTopics = planForm.topics.map(t => ({
+        ...t,
+        sNo: Number(t.sNo) || 1,
+        plannedDate: String(t.plannedDate || ''),
+        noOfHours: t.noOfHours === '' ? 1 : (Number(t.noOfHours) || 1),
+        topic: String(t.topic || ''),
+        executionDate: String(t.executionDate || ''),
+        executionHours: t.executionHours === '' ? 0 : (Number(t.executionHours) || 0),
+        deviation: String(t.deviation || ''),
+        sign: t.sign || t.status || 'Pending',
+        status: t.status || t.sign || 'Pending'
+      }));
+
       const payload = {
         staffId,
         staffName,
@@ -188,7 +271,8 @@ export default function StaffCoursePlan({ staffUser }) {
         subjectCode: planForm.subjectCode.trim(),
         academicYear: planForm.academicYear,
         yearSemester: planForm.yearSemester,
-        topics: planForm.topics
+        status: planForm.status || 'In Progress',
+        topics: sanitizedTopics
       };
 
       const isNew = selectedPlanId === 'NEW';
@@ -204,10 +288,12 @@ export default function StaffCoursePlan({ staffUser }) {
 
       if (data.success) {
         setSuccessMsg(isNew ? 'Course Plan created and saved!' : 'Course Plan updated successfully!');
-        if (isNew && data.data?._id) {
-          setSelectedPlanId(data.data._id);
-        }
-        await fetchPlans();
+        const savedId = (data.data && data.data._id) ? data.data._id : selectedPlanId;
+        setSelectedPlanId(savedId);
+        try {
+          localStorage.setItem(`vcas_course_plan_${staffId}`, savedId);
+        } catch (e) {}
+        await fetchPlans(savedId);
       } else {
         setErrorMsg(data.message || 'Failed to save Course Plan');
       }
@@ -229,6 +315,9 @@ export default function StaffCoursePlan({ staffUser }) {
       const data = await res.json();
       if (data.success) {
         setSuccessMsg('Course Plan removed.');
+        try {
+          localStorage.removeItem(`vcas_course_plan_${staffId}`);
+        } catch (e) {}
         handleStartNewPlan();
         await fetchPlans();
       }
@@ -433,6 +522,40 @@ export default function StaffCoursePlan({ staffUser }) {
                 className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold w-28 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
               />
             </div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-slate-900 min-w-[140px]">Plan Status:</span>
+              <select
+                value={planForm.status || 'In Progress'}
+                onChange={(e) => setPlanForm({ ...planForm, status: e.target.value })}
+                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
+              >
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Action Plan Table Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3 print:hidden">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-extrabold text-slate-700">Course Plan Topics:</span>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-blue-100 text-blue-800">
+                {planForm.topics.length} Entries
+              </span>
+              <span className="text-xs font-medium text-slate-500">
+                ({completedTopics} Completed, {inProgressTopics} In Progress, {pendingTopics} Pending)
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSavePlan}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {saving ? 'Saving...' : 'Save Plan'}
+            </button>
           </div>
 
           {/* ── COURSE PLAN TABLE (DATE, TOPIC, HRS) ───────────────── */}
@@ -532,9 +655,15 @@ export default function StaffCoursePlan({ staffUser }) {
                     {/* Sign / Status */}
                     <td className="py-1 px-2 border-r border-slate-300 text-center">
                       <select
-                        value={t.sign}
+                        value={t.sign || t.status || 'Pending'}
                         onChange={(e) => handleTopicChange(idx, 'sign', e.target.value)}
-                        className="bg-transparent border-0 text-[11px] font-bold text-slate-800 focus:outline-none cursor-pointer"
+                        className={`text-[11px] font-bold rounded-lg px-2 py-1 border transition-colors focus:outline-none cursor-pointer ${
+                          t.sign === 'Completed' || t.sign === 'Signed'
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold'
+                            : t.sign === 'In Progress'
+                            ? 'bg-amber-100 text-amber-800 border-amber-300 font-extrabold'
+                            : 'bg-white text-slate-700 border-slate-300'
+                        }`}
                       >
                         <option value="Pending">Pending</option>
                         <option value="In Progress">In Progress</option>
@@ -581,16 +710,28 @@ export default function StaffCoursePlan({ staffUser }) {
             </table>
           </div>
 
-          {/* Add Row Button */}
-          <div className="flex items-center justify-between print:hidden mb-6">
-            <button
-              type="button"
-              onClick={handleAddRow}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border border-slate-200"
-            >
-              <Plus className="w-4 h-4 text-blue-600" />
-              Add Topic Entry
-            </button>
+          {/* Action Buttons: Add Topic & Save Plan on Course Plan side */}
+          <div className="flex flex-wrap items-center justify-between gap-3 print:hidden mb-6">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleAddRow}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border border-slate-300 shadow-xs"
+              >
+                <Plus className="w-4 h-4 text-blue-600" />
+                Add Topic Entry
+              </button>
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleSavePlan}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-blue-500/25 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Saving...' : 'Save Course Plan (Action Plan)'}
+              </button>
+            </div>
 
             {selectedPlanId !== 'NEW' && (
               <button

@@ -38,7 +38,9 @@ import {
   Save,
   RefreshCw,
   Loader2,
-  UserPlus
+  UserPlus,
+  Paperclip,
+  UploadCloud
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
@@ -73,6 +75,11 @@ export default function AssignmentManagement({ user }) {
   const [submissionsList, setSubmissionsList] = useState(INITIAL_SUBMISSIONS);
   const [availableClasses, setAvailableClasses] = useState([]);
   const [availableDepartments, setAvailableDepartments] = useState(() => getKnownDepartments());
+  const [subjectCatalog, setSubjectCatalog] = useState([]);
+  const [batchCatalog, setBatchCatalog] = useState(['2024-2027', '2023-2026', '2022-2025', '2025-2028']);
+  const [yearCatalog, setYearCatalog] = useState(['1st Year', '2nd Year', '3rd Year', '4th Year']);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = React.useRef(null);
   const [loading, setLoading] = useState(false);
 
   const scopedDepartments = useMemo(() => {
@@ -183,6 +190,9 @@ export default function AssignmentManagement({ user }) {
       submittedCount,
       gradedCount,
       status: a.status || 'Active',
+      category: a.category || 'Regular',
+      projectPhase: a.projectPhase || '',
+      batch: a.batch || '2024-2027',
       description: a.description || '',
       attachedDoc: a.attachmentName || a.attachedDoc || `${a.subjectCode || 'Assignment'}_Brief.pdf`,
       attachmentName: a.attachmentName || '',
@@ -200,10 +210,12 @@ export default function AssignmentManagement({ user }) {
   const fetchAssignments = async () => {
     setLoading(true);
     try {
-      const [resAsgts, resClasses, resDepts] = await Promise.all([
+      const [resAsgts, resClasses, resDepts, resSubjects, resStudents] = await Promise.all([
         fetch(`${API_BASE}/assignments`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
         fetch(`${API_BASE}/classes`).then(r => r.json()).catch(() => ({ success: false, classes: [] })),
-        fetch(`${API_BASE}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] }))
+        fetch(`${API_BASE}/departments`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
+        fetch(`${API_BASE}/subjects`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
+        fetch(`${API_BASE}/students`).then(r => r.json()).catch(() => ({ success: false, data: [] }))
       ]);
 
       if (resDepts.success && Array.isArray(resDepts.data) && resDepts.data.length > 0) {
@@ -213,6 +225,46 @@ export default function AssignmentManagement({ user }) {
 
       const classesList = resClasses.classes || resClasses.data || [];
       setAvailableClasses(Array.isArray(classesList) ? classesList : []);
+
+      // Build unified subjects catalog
+      const subjectsList = Array.isArray(resSubjects?.data) ? resSubjects.data : (Array.isArray(resSubjects) ? resSubjects : []);
+      const subMap = new Map();
+      if (Array.isArray(classesList)) {
+        classesList.forEach(c => {
+          if (c.code) {
+            subMap.set(c.code.toUpperCase(), {
+              code: c.code,
+              name: c.name || c.subjectName,
+              department: c.dept || c.department,
+              faculty: c.staffName || c.faculty
+            });
+          }
+        });
+      }
+      if (Array.isArray(subjectsList)) {
+        subjectsList.forEach(s => {
+          const code = String(s.code || s.subjectCode || '').trim();
+          if (code && !subMap.has(code.toUpperCase())) {
+            subMap.set(code.toUpperCase(), {
+              code,
+              name: s.name || s.subjectName || code,
+              department: s.department || s.dept,
+              faculty: s.faculty || s.staffName
+            });
+          }
+        });
+      }
+      setSubjectCatalog(Array.from(subMap.values()));
+
+      // Extract batches from students if available
+      const studentsList = Array.isArray(resStudents?.data) ? resStudents.data : (Array.isArray(resStudents) ? resStudents : []);
+      if (Array.isArray(studentsList) && studentsList.length > 0) {
+        const foundBatches = Array.from(new Set(studentsList.map(s => s.batch).filter(Boolean)));
+        if (foundBatches.length > 0) {
+          setBatchCatalog(prev => Array.from(new Set([...prev, ...foundBatches])).sort().reverse());
+        }
+      }
+
       const classMap = new Map();
       if (Array.isArray(classesList)) {
         classesList.forEach(c => {
@@ -299,19 +351,26 @@ export default function AssignmentManagement({ user }) {
 
   // New Assignment Form State
   const [assignmentForm, setAssignmentForm] = useState({
+    category: 'Regular',
+    projectPhase: 'Phase 1 - Topic & Problem Statement',
     title: '',
     code: '',
     subject: '',
-    department: '',
-    year: 1,
+    department: 'Computer Science',
+    batch: '2024-2027',
+    year: '1st Year',
     sem: 'Sem 1',
-    faculty: '',
+    faculty: 'Admin',
     dueDate: '',
-    dueTime: '',
-    maxMarks: '',
-    weightage: '',
+    dueTime: '11:59 PM',
+    maxMarks: 20,
+    weightage: '10% CIA',
     description: '',
-    type: 'Code & Report'
+    type: 'Code & Report',
+    attachmentName: '',
+    attachmentData: '',
+    attachmentSize: '',
+    attachmentType: ''
   });
 
   useEffect(() => {
@@ -445,38 +504,117 @@ export default function AssignmentManagement({ user }) {
   }, [submissionsList]);
 
   const BLANK_FORM = {
+    category: 'Regular',
+    projectPhase: 'Phase 1 - Topic & Problem Statement',
     title: '',
     code: '',
     subject: '',
-    department: '',
-    year: 1,
+    department: 'Computer Science',
+    batch: '2024-2027',
+    year: '1st Year',
     sem: 'Sem 1',
-    faculty: '',
+    faculty: 'Admin',
     dueDate: '',
-    dueTime: '',
-    maxMarks: '',
-    weightage: '',
+    dueTime: '11:59 PM',
+    maxMarks: 20,
+    weightage: '10% CIA',
     description: '',
-    type: 'Code & Report'
+    type: 'Code & Report',
+    attachmentName: '',
+    attachmentData: '',
+    attachmentSize: '',
+    attachmentType: ''
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const handleFileSelect = (file) => {
+    if (!file) return;
+    const maxSize = 15 * 1024 * 1024; // 15MB
+    if (file.size > maxSize) {
+      showToast('File size exceeds 15MB limit. Please choose a smaller file.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAssignmentForm(prev => ({
+        ...prev,
+        attachmentName: file.name,
+        attachmentData: reader.result,
+        attachmentSize: formatFileSize(file.size),
+        attachmentType: file.type || 'application/octet-stream'
+      }));
+      showToast(`File "${file.name}" attached successfully!`);
+    };
+    reader.onerror = () => {
+      showToast('Error reading file. Please try again.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileInputChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleRemoveAttachment = () => {
+    setAssignmentForm(prev => ({
+      ...prev,
+      attachmentName: '',
+      attachmentData: '',
+      attachmentSize: '',
+      attachmentType: ''
+    }));
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Open modal for editing an existing assignment
   const handleOpenEdit = (a) => {
     setEditingAssignment(a);
     setAssignmentForm({
-      title: a.title,
-      code: a.code,
-      subject: a.subject,
-      department: a.department,
-      year: a.year,
-      sem: a.sem,
-      faculty: a.faculty,
-      dueDate: a.dueDate,
-      dueTime: a.dueTime,
-      maxMarks: a.maxMarks,
-      weightage: a.weightage,
-      description: a.description,
-      type: a.type
+      category: a.category || 'Regular',
+      projectPhase: a.projectPhase || 'Phase 1 - Topic & Problem Statement',
+      title: a.title || '',
+      code: a.code || a.subjectCode || '',
+      subject: a.subject || a.subjectName || '',
+      department: a.department || 'Computer Science',
+      batch: a.batch || '2024-2027',
+      year: typeof a.year === 'number' ? `${a.year === 1 ? '1st' : a.year === 2 ? '2nd' : a.year === 3 ? '3rd' : `${a.year}th`} Year` : (a.year || '1st Year'),
+      sem: a.sem || (a.semester ? `Sem ${a.semester}` : 'Sem 1'),
+      faculty: a.faculty || a.staffName || 'Admin',
+      dueDate: a.dueDate || '',
+      dueTime: a.dueTime || '11:59 PM',
+      maxMarks: a.maxMarks !== undefined ? a.maxMarks : 20,
+      weightage: a.weightage || '10% CIA',
+      description: a.description || '',
+      type: a.type || 'Code & Report',
+      attachmentName: a.attachmentName || '',
+      attachmentData: a.attachmentData || '',
+      attachmentSize: a.attachmentSize || '',
+      attachmentType: a.attachmentType || ''
     });
     setIsAddAssignmentOpen(true);
   };
@@ -496,6 +634,27 @@ export default function AssignmentManagement({ user }) {
       return;
     }
 
+    const payload = {
+      title: assignmentForm.title.trim(),
+      subjectCode: (assignmentForm.code || '').trim().toUpperCase(),
+      subjectName: (assignmentForm.subject || '').trim(),
+      department: assignmentForm.department || 'Computer Science',
+      batch: assignmentForm.batch || '2024-2027',
+      year: assignmentForm.year || '1st Year',
+      semester: assignmentForm.sem ? parseInt(String(assignmentForm.sem).replace(/\D/g, '')) || 1 : 1,
+      dueDate: assignmentForm.dueDate,
+      totalMarks: Number(assignmentForm.maxMarks) || 20,
+      description: assignmentForm.description || '',
+      category: assignmentForm.category || 'Regular',
+      projectPhase: assignmentForm.category === 'Project' ? (assignmentForm.projectPhase || 'Phase 1 - Topic & Problem Statement') : '',
+      staffName: assignmentForm.faculty || 'Admin',
+      staffId: 'ADMIN',
+      attachmentName: assignmentForm.attachmentName || '',
+      attachmentData: assignmentForm.attachmentData || '',
+      attachmentSize: assignmentForm.attachmentSize || '',
+      attachmentType: assignmentForm.attachmentType || ''
+    };
+
     if (editingAssignment) {
       // Update existing
       try {
@@ -503,17 +662,7 @@ export default function AssignmentManagement({ user }) {
           await fetch(`${API_BASE}/assignments/${editingAssignment._id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: assignmentForm.title,
-              subjectCode: assignmentForm.code,
-              subjectName: assignmentForm.subject,
-              department: assignmentForm.department,
-              semester: assignmentForm.sem ? parseInt(String(assignmentForm.sem).replace(/\D/g, '')) || 1 : 1,
-              dueDate: assignmentForm.dueDate,
-              totalMarks: assignmentForm.maxMarks,
-              description: assignmentForm.description,
-              staffName: assignmentForm.faculty
-            })
+            body: JSON.stringify(payload)
           });
         }
       } catch (err) {
@@ -533,17 +682,7 @@ export default function AssignmentManagement({ user }) {
         const res = await fetch(`${API_BASE}/assignments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: assignmentForm.title,
-            subjectCode: assignmentForm.code,
-            subjectName: assignmentForm.subject,
-            department: assignmentForm.department,
-            semester: assignmentForm.sem ? parseInt(String(assignmentForm.sem).replace(/\D/g, '')) || 1 : 1,
-            dueDate: assignmentForm.dueDate,
-            totalMarks: assignmentForm.maxMarks,
-            description: assignmentForm.description,
-            staffName: assignmentForm.faculty || 'Admin'
-          })
+          body: JSON.stringify(payload)
         });
         const json = await res.json();
         if (json.success && json.data) {
@@ -556,7 +695,7 @@ export default function AssignmentManagement({ user }) {
             submittedCount: 0,
             gradedCount: 0,
             status: 'Active',
-            attachedDoc: `${assignmentForm.code}_Brief.pdf`
+            attachedDoc: assignmentForm.attachmentName || `${assignmentForm.code || 'Assignment'}_Brief.pdf`
           };
           setAssignmentsList(prev => [newAssignment, ...prev]);
         }
@@ -568,12 +707,13 @@ export default function AssignmentManagement({ user }) {
           submittedCount: 0,
           gradedCount: 0,
           status: 'Active',
-          attachedDoc: `${assignmentForm.code}_Brief.pdf`
+          attachedDoc: assignmentForm.attachmentName || `${assignmentForm.code || 'Assignment'}_Brief.pdf`
         };
         setAssignmentsList(prev => [newAssignment, ...prev]);
       }
       handleCloseAssignmentModal();
-      showToast('New Assignment published successfully to student portal!');
+      showToast(assignmentForm.category === 'Project' ? 'Project Assignment created and published!' : 'Assignment created and published!');
+      fetchAssignments();
     }
   };
 
@@ -1790,9 +1930,7 @@ export default function AssignmentManagement({ user }) {
                     {editingAssignment ? 'Edit Assignment' : 'Create New Assignment'}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    {editingAssignment
-                      ? `Editing: ${editingAssignment.code} — ${(editingAssignment.title || '').substring(0, 40)}...`
-                      : 'Publish a coursework homework task with instructions for students'}
+                    Provide instructions and attach question papers, problem sheets, or notes
                   </p>
                 </div>
               </div>
@@ -1802,151 +1940,329 @@ export default function AssignmentManagement({ user }) {
             </div>
 
             <form onSubmit={handleSaveAssignment} className="space-y-4">
+              {/* Assignment Type */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assignment Title *</label>
-                <input
-                  type="text"
-                  value={assignmentForm.title}
-                  onChange={(e) => setAssignmentForm({ ...assignmentForm, title: e.target.value })}
-                  placeholder="e.g. B-Tree Indexing and Query Optimization"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
-                  required
-                />
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Assignment Type</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignmentForm(prev => ({
+                        ...prev,
+                        category: 'Regular',
+                        maxMarks: prev.maxMarks === 50 ? 20 : (prev.maxMarks || 20)
+                      }));
+                    }}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      assignmentForm.category !== 'Project' ? 'bg-white text-blue-600 shadow-xs font-black' : 'text-slate-600'
+                    }`}
+                  >
+                    📝 Regular Assignment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignmentForm(prev => ({
+                        ...prev,
+                        category: 'Project',
+                        maxMarks: (!prev.maxMarks || prev.maxMarks === 20) ? 50 : prev.maxMarks
+                      }));
+                    }}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      assignmentForm.category === 'Project' ? 'bg-purple-600 text-white shadow-xs font-black' : 'text-slate-600'
+                    }`}
+                  >
+                    🚀 Project Assignment
+                  </button>
+                </div>
               </div>
 
-              {/* Quick Select from Registered Classes */}
-              {availableClasses.length > 0 && !editingAssignment && (
+              {assignmentForm.category === 'Project' && (
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-500 mb-1">
-                    Select Class / Course (Auto-fills Code & Subject)
-                  </label>
+                  <label className="block text-xs font-bold text-purple-900 mb-1">Project Phase / Milestone *</label>
                   <select
-                    onChange={(e) => {
-                      const selectedCode = e.target.value;
-                      if (!selectedCode) return;
-                      const matched = availableClasses.find(c => c.code === selectedCode);
-                      if (matched) {
-                        setAssignmentForm(prev => ({
-                          ...prev,
-                          code: matched.code || prev.code,
-                          subject: matched.name || prev.subject,
-                          department: matched.dept || prev.department,
-                          sem: matched.semester ? `Sem ${matched.semester}` : prev.sem,
-                          year: matched.year || prev.year,
-                          faculty: matched.staffName || prev.faculty
-                        }));
-                      }
-                    }}
-                    className="w-full px-3.5 py-2.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs font-semibold text-blue-900 focus:bg-white focus:outline-none cursor-pointer"
-                    defaultValue=""
+                    value={assignmentForm.projectPhase || 'Phase 1 - Topic & Problem Statement'}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, projectPhase: e.target.value })}
+                    className="w-full bg-purple-50 border border-purple-200 text-purple-900 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none cursor-pointer"
                   >
-                    <option value="">-- Choose a Registered Class (Optional) --</option>
-                    {userScopedClasses.map(c => (
-                      <option key={c._id || c.code} value={c.code}>
-                        {c.code} – {c.name} ({c.dept || 'General'})
-                      </option>
-                    ))}
+                    <option value="Phase 1 - Topic & Problem Statement">Phase 1 - Topic & Problem Statement</option>
+                    <option value="Phase 2 - Architecture & Design Methodology">Phase 2 - Architecture & Design Methodology</option>
+                    <option value="Phase 3 - Code & Implementation Review">Phase 3 - Code & Implementation Review</option>
+                    <option value="Phase 4 - Final Project Report & Viva">Phase 4 - Final Project Report & Viva</option>
+                    <option value="Mini Project Submission">Mini Project Submission</option>
+                    <option value="Capstone Project Review">Capstone Project Review</option>
                   </select>
                 </div>
               )}
 
+              {/* Subject Name & Subject Code */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Code <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name</label>
+                  <select
+                    value={assignmentForm.subject}
+                    onChange={(e) => {
+                      const chosen = e.target.value;
+                      const matched = subjectCatalog.find(
+                        s => (s.name || s.subjectName) === chosen || (s.code || s.subjectCode) === chosen
+                      ) || availableClasses.find(c => c.name === chosen || c.code === chosen);
+
+                      setAssignmentForm(prev => ({
+                        ...prev,
+                        subject: chosen,
+                        code: matched ? (matched.code || matched.subjectCode || prev.code) : prev.code,
+                        department: (matched && (matched.department || matched.dept)) ? (matched.department || matched.dept) : prev.department,
+                        faculty: (matched && (matched.faculty || matched.staffName)) ? (matched.faculty || matched.staffName) : prev.faculty
+                      }));
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="">Select Subject</option>
+                    {subjectCatalog.length > 0 ? (
+                      subjectCatalog.map((sub, idx) => (
+                        <option key={sub._id || sub.code || idx} value={sub.name || sub.subjectName || sub.code}>
+                          {(sub.code || sub.subjectCode ? `${sub.code || sub.subjectCode} - ` : '') + (sub.name || sub.subjectName || '')}
+                        </option>
+                      ))
+                    ) : (
+                      assignmentForm.subject ? <option value={assignmentForm.subject}>{assignmentForm.subject}</option> : null
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Subject Code <span className="text-slate-400 font-normal">(optional)</span>
+                  </label>
                   <input
                     type="text"
                     value={assignmentForm.code}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const matched = availableClasses.find(c => (c.code || '').toUpperCase() === val.trim().toUpperCase());
+                      const matched = subjectCatalog.find(s => (s.code || '').toUpperCase() === val.trim().toUpperCase())
+                        || availableClasses.find(c => (c.code || '').toUpperCase() === val.trim().toUpperCase());
                       setAssignmentForm(prev => ({
                         ...prev,
                         code: val,
-                        ...(matched && !prev.subject ? { subject: matched.name, department: matched.dept || prev.department } : {})
+                        ...(matched && !prev.subject ? {
+                          subject: matched.name || matched.subjectName,
+                          department: matched.department || matched.dept || prev.department
+                        } : {})
                       }));
                     }}
-                    placeholder="e.g. CS401 (optional)"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject Name *</label>
-                  <input
-                    type="text"
-                    value={assignmentForm.subject}
-                    onChange={(e) => setAssignmentForm({ ...assignmentForm, subject: e.target.value })}
-                    placeholder="e.g. Cloud Computing & DevOps"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none transition-all"
-                    required
+                    placeholder="e.g., CS401 (optional)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Department *</label>
-                <select
-                  value={assignmentForm.department}
-                  onChange={(e) => setAssignmentForm({ ...assignmentForm, department: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
-                >
-                  {scopedDepartments.length === 0 ? (
-                    <option value="">No departments added yet</option>
-                  ) : (
-                    scopedDepartments.map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))
-                  )}
-                </select>
-              </div>
-
+              {/* Department & Batch */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Due Date *</label>
-                  <input
-                    type="date"
-                    value={assignmentForm.dueDate}
-                    onChange={(e) => setAssignmentForm({ ...assignmentForm, dueDate: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
-                    required
-                  />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
+                  <select
+                    value={assignmentForm.department}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, department: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="">Select Department</option>
+                    {scopedDepartments.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Max Marks *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Batch</label>
+                  <select
+                    value={assignmentForm.batch}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, batch: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="">Select Batch</option>
+                    {batchCatalog.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Year & Assignment Title */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Year</label>
+                  <select
+                    value={assignmentForm.year}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, year: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="">Select Year</option>
+                    {yearCatalog.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Assignment Title *</label>
                   <input
-                    type="number"
-                    value={assignmentForm.maxMarks}
-                    placeholder="e.g. 25"
-                    onChange={(e) => setAssignmentForm({ ...assignmentForm, maxMarks: e.target.value === '' ? '' : Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:border-purple-500 focus:outline-none placeholder:text-slate-400"
+                    type="text"
                     required
+                    value={assignmentForm.title}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, title: e.target.value })}
+                    placeholder="e.g., Unit 3 Case Study"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
               </div>
 
+              {/* Submission Deadline & Total Marks */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Submission Deadline *</label>
+                  <input
+                    type="date"
+                    required
+                    value={assignmentForm.dueDate}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, dueDate: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Total Marks</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    placeholder="20"
+                    value={assignmentForm.maxMarks}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, maxMarks: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              </div>
+
+              {/* Instructions / Description */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assignment Description & Instructions</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Instructions / Description</label>
                 <textarea
                   rows={3}
                   value={assignmentForm.description}
                   onChange={(e) => setAssignmentForm({ ...assignmentForm, description: e.target.value })}
-                  placeholder="Provide instructions, problem statement, or submission guidelines..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-purple-500 focus:outline-none"
+                  placeholder="Provide assignment guidelines, questions, or deliverables..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
 
+              {/* Attach Document / PDF (Optional) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                    Attach Document / PDF (Optional)
+                  </span>
+                  {assignmentForm.attachmentName && (
+                    <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Document Ready
+                    </span>
+                  )}
+                </label>
+
+                {assignmentForm.attachmentName ? (
+                  <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-2xl flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      {assignmentForm.attachmentName.toLowerCase().endsWith('.pdf') ? (
+                        <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 font-black text-xs flex items-center justify-center shrink-0 border border-rose-200">
+                          PDF
+                        </div>
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center shrink-0 border border-blue-200">
+                          DOC
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <p className="text-xs font-extrabold text-slate-900 truncate" title={assignmentForm.attachmentName}>
+                          {assignmentForm.attachmentName}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          {assignmentForm.attachmentSize || 'Uploaded'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {assignmentForm.attachmentData && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = assignmentForm.attachmentData;
+                            link.download = assignmentForm.attachmentName;
+                            link.click();
+                          }}
+                          className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-100/60 rounded-lg transition-colors cursor-pointer"
+                          title="Download / Preview"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleRemoveAttachment}
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-100/60 rounded-lg transition-colors cursor-pointer"
+                        title="Remove Document"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? 'border-blue-500 bg-blue-50/70 scale-[0.99]'
+                        : 'border-slate-200 bg-slate-50/60 hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={handleFileInputChange}
+                      accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center justify-center gap-1.5">
+                      <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shadow-xs">
+                        <UploadCloud className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs font-bold text-slate-800">
+                        Click to upload or drag & drop document
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        Supported: PDF, Word (DOC / DOCX), Text (Max 15MB)
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Form Actions */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={handleCloseAssignmentModal}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className={`px-6 py-2.5 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 ${
+                  className={`px-6 py-2.5 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer ${
                     editingAssignment
                       ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
                       : 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/20'
