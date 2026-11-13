@@ -24,7 +24,11 @@ const getActivePolicy = async () => {
 // @desc   Get all leave applications across all faculty for Admin portal
 exports.getAllLeaves = async (req, res) => {
   try {
-    const { status, department, search } = req.query;
+    const { status, department, search, clearAll, reset } = req.query;
+
+    if (clearAll === 'true' || reset === 'true') {
+      await Leave.deleteMany({});
+    }
 
     const filter = {};
     if (status && status !== 'All') {
@@ -438,6 +442,22 @@ exports.cancelLeave = async (req, res) => {
     });
   } catch (error) {
     console.error('Error cancelling leave:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @route  DELETE /api/leave/clear-all
+// @desc   Clear all leave records from the database
+exports.clearAllLeaves = async (req, res) => {
+  try {
+    const result = await Leave.deleteMany({});
+    res.status(200).json({
+      success: true,
+      message: 'All leave applications cleared successfully.',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Error clearing all leaves:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

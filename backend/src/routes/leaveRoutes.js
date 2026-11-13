@@ -9,8 +9,13 @@ const {
   applyLeave,
   updateLeaveStatus,
   approveLeaveStage,
-  cancelLeave
+  cancelLeave,
+  clearAllLeaves
 } = require('../controllers/leaveController');
+
+// DELETE /api/leave/clear-all or POST /api/leave/clear-all - Purge all leave applications
+router.delete('/clear-all', clearAllLeaves);
+router.post('/clear-all', clearAllLeaves);
 
 // GET    /api/leave                           - Get all leave applications for Admin portal
 router.get('/', getAllLeaves);

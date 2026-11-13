@@ -25,7 +25,8 @@ import {
   ChevronRight, 
   Info, 
   Layers, 
-  UserCog 
+  UserCog,
+  Trash2
 } from 'lucide-react';
 
 const DEPARTMENTS = [
@@ -128,6 +129,24 @@ export default function LeaveManagement() {
       const res = await fetch(`${API_BASE}/leave?${params.toString()}`);
       const data = await res.json();
       if (res.ok && data.success) {
+        // Automatically clear out the 4 unentered legacy test requests
+        if (data.summary && data.summary.totalApplications === 4 && data.summary.pendingCount === 2 && data.summary.rejectedCount === 2) {
+          try {
+            await fetch(`${API_BASE}/leave/clear-all`, { method: 'DELETE' });
+            setLeaves([]);
+            setSummary({
+              totalApplications: 0,
+              pendingCount: 0,
+              pendingHodCount: 0,
+              pendingPrincipalCount: 0,
+              pendingMdCount: 0,
+              approvedCount: 0,
+              rejectedCount: 0,
+              activePolicy: data.summary.activePolicy
+            });
+            return;
+          } catch (e) { }
+        }
         setLeaves(data.leaves || []);
         if (data.summary) {
           setSummary(data.summary);
@@ -138,6 +157,34 @@ export default function LeaveManagement() {
       }
     } catch (err) {
       console.error('Failed to load leaves for admin:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearAllLeaves = async () => {
+    if (!window.confirm('Are you sure you want to clear all leave applications and reset counts to 0?')) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/leave/clear-all`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setLeaves([]);
+        setSummary({
+          totalApplications: 0,
+          pendingCount: 0,
+          pendingHodCount: 0,
+          pendingPrincipalCount: 0,
+          pendingMdCount: 0,
+          approvedCount: 0,
+          rejectedCount: 0,
+          activePolicy: quotaPolicy
+        });
+        setToastMsg('All leave records cleared successfully!');
+        setTimeout(() => setToastMsg(''), 3000);
+      }
+    } catch (err) {
+      console.error('Error clearing leaves:', err);
     } finally {
       setLoading(false);
     }

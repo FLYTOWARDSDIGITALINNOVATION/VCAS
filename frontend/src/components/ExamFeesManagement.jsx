@@ -103,6 +103,8 @@ export default function ExamFeesManagement({
         studentMongoId: found.mongoId || found._id || '',
         course: courseValue,
         department: departmentValue,
+        batch: found.batch || found.academicYear || prev.batch || '2025-2028',
+        year: found.year || prev.year || 'I',
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
         amount: prev.amount || '5000',
         totalAmount: String(total),

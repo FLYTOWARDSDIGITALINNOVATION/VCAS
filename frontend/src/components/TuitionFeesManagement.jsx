@@ -224,6 +224,8 @@ export default function TuitionFeesManagement({
         studentMongoId: found.mongoId || found._id || '',
         course: selectedCourseCode,
         department: departmentValue,
+        batch: found.batch || found.academicYear || prev.batch || '2025-2028',
+        year: found.year || prev.year || 'I',
         academicYear: found.academicYear || prev.academicYear || '2025 - 2026',
         amount: String(calcAmt),
         totalAmount: String(totalPayable),
