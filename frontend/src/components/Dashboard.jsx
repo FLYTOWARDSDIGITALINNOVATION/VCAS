@@ -3,29 +3,29 @@ import { API_BASE, BACKEND_URL } from '../apiConfig';
 import StudentsPage from './StudentsPage';
 import ModalPortal from './ModalPortal';
 import CollegeLogo from './CollegeLogo';
-import { 
-  LayoutDashboard, 
-  GraduationCap, 
-  Users, 
-  Building2, 
-  BookOpen, 
-  CheckSquare, 
-  FileSpreadsheet, 
-  Calendar, 
-  BookMarked, 
-  IndianRupee, 
-  UserCheck, 
-  Bell, 
-  Sparkles, 
-  BarChart3, 
-  ShieldCheck, 
-  Settings, 
-  LogOut, 
-  Search, 
-  Plus, 
-  UserPlus, 
-  DollarSign, 
-  FileText, 
+import {
+  LayoutDashboard,
+  GraduationCap,
+  Users,
+  Building2,
+  BookOpen,
+  CheckSquare,
+  FileSpreadsheet,
+  Calendar,
+  BookMarked,
+  IndianRupee,
+  UserCheck,
+  Bell,
+  Sparkles,
+  BarChart3,
+  ShieldCheck,
+  Settings,
+  LogOut,
+  Search,
+  Plus,
+  UserPlus,
+  DollarSign,
+  FileText,
   ChevronRight,
   ChevronLeft,
   ChevronDown,
@@ -82,7 +82,7 @@ function formatTimeAgo(dateInput) {
 export default function Dashboard({ user, onLogout, onSwitchPortal }) {
   const [activePortal, setActivePortal] = useState(user?.role || 'Admin');
   const isFinanceUser = user?.role === 'Accountant' || user?.role === 'Office Staff' || user?.canViewFees === true;
-  
+
   // Restore active page and fee tab from sessionStorage on refresh
   const [activeNav, setActiveNav] = useState(() => {
     const saved = sessionStorage.getItem('vcas_activeNav');
@@ -109,10 +109,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       setHoveredTooltip(null);
       return;
     }
-    const button = targetElement.tagName === 'BUTTON' 
-      ? targetElement 
+    const button = targetElement.tagName === 'BUTTON'
+      ? targetElement
       : (targetElement.querySelector('button') || targetElement);
-    
+
     const rect = button.getBoundingClientRect();
     if (rect.bottom < 30 || rect.top > window.innerHeight - 30) {
       setHoveredTooltip(null);
@@ -246,16 +246,16 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       }
 
       // Process leaves
-      const leavesList = Array.isArray(leavesData?.leaves) 
-        ? leavesData.leaves 
+      const leavesList = Array.isArray(leavesData?.leaves)
+        ? leavesData.leaves
         : (Array.isArray(leavesData) ? leavesData : (leavesData?.data || []));
-      
-      const totalLeavesCount = leavesData?.summary?.totalApplications !== undefined 
-        ? leavesData.summary.totalApplications 
+
+      const totalLeavesCount = leavesData?.summary?.totalApplications !== undefined
+        ? leavesData.summary.totalApplications
         : leavesList.length;
 
-      const pendingLeavesCount = leavesData?.summary?.pendingCount !== undefined 
-        ? leavesData.summary.pendingCount 
+      const pendingLeavesCount = leavesData?.summary?.pendingCount !== undefined
+        ? leavesData.summary.pendingCount
         : leavesList.filter(l => !l.status || l.status.toLowerCase().includes('pending')).length;
 
       const leaveDisplayCount = pendingLeavesCount > 0 ? pendingLeavesCount : totalLeavesCount;
@@ -387,8 +387,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       }
 
       // Process notices & assignments
-      const noticesList = Array.isArray(noticesData?.notices) 
-        ? noticesData.notices 
+      const noticesList = Array.isArray(noticesData?.notices)
+        ? noticesData.notices
         : (Array.isArray(noticesData) ? noticesData : []);
       const totalNoticesCount = noticesList.length;
 
@@ -472,16 +472,14 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         pendingFeesSum = savedFeeRecords.reduce((acc, curr) => acc + (Number(curr.pendingFee) || 0), 0);
       } else {
         rawStudentsList.forEach(s => {
-          if ((s.feeStatus || '').toLowerCase() !== 'paid') {
-            pendingFeesSum += 25000;
-          }
+          pendingFeesSum += Number(s.pendingFee || 0);
         });
       }
-      const pendingFeesDisplay = pendingFeesSum >= 100000 
-        ? `₹${(pendingFeesSum / 100000).toFixed(1)}L` 
-        : pendingFeesSum >= 1000 
-        ? `₹${(pendingFeesSum / 1000).toFixed(0)}K` 
-        : `₹${pendingFeesSum}`;
+      const pendingFeesDisplay = pendingFeesSum >= 100000
+        ? `₹${(pendingFeesSum / 100000).toFixed(1)}L`
+        : pendingFeesSum >= 1000
+          ? `₹${(pendingFeesSum / 1000).toFixed(0)}K`
+          : `₹${pendingFeesSum}`;
 
       // Live Monthly Fee Collections
       const monthsList = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
@@ -711,9 +709,9 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
   const isAdminUser = user?.role === 'Admin' || user?.role === 'Super Admin' || user?.isSuperAdmin === true;
-  const isFinanceOrOffice = user?.role === 'Accountant' || 
-    user?.role === 'Office Staff' || 
-    user?.designation === 'Accountant' || 
+  const isFinanceOrOffice = user?.role === 'Accountant' ||
+    user?.role === 'Office Staff' ||
+    user?.designation === 'Accountant' ||
     user?.designation === 'Office Staff' ||
     (user?.department && (user?.department.toLowerCase().includes('account') || user?.department.toLowerCase().includes('office')));
 
@@ -746,18 +744,19 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     }] : [{
       title: 'ACADEMIC',
       items: [
+        { name: 'Students', icon: GraduationCap },
         { name: 'TC', icon: Award },
         { name: 'Bonafide', icon: Award },
-        { name: 'Students Attendance', icon: CheckSquare }
+        { name: 'Attendance', icon: CheckSquare }
       ]
     }]),
     ...(canViewFees ? [{
       title: 'FINANCE',
       items: [
-        { 
-          name: 'Fees', 
+        {
+          name: 'Fees',
           icon: IndianRupee,
-          subItems: ['Fee Structure', 'Tuition Fees', 'Exam Fees', 'Transport Fees']
+          subItems: ['Fee Structure', 'Tuition Fees', 'Exam Fees', 'Transport Fees', 'Miscellaneous Fees']
         },
         {
           name: 'Expenses',
@@ -798,128 +797,128 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   // Dynamic Metric cards
   const metricCards = isFinanceOrOffice ? [
-    { 
-      title: 'PENDING FEES', 
-      value: dashboardStats.pendingFees, 
-      change: 'Outstanding balance', 
-      isUp: false, 
-      icon: IndianRupee, 
-      bg: 'bg-amber-500', 
-      textColor: 'text-amber-600', 
-      navTarget: 'Fees' 
+    {
+      title: 'PENDING FEES',
+      value: dashboardStats.pendingFees,
+      change: 'Outstanding balance',
+      isUp: false,
+      icon: IndianRupee,
+      bg: 'bg-amber-500',
+      textColor: 'text-amber-600',
+      navTarget: 'Fees'
     },
-    { 
-      title: 'FEE MODULES', 
-      value: '4 Modules', 
-      change: 'Tuition, Exam, Transport, Structure', 
-      isUp: true, 
-      icon: DollarSign, 
-      bg: 'bg-emerald-500', 
-      textColor: 'text-emerald-600', 
-      navTarget: 'Fees' 
+    {
+      title: 'FEE MODULES',
+      value: '4 Modules',
+      change: 'Tuition, Exam, Transport, Structure',
+      isUp: true,
+      icon: DollarSign,
+      bg: 'bg-emerald-500',
+      textColor: 'text-emerald-600',
+      navTarget: 'Fees'
     },
-    { 
-      title: 'EXPENSES & EVENTS', 
-      value: 'Expenditures', 
-      change: 'Student supplies & events', 
-      isUp: true, 
-      icon: Receipt, 
-      bg: 'bg-indigo-500', 
-      textColor: 'text-indigo-600', 
-      navTarget: 'Expenses' 
+    {
+      title: 'EXPENSES & EVENTS',
+      value: 'Expenditures',
+      change: 'Student supplies & events',
+      isUp: true,
+      icon: Receipt,
+      bg: 'bg-indigo-500',
+      textColor: 'text-indigo-600',
+      navTarget: 'Expenses'
     },
-    { 
-      title: 'NOTICES & CIRCULARS', 
-      value: String(dashboardStats.noticesCount !== undefined ? dashboardStats.noticesCount : 0), 
-      change: `${dashboardStats.noticesCount || 0} published notice(s)`, 
-      isUp: true, 
-      icon: Bell, 
-      bg: 'bg-purple-500', 
-      textColor: 'text-purple-600', 
-      navTarget: 'Notices' 
+    {
+      title: 'NOTICES & CIRCULARS',
+      value: String(dashboardStats.noticesCount !== undefined ? dashboardStats.noticesCount : 0),
+      change: `${dashboardStats.noticesCount || 0} published notice(s)`,
+      isUp: true,
+      icon: Bell,
+      bg: 'bg-purple-500',
+      textColor: 'text-purple-600',
+      navTarget: 'Notices'
     }
   ] : [
-    { 
-      title: 'TOTAL STUDENTS', 
-      value: Number(dashboardStats.totalStudents).toLocaleString('en-IN'), 
-      change: '1 Active Batch • 3 Enrolled', 
-      isUp: true, 
-      icon: GraduationCap, 
-      bg: 'bg-blue-500', 
-      textColor: 'text-blue-600', 
-      navTarget: 'Students' 
+    {
+      title: 'TOTAL STUDENTS',
+      value: Number(dashboardStats.totalStudents).toLocaleString('en-IN'),
+      change: '1 Active Batch • 3 Enrolled',
+      isUp: true,
+      icon: GraduationCap,
+      bg: 'bg-blue-500',
+      textColor: 'text-blue-600',
+      navTarget: 'Students'
     },
-    { 
-      title: 'TOTAL STAFF', 
-      value: String(dashboardStats.totalStaff), 
-      change: '+3% vs last month', 
-      isUp: true, 
-      icon: Users, 
-      bg: 'bg-emerald-500', 
-      textColor: 'text-emerald-600', 
-      navTarget: 'Staff' 
+    {
+      title: 'TOTAL STAFF',
+      value: String(dashboardStats.totalStaff),
+      change: '+3% vs last month',
+      isUp: true,
+      icon: Users,
+      bg: 'bg-emerald-500',
+      textColor: 'text-emerald-600',
+      navTarget: 'Staff'
     },
-    { 
-      title: 'DEPARTMENTS', 
-      value: String(dashboardStats.departmentsCount), 
-      change: 'Active in college', 
-      isUp: true, 
-      icon: Building2, 
-      bg: 'bg-purple-500', 
-      textColor: 'text-purple-600', 
-      navTarget: 'Departments' 
+    {
+      title: 'DEPARTMENTS',
+      value: String(dashboardStats.departmentsCount),
+      change: 'Active in college',
+      isUp: true,
+      icon: Building2,
+      bg: 'bg-purple-500',
+      textColor: 'text-purple-600',
+      navTarget: 'Departments'
     },
-    { 
-      title: 'TOTAL COURSES', 
-      value: String(dashboardStats.totalCourses), 
-      change: dashboardStats.totalCourses > 0 ? `${dashboardStats.totalCourses} Active Courses` : 'No courses added', 
-      isUp: dashboardStats.totalCourses > 0, 
-      icon: BookOpen, 
-      bg: 'bg-indigo-500', 
-      textColor: 'text-indigo-600', 
-      navTarget: 'Subjects' 
+    {
+      title: 'TOTAL COURSES',
+      value: String(dashboardStats.totalCourses),
+      change: dashboardStats.totalCourses > 0 ? `${dashboardStats.totalCourses} Active Courses` : 'No courses added',
+      isUp: dashboardStats.totalCourses > 0,
+      icon: BookOpen,
+      bg: 'bg-indigo-500',
+      textColor: 'text-indigo-600',
+      navTarget: 'Subjects'
     },
-    { 
-      title: 'TODAY\'S ATTENDANCE', 
-      value: dashboardStats.attendanceRate, 
-      change: '+1.4% avg presence', 
-      isUp: true, 
-      icon: CheckSquare, 
-      bg: 'bg-teal-500', 
-      textColor: 'text-teal-600', 
-      navTarget: 'Attendance' 
+    {
+      title: 'TODAY\'S ATTENDANCE',
+      value: dashboardStats.attendanceRate,
+      change: '+1.4% avg presence',
+      isUp: true,
+      icon: CheckSquare,
+      bg: 'bg-teal-500',
+      textColor: 'text-teal-600',
+      navTarget: 'Attendance'
     },
-    ...(canViewFees ? [{ 
-      title: 'PENDING FEES', 
-      value: dashboardStats.pendingFees, 
-      change: '-8% vs last month', 
-      isUp: false, 
-      icon: IndianRupee, 
-      bg: 'bg-amber-500', 
-      textColor: 'text-amber-600', 
-      navTarget: 'Fees' 
+    ...(canViewFees ? [{
+      title: 'PENDING FEES',
+      value: dashboardStats.pendingFees,
+      change: '-8% vs last month',
+      isUp: false,
+      icon: IndianRupee,
+      bg: 'bg-amber-500',
+      textColor: 'text-amber-600',
+      navTarget: 'Fees'
     }] : []),
-    { 
-      title: 'LEAVE REQUESTS', 
-      value: String(dashboardStats.leaveDisplayCount !== undefined ? dashboardStats.leaveDisplayCount : (dashboardStats.pendingLeaves || dashboardStats.totalLeaves || 0)), 
-      change: dashboardStats.pendingLeaves > 0 
-        ? `${dashboardStats.pendingLeaves} pending approval` 
-        : (dashboardStats.totalLeaves > 0 ? `${dashboardStats.totalLeaves} total application(s)` : '0 pending review'), 
-      isUp: (dashboardStats.leaveDisplayCount || 0) > 0, 
-      icon: Calendar, 
-      bg: 'bg-orange-500', 
-      textColor: 'text-orange-600', 
-      navTarget: 'Leave Management' 
+    {
+      title: 'LEAVE REQUESTS',
+      value: String(dashboardStats.leaveDisplayCount !== undefined ? dashboardStats.leaveDisplayCount : (dashboardStats.pendingLeaves || dashboardStats.totalLeaves || 0)),
+      change: dashboardStats.pendingLeaves > 0
+        ? `${dashboardStats.pendingLeaves} pending approval`
+        : (dashboardStats.totalLeaves > 0 ? `${dashboardStats.totalLeaves} total application(s)` : '0 pending review'),
+      isUp: (dashboardStats.leaveDisplayCount || 0) > 0,
+      icon: Calendar,
+      bg: 'bg-orange-500',
+      textColor: 'text-orange-600',
+      navTarget: 'Leave Management'
     },
-    { 
-      title: 'NOTICES & CIRCULARS', 
-      value: String(dashboardStats.noticesCount !== undefined ? dashboardStats.noticesCount : 0), 
-      change: `${dashboardStats.noticesCount || 0} published notice(s)`, 
-      isUp: true, 
-      icon: Bell, 
-      bg: 'bg-indigo-500', 
-      textColor: 'text-indigo-600', 
-      navTarget: 'Notices' 
+    {
+      title: 'NOTICES & CIRCULARS',
+      value: String(dashboardStats.noticesCount !== undefined ? dashboardStats.noticesCount : 0),
+      change: `${dashboardStats.noticesCount || 0} published notice(s)`,
+      isUp: true,
+      icon: Bell,
+      bg: 'bg-indigo-500',
+      textColor: 'text-indigo-600',
+      navTarget: 'Notices'
     }
   ];
 
@@ -929,6 +928,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     { label: 'Tuition Fees', icon: DollarSign, bg: 'bg-amber-50 hover:bg-amber-100 text-amber-700', navTarget: 'Fees', feeType: 'Tuition Fees' },
     { label: 'Exam Fees', icon: FileSpreadsheet, bg: 'bg-purple-50 hover:bg-purple-100 text-purple-700', navTarget: 'Fees', feeType: 'Exam Fees' },
     { label: 'Transport Fees', icon: IndianRupee, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Fees', feeType: 'Transport Fees' },
+    { label: 'Miscellaneous Fees', icon: FileSpreadsheet, bg: 'bg-teal-50 hover:bg-teal-100 text-teal-700', navTarget: 'Fees', feeType: 'Miscellaneous Fees' },
     { label: 'Notices & Circulars', icon: Bell, bg: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700', navTarget: 'Notices' }
   ] : [
     { label: 'Add Student', icon: UserPlus, bg: 'bg-blue-50 hover:bg-blue-100 text-blue-700', navTarget: 'Students' },
@@ -975,7 +975,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                 <CollegeLogo size="md" showText={true} />
               </div>
               {/* Collapse button on Desktop */}
-              <button 
+              <button
                 onClick={() => setSidebarCollapsed(true)}
                 onMouseEnter={(e) => showTooltipFor('Collapse Sidebar', e.currentTarget, true)}
                 onMouseMove={(e) => showTooltipFor('Collapse Sidebar', e.currentTarget, true)}
@@ -986,7 +986,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                 <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
               </button>
               {/* Close button on mobile */}
-              <button 
+              <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer"
                 aria-label="Close menu"
@@ -1014,8 +1014,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                   if (isCollapsed) {
                     const isRupee = Icon === IndianRupee;
                     return (
-                      <div 
-                        key={item.name} 
+                      <div
+                        key={item.name}
                         className="w-full flex justify-center py-1 cursor-pointer"
                         onMouseEnter={(e) => showTooltipFor(item.name, e.currentTarget)}
                         onMouseMove={(e) => showTooltipFor(item.name, e.currentTarget)}
@@ -1028,11 +1028,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                               setSelectedFeeType('All');
                             }
                           }}
-                          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${
-                            isActive
+                          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${isActive
                               ? 'bg-blue-50 text-blue-700 font-extrabold shadow-xs border border-blue-200/80'
                               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 border border-transparent'
-                          }`}
+                            }`}
                           aria-label={item.name}
                         >
                           <Icon className={`w-5 h-5 shrink-0 stroke-[2] pointer-events-none ${isRupee ? 'scale-120 stroke-[2.4]' : ''} ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
@@ -1050,11 +1049,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                             setSelectedFeeType('All');
                             setFeesDropdownOpen(!feesDropdownOpen);
                           }}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            isActive
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${isActive
                               ? 'bg-blue-50 text-blue-700 font-extrabold'
                               : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-3">
                             <Icon className={`w-4 h-4 ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
@@ -1076,11 +1074,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                                     setSelectedFeeType(subName);
                                     setMobileMenuOpen(false);
                                   }}
-                                  className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                                    isSubActive
+                                  className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 cursor-pointer ${isSubActive
                                       ? 'bg-blue-100 text-blue-800 font-extrabold'
                                       : 'text-slate-800 hover:bg-slate-100 hover:text-slate-950'
-                                  }`}
+                                    }`}
                                 >
                                   <span className={`w-1.5 h-1.5 rounded-full ${isSubActive ? 'bg-blue-700' : 'bg-slate-600'}`}></span>
                                   <span>{subName}</span>
@@ -1097,11 +1094,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                     <button
                       key={item.name}
                       onClick={() => handleNavClick(item.name)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        isActive
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${isActive
                           ? 'bg-blue-50 text-blue-700 font-extrabold'
                           : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
-                      }`}
+                        }`}
                     >
                       <Icon className={`w-4 h-4 ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
                       <span>{item.name}</span>
@@ -1116,7 +1112,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
       {/* Mobile Drawer Logout Only */}
       <div className="lg:hidden p-4 border-t border-slate-100">
-        <button 
+        <button
           onClick={() => {
             setMobileMenuOpen(false);
             setShowLogoutModal(true);
@@ -1132,7 +1128,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
   return (
     <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
-      
+
       {/* DESKTOP SIDEBAR */}
       <aside className={`hidden lg:flex ${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white border-r border-slate-200 flex-col shrink-0 h-full overflow-hidden transition-[width] duration-300 ease-in-out`}>
         <SidebarContent isCollapsed={sidebarCollapsed} />
@@ -1141,7 +1137,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       {/* MOBILE SIDEBAR DRAWER & BACKDROP */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-[110] lg:hidden">
-          <div 
+          <div
             className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
           />
@@ -1153,7 +1149,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
       {/* MAIN CONTENT AREA */}
       <div id="main-content-scroll-container" className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
-        
+
         {/* TOP HEADER BAR */}
         <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
           <div className="flex items-center gap-3 flex-1 max-w-md mr-4">
@@ -1208,7 +1204,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
               {/* Quick Results Overlay */}
               {headerSearchResultsOpen && headerSearchQuery.trim() && (
-                <div 
+                <div
                   className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-2 z-50 overflow-hidden animate-fadeIn"
                   onMouseDown={(e) => e.preventDefault()}
                 >
@@ -1274,15 +1270,14 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
             {/* User Avatar & Role Badge (Pill Container matching Image 2) */}
             <div className="flex items-center gap-2.5 bg-slate-50/90 border border-slate-200/80 rounded-2xl p-1 sm:p-1.5 sm:pr-3.5">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-xs ${
-                user?.role === 'Super Admin'
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-xs ${user?.role === 'Super Admin'
                   ? 'bg-purple-100 text-purple-700'
                   : user?.role === 'Accountant'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : user?.role === 'Office Staff'
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-blue-100 text-blue-700'
-              }`}>
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : user?.role === 'Office Staff'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-blue-100 text-blue-700'
+                }`}>
                 {user?.role === 'Super Admin' ? 'SA' : user?.role === 'Accountant' ? 'ACC' : user?.role === 'Office Staff' ? 'OS' : 'P'}
               </div>
               <div className="text-left hidden sm:block min-w-0">
@@ -1434,7 +1429,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         ) : (
           /* DEFAULT DASHBOARD VIEW */
           <main className="flex-1 p-4 sm:p-6 space-y-6 w-full">
-            
+
             {/* Super Admin Access Banner */}
             {user?.role === 'Super Admin' && (
               <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -1453,13 +1448,13 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button 
+                  <button
                     onClick={() => setActiveNav('Staff')}
                     className="px-3 py-1.5 bg-white hover:bg-purple-50 text-purple-700 text-xs font-bold rounded-xl border border-purple-200 shadow-xs transition-all"
                   >
                     Staff Credentials →
                   </button>
-                  <button 
+                  <button
                     onClick={() => setActiveNav('Students')}
                     className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all"
                   >
@@ -1495,12 +1490,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
               {metricCards.map((card, idx) => {
                 const Icon = card.icon;
                 return (
-                  <div 
-                    key={idx} 
+                  <div
+                    key={idx}
                     onClick={() => card.navTarget && handleNavClick(card.navTarget)}
-                    className={`bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all duration-200 flex items-start justify-between ${
-                      card.navTarget ? 'cursor-pointer hover:border-blue-300' : ''
-                    }`}
+                    className={`bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all duration-200 flex items-start justify-between ${card.navTarget ? 'cursor-pointer hover:border-blue-300' : ''
+                      }`}
                   >
                     <div>
                       <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-2">
@@ -1514,7 +1508,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                         {card.change}
                       </p>
                     </div>
-                    
+
                     <div className={`w-10 h-10 rounded-xl ${card.bg} text-white flex items-center justify-center shadow-xs shrink-0`}>
                       <Icon className="w-5 h-5" />
                     </div>
@@ -1526,7 +1520,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
             {/* CHARTS ROW 1: Enrollment Trend Line Chart + Attendance Donut (Only for Academic/Admin roles) */}
             {!isFinanceOrOffice && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 {/* Left 2 Cols: Student Enrollment Trend */}
                 <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
                   <div className="flex items-center justify-between mb-6">
@@ -1538,7 +1532,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                       Total: {Number(dashboardStats.totalStudents).toLocaleString('en-IN')}
                     </span>
                   </div>
-                  
+
                   <div className="h-64 w-full relative">
                     {/* SVG Line Chart */}
                     <svg className="w-full h-full overflow-visible" viewBox="0 0 700 200" preserveAspectRatio="none">
@@ -1556,18 +1550,18 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                         </linearGradient>
                       </defs>
 
-                      <path 
-                        d="M 0 110 Q 100 80, 200 70 T 400 90 T 600 60 T 700 50 L 700 200 L 0 200 Z" 
-                        fill="url(#areaGradient)" 
+                      <path
+                        d="M 0 110 Q 100 80, 200 70 T 400 90 T 600 60 T 700 50 L 700 200 L 0 200 Z"
+                        fill="url(#areaGradient)"
                       />
 
                       {/* Main Line */}
-                      <path 
-                        d="M 0 110 Q 100 80, 200 70 T 400 90 T 600 60 T 700 50" 
-                        fill="none" 
-                        stroke="#3b82f6" 
-                        strokeWidth="3" 
-                        strokeLinecap="round" 
+                      <path
+                        d="M 0 110 Q 100 80, 200 70 T 400 90 T 600 60 T 700 50"
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth="3"
+                        strokeLinecap="round"
                       />
                     </svg>
 
@@ -1593,7 +1587,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                       Live
                     </span>
                   </div>
-                  
+
                   <div className="relative w-44 h-44 sm:w-48 sm:h-48 mx-auto flex items-center justify-center">
                     <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                       {/* Background Circle */}
@@ -1637,7 +1631,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                         d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                       />
                     </svg>
-                    
+
                     <div className="absolute text-center">
                       <span className="text-2xl font-black text-slate-900">{dashboardStats.attendanceBreakdown.presentPct}%</span>
                       <p className="text-[10px] text-slate-400 font-bold uppercase">Present Rate</p>
@@ -1664,7 +1658,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
             {/* CHARTS ROW 2: Horizontal Bar + Monthly Fees + Subject Attendance */}
             {!isFinanceOrOffice ? (
               <div className={`grid grid-cols-1 ${canViewFees ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
-                
+
                 {/* Department Students Horizontal Bar */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
                   <div className="flex items-center justify-between">
@@ -1734,25 +1728,24 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                         </span>
 
                         {/* Vertical Bar */}
-                        <div 
-                          className={`w-full rounded-t-lg transition-all duration-300 shadow-xs ${
-                            s.pct === 0 
-                              ? 'bg-slate-200 border-t-2 border-slate-400' 
+                        <div
+                          className={`w-full rounded-t-lg transition-all duration-300 shadow-xs ${s.pct === 0
+                              ? 'bg-slate-200 border-t-2 border-slate-400'
                               : 'bg-gradient-to-t from-purple-700 to-purple-500 group-hover:from-purple-800 group-hover:to-purple-400'
-                          }`} 
+                            }`}
                           style={{ height: s.pct === 0 ? '6px' : s.height }}
                           title={`${s.code} • ${s.name}: ${s.pct}% Presence`}
                         ></div>
 
                         {/* Subject Code & Hoverable Real Subject Name */}
                         <div className="text-center w-full">
-                          <span 
+                          <span
                             className="text-xs font-bold text-slate-800 group-hover:text-purple-600 transition-colors block truncate"
                             title={`${s.code}: ${s.name}`}
                           >
                             {s.code}
                           </span>
-                          <span 
+                          <span
                             className="text-[9px] text-slate-400 group-hover:text-slate-700 block truncate transition-colors leading-tight"
                             title={`${s.code}: ${s.name}`}
                           >
@@ -1799,7 +1792,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                       { name: 'Fee Structure', desc: 'Define & update class fee tiers', feeType: 'Fee Structure', color: 'text-blue-600 bg-blue-50 border-blue-100' },
                       { name: 'Tuition Fees', desc: 'Term & semester tuition collection', feeType: 'Tuition Fees', color: 'text-amber-600 bg-amber-50 border-amber-100' },
                       { name: 'Exam Fees', desc: 'Semester examination fee receipts', feeType: 'Exam Fees', color: 'text-purple-600 bg-purple-50 border-purple-100' },
-                      { name: 'Transport Fees', desc: 'Bus route fees & passes', feeType: 'Transport Fees', color: 'text-emerald-600 bg-emerald-50 border-emerald-100' }
+                      { name: 'Transport Fees', desc: 'Bus route fees & passes', feeType: 'Transport Fees', color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
+                      { name: 'Miscellaneous Fees', desc: 'Lab, library, cultural & custom fees', feeType: 'Miscellaneous Fees', color: 'text-teal-600 bg-teal-50 border-teal-100' }
                     ].map((mod, idx) => (
                       <button
                         key={idx}
@@ -1825,14 +1819,14 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
 
             {/* BOTTOM ROW: Recent Activity + Quick Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
+
               {/* Left 2 Cols: Recent Activity */}
               <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-slate-900">Recent Institutional Activity</h3>
                   <p className="text-[11px] text-slate-500 font-medium mt-0.5">Institutional notices, leave requests, and academic updates</p>
                 </div>
-                
+
                 <div className="divide-y divide-slate-100">
                   {dashboardStats.recentActivities.length === 0 ? (
                     <div className="py-8 text-center text-xs text-slate-400 font-medium">
@@ -1842,12 +1836,11 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                     dashboardStats.recentActivities.map((act, i) => {
                       const Icon = act.icon;
                       return (
-                        <div 
-                          key={i} 
+                        <div
+                          key={i}
                           onClick={() => act.navTarget && handleNavClick(act.navTarget)}
-                          className={`py-3.5 flex items-center justify-between first:pt-0 last:pb-0 ${
-                            act.navTarget ? 'cursor-pointer hover:bg-slate-50/80 px-2 -mx-2 rounded-xl transition-all' : ''
-                          }`}
+                          className={`py-3.5 flex items-center justify-between first:pt-0 last:pb-0 ${act.navTarget ? 'cursor-pointer hover:bg-slate-50/80 px-2 -mx-2 rounded-xl transition-all' : ''
+                            }`}
                         >
                           <div className="flex items-center gap-3.5 min-w-0 mr-3">
                             <div className={`w-9 h-9 rounded-xl ${act.bg} flex items-center justify-center font-bold shrink-0`}>
@@ -1873,7 +1866,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                   {quickActions.map((action, i) => {
                     const Icon = action.icon;
                     return (
-                      <button 
+                      <button
                         key={i}
                         onClick={() => {
                           if (action.feeType) {

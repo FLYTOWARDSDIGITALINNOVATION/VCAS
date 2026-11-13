@@ -376,21 +376,6 @@ export default function StaffLeave({ staffUser = {} }) {
             {leaves.length}
           </span>
         </button>
-        <button
-          onClick={() => {
-            setActiveTab('dept_timetable');
-            if (deptStaffList.length === 0) fetchDeptStaff();
-            if (!selectedTimetableStaffId && staffId) setSelectedTimetableStaffId(staffId);
-          }}
-          className={`pb-3 px-4 text-xs font-black transition-all flex items-center gap-2 border-b-2 cursor-pointer shrink-0 ${
-            activeTab === 'dept_timetable'
-              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <CalendarCheck className="w-4 h-4 text-indigo-600" />
-          <span>Department Timetable & Period Allocation</span>
-        </button>
       </div>
 
       {/* Leave Summary Cards (Remaining leave count removed per user request) */}
@@ -689,100 +674,6 @@ export default function StaffLeave({ staffUser = {} }) {
       </div>
       )}
 
-      {/* TAB 3: DEPARTMENT TIMETABLE & PERIOD ALLOCATION FOR LEAVE PLANNING */}
-      {activeTab === 'dept_timetable' && (
-        <div className="bg-white rounded-2xl border border-indigo-200/80 shadow-xs overflow-hidden space-y-4 p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-indigo-600" />
-                Department Timetable & Staff Period Allocation
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Department: <span className="font-bold text-slate-800">{staffUser?.department || 'General'}</span> • View schedules to manage period swap and substitute class allocation
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500">Select Faculty:</span>
-              <select
-                value={selectedTimetableStaffId}
-                onChange={(e) => setSelectedTimetableStaffId(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold py-2 px-3 rounded-xl focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                {deptStaffList.map((s) => (
-                  <option key={s.staffId || s._id} value={s.staffId}>
-                    {s.name} ({s.staffId}) {s.staffId === staffId ? '— You' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {loadingTimetable ? (
-            <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-              <p className="text-xs font-medium">Loading faculty timetable schedule...</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-xs text-center border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 font-extrabold text-slate-800">
-                    <th className="py-3 px-3 w-28 text-left bg-slate-200/70 border-r border-slate-200">Day</th>
-                    {PERIODS.map(p => (
-                      <th key={p.num} className="py-2 px-2 border-r border-slate-200">
-                        <div className="text-[11px] font-black text-slate-900">Period {p.num}</div>
-                        <div className="text-[9px] text-slate-500 font-medium">{p.time}</div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {DAYS.map(day => (
-                    <tr key={day} className="hover:bg-indigo-50/20 transition-colors">
-                      <td className="py-3 px-3 font-extrabold text-slate-900 text-left bg-slate-50/60 border-r border-slate-200">
-                        {day}
-                      </td>
-                      {PERIODS.map(p => {
-                        const slotData = deptSchedule[day]?.[String(p.num)] || null;
-                        return (
-                          <td key={p.num} className="py-2 px-2 border-r border-slate-100 min-w-[100px]">
-                            {slotData ? (
-                              <div className="p-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 shadow-2xs">
-                                <div className="font-extrabold text-[11px] truncate" title={slotData.name}>
-                                  {slotData.code || slotData.name}
-                                </div>
-                                <div className="text-[9px] text-blue-600 font-semibold truncate">
-                                  {slotData.name}
-                                </div>
-                                {slotData.room && (
-                                  <div className="text-[9px] text-slate-500 font-mono mt-0.5">
-                                    Rm {slotData.room}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="inline-block px-2 py-1 rounded text-[10px] font-bold text-slate-400 bg-slate-50/50">
-                                Free
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 font-medium flex items-center gap-2">
-            <Info className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Staff marked as <strong>Free</strong> in any period can be assigned for substitute class allocation during leave.</span>
-          </div>
-        </div>
-      )}
 
       {/* HOD Review & Stage Approval Modal */}
       {reviewModalLeave && (

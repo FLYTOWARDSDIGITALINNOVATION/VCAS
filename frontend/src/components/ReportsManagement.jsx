@@ -10,8 +10,6 @@ import {
   FileText, 
   GraduationCap, 
   Users, 
-  IndianRupee, 
-  CheckSquare, 
   Building2, 
   Sparkles, 
   Search, 
@@ -22,8 +20,6 @@ import {
 
 const REPORT_CATEGORIES = [
   { id: 'academic', label: 'Academic Performance', icon: GraduationCap },
-  { id: 'attendance', label: 'Attendance & Defaulters', icon: CheckSquare },
-  { id: 'finance', label: 'Finance & Fee Collections', icon: IndianRupee },
   { id: 'admissions', label: 'Admissions & Demographics', icon: Users },
   { id: 'faculty', label: 'Faculty & Workload', icon: Building2 }
 ];
@@ -348,27 +344,7 @@ export default function ReportsManagement({ user }) {
     let headers = [];
     let rows = [];
 
-    if (activeCategory === 'attendance') {
-      headers = ['Roll No', 'Student Name', 'Department', 'Semester', 'Attendance %', 'Parent Contact', 'Status'];
-      const dataSource = filteredDefaulters.length > 0 ? filteredDefaulters : enrichedStudents.map(s => ({
-        rollNo: s.regNo || s.rollNo || s.studentId || '',
-        name: s.name || s.fullName || '',
-        dept: s.department || '',
-        year: s.sem || s.semester || s.year || '',
-        att: s.attendance !== null && s.attendance !== undefined ? `${s.attendance}%` : 'N/A',
-        parentContact: s.fatherMobile || s.motherMobile || s.phone || 'N/A',
-        status: s.attendance !== null && s.attendance < 75 ? (s.attendance < 65 ? 'Critical Shortage' : 'Warning Issued') : 'Regular'
-      }));
-      rows = dataSource.map(s => [
-        `"${s.rollNo || ''}"`,
-        `"${s.name || ''}"`,
-        `"${s.dept || s.department || ''}"`,
-        `"${s.year || s.sem || ''}"`,
-        `"${s.att || (s.attendance !== null && s.attendance !== undefined ? s.attendance + '%' : 'N/A')}"`,
-        `"${s.parentContact || s.phone || 'N/A'}"`,
-        `"${s.status || 'Regular'}"`
-      ]);
-    } else if (activeCategory === 'faculty') {
+    if (activeCategory === 'faculty') {
       headers = ['Staff ID', 'Name', 'Department', 'Designation', 'Category', 'Email', 'Phone'];
       rows = staff.map(st => [
         `"${st.staffId || st.empId || ''}"`,
@@ -638,145 +614,6 @@ export default function ReportsManagement({ user }) {
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB CONTENT 2: ATTENDANCE & DEFAULTERS */}
-      {activeCategory === 'attendance' && (
-        <div className="space-y-6">
-          {/* Attendance KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Average Campus Attendance</p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-3xl font-black text-slate-900">{overallKpis.avgAttendance !== 'N/A' ? `${overallKpis.avgAttendance}%` : 'N/A'}</span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1">Target Threshold: 75%</p>
-            </div>
-
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">High Attendance (&gt;90%)</p>
-              <span className="text-3xl font-black text-emerald-600 mt-1 block">{overallKpis.highAttendanceCount}</span>
-              <p className="text-[11px] text-slate-500 mt-1">Eligible for merit honors</p>
-            </div>
-
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Warning Zone (75-80%)</p>
-              <span className="text-3xl font-black text-amber-600 mt-1 block">{enrichedStudents.filter(s => s.attendance !== null && Number(s.attendance) >= 75 && Number(s.attendance) < 80).length}</span>
-              <p className="text-[11px] text-slate-500 mt-1">Needs monitoring</p>
-            </div>
-
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Defaulters (&lt; 75%)</p>
-              <span className="text-3xl font-black text-rose-600 mt-1 block">{overallKpis.defaultersCount}</span>
-              <p className="text-[11px] text-slate-500 mt-1">Hall ticket on hold</p>
-            </div>
-          </div>
-
-          {/* Defaulters Action Table */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900">Attendance Defaulter Registry (&lt; 75% Attendance)</h3>
-                <p className="text-xs text-slate-400">Students facing exam condonation requirement</p>
-              </div>
-              <button
-                onClick={() => showToast(`Dispatched SMS alerts to ${filteredDefaulters.length} parent contacts!`)}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs"
-              >
-                Broadcast Alert to All Parents
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                    <th className="py-3.5 px-4">Roll Number</th>
-                    <th className="py-3.5 px-4">Student Name</th>
-                    <th className="py-3.5 px-4">Department & Year</th>
-                    <th className="py-3.5 px-4">Attendance %</th>
-                    <th className="py-3.5 px-4">Missed Hours</th>
-                    <th className="py-3.5 px-4">Guardian Contact</th>
-                    <th className="py-3.5 px-4">Administrative Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {filteredDefaulters.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-400 text-xs font-semibold">No attendance defaulters found</td>
-                    </tr>
-                  ) : filteredDefaulters.map((d, i) => (
-                    <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{d.rollNo}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-900">{d.name}</td>
-                      <td className="py-3.5 px-4">{d.dept} • {d.year}</td>
-                      <td className="py-3.5 px-4 font-black text-rose-600">{d.att}</td>
-                      <td className="py-3.5 px-4 text-slate-500">{d.missedClasses} Hours</td>
-                      <td className="py-3.5 px-4 font-mono">{d.parentContact}</td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-rose-50 text-rose-700 border border-rose-200">
-                          {d.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB CONTENT 3: FINANCE & FEE COLLECTIONS */}
-      {activeCategory === 'finance' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Billed Fees</p>
-              <span className="text-3xl font-black text-slate-900 mt-1 block">{financeData.totalBilledStr}</span>
-              <p className="text-[11px] text-slate-500 mt-1">Academic Year 2025-26 ({financeData.totalStudents} enrolled)</p>
-            </div>
-
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Collected to Date</p>
-              <span className="text-3xl font-black text-emerald-600 mt-1 block">{financeData.collectedStr}</span>
-              <p className="text-[11px] text-slate-500 mt-1">{financeData.collectionRate}% Collection Rate ({financeData.paidCount} paid)</p>
-            </div>
-
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Outstanding Dues</p>
-              <span className="text-3xl font-black text-amber-600 mt-1 block">{financeData.outstandingStr}</span>
-              <p className="text-[11px] text-slate-500 mt-1">Across {financeData.pendingCount} students</p>
-            </div>
-
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Scholarship Waivers</p>
-              <span className="text-3xl font-black text-purple-600 mt-1 block">{financeData.scholarshipStr}</span>
-              <p className="text-[11px] text-slate-500 mt-1">Merit & Need-based</p>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs space-y-4">
-            <h3 className="text-sm font-extrabold text-slate-900">Fee Head Revenue Distribution</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {financeData.feeHeads.map((f, i) => (
-                <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
-                  <div className="flex justify-between font-bold text-xs">
-                    <span className="text-slate-800">{f.head}</span>
-                    <span className="text-cyan-600">{f.pct}%</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-cyan-600 rounded-full" style={{ width: `${f.pct}%` }} />
-                  </div>
-                  <div className="flex justify-between text-[11px] text-slate-500">
-                    <span>Recv: <strong>{f.collected}</strong></span>
-                    <span>Total: {f.total}</span>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>

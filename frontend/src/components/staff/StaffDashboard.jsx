@@ -26,6 +26,7 @@ import StaffCoursePlan from './StaffCoursePlan';
 import BonafideManagement from '../BonafideManagement';
 import TCManagement from '../TCManagement';
 import DriverManagement from '../DriverManagement';
+import AttendanceManagement from '../AttendanceManagement';
 import CollegeLogo from '../CollegeLogo';
 
 const NAV_SECTIONS = [
@@ -74,10 +75,10 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       setHoveredTooltip(null);
       return;
     }
-    const button = targetElement.tagName === 'BUTTON' 
-      ? targetElement 
+    const button = targetElement.tagName === 'BUTTON'
+      ? targetElement
       : (targetElement.querySelector('button') || targetElement);
-    
+
     const rect = button.getBoundingClientRect();
     if (rect.bottom < 30 || rect.top > window.innerHeight - 30) {
       setHoveredTooltip(null);
@@ -132,48 +133,48 @@ export default function StaffDashboard({ staffUser, onLogout }) {
 
   const renderPage = () => {
     switch (activeNav) {
-      case 'Dashboard':            return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
+      case 'Dashboard': return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
       case 'Student':
       case 'Student Module':
-      case 'Student Entry':        return <StudentsPage user={staffUser} readOnly={false} />;
-      case 'My Classes':           return <StaffMyClasses staffUser={staffUser} />;
-      case 'Attendance':           return <StaffAttendance staffUser={staffUser} />;
-      case 'Internal Marks':       return <StaffInternalMarks staffUser={staffUser} />;
-      case 'Timetable':            return <StaffTimetable staffUser={staffUser} />;
+      case 'Student Entry': return <StudentsPage user={staffUser} readOnly={false} />;
+      case 'My Classes': return <StaffMyClasses staffUser={staffUser} />;
+      case 'Attendance':
+      case 'Student Attendance': return (isOfficeStaff || isAccountantOnly) ? <AttendanceManagement user={staffUser} /> : <StaffAttendance staffUser={staffUser} isReadOnly={activeNav === 'Student Attendance'} />;
+      case 'Internal Marks': return <StaffInternalMarks staffUser={staffUser} />;
+      case 'Timetable': return <StaffTimetable staffUser={staffUser} />;
       case 'Hall Allocation & Tickets':
       case 'Hall Tickets & Allocation':
       case 'Hall Allocation Setup':
       case 'Hall Allocation':
       case 'Exam Schedule':
-      case 'Hall Tickets':         return <StaffHallTicket staffUser={staffUser} onNavigate={setActiveNav} />;
-      case 'Assignments':          return <StaffAssignments staffUser={staffUser} />;
-      case 'Question Papers':      return <StaffQuestionPaper staffUser={staffUser} />;
-      case 'Course Plan':          return <StaffCoursePlan staffUser={staffUser} />;
+      case 'Hall Tickets': return <StaffHallTicket staffUser={staffUser} onNavigate={setActiveNav} />;
+      case 'Assignments': return <StaffAssignments staffUser={staffUser} />;
+      case 'Question Papers': return <StaffQuestionPaper staffUser={staffUser} />;
+      case 'Course Plan': return <StaffCoursePlan staffUser={staffUser} />;
       case 'Tasks':
       case 'Task Allocation':
-      case 'Staff Tasks':          return <StaffTaskAllocation staffUser={staffUser} />;
+      case 'Staff Tasks': return <StaffTaskAllocation staffUser={staffUser} />;
       case 'Fee Structure':
-      case 'Fees':                 return <FeeStructureView user={staffUser} />;
+      case 'Fees': return <FeeStructureView user={staffUser} />;
       case 'Expenses':
-      case 'Expense':              return <ExpenseManagement user={staffUser} />;
-      case 'Driver Management':    return <DriverManagement user={staffUser} />;
-      case 'Student Attendance':   return <StaffAttendance staffUser={staffUser} isReadOnly={true} />;
+      case 'Expense': return <ExpenseManagement user={staffUser} />;
+      case 'Driver Management': return <DriverManagement user={staffUser} />;
       case 'Bonafide Certificate':
-      case 'Bonafide':             return <BonafideManagement user={staffUser} />;
+      case 'Bonafide': return <BonafideManagement user={staffUser} />;
       case 'Transfer Certificate':
-      case 'TC':                   return <TCManagement user={staffUser} />;
-      case 'My Profile':           return <StaffProfile staffUser={staffUser} />;
-      case 'Notices':              return <StaffNotices staffUser={staffUser} />;
+      case 'TC': return <TCManagement user={staffUser} />;
+      case 'My Profile': return <StaffProfile staffUser={staffUser} />;
+      case 'Notices': return <StaffNotices staffUser={staffUser} />;
       case 'Leave Management':
-      case 'Leave':                return <StaffLeave staffUser={staffUser} />;
-      default:                     return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
+      case 'Leave': return <StaffLeave staffUser={staffUser} />;
+      default: return <StaffHome staffUser={staffUser} onNavigate={setActiveNav} />;
     }
   };
 
-  const isFinanceStaff = staffUser?.role === 'Accountant' || 
-    staffUser?.role === 'Office Staff' || 
-    staffUser?.designation === 'Accountant' || 
-    staffUser?.canViewFees === true || 
+  const isFinanceStaff = staffUser?.role === 'Accountant' ||
+    staffUser?.role === 'Office Staff' ||
+    staffUser?.designation === 'Accountant' ||
+    staffUser?.canViewFees === true ||
     staffUser?.department?.toLowerCase()?.includes('account');
 
   // Office Staff gets a restricted sidebar (fees + attendance only, no academic menus)
@@ -181,8 +182,8 @@ export default function StaffDashboard({ staffUser, onLogout }) {
   // Accountant-specific (has bonafide too)
   const isAccountantOnly = staffUser?.role === 'Accountant' || staffUser?.designation === 'Accountant';
 
-  const isHodUser = staffUser?.isHod === true || 
-    staffUser?.role === 'HOD' || 
+  const isHodUser = staffUser?.isHod === true ||
+    staffUser?.role === 'HOD' ||
     staffUser?.designation?.toUpperCase()?.includes('HOD') ||
     staffUser?.canAllocateTasks === true;
 
@@ -210,7 +211,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
         { name: 'Fee Structure', icon: IndianRupee },
         { name: 'Expenses', icon: Receipt },
         { name: 'Driver Management', icon: Receipt },
-        { name: 'Student Attendance', icon: CheckSquare },
+        { name: 'Attendance', icon: CheckSquare },
         { name: 'Transfer Certificate', icon: FileOutput }
       ]
     },
@@ -232,7 +233,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
       items: [
         { name: 'Fee Structure', icon: IndianRupee },
         { name: 'Expenses', icon: Receipt },
-        { name: 'Student Attendance', icon: CheckSquare },
+        { name: 'Attendance', icon: CheckSquare },
         { name: 'Bonafide Certificate', icon: Award },
         { name: 'Transfer Certificate', icon: FileOutput }
       ]
@@ -250,27 +251,27 @@ export default function StaffDashboard({ staffUser, onLogout }) {
   const navSections = isOfficeStaff
     ? officeStaffNavSections
     : isAccountantOnly
-    ? accountantNavSections
-    : [
-    { title: 'MAIN', items: [{ name: 'Dashboard', icon: LayoutDashboard }] },
-    { title: 'ACADEMIC', items: academicItems },
-    ...(isFinanceStaff ? [{
-      title: 'FINANCE & SERVICES',
-      items: [
-        { name: 'Fee Structure', icon: IndianRupee },
-        { name: 'Expenses', icon: Receipt },
-        { name: 'Student Attendance', icon: CheckSquare }
-      ]
-    }] : []),
-    {
-      title: 'PROFILE & LEAVE',
-      items: [
-        { name: 'My Profile', icon: User },
-        { name: 'Leave Management', icon: UserCheck },
-        { name: 'Notices', icon: Bell }
-      ]
-    }
-  ];
+      ? accountantNavSections
+      : [
+        { title: 'MAIN', items: [{ name: 'Dashboard', icon: LayoutDashboard }] },
+        { title: 'ACADEMIC', items: academicItems },
+        ...(isFinanceStaff ? [{
+          title: 'FINANCE & SERVICES',
+          items: [
+            { name: 'Fee Structure', icon: IndianRupee },
+            { name: 'Expenses', icon: Receipt },
+            { name: 'Student Attendance', icon: CheckSquare }
+          ]
+        }] : []),
+        {
+          title: 'PROFILE & LEAVE',
+          items: [
+            { name: 'My Profile', icon: User },
+            { name: 'Leave Management', icon: UserCheck },
+            { name: 'Notices', icon: Bell }
+          ]
+        }
+      ];
 
   const SidebarContent = ({ isCollapsed = false }) => (
     <div className="flex flex-col justify-between h-full bg-white select-none min-h-0">
@@ -306,7 +307,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
                 <CollegeLogo size="md" showText={true} />
               </div>
               {/* Collapse button on Desktop */}
-              <button 
+              <button
                 onClick={() => setSidebarCollapsed(true)}
                 onMouseEnter={(e) => showTooltipFor('Collapse Sidebar', e.currentTarget, true)}
                 onMouseMove={(e) => showTooltipFor('Collapse Sidebar', e.currentTarget, true)}
@@ -317,7 +318,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
                 <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
               </button>
               {/* Close button on mobile */}
-              <button 
+              <button
                 onClick={() => setMobileOpen(false)}
                 className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer"
                 aria-label="Close menu"
@@ -330,13 +331,13 @@ export default function StaffDashboard({ staffUser, onLogout }) {
 
         {/* Staff Quick Profile Card in Sidebar */}
         {isCollapsed ? (
-          <div 
+          <div
             className="w-full flex justify-center my-2 cursor-pointer"
             onMouseEnter={(e) => showTooltipFor(staffUser?.name || 'Faculty Member', e.currentTarget)}
             onMouseMove={(e) => showTooltipFor(staffUser?.name || 'Faculty Member', e.currentTarget)}
             onMouseLeave={hideTooltip}
           >
-            <div 
+            <div
               onClick={() => { setActiveNav('My Profile'); setMobileOpen(false); }}
               className="w-10 h-10 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200/80 flex items-center justify-center cursor-pointer group shadow-2xs relative"
               aria-label="View Faculty Profile"
@@ -351,7 +352,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
             </div>
           </div>
         ) : (
-          <div 
+          <div
             onClick={() => { setActiveNav('My Profile'); setMobileOpen(false); }}
             className="mx-4 my-3 p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 transition-all cursor-pointer group shadow-2xs"
             title="View Faculty Profile"
@@ -391,15 +392,15 @@ export default function StaffDashboard({ staffUser, onLogout }) {
               <div className="space-y-1">
                 {section.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = activeNav === item.name || 
+                  const isActive = activeNav === item.name ||
                     (item.name === 'Leave Management' && activeNav === 'Leave') ||
                     (item.name === 'Tasks' && (activeNav === 'Task Allocation' || activeNav === 'Staff Tasks')) ||
                     (item.name === 'Task Allocation' && activeNav === 'Tasks');
-                  
+
                   if (isCollapsed) {
                     return (
-                      <div 
-                        key={item.name} 
+                      <div
+                        key={item.name}
                         className="w-full flex justify-center py-1 cursor-pointer"
                         onMouseEnter={(e) => showTooltipFor(item.name, e.currentTarget)}
                         onMouseMove={(e) => showTooltipFor(item.name, e.currentTarget)}
@@ -407,11 +408,10 @@ export default function StaffDashboard({ staffUser, onLogout }) {
                       >
                         <button
                           onClick={() => { setActiveNav(item.name); setMobileOpen(false); }}
-                          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${
-                            isActive
+                          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${isActive
                               ? 'bg-blue-50 text-blue-700 font-extrabold shadow-xs border border-blue-200/80'
                               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 border border-transparent'
-                          }`}
+                            }`}
                           aria-label={item.name}
                         >
                           <Icon className={`w-5 h-5 shrink-0 stroke-[2] pointer-events-none ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
@@ -424,11 +424,10 @@ export default function StaffDashboard({ staffUser, onLogout }) {
                     <button
                       key={item.name}
                       onClick={() => { setActiveNav(item.name); setMobileOpen(false); }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        isActive
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${isActive
                           ? 'bg-blue-50 text-blue-700 font-extrabold'
                           : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3">
                         <Icon className={`w-4 h-4 ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
@@ -479,8 +478,8 @@ export default function StaffDashboard({ staffUser, onLogout }) {
         {/* Top Header Bar Matching Admin */}
         <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
           <div className="flex items-center gap-3 flex-1 max-w-md mr-4">
-            <button 
-              onClick={() => setMobileOpen(true)} 
+            <button
+              onClick={() => setMobileOpen(true)}
               className="lg:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all"
               aria-label="Toggle Menu"
             >
@@ -515,7 +514,7 @@ export default function StaffDashboard({ staffUser, onLogout }) {
             </button>
 
             {/* User Avatar & Role Badge (Pill Container matching Image 2) */}
-            <div 
+            <div
               onClick={() => setActiveNav('My Profile')}
               className="flex items-center gap-2.5 bg-slate-50/90 hover:bg-slate-100/90 border border-slate-200/80 rounded-2xl p-1 sm:p-1.5 sm:pr-3.5 cursor-pointer transition-all shadow-2xs group"
               title="Faculty Profile"

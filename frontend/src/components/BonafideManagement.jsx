@@ -33,7 +33,7 @@ export default function BonafideManagement({ user = {} }) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
-  
+
   // Modal states
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [viewingCert, setViewingCert] = useState(null);
@@ -129,7 +129,7 @@ export default function BonafideManagement({ user = {} }) {
       ? (fName ? (fName.startsWith('Mr.') ? fName : `Mr.${fName}`) : '')
       : (mName ? (mName.startsWith('Mrs.') ? mName : `Mrs.${mName}`) : '');
     const conduct = isFemale ? 'Her conduct and character are good.' : 'His conduct and character are good.';
-    
+
     // Format year string
     let yrStr = 'I Year';
     if (String(std.year).includes('2') || String(std.sem).includes('3') || String(std.sem).includes('4')) yrStr = 'II Year';
@@ -338,12 +338,11 @@ export default function BonafideManagement({ user = {} }) {
 
   return (
     <div className="p-4 sm:p-7 max-w-7xl mx-auto space-y-6">
-      
+
       {/* Toast Notification */}
       {toastMsg && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 p-4 rounded-2xl text-xs font-bold shadow-2xl animate-in fade-in slide-in-from-bottom-3 ${
-          toastMsg.isError ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'
-        }`}>
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 p-4 rounded-2xl text-xs font-bold shadow-2xl animate-in fade-in slide-in-from-bottom-3 ${toastMsg.isError ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'
+          }`}>
           {toastMsg.isError ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
           <span>{toastMsg.text}</span>
         </div>
@@ -457,7 +456,7 @@ export default function BonafideManagement({ user = {} }) {
               <tbody className="divide-y divide-slate-100 font-medium">
                 {filteredCertificates.map((cert) => (
                   <tr key={cert._id} className="hover:bg-purple-50/20 transition-colors">
-                    
+
                     {/* Ref No & Date */}
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className="font-mono font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200 block w-fit">
@@ -529,7 +528,7 @@ export default function BonafideManagement({ user = {} }) {
                             Edit
                           </button>
                         )}
-                        
+
                         {(isAccountant || isAdmin) && (
                           <button
                             type="button"
@@ -557,7 +556,7 @@ export default function BonafideManagement({ user = {} }) {
       {showIssueModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-scaleUp border border-slate-100 max-h-[92vh] overflow-y-auto">
-            
+
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
@@ -618,7 +617,7 @@ export default function BonafideManagement({ user = {} }) {
             </div>
 
             <form onSubmit={handleIssueCertificate} className="space-y-4 text-xs">
-              
+
               {/* Row 1: Ref No & Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -725,14 +724,35 @@ export default function BonafideManagement({ user = {} }) {
                   <label className="block text-slate-700 font-bold mb-1">
                     {formData.parentType === 'Mother' ? "Mother's Name *" : formData.parentType === 'Father' ? "Father's Name *" : "Parent / Guardian Name *"}
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Mr.Arulappan or Mrs.Velkani A"
-                    value={formData.parentName}
-                    onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:border-purple-500"
-                  />
+                  {(formData.fatherName || formData.motherName) ? (
+                    <select
+                      required
+                      value={formData.parentName}
+                      onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                    >
+                      <option value="">-- Select Parent Name --</option>
+                      {formData.fatherName && (
+                        <option value={formData.fatherName.startsWith('Mr.') ? formData.fatherName : `Mr.${formData.fatherName}`}>
+                          👨 Father: {formData.fatherName.startsWith('Mr.') ? formData.fatherName : `Mr.${formData.fatherName}`}
+                        </option>
+                      )}
+                      {formData.motherName && (
+                        <option value={formData.motherName.startsWith('Mrs.') ? formData.motherName : `Mrs.${formData.motherName}`}>
+                          👩 Mother: {formData.motherName.startsWith('Mrs.') ? formData.motherName : `Mrs.${formData.motherName}`}
+                        </option>
+                      )}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Mr.Arulappan or Mrs.Velkani A"
+                      value={formData.parentName}
+                      onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:border-purple-500"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -845,7 +865,7 @@ export default function BonafideManagement({ user = {} }) {
       {viewingCert && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
           <div className="relative bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-10 shadow-2xl my-auto animate-scaleUp print:p-0 print:m-0 print:shadow-none print:border-none print:max-w-none">
-            
+
             {/* Action Bar (Hidden when printing) */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-200 print:hidden">
               <div className="flex flex-wrap items-center gap-2">
@@ -879,7 +899,7 @@ export default function BonafideManagement({ user = {} }) {
                           body: JSON.stringify({ parentType: chosen, parentName: nextParent })
                         });
                         showToast(`Switched to ${chosen}'s name: ${nextParent}`);
-                      } catch (err) {}
+                      } catch (err) { }
                     }}
                     className="bg-white border border-purple-300 font-bold text-slate-800 rounded-lg px-2 py-0.5 text-xs cursor-pointer focus:outline-none"
                   >
@@ -927,13 +947,13 @@ export default function BonafideManagement({ user = {} }) {
             {/* OFFICIAL PRINTABLE CERTIFICATE SHEET                          */}
             {/* ═════════════════════════════════════════════════════════════ */}
             <div className="border-4 border-slate-900 p-6 sm:p-10 font-serif text-slate-900 relative bg-white">
-              
+
               {/* College Header */}
               <div className="flex items-center justify-between gap-4 pb-3 border-b-2 border-slate-900">
                 <div className="w-20 h-20 shrink-0 flex items-center justify-center">
                   <CollegeLogo size="lg" showText={false} />
                 </div>
-                
+
                 <div className="text-center flex-1 space-y-0.5">
                   <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-slate-950 font-sans">
                     VIVEKANANDA
@@ -1021,7 +1041,7 @@ export default function BonafideManagement({ user = {} }) {
       {showEditModal && editingCert && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-scaleUp border border-slate-100 max-h-[92vh] overflow-y-auto">
-            
+
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
@@ -1042,7 +1062,7 @@ export default function BonafideManagement({ user = {} }) {
             </div>
 
             <form onSubmit={handleUpdateCertificate} className="space-y-4 text-xs">
-              
+
               {/* Row 1: Ref No & Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1139,14 +1159,35 @@ export default function BonafideManagement({ user = {} }) {
                   <label className="block text-slate-700 font-bold mb-1">
                     {editingCert.parentType === 'Mother' ? "Mother's Name *" : editingCert.parentType === 'Father' ? "Father's Name *" : "Parent / Guardian Name *"}
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Mr.Arulappan or Mrs.Velkani A"
-                    value={editingCert.parentName}
-                    onChange={(e) => setEditingCert({ ...editingCert, parentName: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:border-purple-500"
-                  />
+                  {(editingCert.fatherName || editingCert.motherName) ? (
+                    <select
+                      required
+                      value={editingCert.parentName}
+                      onChange={(e) => setEditingCert({ ...editingCert, parentName: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                    >
+                      <option value="">-- Select Parent Name --</option>
+                      {editingCert.fatherName && (
+                        <option value={editingCert.fatherName.startsWith('Mr.') ? editingCert.fatherName : `Mr.${editingCert.fatherName}`}>
+                          👨 Father: {editingCert.fatherName.startsWith('Mr.') ? editingCert.fatherName : `Mr.${editingCert.fatherName}`}
+                        </option>
+                      )}
+                      {editingCert.motherName && (
+                        <option value={editingCert.motherName.startsWith('Mrs.') ? editingCert.motherName : `Mrs.${editingCert.motherName}`}>
+                          👩 Mother: {editingCert.motherName.startsWith('Mrs.') ? editingCert.motherName : `Mrs.${editingCert.motherName}`}
+                        </option>
+                      )}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Mr.Arulappan or Mrs.Velkani A"
+                      value={editingCert.parentName}
+                      onChange={(e) => setEditingCert({ ...editingCert, parentName: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:border-purple-500"
+                    />
+                  )}
                 </div>
               </div>
 

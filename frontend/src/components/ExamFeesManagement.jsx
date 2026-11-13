@@ -3,9 +3,9 @@ import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
 import { FileText, Save, User, CreditCard, Clock, AlertCircle, Search, Download, Printer } from 'lucide-react';
 
-export default function ExamFeesManagement({ 
-  entryFormData, 
-  setEntryFormData, 
+export default function ExamFeesManagement({
+  entryFormData,
+  setEntryFormData,
   handleSaveEntrySubmit,
   studentOptions = [],
   recordsList = []
@@ -73,7 +73,7 @@ export default function ExamFeesManagement({
       return;
     }
 
-    const found = (studentOptions || []).find(s => 
+    const found = (studentOptions || []).find(s =>
       s.mongoId === selectedKey || s._id === selectedKey || s.rollNo === selectedKey || s.id === selectedKey || s.name === selectedKey
     );
 
@@ -91,7 +91,9 @@ export default function ExamFeesManagement({
       const baseAmt = parseFloat(entryFormData.amount) || 5000;
       const fineAmt = parseFloat(entryFormData.fine) || 0;
       const total = baseAmt + fineAmt;
-      const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== '' ? parseFloat(entryFormData.paidAmount) || 0 : 0;
+      const currentPaid = entryFormData.paidAmount !== undefined && entryFormData.paidAmount !== '' && entryFormData.paidAmount !== '0'
+        ? parseFloat(entryFormData.paidAmount) || 0 
+        : baseAmt;
 
       setEntryFormData(prev => ({
         ...prev,
@@ -104,8 +106,8 @@ export default function ExamFeesManagement({
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
         amount: prev.amount || '5000',
         totalAmount: String(total),
-        paidAmount: prev.paidAmount !== undefined && prev.paidAmount !== '' ? String(prev.paidAmount) : '0',
-        balance: String(Math.max(0, total - currentPaid))
+        paidAmount: prev.paidAmount && prev.paidAmount !== '0' ? String(prev.paidAmount) : String(baseAmt),
+        balance: String(Math.max(0, total - (prev.paidAmount && prev.paidAmount !== '0' ? parseFloat(prev.paidAmount) : baseAmt)))
       }));
     }
   };
@@ -230,8 +232,8 @@ export default function ExamFeesManagement({
     const pendingFee = safeNumber(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee), 0);
     const receiptDigits = String(rollNo).replace(/\D/g, '').slice(-6) || String(Date.now()).slice(-6);
     const hasRecordedPayment = paidFee > 0 || totalFee > 0;
-    const receiptNo = safeText(r.receiptNo, hasRecordedPayment ? `REC-${new Date().getFullYear()}-${receiptDigits}` : '');
-    const txnRef = safeText(r.referenceNo || r.paymentRef || r.transactionRef || r.paymentRefNo, hasRecordedPayment ? `TXN${Date.now().toString().slice(-10)}` : '');
+    const receiptNo = safeText(r.receiptNo, '');
+    const txnRef = safeText(r.referenceNo || r.paymentRef || r.transactionRef || r.paymentRefNo, '');
     const payDate = safeText(r.lastPaymentDate || r.paymentDate, new Date().toISOString().split('T')[0]);
     const statusLabel = paidFee > 0 && pendingFee <= 0 ? 'Fully Paid' : paidFee > 0 ? 'Partial / Pending' : 'Pending';
     const breakdownRows = [[`Exam Fees`, Number(paidFee || 0)]];
@@ -273,8 +275,8 @@ export default function ExamFeesManagement({
               <div class="badge">EXAMINATION FEE RECEIPT</div>
             </div>
             <div class="meta-grid">
-              <div class="meta-item"><span>Receipt No:</span> <strong>${receiptNo}</strong></div>
-              <div class="meta-item"><span>Transaction Ref:</span> <strong>${txnRef}</strong></div>
+              ${receiptNo ? `<div class="meta-item"><span>Receipt No:</span> <strong>${receiptNo}</strong></div>` : ''}
+              ${txnRef ? `<div class="meta-item"><span>Transaction Ref:</span> <strong>${txnRef}</strong></div>` : ''}
               <div class="meta-item"><span>Payment Date:</span> <strong>${payDate}</strong></div>
               <div class="meta-item"><span>Student Name:</span> <strong>${studentName}</strong></div>
               <div class="meta-item"><span>Roll / ID No:</span> <strong>${rollNo}</strong></div>
@@ -329,10 +331,10 @@ export default function ExamFeesManagement({
 
   return (
     <div className="space-y-6">
-      
+
       {/* FORM CARD */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
-        
+
         {/* Form Header */}
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200">
@@ -350,10 +352,10 @@ export default function ExamFeesManagement({
 
         {/* Form */}
         <form onSubmit={handleSaveEntrySubmit} className="space-y-6 text-xs">
-          
+
           {/* ROW 1: Student, Roll No., Department, Year, Batch */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            
+
             {/* Student Dropdown */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -409,7 +411,7 @@ export default function ExamFeesManagement({
                 <input
                   type="text"
                   value={entryFormData.studentName}
-                  onChange={(e) => setEntryFormData({...entryFormData, studentName: e.target.value})}
+                  onChange={(e) => setEntryFormData({ ...entryFormData, studentName: e.target.value })}
                   className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs"
                   placeholder="Enter student name"
                   required
@@ -425,7 +427,7 @@ export default function ExamFeesManagement({
               <input
                 type="text"
                 value={entryFormData.rollNo}
-                onChange={(e) => setEntryFormData({...entryFormData, rollNo: e.target.value})}
+                onChange={(e) => setEntryFormData({ ...entryFormData, rollNo: e.target.value })}
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-semibold focus:border-blue-500 focus:outline-none shadow-2xs"
                 placeholder="Auto-filled"
                 required
@@ -471,7 +473,7 @@ export default function ExamFeesManagement({
               <label className="block text-slate-700 font-bold mb-1.5">Year <span className="text-rose-500">*</span></label>
               <select
                 value={entryFormData.year || 'I'}
-                onChange={(e) => setEntryFormData({...entryFormData, year: e.target.value})}
+                onChange={(e) => setEntryFormData({ ...entryFormData, year: e.target.value })}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
               >
                 <option value="I">I Year</option>
@@ -485,7 +487,7 @@ export default function ExamFeesManagement({
               <label className="block text-slate-700 font-bold mb-1.5">Batch <span className="text-rose-500">*</span></label>
               <select
                 value={entryFormData.batch || '2025-2028'}
-                onChange={(e) => setEntryFormData({...entryFormData, batch: e.target.value})}
+                onChange={(e) => setEntryFormData({ ...entryFormData, batch: e.target.value })}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
               >
                 <option value="2025-2028">2025–2028</option>
@@ -499,7 +501,7 @@ export default function ExamFeesManagement({
 
           {/* ROW 2: Fee Type, Base Amount, Due Date, Fine */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            
+
             {/* Fee Type */}
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">
@@ -551,7 +553,7 @@ export default function ExamFeesManagement({
               <input
                 type="date"
                 value={entryFormData.dueDate || ''}
-                onChange={(e) => setEntryFormData({...entryFormData, dueDate: e.target.value})}
+                onChange={(e) => setEntryFormData({ ...entryFormData, dueDate: e.target.value })}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
               />
             </div>
@@ -595,7 +597,7 @@ export default function ExamFeesManagement({
 
           {/* ROW 3: Paid Amount, Balance, Payment Mode, Payment Date */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            
+
             {/* Paid Amount */}
             <div>
               <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
@@ -662,7 +664,7 @@ export default function ExamFeesManagement({
               </label>
               <select
                 value={entryFormData.paymentMode || 'UPI'}
-                onChange={(e) => setEntryFormData({...entryFormData, paymentMode: e.target.value})}
+                onChange={(e) => setEntryFormData({ ...entryFormData, paymentMode: e.target.value })}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               >
@@ -682,7 +684,7 @@ export default function ExamFeesManagement({
               <input
                 type="date"
                 value={entryFormData.paymentDate || new Date().toISOString().split('T')[0]}
-                onChange={(e) => setEntryFormData({...entryFormData, paymentDate: e.target.value})}
+                onChange={(e) => setEntryFormData({ ...entryFormData, paymentDate: e.target.value })}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
               />
@@ -725,7 +727,7 @@ export default function ExamFeesManagement({
                 <input
                   type="text"
                   value={entryFormData.upiId || ''}
-                  onChange={(e) => setEntryFormData({...entryFormData, upiId: e.target.value})}
+                  onChange={(e) => setEntryFormData({ ...entryFormData, upiId: e.target.value })}
                   className="w-full p-2.5 bg-white border border-indigo-200 rounded-xl text-slate-800 font-medium focus:border-indigo-400 focus:outline-none shadow-2xs"
                   placeholder="e.g. student@okicici"
                 />
@@ -738,7 +740,7 @@ export default function ExamFeesManagement({
                 <input
                   type="text"
                   value={entryFormData.accountHolderName || ''}
-                  onChange={(e) => setEntryFormData({...entryFormData, accountHolderName: e.target.value})}
+                  onChange={(e) => setEntryFormData({ ...entryFormData, accountHolderName: e.target.value })}
                   className="w-full p-2.5 bg-white border border-indigo-200 rounded-xl text-slate-800 font-medium focus:border-indigo-400 focus:outline-none shadow-2xs"
                   placeholder="Account holder's full name"
                 />
@@ -924,13 +926,12 @@ export default function ExamFeesManagement({
                         {pendVal === 0 ? '₹0' : `₹${pendVal.toLocaleString('en-IN')}`}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                          r.status === 'Paid' 
-                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'Paid'
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                             : r.status === 'Partial'
-                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                            : 'bg-amber-100 text-amber-700 border border-amber-200'
-                        }`}>
+                              ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                              : 'bg-amber-100 text-amber-700 border border-amber-200'
+                          }`}>
                           {r.status || (pendVal === 0 ? 'Paid' : 'Pending')}
                         </span>
                       </td>

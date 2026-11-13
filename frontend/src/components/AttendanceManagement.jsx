@@ -137,7 +137,8 @@ export default function AttendanceManagement({ user }) {
     user?.canViewFees === true ||
     (user?.department && (user?.department.toLowerCase().includes('account') || user?.department.toLowerCase().includes('office')))
   );
-  const onlyShowAbsentStudents = isFinanceOrOffice && !isSuperAdmin;
+  // User requirement: Admin side attendance keep for the accountant and the office staff side also
+  const onlyShowAbsentStudents = false;
 
   // Navigation Tabs: 'daily-log', 'roll-call', 'student-register', 'staff-attendance', 'leaves'
   const [activeTab, setActiveTab] = useState('daily-log');
@@ -380,20 +381,20 @@ export default function AttendanceManagement({ user }) {
   const totalStaffCount = staffAttendance.length;
   const staffOnLeaveCount = staffAttendance.filter(s => {
     if (s.status === 'Inactive' || s.status === 'On Leave') return true;
-    const hasApprovedLeave = leaveRequests.some(l => 
-      l.status === 'Approved' && 
+    const hasApprovedLeave = leaveRequests.some(l =>
+      l.status === 'Approved' &&
       (l.applicantName === s.name || l.applicantName === s.empId) &&
       (!l.from || !l.to || (selectedDate >= l.from && selectedDate <= l.to))
     );
     return hasApprovedLeave;
   }).length;
 
-  const staffOnDutyCount = staffPresentCount > 0 
-    ? staffPresentCount 
+  const staffOnDutyCount = staffPresentCount > 0
+    ? staffPresentCount
     : Math.max(0, totalStaffCount - staffOnLeaveCount);
 
-  const staffOnDutyPercentage = totalStaffCount > 0 
-    ? ((staffOnDutyCount / totalStaffCount) * 100).toFixed(1) 
+  const staffOnDutyPercentage = totalStaffCount > 0
+    ? ((staffOnDutyCount / totalStaffCount) * 100).toFixed(1)
     : '0.0';
 
   const filteredStaffAttendance = useMemo(() => {
@@ -918,7 +919,7 @@ export default function AttendanceManagement({ user }) {
           window.dispatchEvent(new CustomEvent('vcas_attendance_updated', { detail: { date: payload.date } }));
           localStorage.setItem('vcas_attendance_last_sync', Date.now().toString());
           window.dispatchEvent(new Event('storage'));
-        } catch (_) {}
+        } catch (_) { }
       } else {
         alert(data.message || 'Failed to save attendance session.');
       }
@@ -1100,7 +1101,7 @@ export default function AttendanceManagement({ user }) {
       </div>
 
       {/* 2. STATS SUMMARY CARDS */}
-      <div className={`grid grid-cols-2 sm:grid-cols-3 ${isFinanceOrOffice ? 'lg:grid-cols-4' : 'lg:grid-cols-5'} gap-3.5 sm:gap-4`}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Date Attendance</span>
@@ -1112,22 +1113,20 @@ export default function AttendanceManagement({ user }) {
           </div>
         </div>
 
-        {!isFinanceOrOffice && (
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Staff on Duty</span>
-              <p className="text-2xl font-black text-blue-600">
-                {totalStaffCount > 0 ? `${staffOnDutyPercentage}%` : '0.0%'}
-              </p>
-              <p className="text-[11px] text-blue-600 font-bold mt-1">
-                {staffOnDutyCount} / {totalStaffCount} {staffFacultyCount === totalStaffCount ? 'Faculty' : 'Staff'}
-              </p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
-              <UserCheck className="w-5 h-5" />
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Staff on Duty</span>
+            <p className="text-2xl font-black text-blue-600">
+              {totalStaffCount > 0 ? `${staffOnDutyPercentage}%` : '0.0%'}
+            </p>
+            <p className="text-[11px] text-blue-600 font-bold mt-1">
+              {staffOnDutyCount} / {totalStaffCount} {staffFacultyCount === totalStaffCount ? 'Faculty' : 'Staff'}
+            </p>
           </div>
-        )}
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <UserCheck className="w-5 h-5" />
+          </div>
+        </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between">
           <div>
@@ -1395,7 +1394,7 @@ export default function AttendanceManagement({ user }) {
                 {formatReadableDate(selectedDate)}
               </h2>
               <p className="text-xs text-slate-300 mt-0.5">
-                Viewing {isFinanceOrOffice ? 'absent students only' : (effectiveStatusFilter === 'ALL' ? 'absent students list' : `${effectiveStatusFilter} students`)} for this date.
+                Viewing {effectiveStatusFilter === 'ALL' ? 'absent students list' : `${effectiveStatusFilter} students`} for this date.
               </p>
             </div>
 
@@ -1447,21 +1446,19 @@ export default function AttendanceManagement({ user }) {
               <span>Shortage Monitor (&lt;75%)</span>
             </button>
 
-            {!isFinanceOrOffice && (
-              <button
-                onClick={() => setActiveTab('staff-attendance')}
-                className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'staff-attendance'
-                  ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
-                  : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
-                  }`}
-              >
-                <UserCheck className="w-4 h-4" />
-                <span>Staff Attendance (Faculty & Office)</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-extrabold">
-                  {staffAttendance.length}
-                </span>
-              </button>
-            )}
+            <button
+              onClick={() => setActiveTab('staff-attendance')}
+              className={`flex items-center gap-2 px-4 py-2.5 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'staff-attendance'
+                ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
+                : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
+                }`}
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>Staff Attendance (Faculty & Office)</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-extrabold">
+                {staffAttendance.length}
+              </span>
+            </button>
 
             <button
               onClick={() => setActiveTab('leaves')}
@@ -1927,7 +1924,7 @@ export default function AttendanceManagement({ user }) {
           {/* ========================================================================= */}
           {/* TAB 4: STAFF ATTENDANCE (FACULTY, OFFICE STAFF, ACCOUNTANT)               */}
           {/* ========================================================================= */}
-          {activeTab === 'staff-attendance' && !isFinanceOrOffice && (
+          {activeTab === 'staff-attendance' && (
             <div className="space-y-4">
               {/* Summary Stats Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

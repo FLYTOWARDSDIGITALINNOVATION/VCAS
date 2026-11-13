@@ -39,8 +39,52 @@ export const UG_FEE_STRUCTURE = [
     borderColor: 'border-blue-200',
     bgColor: 'bg-blue-50/50',
     badge: '₹27,000 / Year'
+  },
+  {
+    cluster: 'Computer Science, AI & CFS',
+    departments: ['CS', 'AI', 'CFS'],
+    deptNames: [
+      'B.Sc Computer Science (CS)',
+      'B.Sc Artificial Intelligence (AI)',
+      'B.Sc Criminology & Forensic Science (CFS)'
+    ],
+    registrationFee: 8000,
+    sem1Fee: 10000,
+    sem2Fee: 10000,
+    totalAnnualFee: 28000,
+    color: 'from-purple-600 to-indigo-600',
+    borderColor: 'border-purple-200',
+    bgColor: 'bg-purple-50/50',
+    badge: '₹28,000 / Year'
   }
 ];
+
+export const getDepartmentFixedFee = (deptOrCourse) => {
+  const norm = String(deptOrCourse || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isTech = norm.includes('cs') || norm.includes('computer') || norm.includes('ai') || norm.includes('artificial') || norm.includes('cfs') || norm.includes('criminology') || norm.includes('forensic');
+  if (isTech) {
+    return {
+      cluster: 'Computer Science, AI & CFS',
+      departments: ['CS', 'AI', 'CFS'],
+      deptNames: ['B.Sc Computer Science (CS)', 'B.Sc Artificial Intelligence (AI)', 'B.Sc Criminology & Forensic Science (CFS)'],
+      registrationFee: 8000,
+      sem1Fee: 10000,
+      sem2Fee: 10000,
+      totalAnnualFee: 28000,
+      badge: '₹28,000 / Year'
+    };
+  }
+  return {
+    cluster: 'Commerce & Management',
+    departments: ['B.Com', 'BBA'],
+    deptNames: ['Bachelor of Commerce (B.Com)', 'Bachelor of Business Administration (BBA)'],
+    registrationFee: 7000,
+    sem1Fee: 10000,
+    sem2Fee: 10000,
+    totalAnnualFee: 27000,
+    badge: '₹27,000 / Year'
+  };
+};
 
 export const SCHOLARSHIP_SLABS = [
   {
@@ -174,8 +218,7 @@ export default function FeeStructureView({ user }) {
       const json = await res.json();
       if (json.success && json.data) {
         if (Array.isArray(json.data.clusters) && json.data.clusters.length > 0) {
-          const cleanedClusters = json.data.clusters.filter(c => !(c.cluster || '').toLowerCase().includes('computing'));
-          setClusters(cleanedClusters.length > 0 ? cleanedClusters : UG_FEE_STRUCTURE);
+          setClusters(json.data.clusters);
         }
         if (Array.isArray(json.data.scholarships) && json.data.scholarships.length > 0) {
           setScholarships(json.data.scholarships);

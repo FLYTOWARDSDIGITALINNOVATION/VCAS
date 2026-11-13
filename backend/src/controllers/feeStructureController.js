@@ -13,6 +13,23 @@ const DEFAULT_CLUSTERS = [
     borderColor: 'border-blue-200',
     bgColor: 'bg-blue-50/50',
     badge: '₹27,000 / Year'
+  },
+  {
+    cluster: 'Computer Science, AI & CFS',
+    departments: ['CS', 'AI', 'CFS'],
+    deptNames: [
+      'B.Sc Computer Science (CS)',
+      'B.Sc Artificial Intelligence (AI)',
+      'B.Sc Criminology & Forensic Science (CFS)'
+    ],
+    registrationFee: 8000,
+    sem1Fee: 10000,
+    sem2Fee: 10000,
+    totalAnnualFee: 28000,
+    color: 'from-purple-600 to-indigo-600',
+    borderColor: 'border-purple-200',
+    bgColor: 'bg-purple-50/50',
+    badge: '₹28,000 / Year'
   }
 ];
 
@@ -120,9 +137,13 @@ exports.getFeeStructure = async (req, res) => {
     }
 
     if (feeDoc && Array.isArray(feeDoc.clusters)) {
-      const filtered = feeDoc.clusters.filter(c => !(c.cluster || '').toLowerCase().includes('computing'));
-      if (filtered.length !== feeDoc.clusters.length) {
-        feeDoc.clusters = filtered.length > 0 ? filtered : DEFAULT_CLUSTERS;
+      const hasTech = feeDoc.clusters.some(c => 
+        (c.cluster || '').toLowerCase().includes('cs') || 
+        (c.cluster || '').toLowerCase().includes('computer') ||
+        (c.departments || []).some(d => ['cs', 'ai', 'cfs'].includes(d.toLowerCase()))
+      );
+      if (!hasTech) {
+        feeDoc.clusters = DEFAULT_CLUSTERS;
         await feeDoc.save();
       }
     }
