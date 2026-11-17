@@ -388,7 +388,11 @@ export default function MiscellaneousFeesManagement({
   });
 
   const searchedMiscRecords = miscRecords.filter(r => {
+    if (!r) return false;
     const term = (tableSearchTerm || '').toLowerCase().trim();
+    const feeName = String(r.feeBreakdown?.misc?.name || r.miscFeeName || r.feeType || '').toLowerCase();
+    const paidVal = String(r.feeBreakdown?.misc?.paid || r.paidFee || r.paidAmount || '');
+    const totalVal = String(r.feeBreakdown?.misc?.total || r.totalFee || '');
     const matchesSearch = !term || (
       (r.name && r.name.toLowerCase().includes(term)) ||
       (r.rollNo && r.rollNo.toLowerCase().includes(term)) ||
@@ -396,7 +400,10 @@ export default function MiscellaneousFeesManagement({
       (r.course && r.course.toLowerCase().includes(term)) ||
       (r.department && r.department.toLowerCase().includes(term)) ||
       (r.status && r.status.toLowerCase().includes(term)) ||
-      (r.receiptNo && r.receiptNo.toLowerCase().includes(term))
+      (r.receiptNo && r.receiptNo.toLowerCase().includes(term)) ||
+      feeName.includes(term) ||
+      paidVal.includes(term) ||
+      totalVal.includes(term)
     );
     let matchesDept = true;
     if (tableDeptFilter !== 'All') {
@@ -425,7 +432,7 @@ export default function MiscellaneousFeesManagement({
     const feeName = miscData.name || r.miscFeeName || (r.feeType === 'Miscellaneous Fees' ? (r.miscFeeName || 'Lab Fees') : 'Miscellaneous Fees');
     
     // Exact fee amount assessed for this specific miscellaneous fee
-    const totalFee = Number(
+    let totalFee = Number(
       (miscData.total !== undefined && miscData.total !== null && miscData.total !== '')
         ? miscData.total
         : (miscBase > 0 ? miscBase : (r.totalFee || 0))
@@ -440,9 +447,9 @@ export default function MiscellaneousFeesManagement({
             : (r.paidAmount || 0))
     );
     
-    // Prevent cumulative all-fees sum (e.g. 1250) from bleeding into this specific receipt
-    if (totalFee > 0 && paidFee > totalFee) {
-      paidFee = totalFee;
+    // Ensure total assessed reflects at least the total paid when multiple payments are made
+    if (paidFee > totalFee) {
+      totalFee = paidFee;
     }
     const pendingFee = Math.max(0, totalFee - paidFee);
     const receiptNo = r.receiptNo || '';
@@ -1145,7 +1152,7 @@ export default function MiscellaneousFeesManagement({
                 searchedMiscRecords.map((r, idx) => {
                   const mData = r.feeBreakdown?.misc || {};
                   const mBase = Number(r.baseAmount || 0);
-                  const total = Number(
+                  let total = Number(
                     (mData.total !== undefined && mData.total !== null && mData.total !== '')
                       ? mData.total
                       : (mBase > 0 ? mBase : (r.totalFee || 0))
@@ -1157,8 +1164,8 @@ export default function MiscellaneousFeesManagement({
                           ? (r.paidAmount !== undefined && r.paidAmount !== '' ? r.paidAmount : (r.baseAmount || r.paidFee || 0))
                           : (r.paidAmount || 0))
                   );
-                  if (total > 0 && paid > total) {
-                    paid = total;
+                  if (paid > total) {
+                    total = paid;
                   }
                   const fName = mData.name || r.miscFeeName || (r.feeType === 'Miscellaneous Fees' ? (r.miscFeeName || 'Lab Fees') : 'Miscellaneous Fees');
                   return (

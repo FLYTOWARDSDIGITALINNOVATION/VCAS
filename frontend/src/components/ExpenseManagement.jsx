@@ -57,6 +57,19 @@ export default function ExpenseManagement({ user }) {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('All');
   const [toastMessage, setToastMessage] = useState(null);
 
+  // Custom Category State (for "Other" option)
+  const [customCategory, setCustomCategory] = useState('');
+
+  // Calendar Date Range filters for main view
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
+
+  // Download / Export Modal state with Calendar date range
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadStartDate, setDownloadStartDate] = useState('');
+  const [downloadEndDate, setDownloadEndDate] = useState('');
+  const [downloadCategory, setDownloadCategory] = useState('All');
+
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
@@ -107,7 +120,18 @@ export default function ExpenseManagement({ user }) {
     fetchExpenses();
   }, []);
 
-  // Filtered expenses
+  // Compute all available categories (standard + custom from database)
+  const allAvailableCategories = useMemo(() => {
+    const list = [...CATEGORIES];
+    expenses.forEach(e => {
+      if (e.category && e.category.trim() && !list.includes(e.category.trim())) {
+        list.push(e.category.trim());
+      }
+    });
+    return list;
+  }, [expenses]);
+
+  // Filtered expenses for table view
   const filteredExpenses = useMemo(() => {
     return expenses.filter(item => {
       const term = searchTerm.toLowerCase().trim();
@@ -117,13 +141,212 @@ export default function ExpenseManagement({ user }) {
         (item.vendor && item.vendor.toLowerCase().includes(term)) ||
         (item.receiptNo && item.receiptNo.toLowerCase().includes(term)) ||
         (item.department && item.department.toLowerCase().includes(term)) ||
-        (item.description && item.description.toLowerCase().includes(term))
+        (item.description && item.description.toLowerCase().includes(term)) ||
+        (item.category && item.category.toLowerCase().includes(term))
       );
       const matchesCat = selectedCategory === 'All' || item.category === selectedCategory;
       const matchesYear = selectedAcademicYear === 'All' || item.academicYear === selectedAcademicYear;
-      return matchesSearch && matchesCat && matchesYear;
+
+      const itemDate = item.date ? new Date(item.date).toISOString().split('T')[0] : '';
+      const matchesStart = !startDateFilter || (itemDate && itemDate >= startDateFilter);
+      const matchesEnd = !endDateFilter || (itemDate && itemDate <= endDateFilter);
+
+      return matchesSearch && matchesCat && matchesYear && matchesStart && matchesEnd;
     });
-  }, [expenses, searchTerm, selectedCategory, selectedAcademicYear]);
+  }, [expenses, searchTerm, selectedCategory, selectedAcademicYear, startDateFilter, endDateFilter]);
+
+  // Filtered expenses specifically for the Download Modal
+  const downloadFilteredRecords = useMemo(() => {
+    return expenses.filter(item => {
+      const itemDate = item.date ? new Date(item.date).toISOString().split('T')[0] : '';
+      const matchesStart = !downloadStartDate || (itemDate && itemDate >= downloadStartDate);
+      const matchesEnd = !downloadEndDate || (itemDate && itemDate <= downloadEndDate);
+      const matchesCat = downloadCategory === 'All' || item.category === downloadCategory;
+      return matchesStart && matchesEnd && matchesCat;
+    });
+  }, [expenses, downloadStartDate, downloadEndDate, downloadCategory]);
+
+  const downloadTotalAmount = useMemo(() => {
+    return downloadFilteredRecords.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [downloadFilteredRecords]);
+
+  // Quick preset dates for download modal
+  const applyDownloadPreset = (preset) => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    if (preset === 'all') {
+      setDownloadStartDate('');
+      setDownloadEndDate('');
+    } else if (preset === 'today') {
+      setDownloadStartDate(todayStr);
+      setDownloadEndDate(todayStr);
+    } else if (preset === 'this_month') {
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+      setDownloadStartDate(startOfMonth);
+      setDownloadEndDate(todayStr);
+    } else if (preset === 'last_30_days') {
+      const past30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      setDownloadStartDate(past30);
+      setDownloadEndDate(todayStr);
+    } else if (preset === 'academic_year') {
+      setDownloadStartDate('2025-06-01');
+      setDownloadEndDate('2026-05-31');
+    }
+  };
+
+  // CSV Export Function
+  const handleExportCSV = (recordsToExport, fromDate, toDate, filterCat = 'All') => {
+    if (!recordsToExport || recordsToExport.length === 0) {
+      showToast('No records found to download');
+      return;
+    }
+    const headers = [
+      'S.No',
+      'Date',
+      'Title / Purpose',
+      'Category',
+      'Amount (INR)',
+      'Spent By',
+      'Department',
+      'Vendor / Shop',
+      'Payment Mode',
+      'Receipt / Voucher No',
+      'Description / Notes',
+      'Academic Year'
+    ];
+    const rows = recordsToExport.map((r, idx) => [
+      idx + 1,
+      r.date ? new Date(r.date).toLocaleDateString('en-IN') : '',
+      `"${(r.title || '').replace(/"/g, '""')}"`,
+      `"${(r.category || '').replace(/"/g, '""')}"`,
+      Number(r.amount || 0),
+      `"${(r.spentBy || '').replace(/"/g, '""')}"`,
+      `"${(r.department || '').replace(/"/g, '""')}"`,
+      `"${(r.vendor || '').replace(/"/g, '""')}"`,
+      `"${(r.paymentMode || '').replace(/"/g, '""')}"`,
+      `"${(r.receiptNo || '').replace(/"/g, '""')}"`,
+      `"${(r.description || '').replace(/"/g, '""')}"`,
+      `"${(r.academicYear || '').replace(/"/g, '""')}"`
+    ]);
+
+    const totalAmt = recordsToExport.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    rows.push([]);
+    rows.push(['', '', 'TOTAL EXPENDITURE', `Filter: ${filterCat}`, totalAmt, '', '', '', '', '', '', '']);
+
+    const csvString = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const dateRangeLabel = fromDate && toDate ? `${fromDate}_to_${toDate}` : (fromDate ? `from_${fromDate}` : (toDate ? `upto_${toDate}` : 'All_Dates'));
+    link.download = `VCAS_Expenses_${dateRangeLabel}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Expenses report downloaded successfully!');
+  };
+
+  // Print Statement Function
+  const handlePrintStatement = (recordsToPrint, fromDate, toDate, filterCat = 'All') => {
+    if (!recordsToPrint || recordsToPrint.length === 0) {
+      showToast('No records found to print');
+      return;
+    }
+    const totalAmt = recordsToPrint.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    const printWin = window.open('', '_blank', 'width=950,height=700');
+    if (!printWin) {
+      showToast('Please allow popups to print report');
+      return;
+    }
+    const dateRangeText = (fromDate || toDate)
+      ? `${fromDate ? new Date(fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Beginning'} to ${toDate ? new Date(toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Current'}`
+      : 'All Recorded Dates';
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Institutional Expenditure Report</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; padding: 25px; color: #1e293b; font-size: 11px; }
+            .header { text-align: center; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-bottom: 16px; }
+            .college-name { font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }
+            .sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+            .title-bar { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 8px; margin-bottom: 14px; }
+            .title-bar h2 { margin: 0; font-size: 13px; font-weight: 800; color: #1e293b; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th { background: #f1f5f9; color: #334155; font-weight: 700; text-transform: uppercase; font-size: 9px; padding: 7px 6px; border: 1px solid #cbd5e1; text-align: left; }
+            td { padding: 6px; border: 1px solid #e2e8f0; font-size: 10.5px; }
+            .text-right { text-align: right; }
+            .font-bold { font-weight: 700; }
+            .total-row { background: #f8fafc; font-weight: 800; border-top: 2px solid #334155; }
+            .footer { margin-top: 24px; display: flex; justify-content: space-between; padding-top: 16px; font-size: 10px; color: #64748b; }
+            @media print { body { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="college-name">Vivekananda College of Arts & Sciences</div>
+            <div class="sub">Finance & Accounts Office • Institutional Expenditure Statement</div>
+          </div>
+          <div class="title-bar">
+            <div>
+              <h2>Expenditure Statement Report</h2>
+              <div class="sub">Filtered Date Range: <strong>${dateRangeText}</strong> | Category: <strong>${filterCat}</strong></div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 10px; color: #64748b;">Generated On: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+              <div style="font-weight: 800; color: #047857; font-size: 13px;">Total: ₹${totalAmt.toLocaleString('en-IN')}</div>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25px;">#</th>
+                <th style="width: 70px;">Date</th>
+                <th>Title / Purpose</th>
+                <th style="width: 95px;">Category</th>
+                <th style="width: 80px;">Spent By</th>
+                <th style="width: 80px;">Vendor</th>
+                <th style="width: 65px;">Mode</th>
+                <th style="width: 70px;">Receipt No</th>
+                <th style="width: 75px;" class="text-right">Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recordsToPrint.map((r, i) => `
+                <tr>
+                  <td>${i + 1}</td>
+                  <td>${r.date ? new Date(r.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                  <td><strong>${r.title}</strong>${r.description ? `<br><span style="color: #64748b; font-size: 9.5px;">${r.description}</span>` : ''}</td>
+                  <td>${r.category}</td>
+                  <td>${r.spentBy || '—'}<br><span style="color: #64748b; font-size: 9px;">${r.department || ''}</span></td>
+                  <td>${r.vendor || '—'}</td>
+                  <td>${r.paymentMode}</td>
+                  <td style="font-family: monospace;">${r.receiptNo || '—'}</td>
+                  <td class="text-right font-bold">₹${Number(r.amount).toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                <td colspan="8" class="text-right font-bold" style="padding: 8px;">TOTAL EXPENDITURE (${recordsToPrint.length} Records)</td>
+                <td class="text-right font-bold" style="padding: 8px; color: #047857; font-size: 12px;">₹${totalAmt.toLocaleString('en-IN')}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="footer">
+            <div>Prepared By: ___________________ (Finance Desk)</div>
+            <div>Verified By: ___________________ (Accountant)</div>
+            <div>Approved By: ___________________ (Principal / Secretary)</div>
+          </div>
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
 
   // Aggregate Metrics
   const totalExpenditure = useMemo(() => {
@@ -156,8 +379,10 @@ export default function ExpenseManagement({ user }) {
 
   const openAddModal = () => {
     setEditingExpense(null);
+    setCustomCategory('');
     setFormData({
       ...initialFormState,
+      category: 'Events & Functions',
       receiptNo: `EXP-${Date.now().toString().slice(-5)}`,
       spentBy: user?.name || (user?.role === 'Accountant' ? 'Accountant' : 'Office Staff'),
       recordedBy: user?.name || 'Staff Member',
@@ -168,9 +393,11 @@ export default function ExpenseManagement({ user }) {
 
   const openEditModal = (item) => {
     setEditingExpense(item);
+    const isStandardCat = CATEGORIES.includes(item.category);
+    setCustomCategory(isStandardCat ? '' : (item.category || ''));
     setFormData({
       title: item.title || '',
-      category: item.category || 'Events & Functions',
+      category: isStandardCat ? (item.category || 'Events & Functions') : 'Other',
       amount: String(item.amount || ''),
       date: item.date ? new Date(item.date).toISOString().split('T')[0] : '',
       spentBy: item.spentBy || '',
@@ -189,8 +416,13 @@ export default function ExpenseManagement({ user }) {
 
   const handleSubmitExpense = async (e) => {
     e.preventDefault();
+    const finalCategory = (formData.category === 'Other')
+      ? (customCategory.trim() || 'Other')
+      : formData.category;
+
     const payload = {
       ...formData,
+      category: finalCategory,
       amount: parseFloat(formData.amount) || 0
     };
 
@@ -269,9 +501,17 @@ export default function ExpenseManagement({ user }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={() => window.print()}
+            onClick={() => setShowDownloadModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-indigo-700 font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-indigo-600" />
+            <span>Download Expenses</span>
+          </button>
+
+          <button
+            onClick={() => handlePrintStatement(filteredExpenses, startDateFilter, endDateFilter, selectedCategory)}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
           >
             <Printer className="w-4 h-4 text-slate-500" />
@@ -368,9 +608,9 @@ export default function ExpenseManagement({ user }) {
       </div>
 
       {/* FILTER & SEARCH BAR */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
         {/* Search */}
-        <div className="relative w-full md:w-80">
+        <div className="relative w-full lg:w-72">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input 
             type="text"
@@ -381,37 +621,77 @@ export default function ExpenseManagement({ user }) {
           />
         </div>
 
-        {/* Dropdown Filters */}
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        {/* Filters: Category, Academic Year, Calendar Date Range, and Export */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          {/* Calendar Date Range Filter */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-2xs">
+            <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span className="text-[11px] text-slate-500 font-bold">From:</span>
+            <input 
+              type="date"
+              value={startDateFilter}
+              onChange={(e) => setStartDateFilter(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+              title="Filter from date"
+            />
+            <span className="text-[11px] text-slate-500 font-bold ml-1">To:</span>
+            <input 
+              type="date"
+              value={endDateFilter}
+              onChange={(e) => setEndDateFilter(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+              title="Filter to date"
+            />
+            {(startDateFilter || endDateFilter) && (
+              <button
+                type="button"
+                onClick={() => { setStartDateFilter(''); setEndDateFilter(''); }}
+                className="text-slate-400 hover:text-rose-500 text-xs font-black px-1 cursor-pointer"
+                title="Clear date range filter"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
           {/* Category Filter */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-xs text-slate-500 font-medium">Category:</span>
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 py-1.5 px-3 focus:outline-none focus:border-indigo-500 shadow-2xs cursor-pointer"
+              className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 py-1.5 px-3 focus:outline-none focus:border-indigo-500 shadow-2xs cursor-pointer max-w-[150px] truncate"
             >
               <option value="All">All Categories</option>
-              {CATEGORIES.map(c => (
+              {allAvailableCategories.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
 
           {/* Academic Year Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium">Year:</span>
+          <div className="flex items-center gap-1.5">
             <select
               value={selectedAcademicYear}
               onChange={(e) => setSelectedAcademicYear(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-2.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
               <option value="All">All Years</option>
               <option value="2025–2026">2025–2026</option>
               <option value="2024–2025">2024–2025</option>
             </select>
           </div>
+
+          {/* Quick Export Button */}
+          <button
+            type="button"
+            onClick={() => handleExportCSV(filteredExpenses, startDateFilter, endDateFilter, selectedCategory)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0"
+            title="Download currently filtered records as CSV"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Export CSV</span>
+          </button>
         </div>
       </div>
 
@@ -597,12 +877,17 @@ export default function ExpenseManagement({ user }) {
                   </label>
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ ...formData, category: val });
+                      if (val !== 'Other') setCustomCategory('');
+                    }}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:border-indigo-500 focus:outline-none shadow-2xs cursor-pointer"
                   >
                     {CATEGORIES.map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
+                    <option value="Other">Other (Type custom category...)</option>
                   </select>
                 </div>
 
@@ -621,6 +906,28 @@ export default function ExpenseManagement({ user }) {
                   />
                 </div>
               </div>
+
+              {/* Custom Category Input if "Other" is selected */}
+              {formData.category === 'Other' && (
+                <div className="bg-indigo-50/60 border border-indigo-200 p-3.5 rounded-2xl animate-fadeIn">
+                  <label className="block text-indigo-950 font-extrabold mb-1.5 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Enter Custom Category Name <span className="text-rose-500">*</span></span>
+                  </label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="Type category (e.g. Electrical Works, Campus Fest, Printing, Guest Honorarium...)"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-indigo-300 rounded-xl text-slate-900 font-bold focus:border-indigo-600 focus:outline-none shadow-2xs text-xs"
+                    autoFocus
+                  />
+                  <p className="text-[11px] text-indigo-600/80 mt-1 font-medium">
+                    This custom category will be recorded and displayed for this expenditure.
+                  </p>
+                </div>
+              )}
 
               {/* Date & Spent By */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -861,6 +1168,173 @@ export default function ExpenseManagement({ user }) {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXPENSE DOWNLOAD WITH CALENDAR FILTER MODAL */}
+      {showDownloadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setShowDownloadModal(false)} />
+          <div className="relative bg-white rounded-3xl shadow-2xl p-6 sm:p-8 w-full max-w-lg z-10 border border-slate-200 animate-scaleUp space-y-5">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-200 shrink-0">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Download Expenditures Report
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Filter expenses between any two dates using the calendar and export.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowDownloadModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Preset Buttons */}
+            <div>
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                Quick Date Presets
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyDownloadPreset('all')}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer transition-colors"
+                >
+                  All Dates
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyDownloadPreset('today')}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer transition-colors"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyDownloadPreset('this_month')}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer transition-colors"
+                >
+                  This Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyDownloadPreset('last_30_days')}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer transition-colors"
+                >
+                  Past 30 Days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyDownloadPreset('academic_year')}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer transition-colors"
+                >
+                  Academic Year (2025–26)
+                </button>
+              </div>
+            </div>
+
+            {/* Calendar Date Pickers (From Date to To Date) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80">
+              <div>
+                <label className="block text-slate-800 font-bold mb-1.5 text-xs flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>From Date (Calendar)</span>
+                </label>
+                <input 
+                  type="date"
+                  value={downloadStartDate}
+                  onChange={(e) => setDownloadStartDate(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold text-xs focus:border-indigo-600 focus:outline-none shadow-2xs cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-800 font-bold mb-1.5 text-xs flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>To Date (Calendar)</span>
+                </label>
+                <input 
+                  type="date"
+                  value={downloadEndDate}
+                  onChange={(e) => setDownloadEndDate(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold text-xs focus:border-indigo-600 focus:outline-none shadow-2xs cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Category Filter for Download */}
+            <div>
+              <label className="block text-slate-800 font-bold mb-1.5 text-xs flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-slate-500" />
+                <span>Filter by Category (Optional)</span>
+              </label>
+              <select
+                value={downloadCategory}
+                onChange={(e) => setDownloadCategory(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold text-xs focus:bg-white focus:border-indigo-500 focus:outline-none shadow-2xs cursor-pointer"
+              >
+                <option value="All">All Categories ({expenses.length} Records)</option>
+                {allAvailableCategories.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Live Filter Summary Card */}
+            <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                  Matching Expenditures
+                </p>
+                <p className="text-xl font-extrabold text-slate-900 mt-0.5">
+                  {downloadFilteredRecords.length} <span className="text-xs font-semibold text-slate-500">records found</span>
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                  Total Spending
+                </p>
+                <p className="text-xl font-black text-emerald-600 mt-0.5">
+                  ₹{downloadTotalAmount.toLocaleString('en-IN')}
+                </p>
+              </div>
+            </div>
+
+            {/* Download Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleExportCSV(downloadFilteredRecords, downloadStartDate, downloadEndDate, downloadCategory)}
+                disabled={downloadFilteredRecords.length === 0}
+                className="w-full sm:flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download CSV / Excel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePrintStatement(downloadFilteredRecords, downloadStartDate, downloadEndDate, downloadCategory)}
+                disabled={downloadFilteredRecords.length === 0}
+                className="w-full sm:flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print / PDF Report</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}

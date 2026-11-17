@@ -9,16 +9,7 @@ const expenseSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: [
-      'Events & Functions',
-      'Student Supplies & Welfare',
-      'Sports & Culturals',
-      'Books & Stationery',
-      'Lab & Equipment',
-      'Refreshments & Food',
-      'Maintenance & Operations',
-      'Miscellaneous'
-    ],
+    trim: true,
     default: 'Events & Functions'
   },
   amount: {
