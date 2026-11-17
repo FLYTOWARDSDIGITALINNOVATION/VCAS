@@ -848,8 +848,8 @@ export default function NoticesManagement() {
       {/* MODAL: CREATE / EDIT NOTICE */}
       {(showCreateModal || showEditModal) && (
         <ModalPortal isOpen={Boolean(showCreateModal || showEditModal)} onClose={() => { setShowCreateModal(false); setShowEditModal(null); }}>
-          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] overflow-hidden border border-slate-200 shadow-2xl my-auto" onClick={(e) => e.stopPropagation()}>
-            <div className={`px-6 py-4 text-white flex items-center justify-between ${showCreateModal ? 'bg-gradient-to-r from-blue-600 to-indigo-700' : 'bg-gradient-to-r from-amber-600 to-amber-700'}`}>
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 shadow-2xl my-auto text-left" onClick={(e) => e.stopPropagation()}>
+            <div className={`px-6 py-4 text-white flex items-center justify-between shrink-0 ${showCreateModal ? 'bg-gradient-to-r from-blue-600 to-indigo-700' : 'bg-gradient-to-r from-amber-600 to-amber-700'}`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20">
                   {showCreateModal ? <Plus className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
@@ -864,6 +864,7 @@ export default function NoticesManagement() {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setShowCreateModal(false);
                   setShowEditModal(null);
@@ -874,8 +875,8 @@ export default function NoticesManagement() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-4 bg-slate-50/50">
-              <form onSubmit={showCreateModal ? handleSaveCreate : handleSaveEdit} className="space-y-4">
+            <form onSubmit={showCreateModal ? handleSaveCreate : handleSaveEdit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto flex-1 min-h-0 space-y-4 bg-slate-50/50">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
@@ -1010,27 +1011,28 @@ export default function NoticesManagement() {
                     Flag as Urgent / High Priority Notice
                   </label>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setShowEditModal(null);
-                    }}
-                    className="px-5 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className={`px-6 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-md transition-all cursor-pointer ${showCreateModal ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20' : 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'}`}
-                  >
-                    {showCreateModal ? 'Publish Notice' : 'Save Changes'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              {/* Sticky / fixed bottom action bar */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-white border-t border-slate-200 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setShowEditModal(null);
+                  }}
+                  className="px-5 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-6 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-md transition-all cursor-pointer ${showCreateModal ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20' : 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'}`}
+                >
+                  {showCreateModal ? 'Publish Notice' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </ModalPortal>
       )}
