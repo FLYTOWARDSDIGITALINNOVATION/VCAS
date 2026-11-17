@@ -372,7 +372,7 @@ export default function NoticesManagement({ user }) {
 
   const handleSaveCreate = async (e) => {
     e.preventDefault();
-    if (!formData.title.trim() || !formData.content.trim()) {
+    if (!(formData.title || '').trim() || !(formData.content || formData.body || '').trim()) {
       alert('Please fill out the circular title and detailed content.');
       return;
     }
@@ -382,12 +382,12 @@ export default function NoticesManagement({ user }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: formData.title.trim(),
-          reason: formData.reason.trim(),
-          body: formData.content.trim(),
-          tag: formData.category,
+          title: (formData.title || '').trim(),
+          reason: (formData.reason || '').trim(),
+          body: (formData.content || formData.body || '').trim(),
+          tag: formData.category || 'Academic',
           urgent: Boolean(formData.urgent),
-          targetAudience: formData.targetAudience,
+          targetAudience: formData.targetAudience || 'All',
           assignedToStaffId: formData.assignedToStaffId || '',
           assignedToStaffName: formData.assignedToStaffName || '',
           assignedTo: formData.assignedTo || null,
@@ -415,7 +415,12 @@ export default function NoticesManagement({ user }) {
     if (e) e.stopPropagation();
     setShowEditModal(notice);
     setFormData({
-      ...notice,
+      title: notice.title || '',
+      reason: notice.reason || '',
+      content: notice.content || notice.body || '',
+      category: notice.category || notice.tag || 'Academic',
+      urgent: Boolean(notice.urgent || notice.priority === 'Urgent'),
+      targetAudience: notice.targetAudience || 'All Students',
       assignedToStaffId: notice.assignedToStaffId || notice.assignedTo?.staffId || '',
       assignedToStaffName: notice.assignedToStaffName || notice.assignedTo?.name || '',
       assignedTo: notice.assignedTo || null,
@@ -425,6 +430,10 @@ export default function NoticesManagement({ user }) {
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
+    const cleanTitle = (formData.title || '').trim();
+    const cleanReason = (formData.reason || '').trim();
+    const cleanBody = (formData.content || formData.body || '').trim();
+
     try {
       const noticeId = showEditModal._id || showEditModal.id;
       if (noticeId && String(noticeId).length === 24) {
@@ -432,12 +441,12 @@ export default function NoticesManagement({ user }) {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: formData.title.trim(),
-            reason: formData.reason.trim(),
-            body: formData.content.trim(),
-            tag: formData.category,
+            title: cleanTitle,
+            reason: cleanReason,
+            body: cleanBody,
+            tag: formData.category || 'Academic',
             urgent: Boolean(formData.urgent),
-            targetAudience: formData.targetAudience,
+            targetAudience: formData.targetAudience || 'All Students',
             assignedToStaffId: formData.assignedToStaffId || '',
             assignedToStaffName: formData.assignedToStaffName || '',
             assignedTo: formData.assignedTo || null,
@@ -448,12 +457,15 @@ export default function NoticesManagement({ user }) {
     } catch (_) {}
     setNotices(prev => prev.map(n => (n.id === showEditModal.id || n._id === showEditModal._id) ? {
       ...n,
-      title: formData.title.trim(),
-      reason: formData.reason.trim(),
-      body: formData.content.trim(),
-      tag: formData.category,
+      title: cleanTitle,
+      reason: cleanReason,
+      body: cleanBody,
+      content: cleanBody,
+      tag: formData.category || 'Academic',
+      category: formData.category || 'Academic',
       urgent: Boolean(formData.urgent),
-      targetAudience: formData.targetAudience,
+      priority: formData.urgent ? 'Urgent' : 'Normal',
+      targetAudience: formData.targetAudience || 'All Students',
       assignedToStaffId: formData.assignedToStaffId || '',
       assignedToStaffName: formData.assignedToStaffName || '',
       assignedTo: formData.assignedTo || null,
@@ -514,7 +526,7 @@ export default function NoticesManagement({ user }) {
       </div>
 
       {/* STAT CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Notices</p>
@@ -544,18 +556,6 @@ export default function NoticesManagement({ user }) {
           </div>
           <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
             <AlertTriangle className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Reads</p>
-            <p className="text-2xl font-black text-emerald-600 mt-1">
-              {visibleNotices.reduce((acc, n) => acc + (n.viewsCount || 0), 0).toLocaleString()}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <Eye className="w-5 h-5" />
           </div>
         </div>
       </div>
@@ -923,8 +923,8 @@ export default function NoticesManagement({ user }) {
                 <p className="text-[11px] text-slate-500">{showViewModal.designation}</p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Total Reads</p>
-                <p className="font-bold text-emerald-600 text-sm">{showViewModal.viewsCount || 1} views</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Date Published</p>
+                <p className="font-bold text-slate-700 text-xs">{showViewModal.publishDate || 'Recent'}</p>
               </div>
             </div>
 

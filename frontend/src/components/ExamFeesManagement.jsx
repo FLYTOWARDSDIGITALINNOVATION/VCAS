@@ -375,40 +375,55 @@ export default function ExamFeesManagement({
               </div>
 
               {!isCustomStudent ? (
-                <div className="space-y-1.5">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Search student by name or roll no..."
-                      value={studentSearchTerm}
-                      onChange={(e) => setStudentSearchTerm(e.target.value)}
-                      className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 text-[11px] placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
-                    />
-                    {studentSearchTerm && (
-                      <button
-                        type="button"
-                        onClick={() => setStudentSearchTerm('')}
-                        className="absolute right-2 top-1.5 text-xs text-slate-400 hover:text-slate-600 font-bold"
-                        title="Clear search"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <select
-                    value={entryFormData.studentKey || entryFormData.studentMongoId || entryFormData.rollNo || ''}
-                    onChange={(e) => handleStudentSelect(e.target.value)}
-                    className="w-full p-2.5 bg-blue-50/50 border border-blue-300 rounded-xl text-slate-900 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
-                    required
-                  >
-                    <option value="">-- Select Student ({filteredStudentOptions.length} available) --</option>
-                    {filteredStudentOptions.map((s, idx) => (
-                      <option key={s.mongoId || s._id || idx} value={s.mongoId || s._id || s.rollNo || s.id}>
-                        {s.name} ({s.rollNo || s.id}) • {s.course}
-                      </option>
-                    ))}
-                  </select>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 z-10 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder={entryFormData.studentName ? entryFormData.studentName : `Search by name or roll no… (${(studentOptions||[]).length} students)`}
+                    value={studentSearchTerm}
+                    onChange={(e) => { setStudentSearchTerm(e.target.value); }}
+                    className="w-full pl-8 pr-7 py-2 bg-white border border-blue-300 rounded-xl text-slate-800 text-[11px] placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+                  />
+                  {studentSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setStudentSearchTerm('')}
+                      className="absolute right-2 top-2 text-xs text-slate-400 hover:text-slate-600 font-bold z-10"
+                      title="Clear search"
+                    >✕</button>
+                  )}
+                  {/* Autocomplete dropdown */}
+                  {studentSearchTerm.trim() && (
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                      {filteredStudentOptions.length === 0 ? (
+                        <div className="px-3 py-2 text-[11px] text-slate-400 italic">No students match "{studentSearchTerm}"</div>
+                      ) : (
+                        filteredStudentOptions.map((s, idx) => (
+                          <button
+                            key={s.mongoId || s._id || idx}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); handleStudentSelect(s.mongoId || s._id || s.rollNo || s.id); setStudentSearchTerm(''); }}
+                            className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[11px] border-b border-slate-100 last:border-0 cursor-pointer"
+                          >
+                            <span className="font-bold text-slate-800">{s.name}</span>
+                            <span className="text-slate-500 ml-1">({s.rollNo || s.id})</span>
+                            <span className="text-slate-400 ml-1">• {s.course}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  {/* Show selected student pill */}
+                  {!studentSearchTerm && entryFormData.studentName && (
+                    <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                      <span className="text-[11px] font-bold text-blue-800">{entryFormData.studentName}</span>
+                      <span className="text-[10px] text-blue-500">({entryFormData.rollNo})</span>
+                      <button type="button" onClick={() => { handleStudentSelect(''); setStudentSearchTerm(''); }} className="ml-auto text-blue-400 hover:text-red-500 text-xs font-bold">✕</button>
+                    </div>
+                  )}
+                  {!studentSearchTerm && !entryFormData.studentName && (
+                    <div className="mt-1 text-[10px] text-slate-400 pl-1">Type a name or roll number to search all {(studentOptions||[]).length} students</div>
+                  )}
                 </div>
               ) : (
                 <input

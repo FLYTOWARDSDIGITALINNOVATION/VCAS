@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { API_BASE, BACKEND_URL } from '../apiConfig';
 import { createPortal } from 'react-dom';
 import {
@@ -141,48 +141,49 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   });
 
   // Real student fee records populated directly from database (/api/students)
+  // Shared sanitize function used by both initial load and refresh
+  const sanitizeRecords = (records) => {
+    if (!Array.isArray(records)) return [];
+    return records.map(rec => {
+      const deptFeeInfo = getDepartmentFixedFee(rec.department || rec.course);
+      const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
+      const breakdown = rec.feeBreakdown || {};
+      const tuitionPaid = Number(breakdown.tuition?.paid || 0);
+      const examPaid = Number(breakdown.exam?.paid || 0);
+      const transportPaid = Number(breakdown.transport?.paid || 0);
+      const miscPaid = Number(breakdown.misc?.paid || 0);
+      const sectionPaid = tuitionPaid + examPaid + transportPaid + miscPaid;
+      const paid = sectionPaid > 0 ? sectionPaid : (Number(rec.paidFee) || 0);
+
+      const tuitionTotal = Number(breakdown.tuition?.total || fixedAnnualFee);
+      const examTotal = Number(breakdown.exam?.total || 0);
+      const transportTotal = Number(breakdown.transport?.total || 0);
+      const miscTotal = Number(breakdown.misc?.total || 0);
+      const sectionTotal = tuitionTotal + examTotal + transportTotal + miscTotal;
+
+      let total = sectionTotal > 0 ? sectionTotal : (Number(rec.totalFee) || fixedAnnualFee);
+      if (total === 25000 || total === 35000) {
+        total = fixedAnnualFee + examTotal + transportTotal + miscTotal;
+      }
+      if (total < paid) {
+        total = paid;
+      }
+      const pending = Math.max(0, total - paid);
+      const status = total > 0 && pending === 0 ? 'Paid' : (paid > 0 ? 'Partial' : 'Pending');
+      return {
+        ...rec,
+        paidFee: paid,
+        paidFeeDisplay: `₹${paid.toLocaleString('en-IN')}`,
+        totalFee: total,
+        totalFeeDisplay: `₹${total.toLocaleString('en-IN')}`,
+        pendingFee: pending,
+        pendingFeeDisplay: pending > 0 ? `₹${pending.toLocaleString('en-IN')}` : '₹0',
+        status: status
+      };
+    });
+  };
+
   const [feeRecords, setFeeRecords] = useState(() => {
-    const sanitizeRecords = (records) => {
-      if (!Array.isArray(records)) return [];
-      return records.map(rec => {
-        const deptFeeInfo = getDepartmentFixedFee(rec.department || rec.course);
-        const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
-        const breakdown = rec.feeBreakdown || {};
-        const tuitionPaid = Number(breakdown.tuition?.paid || 0);
-        const examPaid = Number(breakdown.exam?.paid || 0);
-        const transportPaid = Number(breakdown.transport?.paid || 0);
-        const miscPaid = Number(breakdown.misc?.paid || 0);
-        const sectionPaid = tuitionPaid + examPaid + transportPaid + miscPaid;
-        const paid = sectionPaid > 0 ? sectionPaid : (Number(rec.paidFee) || 0);
-
-        const tuitionTotal = Number(breakdown.tuition?.total || fixedAnnualFee);
-        const examTotal = Number(breakdown.exam?.total || 0);
-        const transportTotal = Number(breakdown.transport?.total || 0);
-        const miscTotal = Number(breakdown.misc?.total || 0);
-        const sectionTotal = tuitionTotal + examTotal + transportTotal + miscTotal;
-
-        let total = sectionTotal > 0 ? sectionTotal : (Number(rec.totalFee) || fixedAnnualFee);
-        if (total === 25000 || total === 35000) {
-          total = fixedAnnualFee + examTotal + transportTotal + miscTotal;
-        }
-        if (total < paid) {
-          total = paid;
-        }
-        const pending = Math.max(0, total - paid);
-        const status = total > 0 && pending === 0 ? 'Paid' : (paid > 0 ? 'Partial' : 'Pending');
-        return {
-          ...rec,
-          paidFee: paid,
-          paidFeeDisplay: `₹${paid.toLocaleString('en-IN')}`,
-          totalFee: total,
-          totalFeeDisplay: `₹${total.toLocaleString('en-IN')}`,
-          pendingFee: pending,
-          pendingFeeDisplay: pending > 0 ? `₹${pending.toLocaleString('en-IN')}` : '₹0',
-          status: status
-        };
-      });
-    };
-
     try {
       const saved = localStorage.getItem('vcas_real_fee_records');
       if (saved) {
@@ -194,10 +195,12 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   });
 
   // Fetch real students from database on mount and merge any locally saved fee records
-  useEffect(() => {
-    const fetchStudentsForFees = async () => {
-      try {
-        const savedLocalRecords = (() => {
+  const [isRefreshingStudents, setIsRefreshingStudents] = useState(false);
+
+  const fetchStudentsForFees = useCallback(async () => {
+    setIsRefreshingStudents(true);
+    try {
+      const savedLocalRecords = (() => {
           try {
             const saved = localStorage.getItem('vcas_real_fee_records');
             if (!saved) return [];
@@ -370,10 +373,14 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
             localStorage.setItem('vcas_real_fee_records', JSON.stringify(sanitized));
           }
         } catch (e) { }
+      } finally {
+        setIsRefreshingStudents(false);
       }
-    };
+    }, []);
+
+  useEffect(() => {
     fetchStudentsForFees();
-  }, []);
+  }, [fetchStudentsForFees]);
 
   // Compute live dashboard metrics strictly from real fee records
   const detailedFeeSummary = useMemo(() => {
@@ -513,7 +520,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     setInlineEditState(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleInlineEditSave = () => {
+  const handleInlineEditSave = async () => {
     if (!inlineEditState.rowId) return;
 
     const targetRowId = inlineEditState.rowId;
@@ -532,6 +539,30 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       const rawStatus = String(inlineEditState.status || '').toLowerCase();
       const nextStatus = rawStatus === 'paid' ? 'Paid' : rawStatus === 'pending' ? 'Pending' : (rawStatus === 'overdue' ? 'Overdue' : (explicitPaid >= explicitTotal && explicitTotal > 0 ? 'Paid' : 'Pending'));
 
+      const nextBreakdown = {
+        tuition: { total: tuitionPaid, paid: nextStatus === 'Pending' ? 0 : tuitionPaid, pending: nextStatus === 'Pending' ? tuitionPaid : 0 },
+        exam: { total: examPaid, paid: nextStatus === 'Pending' ? 0 : examPaid, pending: nextStatus === 'Pending' ? examPaid : 0 },
+        transport: { total: transportPaid, paid: nextStatus === 'Pending' ? 0 : transportPaid, pending: nextStatus === 'Pending' ? transportPaid : 0 },
+        misc: { total: miscPaid, paid: nextStatus === 'Pending' ? 0 : miscPaid, pending: nextStatus === 'Pending' ? miscPaid : 0, name: rec.feeBreakdown?.misc?.name || 'Miscellaneous Fees' }
+      };
+
+      // Sync to backend
+      const mongoId = rec.mongoId || rec._id;
+      if (mongoId) {
+        fetch(`${API_BASE}/students/${mongoId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            feeStatus: nextStatus,
+            totalFee: explicitTotal,
+            paidFee: explicitPaid,
+            pendingFee: explicitPending,
+            feeBreakdown: nextBreakdown,
+            lastPaymentDate: new Date().toISOString().split('T')[0]
+          })
+        }).catch(err => console.warn('Backend sync warning on inline edit:', err));
+      }
+
       return {
         ...rec,
         name: inlineEditState.name || rec.name,
@@ -548,12 +579,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         pendingFeeDisplay: explicitPending > 0 ? formatINR(explicitPending) : '₹0',
         dueDate: inlineEditState.dueDate || rec.dueDate || '',
         status: nextStatus,
-        feeBreakdown: {
-          tuition: { total: tuitionPaid, paid: nextStatus === 'Pending' ? 0 : tuitionPaid, pending: nextStatus === 'Pending' ? tuitionPaid : 0 },
-          exam: { total: examPaid, paid: nextStatus === 'Pending' ? 0 : examPaid, pending: nextStatus === 'Pending' ? examPaid : 0 },
-          transport: { total: transportPaid, paid: nextStatus === 'Pending' ? 0 : transportPaid, pending: nextStatus === 'Pending' ? transportPaid : 0 },
-          misc: { total: miscPaid, paid: nextStatus === 'Pending' ? 0 : miscPaid, pending: nextStatus === 'Pending' ? miscPaid : 0, name: rec.feeBreakdown?.misc?.name || 'Miscellaneous Fees' }
-        }
+        feeBreakdown: nextBreakdown
       };
     });
 
@@ -724,7 +750,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               feeBreakdown: {
                 tuition: { total: feeKey === 'tuition' ? totalAmount : 0, paid: feeKey === 'tuition' ? paidAmount : 0, pending: feeKey === 'tuition' ? pendingAmount : 0 },
                 exam: { total: feeKey === 'exam' ? totalAmount : 0, paid: feeKey === 'exam' ? paidAmount : 0, pending: feeKey === 'exam' ? pendingAmount : 0 },
-                transport: { total: feeKey === 'transport' ? totalAmount : 0, paid: feeKey === 'transport' ? paidAmount : 0, pending: feeKey === 'transport' ? pendingAmount : 0 }
+                transport: { total: feeKey === 'transport' ? totalAmount : 0, paid: feeKey === 'transport' ? paidAmount : 0, pending: feeKey === 'transport' ? pendingAmount : 0 },
+                misc: { total: feeKey === 'misc' ? totalAmount : 0, paid: feeKey === 'misc' ? paidAmount : 0, pending: feeKey === 'misc' ? pendingAmount : 0, name: entryFormData.miscFeeName || 'Miscellaneous Fees' }
               },
               lastPaymentDate: payDate,
               paymentMode: entryFormData.paymentMode || 'Online / UPI',
@@ -922,10 +949,11 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         const currentType = studentBreakdown[feeKey] || { total: 0, paid: 0, pending: 0 };
         const newTypeTotal = Math.max(Number(currentType.total || 0), Number(totalAmount || 0));
         const newTypePaid = Number(currentType.paid || 0) + Number(paidAmount || 0);
+        const resolvedStudentTypeTotal = newTypeTotal > 0 ? newTypeTotal : newTypePaid;
         studentBreakdown[feeKey] = {
-          total: newTypeTotal,
+          total: resolvedStudentTypeTotal,
           paid: newTypePaid,
-          pending: Math.max(0, newTypeTotal - newTypePaid),
+          pending: Math.max(0, resolvedStudentTypeTotal - newTypePaid),
           name: feeKey === 'misc' ? (entryFormData.miscFeeName || currentType.name || 'Miscellaneous Fees') : currentType.name
         };
 
@@ -1536,6 +1564,15 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           >
             <Printer className="w-4 h-4 text-slate-500" />
             <span>Print</span>
+          </button>
+          <button
+            onClick={fetchStudentsForFees}
+            disabled={isRefreshingStudents}
+            title="Refresh student list from database"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <RotateCcw className={`w-4 h-4 ${isRefreshingStudents ? 'animate-spin' : ''}`} />
+            <span>{isRefreshingStudents ? 'Refreshing...' : 'Refresh Students'}</span>
           </button>
         </div>
       </div>

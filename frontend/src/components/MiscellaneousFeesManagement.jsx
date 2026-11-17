@@ -231,7 +231,71 @@ export default function MiscellaneousFeesManagement({
     const actual = normalizeDeptText(actualValue);
     const expected = normalizeDeptText(expectedValue);
     if (!actual || !expected) return false;
-    return actual === expected || actual.includes(expected) || expected.includes(actual);
+    if (actual === expected) return true;
+    if (actual.length >= 4 && expected.length >= 4) {
+      return actual.includes(expected) || expected.includes(actual);
+    }
+    return false;
+  };
+
+  const getDepartmentSelectionValue = (selectedDepartment) => {
+    const raw = String(selectedDepartment || '').trim();
+    if (!raw) return '';
+
+    const canonicalMap = {
+      commerce: 'Commerce',
+      bcom: 'Commerce',
+      'b.com': 'Commerce',
+      'b com': 'Commerce',
+      computerscience: 'Computer Science',
+      cs: 'Computer Science',
+      'bsc computerscience': 'Computer Science',
+      'bsc cs': 'Computer Science',
+      artificialintelligence: 'Artificial Intelligence',
+      ai: 'Artificial Intelligence',
+      'bsc artificialintelligence': 'Artificial Intelligence',
+      criminologyandforensicscience: 'Criminology and Forensic Science',
+      criminology: 'Criminology and Forensic Science',
+      forensicscience: 'Criminology and Forensic Science',
+      cfs: 'Criminology and Forensic Science',
+      cafs: 'Criminology and Forensic Science',
+      'bsc criminology': 'Criminology and Forensic Science',
+      'bsc criminology and forensic science': 'Criminology and Forensic Science',
+      criminologyandcomputerscience: 'Criminology and Forensic Science',
+      management: 'Management',
+      bba: 'Management',
+      'business administration': 'Management',
+      english: 'English',
+      mathematics: 'Mathematics',
+      math: 'Mathematics',
+      physics: 'Physics',
+      chemistry: 'Chemistry'
+    };
+
+    const normalizedRaw = normalizeDeptText(raw);
+    const explicitCanonical = canonicalMap[normalizedRaw];
+    if (explicitCanonical) {
+      const adminMatch = (adminDepartments || []).find(d =>
+        normalizeDeptText(d.name) === normalizeDeptText(explicitCanonical) ||
+        normalizeDeptText(d.code) === normalizeDeptText(explicitCanonical)
+      );
+      return adminMatch?.name || adminMatch?.code || explicitCanonical;
+    }
+
+    const directMatch = (adminDepartments || []).find(d => {
+      const code = normalizeDeptText(d.code);
+      const name = normalizeDeptText(d.name);
+      return code === normalizedRaw || name === normalizedRaw;
+    });
+    if (directMatch) return directMatch.name || directMatch.code;
+
+    const partialMatch = (adminDepartments || []).find(d => {
+      const name = normalizeDeptText(d.name);
+      return name.length > 3 && (name.includes(normalizedRaw) || normalizedRaw.includes(name));
+    });
+    if (partialMatch) return partialMatch.name || partialMatch.code;
+
+    return raw;
   };
 
   const getCourseCodeFromDepartment = (selectedDepartment) => {
@@ -239,11 +303,11 @@ export default function MiscellaneousFeesManagement({
     if (!departmentValue) return 'B.Com';
 
     const normalized = normalizeDeptText(departmentValue);
-    if (normalized.includes('computer') || normalized.includes('cs')) return 'CS';
-    if (normalized.includes('ai')) return 'AI';
-    if (normalized.includes('cfs') || normalized.includes('forensic')) return 'CFS';
-    if (normalized.includes('bba')) return 'BBA';
-    if (normalized.includes('commerce')) return 'B.Com';
+    if (normalized.includes('criminology') || normalized.includes('forensic') || normalized === 'cfs' || normalized === 'cafs') return 'CFS';
+    if (normalized.includes('computer') || normalized === 'cs') return 'CS';
+    if (normalized.includes('artificial') || normalized.includes('ai')) return 'AI';
+    if (normalized.includes('management') || normalized.includes('bba') || normalized === 'm') return 'BBA';
+    if (normalized.includes('commerce') || normalized.includes('bcom') || normalized === 'c') return 'B.Com';
 
     const matchedDept = (adminDepartments || []).find(d => {
       const code = String(d.code || '').trim();
@@ -271,16 +335,8 @@ export default function MiscellaneousFeesManagement({
     );
 
     if (found) {
-      const rawDept = found.department || found.course || 'B.Com';
-      const matchingDepartment = (adminDepartments || []).find(d => {
-        const deptName = String(d.name || '').trim();
-        const deptCode = String(d.code || '').trim();
-        const candidate = String(rawDept || '').trim();
-        return departmentMatches(deptName, candidate) || departmentMatches(deptCode, candidate);
-      });
-
-      const fallbackDepartment = String(rawDept || '').trim() || 'B.Com';
-      const departmentValue = matchingDepartment ? (matchingDepartment.name || matchingDepartment.code || fallbackDepartment) : fallbackDepartment;
+      const rawDept = found.department || found.course || '';
+      const departmentValue = getDepartmentSelectionValue(rawDept) || rawDept || 'Commerce';
       const courseValue = getCourseCodeFromDepartment(departmentValue);
 
       // Auto-fill amount based on currently active fee name
@@ -305,8 +361,8 @@ export default function MiscellaneousFeesManagement({
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
         amount: String(baseAmt),
         totalAmount: String(total),
-        paidAmount: prev.paidAmount && prev.paidAmount !== '0' ? String(prev.paidAmount) : String(baseAmt),
-        balance: String(Math.max(0, total - (prev.paidAmount && prev.paidAmount !== '0' ? parseFloat(prev.paidAmount) : baseAmt)))
+        paidAmount: String(baseAmt),
+        balance: '0'
       }));
     }
   };
@@ -365,10 +421,30 @@ export default function MiscellaneousFeesManagement({
     const dept = r.department || r.course || 'UG Program';
     const breakdown = r.feeBreakdown || {};
     const miscData = breakdown.misc || {};
-    const totalFee = Number(miscData.total || r.totalFee || 0);
-    const paidFee = Number(miscData.paid || r.paidFee || 0);
+    const miscBase = Number(r.baseAmount || 0);
+    const feeName = miscData.name || r.miscFeeName || (r.feeType === 'Miscellaneous Fees' ? (r.miscFeeName || 'Lab Fees') : 'Miscellaneous Fees');
+    
+    // Exact fee amount assessed for this specific miscellaneous fee
+    const totalFee = Number(
+      (miscData.total !== undefined && miscData.total !== null && miscData.total !== '')
+        ? miscData.total
+        : (miscBase > 0 ? miscBase : (r.totalFee || 0))
+    );
+    
+    // Exact fee amount paid for this specific miscellaneous fee
+    let paidFee = Number(
+      (miscData.paid !== undefined && miscData.paid !== null && miscData.paid !== '')
+        ? miscData.paid
+        : (r.feeType?.toLowerCase().includes('misc')
+            ? (r.paidAmount !== undefined && r.paidAmount !== '' ? r.paidAmount : (r.baseAmount || r.paidFee || 0))
+            : (r.paidAmount || 0))
+    );
+    
+    // Prevent cumulative all-fees sum (e.g. 1250) from bleeding into this specific receipt
+    if (totalFee > 0 && paidFee > totalFee) {
+      paidFee = totalFee;
+    }
     const pendingFee = Math.max(0, totalFee - paidFee);
-    const feeName = miscData.name || r.miscFeeName || 'Miscellaneous Fees';
     const receiptNo = r.receiptNo || '';
     const txnRef = r.referenceNo || r.paymentRef || '';
     const payDate = r.lastPaymentDate || r.paymentDate || new Date().toISOString().split('T')[0];
@@ -665,39 +741,55 @@ export default function MiscellaneousFeesManagement({
               </div>
 
               {!isCustomStudent ? (
-                <div className="space-y-1.5">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Search student..."
-                      value={studentSearchTerm}
-                      onChange={(e) => setStudentSearchTerm(e.target.value)}
-                      className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 text-[11px] placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
-                    />
-                    {studentSearchTerm && (
-                      <button
-                        type="button"
-                        onClick={() => setStudentSearchTerm('')}
-                        className="absolute right-2 top-1.5 text-xs text-slate-400 hover:text-slate-600 font-bold"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <select
-                    value={entryFormData.studentKey || entryFormData.studentMongoId || entryFormData.rollNo || ''}
-                    onChange={(e) => handleStudentSelect(e.target.value)}
-                    className="w-full p-2.5 bg-blue-50/50 border border-blue-300 rounded-xl text-slate-900 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
-                    required
-                  >
-                    <option value="">-- Select Student ({filteredStudentOptions.length} available) --</option>
-                    {filteredStudentOptions.map((s, idx) => (
-                      <option key={s.mongoId || s._id || idx} value={s.mongoId || s._id || s.rollNo || s.id}>
-                        {s.name} ({s.rollNo || s.id}) • {s.course}
-                      </option>
-                    ))}
-                  </select>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 z-10 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder={entryFormData.studentName ? entryFormData.studentName : `Search by name or roll no… (${(studentOptions||[]).length} students)`}
+                    value={studentSearchTerm}
+                    onChange={(e) => { setStudentSearchTerm(e.target.value); }}
+                    onFocus={(e) => { if (!studentSearchTerm && entryFormData.studentName) e.target.placeholder = 'Type to search…'; }}
+                    className="w-full pl-8 pr-7 py-2 bg-white border border-blue-300 rounded-xl text-slate-800 text-[11px] placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+                  />
+                  {studentSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setStudentSearchTerm('')}
+                      className="absolute right-2 top-2 text-xs text-slate-400 hover:text-slate-600 font-bold z-10"
+                    >✕</button>
+                  )}
+                  {/* Autocomplete dropdown */}
+                  {studentSearchTerm.trim() && (
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                      {filteredStudentOptions.length === 0 ? (
+                        <div className="px-3 py-2 text-[11px] text-slate-400 italic">No students match "{studentSearchTerm}"</div>
+                      ) : (
+                        filteredStudentOptions.map((s, idx) => (
+                          <button
+                            key={s.mongoId || s._id || idx}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); handleStudentSelect(s.mongoId || s._id || s.rollNo || s.id); setStudentSearchTerm(''); }}
+                            className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[11px] border-b border-slate-100 last:border-0 cursor-pointer"
+                          >
+                            <span className="font-bold text-slate-800">{s.name}</span>
+                            <span className="text-slate-500 ml-1">({s.rollNo || s.id})</span>
+                            <span className="text-slate-400 ml-1">• {s.course}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  {/* Show selected student pill */}
+                  {!studentSearchTerm && entryFormData.studentName && (
+                    <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                      <span className="text-[11px] font-bold text-blue-800">{entryFormData.studentName}</span>
+                      <span className="text-[10px] text-blue-500">({entryFormData.rollNo})</span>
+                      <button type="button" onClick={() => { handleStudentSelect(''); setStudentSearchTerm(''); }} className="ml-auto text-blue-400 hover:text-red-500 text-xs font-bold">✕</button>
+                    </div>
+                  )}
+                  {!studentSearchTerm && !entryFormData.studentName && (
+                    <div className="mt-1 text-[10px] text-slate-400 pl-1">Type a name or roll number to search all {(studentOptions||[]).length} students</div>
+                  )}
                 </div>
               ) : (
                 <input
@@ -1052,9 +1144,23 @@ export default function MiscellaneousFeesManagement({
               {searchedMiscRecords.length > 0 ? (
                 searchedMiscRecords.map((r, idx) => {
                   const mData = r.feeBreakdown?.misc || {};
-                  const paid = Number(mData.paid || r.paidFee || 0);
-                  const total = Number(mData.total || r.totalFee || paid);
-                  const fName = mData.name || r.miscFeeName || 'Miscellaneous Fees';
+                  const mBase = Number(r.baseAmount || 0);
+                  const total = Number(
+                    (mData.total !== undefined && mData.total !== null && mData.total !== '')
+                      ? mData.total
+                      : (mBase > 0 ? mBase : (r.totalFee || 0))
+                  );
+                  let paid = Number(
+                    (mData.paid !== undefined && mData.paid !== null && mData.paid !== '')
+                      ? mData.paid
+                      : (r.feeType?.toLowerCase().includes('misc')
+                          ? (r.paidAmount !== undefined && r.paidAmount !== '' ? r.paidAmount : (r.baseAmount || r.paidFee || 0))
+                          : (r.paidAmount || 0))
+                  );
+                  if (total > 0 && paid > total) {
+                    paid = total;
+                  }
+                  const fName = mData.name || r.miscFeeName || (r.feeType === 'Miscellaneous Fees' ? (r.miscFeeName || 'Lab Fees') : 'Miscellaneous Fees');
                   return (
                     <tr key={idx} className="hover:bg-slate-50/80">
                       <td className="p-3 font-bold text-slate-900">{r.name}</td>
