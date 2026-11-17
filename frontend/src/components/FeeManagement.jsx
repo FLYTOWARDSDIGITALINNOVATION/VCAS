@@ -23,7 +23,8 @@ import {
   Save,
   RotateCcw,
   Info,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 import ExamFeesManagement from './ExamFeesManagement';
 import TuitionFeesManagement from './TuitionFeesManagement';
@@ -59,6 +60,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   const [selectedStudentForPay, setSelectedStudentForPay] = useState(null);
   const [selectedStudentForView, setSelectedStudentForView] = useState(null);
   const [selectedReceiptStudent, setSelectedReceiptStudent] = useState(null);
+  const [recordToDelete, setRecordToDelete] = useState(null);
 
   // Blank initial form state for own typing
   const emptyEntryForm = {
@@ -560,6 +562,51 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     setEditingRowId(null);
     setInlineEditState({});
     showToast('Student fee record updated');
+  };
+
+  // Delete fee collection record
+  const handleDeleteFeeRecord = (row) => {
+    setRecordToDelete(row);
+  };
+
+  const confirmDeleteRecord = async () => {
+    if (!recordToDelete) return;
+    const targetId = recordToDelete._id || recordToDelete.id || recordToDelete.rollNo;
+    const targetName = recordToDelete.name || recordToDelete.studentName || 'Student';
+
+    // 1. Remove from feeRecords
+    const updatedRecords = feeRecords.filter(r => {
+      const matchId = (r._id && r._id === targetId) || (r.id && r.id === targetId) || (r.rollNo && r.rollNo === targetId);
+      const matchMongo = (r.mongoId && recordToDelete.mongoId && r.mongoId === recordToDelete.mongoId);
+      return !matchId && !matchMongo;
+    });
+
+    setFeeRecords(updatedRecords);
+    localStorage.setItem('vcas_real_fee_records', JSON.stringify(updatedRecords));
+
+    // 2. Reset student fee in database
+    try {
+      const studentLookupId = recordToDelete.mongoId || recordToDelete.id || recordToDelete.rollNo;
+      if (studentLookupId) {
+        await fetch(`${API_BASE}/students/${studentLookupId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            feeStatus: 'Pending',
+            paidFee: 0,
+            pendingFee: 0,
+            receiptNo: '',
+            referenceNo: '',
+            paymentDate: ''
+          })
+        });
+      }
+    } catch (err) {
+      console.warn('Notice resetting student fee in DB on record deletion:', err);
+    }
+
+    setRecordToDelete(null);
+    showToast(`Fee collection record for ${targetName} deleted successfully.`);
   };
 
   // Form Submission -> Persists entry to feeRecords, localStorage & MongoDB backend, then Triggers Confirmation Modal
@@ -1592,6 +1639,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               handleSaveEntrySubmit={handleSaveEntrySubmit}
               studentOptions={feeRecords}
               recordsList={feeRecords}
+              onDeleteRecord={handleDeleteFeeRecord}
             />
           ) : activeTab === 'Tuition Fees' ? (
             <TuitionFeesManagement
@@ -1606,6 +1654,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                 (r.paymentRef && String(r.paymentRef).trim() !== '') ||
                 (r.lastPaymentDate && String(r.lastPaymentDate).trim() !== '')
               )}
+              onDeleteRecord={handleDeleteFeeRecord}
             />
           ) : activeTab === 'Miscellaneous Fees' ? (
             <MiscellaneousFeesManagement
@@ -1614,6 +1663,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               handleSaveEntrySubmit={handleSaveEntrySubmit}
               studentOptions={feeRecords}
               recordsList={feeRecords}
+              onDeleteRecord={handleDeleteFeeRecord}
+              user={user}
             />
           ) : (
             <ExamFeesManagement
@@ -1622,6 +1673,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               handleSaveEntrySubmit={handleSaveEntrySubmit}
               studentOptions={feeRecords}
               recordsList={feeRecords}
+              onDeleteRecord={handleDeleteFeeRecord}
             />
           )}
         </div>
@@ -2194,6 +2246,14 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                               >
                                 <Printer className="w-4 h-4" />
                               </button>
+
+                              <button
+                                onClick={() => handleDeleteFeeRecord(row)}
+                                title="Delete Fee Collection Record"
+                                className="hover:text-rose-600 text-rose-500 hover:bg-rose-50 p-1 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -2658,6 +2718,41 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               </button>
             </div>
 
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {recordToDelete && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full border border-slate-200 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">Delete Fee Record?</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Are you sure you want to delete the fee collection record for{' '}
+                <strong className="text-slate-800">{recordToDelete.name || recordToDelete.studentName}</strong> ({recordToDelete.rollNo || recordToDelete.id})? This will remove the record from collections.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setRecordToDelete(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteRecord}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer"
+              >
+                Delete Record
+              </button>
+            </div>
           </div>
         </div>,
         document.body

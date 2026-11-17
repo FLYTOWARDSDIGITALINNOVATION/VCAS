@@ -28,6 +28,7 @@ import {
   Upload
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import { isNoticeVisible } from '../utils/noticeAudience';
 
 const INITIAL_NOTICES = [
   {
@@ -147,15 +148,24 @@ const INITIAL_NOTICES = [
 
 const CATEGORIES = ['All', 'Examinations', 'Academic', 'Placements', 'Holidays', 'Administrative', 'Events'];
 const PRIORITIES = ['All', 'Urgent', 'High', 'Normal', 'Low'];
-const AUDIENCES = ['All', 'All Students', 'Students', 'Faculty', 'Staff'];
+const AUDIENCES = ['All', 'All Students', 'Students', 'Staff', 'HODs', 'Administration'];
 
-export default function NoticesManagement() {
+export default function NoticesManagement({ user }) {
+  const activeUser = user || (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+    } catch {
+      return null;
+    }
+  })();
+
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedPriority, setSelectedPriority] = useState('All');
   const [selectedAudience, setSelectedAudience] = useState('All');
+  const [staffMembers, setStaffMembers] = useState([]);
   
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -179,6 +189,9 @@ export default function NoticesManagement() {
           category: n.tag || n.category || 'Academic',
           priority: n.urgent ? 'Urgent' : (n.priority || 'Normal'),
           targetAudience: n.targetAudience || 'All Students',
+          assignedTo: n.assignedTo || null,
+          assignedToStaffId: n.assignedToStaffId || n.assignedTo?.staffId || '',
+          assignedToStaffName: n.assignedToStaffName || n.assignedTo?.name || '',
           targetDept: n.department || 'All Departments',
           publishDate: n.date || (n.createdAt ? new Date(n.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
           expiryDate: n.expiryDate || '',
@@ -198,8 +211,22 @@ export default function NoticesManagement() {
     }
   };
 
+  // Fetch staff list for notice assignment
+  const fetchStaffMembers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/staff`);
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.data)) {
+        setStaffMembers(data.data);
+      }
+    } catch (err) {
+      console.warn('Could not fetch staff for notice assignment:', err);
+    }
+  };
+
   useEffect(() => {
     fetchNotices();
+    fetchStaffMembers();
   }, []);
 
   // Lock background scroll when any modal is open
@@ -224,6 +251,9 @@ export default function NoticesManagement() {
     title: '',
     reason: '',
     targetAudience: 'All',
+    assignedToStaffId: '',
+    assignedToStaffName: '',
+    assignedTo: null,
     content: '',
     category: 'Academic',
     urgent: false,
@@ -235,14 +265,20 @@ export default function NoticesManagement() {
     setTimeout(() => setToastMessage(''), 3500);
   };
 
+  // Base visible notices restricted by targetAudience for the logged-in role
+  const visibleNotices = useMemo(() => {
+    return notices.filter(n => isNoticeVisible(n, activeUser));
+  }, [notices, activeUser]);
+
   // Filtered Notices
   const filteredNotices = useMemo(() => {
-    return notices.filter(item => {
+    return visibleNotices.filter(item => {
       const q = (searchTerm || '').toLowerCase().trim();
       const matchSearch = !q || (
         String(item.title || '').toLowerCase().includes(q) ||
         String(item.refNo || '').toLowerCase().includes(q) ||
         String(item.author || item.postedBy || '').toLowerCase().includes(q) ||
+        String(item.assignedToStaffName || item.assignedTo?.name || '').toLowerCase().includes(q) ||
         String(item.content || item.body || '').toLowerCase().includes(q) ||
         String(item.category || item.tag || '').toLowerCase().includes(q)
       );
@@ -251,16 +287,16 @@ export default function NoticesManagement() {
       const matchPriority = selectedPriority === 'All' || item.priority === selectedPriority;
       const matchAudience = selectedAudience === 'All' || 
         item.targetAudience === selectedAudience || 
-        String(item.targetAudience || '').includes(selectedAudience);
+        String(item.targetAudience || '').toLowerCase() === selectedAudience.toLowerCase();
 
       return matchSearch && matchCategory && matchPriority && matchAudience;
     });
-  }, [notices, searchTerm, selectedCategory, selectedPriority, selectedAudience]);
+  }, [visibleNotices, searchTerm, selectedCategory, selectedPriority, selectedAudience]);
 
   // Pinned Notices
   const pinnedNotices = useMemo(() => {
-    return notices.filter(n => n.isPinned);
-  }, [notices]);
+    return visibleNotices.filter(n => n.isPinned);
+  }, [visibleNotices]);
 
   // Handlers
   const handleTogglePin = (id, e) => {
@@ -274,6 +310,9 @@ export default function NoticesManagement() {
       title: '',
       reason: '',
       targetAudience: 'All',
+      assignedToStaffId: '',
+      assignedToStaffName: '',
+      assignedTo: null,
       content: '',
       category: 'Academic',
       urgent: false,
@@ -349,8 +388,12 @@ export default function NoticesManagement() {
           tag: formData.category,
           urgent: Boolean(formData.urgent),
           targetAudience: formData.targetAudience,
-          postedBy: 'Admin Office',
-          department: 'All Departments',
+          assignedToStaffId: formData.assignedToStaffId || '',
+          assignedToStaffName: formData.assignedToStaffName || '',
+          assignedTo: formData.assignedTo || null,
+          postedBy: activeUser?.name ? `${activeUser.name} (${activeUser.role || 'Staff'})` : 'Admin Office',
+          postedByStaffId: activeUser?.staffId || '',
+          department: activeUser?.department || 'All Departments',
           attachments: formData.attachments || []
         })
       });
@@ -371,7 +414,13 @@ export default function NoticesManagement() {
   const handleOpenEdit = (notice, e) => {
     if (e) e.stopPropagation();
     setShowEditModal(notice);
-    setFormData({ ...notice, attachments: notice.attachments || [] });
+    setFormData({
+      ...notice,
+      assignedToStaffId: notice.assignedToStaffId || notice.assignedTo?.staffId || '',
+      assignedToStaffName: notice.assignedToStaffName || notice.assignedTo?.name || '',
+      assignedTo: notice.assignedTo || null,
+      attachments: notice.attachments || []
+    });
   };
 
   const handleSaveEdit = async (e) => {
@@ -389,6 +438,9 @@ export default function NoticesManagement() {
             tag: formData.category,
             urgent: Boolean(formData.urgent),
             targetAudience: formData.targetAudience,
+            assignedToStaffId: formData.assignedToStaffId || '',
+            assignedToStaffName: formData.assignedToStaffName || '',
+            assignedTo: formData.assignedTo || null,
             attachments: formData.attachments || []
           })
         });
@@ -402,6 +454,9 @@ export default function NoticesManagement() {
       tag: formData.category,
       urgent: Boolean(formData.urgent),
       targetAudience: formData.targetAudience,
+      assignedToStaffId: formData.assignedToStaffId || '',
+      assignedToStaffName: formData.assignedToStaffName || '',
+      assignedTo: formData.assignedTo || null,
       attachments: formData.attachments || []
     } : n));
     setShowEditModal(null);
@@ -463,7 +518,7 @@ export default function NoticesManagement() {
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Notices</p>
-            <p className="text-2xl font-black text-slate-900 mt-1">{notices.length}</p>
+            <p className="text-2xl font-black text-slate-900 mt-1">{visibleNotices.length}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <FileText className="w-5 h-5" />
@@ -484,7 +539,7 @@ export default function NoticesManagement() {
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Urgent Alerts</p>
             <p className="text-2xl font-black text-rose-600 mt-1">
-              {notices.filter(n => n.priority === 'Urgent').length}
+              {visibleNotices.filter(n => n.priority === 'Urgent').length}
             </p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
@@ -496,7 +551,7 @@ export default function NoticesManagement() {
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Reads</p>
             <p className="text-2xl font-black text-emerald-600 mt-1">
-              {notices.reduce((acc, n) => acc + (n.viewsCount || 0), 0).toLocaleString()}
+              {visibleNotices.reduce((acc, n) => acc + (n.viewsCount || 0), 0).toLocaleString()}
             </p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -657,11 +712,33 @@ export default function NoticesManagement() {
                       <Users className="w-3 h-3 text-slate-400" />
                       {notice.targetAudience} • {notice.targetDept}
                     </span>
+
+                    {/* Assigned Staff Badge if assigned */}
+                    {(notice.assignedToStaffName || notice.assignedTo?.name) && (
+                      <span className="text-[11px] font-bold text-indigo-700 flex items-center gap-1 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-200">
+                        <span>🎯 Assigned:</span>
+                        <span>{notice.assignedToStaffName || notice.assignedTo?.name}</span>
+                        {notice.assignedToStaffId && <span className="text-indigo-400 font-mono text-[10px]">({notice.assignedToStaffId})</span>}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-auto">
                     <span className="text-xs font-mono font-bold text-slate-400">{notice.refNo}</span>
                     
+                    {/* View Notice button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowViewModal(notice);
+                      }}
+                      title="View notice details"
+                      className="px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all flex items-center gap-1 border border-blue-200/80 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-blue-600" />
+                      <span>View</span>
+                    </button>
+
                     {/* Pin button */}
                     <button
                       onClick={(e) => handleTogglePin(notice.id, e)}
@@ -785,6 +862,25 @@ export default function NoticesManagement() {
                 <p className="font-bold text-slate-800 mt-0.5">{showViewModal.expiryDate || 'Indefinite'}</p>
               </div>
             </div>
+
+            {/* Assigned Staff Notice Meta if assigned */}
+            {(showViewModal.assignedToStaffName || showViewModal.assignedTo?.name) && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎯</span>
+                  <div>
+                    <p className="text-[10px] font-extrabold text-indigo-500 uppercase tracking-wider">Assigned Person (Exclusive Edit Access)</p>
+                    <p className="font-extrabold text-indigo-900 text-sm">
+                      {showViewModal.assignedToStaffName || showViewModal.assignedTo?.name}
+                      {showViewModal.assignedToStaffId && <span className="font-mono text-xs text-indigo-600 font-semibold ml-2">({showViewModal.assignedToStaffId})</span>}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-black uppercase px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-md">
+                  Assigned Notice
+                </span>
+              </div>
+            )}
 
             {/* Circular Body Content */}
             <div className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line bg-white p-4 rounded-2xl border border-slate-100">
@@ -910,6 +1006,54 @@ export default function NoticesManagement() {
                       <option value="Event">Event</option>
                       <option value="Research">Research</option>
                     </select>
+                  </div>
+
+                  {/* Assign To Specific Staff (Exclusive Edit & View) */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-extrabold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span>🎯 Assign To Specific Person (Optional)</span>
+                      <span className="text-[10px] text-indigo-600 font-semibold">
+                        Exclusive Edit Access for Assigned Person
+                      </span>
+                    </label>
+                    <select
+                      value={formData.assignedToStaffId || ''}
+                      onChange={(e) => {
+                        const sId = e.target.value;
+                        if (!sId) {
+                          setFormData({
+                            ...formData,
+                            assignedToStaffId: '',
+                            assignedToStaffName: '',
+                            assignedTo: null
+                          });
+                        } else {
+                          const staffObj = staffMembers.find(s => s.staffId === sId);
+                          setFormData({
+                            ...formData,
+                            assignedToStaffId: sId,
+                            assignedToStaffName: staffObj?.name || '',
+                            assignedTo: staffObj ? {
+                              staffId: staffObj.staffId,
+                              name: staffObj.name,
+                              department: staffObj.department || '',
+                              designation: staffObj.designation || 'Staff'
+                            } : null
+                          });
+                        }
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-2xs"
+                    >
+                      <option value="">-- None (Broadcast to general audience) --</option>
+                      {staffMembers.map((staff) => (
+                        <option key={staff.staffId || staff._id} value={staff.staffId}>
+                          {staff.name} ({staff.staffId} • {staff.department || staff.role || 'Staff'})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      If assigned to a staff member, other staff will not view it, and only the assigned person has edit access.
+                    </p>
                   </div>
                 </div>
 
@@ -1063,7 +1207,7 @@ export default function NoticesManagement() {
                 Cancel
               </button>
               <button
-                onClick={() => handleDeleteNotice(showDeleteModal.id)}
+                onClick={() => handleDeleteNotice(showDeleteModal._id || showDeleteModal.id)}
                 className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-500/20"
               >
                 Yes, Delete

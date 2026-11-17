@@ -1,14 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
-import { FileText, Save, User, CreditCard, Clock, AlertCircle, Search, Download, Printer, Layers } from 'lucide-react';
+import { 
+  FileText, 
+  Save, 
+  User, 
+  CreditCard, 
+  Clock, 
+  AlertCircle, 
+  Search, 
+  Download, 
+  Printer, 
+  Layers, 
+  Trash2,
+  Plus,
+  CheckCircle2,
+  Shield,
+  RotateCcw,
+  Sparkles,
+  DollarSign
+} from 'lucide-react';
+
+const DEFAULT_MISC_FEES = [
+  { feeType: 'Lab Fees', amount: 2500 },
+  { feeType: 'Library Fees', amount: 1000 },
+  { feeType: 'Sports & Culturals Fees', amount: 1500 },
+  { feeType: 'Special Amenities Fees', amount: 1200 },
+  { feeType: 'ID Card / Badge Fees', amount: 300 },
+  { feeType: 'Registration / Admission Fees', amount: 2000 },
+  { feeType: 'Certificate / Verification Fees', amount: 500 },
+  { feeType: 'Seminar & Workshop Fees', amount: 800 },
+  { feeType: 'Hostel Maintenance Fees', amount: 5000 },
+  { feeType: 'Other / Custom Fees', amount: 1000 }
+];
 
 export default function MiscellaneousFeesManagement({
   entryFormData,
   setEntryFormData,
   handleSaveEntrySubmit,
   studentOptions = [],
-  recordsList = []
+  recordsList = [],
+  onDeleteRecord,
+  user
 }) {
   const [isCustomStudent, setIsCustomStudent] = useState(false);
   const [adminDepartments, setAdminDepartments] = useState([]);
@@ -19,21 +52,42 @@ export default function MiscellaneousFeesManagement({
   const [tableSemFilter, setTableSemFilter] = useState('All');
   const [tableBatchFilter, setTableBatchFilter] = useState('All');
 
-  // List of miscellaneous fee types
-  const miscFeeOptions = [
-    'Lab Fees',
-    'Library Fees',
-    'Sports & Culturals Fees',
-    'Special Amenities Fees',
-    'ID Card / Badge Fees',
-    'Registration / Admission Fees',
-    'Certificate / Verification Fees',
-    'Seminar & Workshop Fees',
-    'Hostel Maintenance Fees',
-    'Other / Custom Fees'
-  ];
+  // Super Admin vs Accountant Role detection
+  const currentUser = user || (typeof window !== 'undefined' && JSON.parse(sessionStorage.getItem('vcas_user') || '{}'));
+  const effectiveRole = (currentUser?.role || currentUser?.designation || 'Accountant')
+    .toString()
+    .trim();
+  const normalizedRole = effectiveRole.toLowerCase();
+  const isSuperAdmin = currentUser?.isSuperAdmin === true ||
+    ['super admin', 'superadmin', 'super-admin', 'super administrator', 'superadministrator'].includes(normalizedRole) ||
+    normalizedRole.includes('superadmin') ||
+    normalizedRole.includes('super admin');
+
+  // Master fee schedule state (rows & columns: feeType and amount)
+  const [miscFeeStructure, setMiscFeeStructure] = useState(DEFAULT_MISC_FEES);
+  const [isStructureLoading, setIsStructureLoading] = useState(false);
+  const [isSavingStructure, setIsSavingStructure] = useState(false);
+  const [structureToast, setStructureToast] = useState(null);
+  const [autoFilledNotice, setAutoFilledNotice] = useState(null);
+
+  // Fetch configured miscellaneous fees from backend
+  const fetchMiscFees = async () => {
+    try {
+      setIsStructureLoading(true);
+      const res = await fetch(`${API_BASE}/fee-structure/miscellaneous-fees`);
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        setMiscFeeStructure(json.data);
+      }
+    } catch (err) {
+      console.warn('Could not fetch miscellaneous fees structure:', err);
+    } finally {
+      setIsStructureLoading(false);
+    }
+  };
 
   useEffect(() => {
+    fetchMiscFees();
     fetch(`${API_BASE}/departments`)
       .then(res => res.json())
       .then(json => {
@@ -42,7 +96,134 @@ export default function MiscellaneousFeesManagement({
         }
       })
       .catch(err => console.warn('Could not fetch admin departments:', err));
+
+    const handleSync = () => fetchMiscFees();
+    window.addEventListener('vcas_feestructure_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('vcas_feestructure_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, []);
+
+  // Auto-fill initial fee amount when structure loads if empty
+  useEffect(() => {
+    if (miscFeeStructure.length > 0) {
+      const activeFeeName = entryFormData.miscFeeName || miscFeeStructure[0].feeType;
+      const matched = miscFeeStructure.find(f => f.feeType?.toLowerCase() === activeFeeName?.toLowerCase());
+      if (matched && (!entryFormData.amount || entryFormData.amount === '1000' || entryFormData.amount === '0')) {
+        const amtStr = String(matched.amount);
+        const fineAmt = parseFloat(entryFormData.fine) || 0;
+        const total = matched.amount + fineAmt;
+        setEntryFormData(prev => ({
+          ...prev,
+          feeType: 'Miscellaneous Fees',
+          miscFeeName: activeFeeName,
+          amount: amtStr,
+          totalAmount: String(total),
+          paidAmount: prev.paidAmount && prev.paidAmount !== '0' && prev.paidAmount !== '1000' ? prev.paidAmount : amtStr,
+          balance: String(Math.max(0, total - (prev.paidAmount && prev.paidAmount !== '0' && prev.paidAmount !== '1000' ? parseFloat(prev.paidAmount) : matched.amount)))
+        }));
+      }
+    }
+  }, [miscFeeStructure]);
+
+  // Handle Super Admin rows & columns modification
+  const handleAddFeeRow = () => {
+    setMiscFeeStructure(prev => [
+      ...prev,
+      { feeType: '', amount: 0 }
+    ]);
+  };
+
+  const handleFeeRowChange = (index, field, value) => {
+    setMiscFeeStructure(prev => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [field]: field === 'amount' ? (value === '' ? '' : Math.max(0, parseFloat(value) || 0)) : value
+      };
+      return next;
+    });
+  };
+
+  const handleDeleteFeeRow = (index) => {
+    if (miscFeeStructure.length <= 1) {
+      alert('At least one miscellaneous fee row is required.');
+      return;
+    }
+    setMiscFeeStructure(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleResetMiscDefaults = () => {
+    if (window.confirm('Reset miscellaneous fees structure to standard defaults?')) {
+      setMiscFeeStructure(DEFAULT_MISC_FEES);
+    }
+  };
+
+  // Save fee schedule to backend (Super Admin exclusive)
+  const handleSaveMiscStructure = async () => {
+    const validFees = miscFeeStructure
+      .map(f => ({ feeType: String(f.feeType || '').trim(), amount: Number(f.amount) || 0 }))
+      .filter(f => f.feeType.length > 0);
+
+    if (validFees.length === 0) {
+      alert('Please provide at least one fee type and price amount.');
+      return;
+    }
+
+    setIsSavingStructure(true);
+    try {
+      const res = await fetch(`${API_BASE}/fee-structure/miscellaneous-fees`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          miscellaneousFees: validFees,
+          updatedBy: currentUser?.name || 'Super Admin',
+          updatedRole: effectiveRole
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMiscFeeStructure(json.data || validFees);
+        setStructureToast('Miscellaneous Fee Structure saved successfully! Auto-synced with Accountant portal.');
+        setTimeout(() => setStructureToast(null), 4000);
+        window.dispatchEvent(new Event('vcas_feestructure_updated'));
+      } else {
+        alert(json.message || 'Failed to save miscellaneous fee structure.');
+      }
+    } catch (err) {
+      alert('Error saving fee structure: ' + err.message);
+    } finally {
+      setIsSavingStructure(false);
+    }
+  };
+
+  // Accountant fee type selection & auto-fill amount
+  const handleFeeTypeSelection = (selectedType) => {
+    const matched = miscFeeStructure.find(
+      f => f.feeType?.trim().toLowerCase() === selectedType?.trim().toLowerCase()
+    );
+    const priceAmount = matched ? matched.amount : (parseFloat(entryFormData.amount) || 0);
+    const fineAmt = parseFloat(entryFormData.fine) || 0;
+    const total = priceAmount + fineAmt;
+    const currentPaid = priceAmount; // Auto-fills full payment by default
+
+    setEntryFormData(prev => ({
+      ...prev,
+      feeType: 'Miscellaneous Fees',
+      miscFeeName: selectedType,
+      amount: String(priceAmount),
+      totalAmount: String(total),
+      paidAmount: String(currentPaid),
+      balance: String(Math.max(0, total - currentPaid))
+    }));
+
+    if (matched) {
+      setAutoFilledNotice(`✓ Auto-filled ₹${Number(priceAmount).toLocaleString('en-IN')} for ${selectedType}`);
+      setTimeout(() => setAutoFilledNotice(null), 3500);
+    }
+  };
 
   const normalizeDeptText = (value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
 
@@ -97,17 +278,22 @@ export default function MiscellaneousFeesManagement({
         const candidate = String(rawDept || '').trim();
         return departmentMatches(deptName, candidate) || departmentMatches(deptCode, candidate);
       });
+
       const fallbackDepartment = String(rawDept || '').trim() || 'B.Com';
       const departmentValue = matchingDepartment ? (matchingDepartment.name || matchingDepartment.code || fallbackDepartment) : fallbackDepartment;
       const courseValue = getCourseCodeFromDepartment(departmentValue);
-      const baseAmt = parseFloat(entryFormData.amount) || 1000;
+
+      // Auto-fill amount based on currently active fee name
+      const activeFeeName = entryFormData.miscFeeName || (miscFeeStructure[0]?.feeType || 'Lab Fees');
+      const matchedFee = miscFeeStructure.find(f => f.feeType?.toLowerCase() === activeFeeName?.toLowerCase());
+      const baseAmt = matchedFee ? matchedFee.amount : (parseFloat(entryFormData.amount) || 1000);
       const fineAmt = parseFloat(entryFormData.fine) || 0;
       const total = baseAmt + fineAmt;
 
       setEntryFormData(prev => ({
         ...prev,
         feeType: 'Miscellaneous Fees',
-        miscFeeName: prev.miscFeeName || 'Lab Fees',
+        miscFeeName: activeFeeName,
         studentName: found.name,
         rollNo: found.rollNo || found.id,
         studentKey: found.mongoId || found._id || found.rollNo || found.id,
@@ -117,7 +303,7 @@ export default function MiscellaneousFeesManagement({
         batch: found.batch || found.academicYear || prev.batch || '2025-2028',
         year: found.year || prev.year || 'I',
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
-        amount: prev.amount || '1000',
+        amount: String(baseAmt),
         totalAmount: String(total),
         paidAmount: prev.paidAmount && prev.paidAmount !== '0' ? String(prev.paidAmount) : String(baseAmt),
         balance: String(Math.max(0, total - (prev.paidAmount && prev.paidAmount !== '0' ? parseFloat(prev.paidAmount) : baseAmt)))
@@ -275,7 +461,177 @@ export default function MiscellaneousFeesManagement({
 
   return (
     <div className="space-y-6">
-      {/* FORM CARD */}
+
+      {/* ========================================================================= */}
+      {/* 1. SUPER ADMIN EXCLUSIVE: MISCELLANEOUS FEES MASTER SCHEDULE CONFIGURATION */}
+      {/* ========================================================================= */}
+      {isSuperAdmin && (
+        <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border-2 border-purple-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-purple-200/60 pb-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-purple-300">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                    Miscellaneous Fees Master Configuration
+                  </h2>
+                  <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 tracking-wide uppercase">
+                    Super Admin Only
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1">
+                  Add and configure the type of fees and the price amount in rows and columns below. Rows can be added one below another. On the <strong>Accountant side</strong>, these fee types alone will be fetched and the price amount will be auto-filled.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleResetMiscDefaults}
+                disabled={isSavingStructure}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Reset to official standard fee list"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Defaults</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveMiscStructure}
+                disabled={isSavingStructure}
+                className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSavingStructure ? 'Saving...' : 'Save Fee Structure'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Toast Notification */}
+          {structureToast && (
+            <div className="p-3 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{structureToast}</span>
+            </div>
+          )}
+
+          {/* Table of Rows and Columns */}
+          <div className="overflow-x-auto bg-white rounded-2xl border border-purple-200/80 shadow-xs">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-purple-100/60 text-purple-950 font-black border-b border-purple-200 uppercase text-[11px] tracking-wider">
+                  <th className="p-3 w-12 text-center">#</th>
+                  <th className="p-3">Fee Type / Category Name</th>
+                  <th className="p-3 w-48">Price Amount (₹)</th>
+                  <th className="p-3 w-20 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {miscFeeStructure.map((fee, idx) => (
+                  <tr key={idx} className="hover:bg-purple-50/30 transition-colors">
+                    <td className="p-3 text-center font-bold text-slate-500 font-mono">
+                      {idx + 1}
+                    </td>
+                    <td className="p-3">
+                      <input
+                        type="text"
+                        value={fee.feeType}
+                        onChange={(e) => handleFeeRowChange(idx, 'feeType', e.target.value)}
+                        placeholder="e.g. Lab Fees, Library Fees, Special Amenities..."
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:border-purple-500 focus:outline-none shadow-2xs"
+                        required
+                      />
+                    </td>
+                    <td className="p-3">
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-2 text-slate-400 font-bold text-xs">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={fee.amount}
+                          onChange={(e) => handleFeeRowChange(idx, 'amount', e.target.value)}
+                          placeholder="0"
+                          className="w-full pl-6 pr-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-black focus:bg-white focus:border-purple-500 focus:outline-none shadow-2xs font-mono"
+                          required
+                        />
+                      </div>
+                    </td>
+                    <td className="p-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFeeRow(idx)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Remove this fee row"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-500" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Add Row Button - Adds rows one below another */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleAddFeeRow}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-purple-50 text-purple-700 font-extrabold text-xs rounded-xl border-2 border-dashed border-purple-300 hover:border-purple-500 transition-all cursor-pointer shadow-2xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Add Fee Row (One Below Another)</span>
+            </button>
+
+            <span className="text-[11px] text-slate-500 font-medium">
+              Total configured fees: <strong className="text-purple-700">{miscFeeStructure.length} categories</strong>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. ACCOUNTANT VIEW: APPROVED MASTER RATE REFERENCE BANNER                   */}
+      {/* ========================================================================= */}
+      {!isSuperAdmin && (
+        <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 border border-blue-200">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
+                <span>Approved Miscellaneous Fees Schedule</span>
+                <span className="text-[9px] px-2 py-0.2 bg-emerald-100 text-emerald-700 rounded-full font-bold">
+                  Auto-fill Enabled
+                </span>
+              </h4>
+              <p className="text-[11px] text-slate-600">
+                Fee types and price amounts are approved by <strong>Super Admin</strong>. Selecting any fee type in the collection form will automatically auto-fill the approved price amount.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 max-w-md">
+            {miscFeeStructure.slice(0, 4).map((f, i) => (
+              <span key={i} className="text-[10px] px-2 py-0.5 bg-white border border-blue-200 rounded-lg font-bold text-slate-700 font-mono">
+                {f.feeType}: <strong className="text-blue-700">₹{Number(f.amount).toLocaleString('en-IN')}</strong>
+              </span>
+            ))}
+            {miscFeeStructure.length > 4 && (
+              <span className="text-[10px] text-blue-600 font-bold">
+                +{miscFeeStructure.length - 4} more
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. FEE COLLECTION / ENTRY FORM (ACCOUNTANT & FINANCE)                     */}
+      {/* ========================================================================= */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 rounded-2xl bg-cyan-100 text-cyan-600 flex items-center justify-center shrink-0 border border-cyan-200">
@@ -286,7 +642,7 @@ export default function MiscellaneousFeesManagement({
               Add Miscellaneous Fees Entry
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Select student, choose the specific fee name (Lab, Library, Sports, Amenities, etc.), and collect payment.
+              Select student, choose fee type (price amount auto-fills from Super Admin schedule), and record payment.
             </p>
           </div>
         </div>
@@ -430,32 +786,37 @@ export default function MiscellaneousFeesManagement({
             </div>
           </div>
 
-          {/* ROW 2: Name of the fees selection, Amount, Due Date, Fine */}
+          {/* ROW 2: Name of the fees (Fetched from Super Admin schedule), Amount (Auto-filled), Due Date, Fine */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Miscellaneous Fee Name Selector (in Type Mode) */}
+            
+            {/* Miscellaneous Fee Name Selector (Fetched from Super Admin schedule) */}
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Name of the Fees (Fee Type) <span className="text-rose-500">*</span>
+              <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                <span>Fee Type <span className="text-rose-500">*</span></span>
+                <span className="text-[10px] text-cyan-600 font-bold">Fetched from Super Admin</span>
               </label>
-              <input
-                type="text"
-                list="miscFeeOptionsList"
-                value={entryFormData.miscFeeName !== undefined ? entryFormData.miscFeeName : 'Lab Fees'}
-                onChange={(e) => setEntryFormData({ ...entryFormData, miscFeeName: e.target.value })}
-                placeholder="Type fee name (e.g. Lab Fees, Library, ID Card...)"
-                className="w-full p-2.5 bg-cyan-50/60 border border-cyan-300 rounded-xl text-slate-900 font-bold focus:border-cyan-500 focus:outline-none shadow-2xs"
+              <select
+                value={entryFormData.miscFeeName || (miscFeeStructure[0]?.feeType || '')}
+                onChange={(e) => handleFeeTypeSelection(e.target.value)}
+                className="w-full p-2.5 bg-cyan-50/60 border border-cyan-300 rounded-xl text-slate-900 font-bold focus:border-cyan-500 focus:outline-none shadow-2xs cursor-pointer"
                 required
-              />
-              <datalist id="miscFeeOptionsList">
-                {miscFeeOptions.map(opt => (
-                  <option key={opt} value={opt} />
+              >
+                <option value="">-- Select Fee Type ({miscFeeStructure.length} types) --</option>
+                {miscFeeStructure.map((opt, idx) => (
+                  <option key={opt._id || opt.feeType || idx} value={opt.feeType}>
+                    {opt.feeType} (₹{Number(opt.amount).toLocaleString('en-IN')})
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </div>
 
+            {/* Price Amount Field (Auto-filled from Super Admin Schedule) */}
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5">
-                Amount (₹) <span className="text-rose-500">*</span>
+              <label className="block text-slate-700 font-bold mb-1.5 flex items-center justify-between">
+                <span>Amount (₹) <span className="text-rose-500">*</span></span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded-md font-bold">
+                  ✓ Auto-filled
+                </span>
               </label>
               <input
                 type="number"
@@ -475,10 +836,15 @@ export default function MiscellaneousFeesManagement({
                     balance: String(Math.max(0, total - currentPaid))
                   }));
                 }}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:border-blue-500 focus:outline-none shadow-2xs"
+                className="w-full p-2.5 bg-emerald-50/30 border border-emerald-300 rounded-xl text-slate-900 font-black focus:border-blue-500 focus:outline-none shadow-2xs font-mono"
                 placeholder="e.g. 1500"
                 required
               />
+              {autoFilledNotice && (
+                <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                  {autoFilledNotice}
+                </p>
+              )}
             </div>
 
             <div>
@@ -648,7 +1014,9 @@ export default function MiscellaneousFeesManagement({
         </form>
       </div>
 
-      {/* TABLE */}
+      {/* ========================================================================= */}
+      {/* 4. MISCELLANEOUS FEE RECORDS TABLE                                        */}
+      {/* ========================================================================= */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -701,14 +1069,26 @@ export default function MiscellaneousFeesManagement({
                         </span>
                       </td>
                       <td className="p-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadReceipt(r)}
-                          className="p-1 hover:text-blue-600 text-slate-500 cursor-pointer"
-                          title="Print / Download Receipt"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadReceipt(r)}
+                            className="p-1 hover:text-blue-600 text-slate-500 cursor-pointer"
+                            title="Print / Download Receipt"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                          {onDeleteRecord && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteRecord(r)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Collection Record"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-500 hover:text-rose-600" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -727,4 +1107,3 @@ export default function MiscellaneousFeesManagement({
     </div>
   );
 }
-

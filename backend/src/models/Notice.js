@@ -8,6 +8,14 @@ const noticeSchema = new mongoose.Schema({
   postedByStaffId: { type: String, default: '', trim: true },
   department:      { type: String, default: 'All', trim: true },
   targetAudience:  { type: String, default: 'All', trim: true },
+  assignedTo: {
+    staffId:     { type: String, default: '', trim: true },
+    name:        { type: String, default: '', trim: true },
+    department:  { type: String, default: '', trim: true },
+    designation: { type: String, default: '', trim: true }
+  },
+  assignedToStaffId:   { type: String, default: '', trim: true },
+  assignedToStaffName: { type: String, default: '', trim: true },
   reason:          { type: String, default: '', trim: true },
   date:            { type: String, default: () => new Date().toISOString().split('T')[0] },
   urgent:          { type: Boolean, default: false },

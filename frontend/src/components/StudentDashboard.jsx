@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE, BACKEND_URL } from '../apiConfig';
+import { isNoticeVisible } from '../utils/noticeAudience';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
 import {
   LayoutDashboard,
@@ -2914,7 +2915,8 @@ CONTACT:
                   const matchTag = noticeTagFilter === 'ALL' || n.tag === noticeTagFilter || (noticeTagFilter === 'Urgent' && n.urgent);
                   const q = noticeSearch.trim().toLowerCase();
                   const matchSearch = !q || (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q);
-                  return matchTag && matchSearch;
+                  const matchAudience = isNoticeVisible(n, student || { role: 'Student' });
+                  return matchTag && matchSearch && matchAudience;
                 });
                 if (filtered.length === 0) {
                   return (

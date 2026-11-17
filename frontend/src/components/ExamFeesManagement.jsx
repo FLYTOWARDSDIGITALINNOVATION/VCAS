@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
-import { FileText, Save, User, CreditCard, Clock, AlertCircle, Search, Download, Printer } from 'lucide-react';
+import { FileText, Save, User, CreditCard, Clock, AlertCircle, Search, Download, Printer, Trash2 } from 'lucide-react';
 
 export default function ExamFeesManagement({
   entryFormData,
   setEntryFormData,
   handleSaveEntrySubmit,
   studentOptions = [],
-  recordsList = []
+  recordsList = [],
+  onDeleteRecord
 }) {
   const [isCustomStudent, setIsCustomStudent] = useState(false);
   const [adminDepartments, setAdminDepartments] = useState([]);
@@ -941,15 +942,27 @@ export default function ExamFeesManagement({
                         {r.lastPaymentDate || r.dueDate || 'Recent'}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadReceipt(r)}
-                          className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800 border border-purple-200 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto transition-all cursor-pointer shadow-2xs"
-                          title="Download / Print Bill"
-                        >
-                          <Download className="w-3 h-3" />
-                          <span>Bill</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadReceipt(r)}
+                            className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800 border border-purple-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                            title="Download / Print Bill"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>Bill</span>
+                          </button>
+                          {onDeleteRecord && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteRecord(r)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Collection Record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-500 hover:text-rose-600" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

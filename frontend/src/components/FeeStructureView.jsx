@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE, BACKEND_URL } from '../apiConfig';
-import { 
-  Building2, 
-  Award, 
-  CheckCircle2, 
-  Printer, 
-  Calculator, 
-  FileText, 
-  GraduationCap, 
-  Sparkles, 
-  HeartHandshake, 
-  ShieldCheck, 
+import {
+  Building2,
+  Award,
+  CheckCircle2,
+  Printer,
+  Calculator,
+  FileText,
+  GraduationCap,
+  Sparkles,
+  HeartHandshake,
+  ShieldCheck,
   HelpCircle,
   IndianRupee,
   Layers,
@@ -22,7 +22,9 @@ import {
   AlertCircle,
   X,
   Clock,
-  UserCheck
+  UserCheck,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
@@ -173,6 +175,19 @@ export const SCHOLARSHIP_SLABS = [
   }
 ];
 
+export const DEFAULT_MISC_FEES = [
+  { feeType: 'Lab Fees', amount: 2500 },
+  { feeType: 'Library Fees', amount: 1000 },
+  { feeType: 'Sports & Culturals Fees', amount: 1500 },
+  { feeType: 'Special Amenities Fees', amount: 1200 },
+  { feeType: 'ID Card / Badge Fees', amount: 300 },
+  { feeType: 'Registration / Admission Fees', amount: 2000 },
+  { feeType: 'Certificate / Verification Fees', amount: 500 },
+  { feeType: 'Seminar & Workshop Fees', amount: 800 },
+  { feeType: 'Hostel Maintenance Fees', amount: 5000 },
+  { feeType: 'Other / Custom Fees', amount: 1000 }
+];
+
 export default function FeeStructureView({ user }) {
   // Identify current logged in user & role
   const currentUser = user || (() => {
@@ -197,6 +212,7 @@ export default function FeeStructureView({ user }) {
   // Live Synchronized Fee Structure State
   const [clusters, setClusters] = useState(UG_FEE_STRUCTURE);
   const [scholarships, setScholarships] = useState(SCHOLARSHIP_SLABS);
+  const [miscFees, setMiscFees] = useState(DEFAULT_MISC_FEES);
   const [academicYear, setAcademicYear] = useState('2025–2026');
   const [lastUpdateMeta, setLastUpdateMeta] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -207,6 +223,7 @@ export default function FeeStructureView({ user }) {
   const [isSaving, setIsSaving] = useState(false);
   const [editClusters, setEditClusters] = useState([]);
   const [editScholarships, setEditScholarships] = useState([]);
+  const [editMiscFees, setEditMiscFees] = useState([]);
   const [editAcademicYear, setEditAcademicYear] = useState('2025–2026');
   const [feedbackToast, setFeedbackToast] = useState(null);
 
@@ -222,6 +239,9 @@ export default function FeeStructureView({ user }) {
         }
         if (Array.isArray(json.data.scholarships) && json.data.scholarships.length > 0) {
           setScholarships(json.data.scholarships);
+        }
+        if (Array.isArray(json.data.miscellaneousFees) && json.data.miscellaneousFees.length > 0) {
+          setMiscFees(json.data.miscellaneousFees);
         }
         if (json.data.academicYear) {
           setAcademicYear(json.data.academicYear);
@@ -249,8 +269,8 @@ export default function FeeStructureView({ user }) {
       if (json.success && Array.isArray(json.data) && json.data.length > 0) {
         setAdminDepartments(json.data);
         setCalcDept(prev => {
-          const match = json.data.find(d => 
-            (d.code && d.code.toLowerCase() === prev?.toLowerCase()) || 
+          const match = json.data.find(d =>
+            (d.code && d.code.toLowerCase() === prev?.toLowerCase()) ||
             (d.name && d.name.toLowerCase() === prev?.toLowerCase())
           );
           return match ? (match.code || match.name) : (json.data[0].code || json.data[0].name);
@@ -284,8 +304,31 @@ export default function FeeStructureView({ user }) {
     }
     setEditClusters(JSON.parse(JSON.stringify(clusters)));
     setEditScholarships(JSON.parse(JSON.stringify(scholarships)));
+    setEditMiscFees(JSON.parse(JSON.stringify(miscFees.length > 0 ? miscFees : DEFAULT_MISC_FEES)));
     setEditAcademicYear(academicYear);
     setIsEditModalOpen(true);
+  };
+
+  const handleAddModalMiscRow = () => {
+    setEditMiscFees(prev => [
+      ...prev,
+      { feeType: '', amount: 0 }
+    ]);
+  };
+
+  const handleEditModalMiscChange = (index, field, value) => {
+    setEditMiscFees(prev => {
+      const copy = [...prev];
+      copy[index] = {
+        ...copy[index],
+        [field]: field === 'amount' ? (value === '' ? '' : Math.max(0, parseFloat(value) || 0)) : value
+      };
+      return copy;
+    });
+  };
+
+  const handleDeleteModalMiscRow = (index) => {
+    setEditMiscFees(prev => prev.filter((_, idx) => idx !== index));
   };
 
   // Save changes to backend so Super Admin, Office Staff, and Accountant all see it instantly
@@ -296,6 +339,7 @@ export default function FeeStructureView({ user }) {
       const payload = {
         clusters: editClusters,
         scholarships: editScholarships,
+        miscellaneousFees: editMiscFees,
         academicYear: editAcademicYear,
         updatedBy: currentUser?.name || userRole,
         updatedRole: userRole
@@ -311,6 +355,9 @@ export default function FeeStructureView({ user }) {
       if (data.success && data.data) {
         setClusters(data.data.clusters);
         setScholarships(data.data.scholarships);
+        if (Array.isArray(data.data.miscellaneousFees)) {
+          setMiscFees(data.data.miscellaneousFees);
+        }
         setAcademicYear(data.data.academicYear);
         setLastUpdateMeta({
           by: data.data.lastUpdatedBy,
@@ -352,6 +399,9 @@ export default function FeeStructureView({ user }) {
       if (data.success && data.data) {
         setClusters(data.data.clusters);
         setScholarships(data.data.scholarships);
+        if (Array.isArray(data.data.miscellaneousFees)) {
+          setMiscFees(data.data.miscellaneousFees);
+        }
         setAcademicYear(data.data.academicYear);
         setLastUpdateMeta({
           by: data.data.lastUpdatedBy,
@@ -577,7 +627,7 @@ export default function FeeStructureView({ user }) {
           <span className="text-xs font-bold">{feedbackToast}</span>
         </div>
       )}
-      
+
       {/* 1. TOP HERO HEADER */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="space-y-2 z-10">
@@ -653,8 +703,8 @@ export default function FeeStructureView({ user }) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {clusters.map((cluster, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className={`bg-white rounded-3xl border ${cluster.borderColor || 'border-slate-200'} p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between`}
             >
               <div className="space-y-4">
@@ -671,7 +721,7 @@ export default function FeeStructureView({ user }) {
                 {/* Department Names Pills */}
                 <div className="flex flex-wrap gap-2 pt-1">
                   {cluster.departments.map(dept => (
-                    <span 
+                    <span
                       key={dept}
                       className="px-3 py-1.5 rounded-xl font-extrabold text-xs bg-slate-900 text-white shadow-2xs"
                     >
@@ -773,9 +823,67 @@ export default function FeeStructureView({ user }) {
         </div>
       </div>
 
+      {/* 3. APPROVED MISCELLANEOUS FEES SCHEDULE */}
+      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-50 border border-cyan-200 text-cyan-600 flex items-center justify-center shrink-0">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 leading-tight">
+                Approved Miscellaneous Fees Schedule
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Standard institutional rate card for Lab, Library, Sports and Special Amenities. Auto-fills on Accountant portal.
+              </p>
+            </div>
+          </div>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={handleOpenEdit}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition-all cursor-pointer self-start sm:self-auto"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Configure Rates (Super Admin)</span>
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[11px] tracking-wider">
+                <th className="py-3 px-4 w-14 text-center">#</th>
+                <th className="py-3 px-4">Fee Category / Description</th>
+                <th className="py-3 px-4 text-right">Approved Price Amount (₹)</th>
+                <th className="py-3 px-4 text-center">Accountant Auto-fill</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium">
+              {miscFees.map((fee, idx) => (
+                <tr key={idx} className="hover:bg-cyan-50/20 transition-colors">
+                  <td className="py-3 px-4 text-center font-mono text-slate-500 font-bold">{idx + 1}</td>
+                  <td className="py-3 px-4 font-bold text-slate-900">{fee.feeType}</td>
+                  <td className="py-3 px-4 text-right font-mono font-black text-cyan-700 text-sm">
+                    ₹{Number(fee.amount).toLocaleString('en-IN')}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      ✓ Auto-fills on Accountant side
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* 4. INTERACTIVE FEE & CONCESSION CALCULATOR */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
+
         {/* Left 2 Cols: Calculator Controls */}
         <div className="lg:col-span-2 bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
           <div className="flex items-center gap-3">
@@ -880,11 +988,10 @@ export default function FeeStructureView({ user }) {
                     key={p.id}
                     type="button"
                     onClick={() => setCalcPeriod(p.id)}
-                    className={`py-2 px-3 rounded-xl font-extrabold text-xs transition-all ${
-                      calcPeriod === p.id 
-                        ? 'bg-blue-600 text-white shadow-xs' 
+                    className={`py-2 px-3 rounded-xl font-extrabold text-xs transition-all ${calcPeriod === p.id
+                        ? 'bg-blue-600 text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
+                      }`}
                   >
                     {p.label}
                   </button>
@@ -1238,6 +1345,77 @@ export default function FeeStructureView({ user }) {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* 3. Approved Miscellaneous Fees Rows & Columns */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-cyan-600" />
+                    <span>3. Miscellaneous Fee Types & Price Amounts</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handleAddModalMiscRow}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 border border-cyan-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add Fee Row Below</span>
+                  </button>
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px] uppercase">
+                        <th className="p-2.5 w-10 text-center">#</th>
+                        <th className="p-2.5">Fee Type</th>
+                        <th className="p-2.5 w-44">Price Amount (₹)</th>
+                        <th className="p-2.5 w-16 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {editMiscFees.map((mFee, mIdx) => (
+                        <tr key={mIdx} className="hover:bg-slate-50/50">
+                          <td className="p-2.5 text-center font-bold text-slate-400 font-mono">{mIdx + 1}</td>
+                          <td className="p-2.5">
+                            <input
+                              type="text"
+                              value={mFee.feeType}
+                              onChange={(e) => handleEditModalMiscChange(mIdx, 'feeType', e.target.value)}
+                              placeholder="e.g. Lab Fees, Library Fees..."
+                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:border-cyan-500 focus:outline-none"
+                              required
+                            />
+                          </td>
+                          <td className="p-2.5">
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-2 text-slate-400 font-bold">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={mFee.amount}
+                                onChange={(e) => handleEditModalMiscChange(mIdx, 'amount', e.target.value)}
+                                className="w-full pl-6 pr-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-black focus:bg-white focus:border-cyan-500 focus:outline-none font-mono"
+                                required
+                              />
+                            </div>
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteModalMiscRow(mIdx)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete row"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-500" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 

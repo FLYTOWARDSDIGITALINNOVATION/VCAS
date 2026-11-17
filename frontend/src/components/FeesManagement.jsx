@@ -15,7 +15,8 @@ import {
   Building,
   Users,
   X,
-  Printer
+  Printer,
+  Trash2
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 
@@ -208,13 +209,27 @@ export default function FeesManagement() {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => showToast(`Printing receipt ${t.receiptNo}...`)}
-                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
-                      title="Print receipt"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => showToast(`Printing receipt ${t.receiptNo}...`)}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
+                        title="Print receipt"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to delete the collection record for ${t.studentName}?`)) {
+                            setTransactions(prev => prev.filter(item => (item._id || item.id) !== (t._id || t.id)));
+                            showToast(`Deleted transaction ${t.receiptNo}`);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Delete record"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-500" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

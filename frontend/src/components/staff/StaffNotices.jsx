@@ -23,9 +23,11 @@ import {
   Search,
   Filter,
   User,
-  Users
+  Users,
+  Eye
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
+import { isNoticeVisible } from '../../utils/noticeAudience';
 
 export default function StaffNotices({ staffUser = {} }) {
   const [notices, setNotices] = useState([]);
@@ -34,6 +36,7 @@ export default function StaffNotices({ staffUser = {} }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [viewingNotice, setViewingNotice] = useState(null);
 
   // Edit mode state
   const [editingId, setEditingId] = useState(null); // null = create, string = edit
@@ -82,9 +85,14 @@ export default function StaffNotices({ staffUser = {} }) {
     fetchNotices();
   }, [selectedTag]);
 
+  // Notices visible to this staff user based on targetAudience
+  const visibleNotices = useMemo(() => {
+    return notices.filter(n => isNoticeVisible(n, staffUser));
+  }, [notices, staffUser]);
+
   // Filtered notices based on tag & search
   const filteredNotices = useMemo(() => {
-    return notices.filter(n => {
+    return visibleNotices.filter(n => {
       const q = searchQuery.toLowerCase().trim();
       if (!q) return true;
       const matchTitle = (n.title || '').toLowerCase().includes(q);
@@ -94,7 +102,43 @@ export default function StaffNotices({ staffUser = {} }) {
       const matchDept = (n.department || '').toLowerCase().includes(q);
       return matchTitle || matchBody || matchAuthor || matchReason || matchDept;
     });
-  }, [notices, searchQuery]);
+  }, [visibleNotices, searchQuery]);
+
+  // Determine if current staff user has permission to edit this notice
+  const canEditNotice = (n) => {
+    if (!n || !staffUser) return false;
+    const role = (staffUser.role || '').trim();
+    const designation = (staffUser.designation || '').toLowerCase();
+    const isAdmin = role === 'Super Admin' || role === 'SuperAdmin' || staffUser.isSuperAdmin === true || role === 'Admin' || designation.includes('principal');
+    if (isAdmin) return true;
+
+    // Check if assigned to this staff member
+    const assignedStaffId = n.assignedToStaffId || n.assignedTo?.staffId || '';
+    const assignedName = (n.assignedToStaffName || n.assignedTo?.name || '').trim().toLowerCase();
+    if (assignedStaffId && staffUser.staffId && staffUser.staffId === assignedStaffId) return true;
+    if (assignedName && staffUser.name && staffUser.name.trim().toLowerCase() === assignedName) return true;
+
+    // Author of the notice can edit
+    if (staffUser.staffId && n.postedByStaffId === staffUser.staffId) return true;
+    if (staffUser.name && (n.postedBy === staffUser.name || n.author === staffUser.name)) return true;
+
+    return false;
+  };
+
+  // Determine if current staff user has permission to delete this notice
+  const canDeleteNotice = (n) => {
+    if (!n || !staffUser) return false;
+    const role = (staffUser.role || '').trim();
+    const designation = (staffUser.designation || '').toLowerCase();
+    const isAdmin = role === 'Super Admin' || role === 'SuperAdmin' || staffUser.isSuperAdmin === true || role === 'Admin' || designation.includes('principal');
+    if (isAdmin) return true;
+
+    // Only author can delete their own notice
+    if (staffUser.staffId && n.postedByStaffId === staffUser.staffId) return true;
+    if (staffUser.name && (n.postedBy === staffUser.name || n.author === staffUser.name)) return true;
+
+    return false;
+  };
 
   // Tag color mapping
   const getTagBadgeStyle = (tag) => {
@@ -343,8 +387,8 @@ export default function StaffNotices({ staffUser = {} }) {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
           {tags.map(tag => {
             const count = tag === 'ALL' 
-              ? notices.length 
-              : notices.filter(n => (n.tag || '').toLowerCase() === tag.toLowerCase()).length;
+              ? visibleNotices.length 
+              : visibleNotices.filter(n => (n.tag || '').toLowerCase() === tag.toLowerCase()).length;
             const isSelected = selectedTag === tag;
             return (
               <button
@@ -414,10 +458,19 @@ export default function StaffNotices({ staffUser = {} }) {
         ) : (
           filteredNotices.map((notice) => {
             const isNoticeUrgent = Boolean(notice.urgent);
+            const userCanEdit = canEditNotice(notice);
+            const userCanDelete = canDeleteNotice(notice);
+            const isAssignedToMe = Boolean(
+              (notice.assignedToStaffId && staffUser.staffId && notice.assignedToStaffId === staffUser.staffId) ||
+              (notice.assignedTo?.staffId && staffUser.staffId && notice.assignedTo?.staffId === staffUser.staffId) ||
+              (notice.assignedToStaffName && staffUser.name && notice.assignedToStaffName.trim().toLowerCase() === staffUser.name.trim().toLowerCase())
+            );
+
             return (
               <div
                 key={notice._id || notice.id}
-                className={`bg-white rounded-2xl border transition-all duration-200 p-5 sm:p-6 shadow-xs hover:shadow-md ${
+                onClick={() => setViewingNotice(notice)}
+                className={`bg-white rounded-2xl border transition-all duration-200 p-5 sm:p-6 shadow-xs hover:shadow-md cursor-pointer ${
                   isNoticeUrgent 
                     ? 'border-l-4 border-l-red-500 border-red-200/70 bg-gradient-to-r from-red-50/20 to-white' 
                     : 'border-slate-200/80 hover:border-blue-200'
@@ -435,8 +488,13 @@ export default function StaffNotices({ staffUser = {} }) {
                       </span>
                     )}
                     {isNoticeUrgent && (
-                      <span className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-red-100 text-red-700 border border-red-200 animate-pulse">
+                      <span className="flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg bg-red-100 text-red-700 border border-red-200 animate-pulse">
                         <AlertCircle className="w-3 h-3" /> URGENT
+                      </span>
+                    )}
+                    {isAssignedToMe && (
+                      <span className="flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg bg-indigo-100 text-indigo-800 border border-indigo-200">
+                        <span>🎯 Assigned to You (Edit access)</span>
                       </span>
                     )}
                   </div>
@@ -448,21 +506,50 @@ export default function StaffNotices({ staffUser = {} }) {
                       <span>{notice.date || 'Today'}</span>
                     </div>
 
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-0.5">
+                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-0.5 gap-0.5">
+                      {/* VIEW BUTTON - Available for all notices */}
                       <button
-                        onClick={() => openEditModal(notice)}
-                        title="Edit Notice"
-                        className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-white rounded-lg transition-all cursor-pointer"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setViewingNotice(notice);
+                        }}
+                        title="View Notice Details"
+                        className="px-2 py-1 text-blue-700 bg-blue-50/80 hover:bg-blue-100 rounded-lg transition-all cursor-pointer flex items-center gap-1 font-bold text-xs"
                       >
-                        <Edit className="w-3.5 h-3.5" />
+                        <Eye className="w-3.5 h-3.5 text-blue-600" />
+                        <span>View</span>
                       </button>
-                      <button
-                        onClick={() => handleDeleteNotice(notice._id || notice.id)}
-                        title="Delete Notice"
-                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg transition-all cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+
+                      {/* EDIT BUTTON - Only if assigned to this staff, author, or admin */}
+                      {userCanEdit && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(notice);
+                          }}
+                          title="Edit Notice"
+                          className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-white rounded-lg transition-all cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      {/* DELETE BUTTON - Only for author or admin */}
+                      {userCanDelete && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteNotice(notice._id || notice.id);
+                          }}
+                          title="Delete Notice"
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg transition-all cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -753,6 +840,159 @@ export default function StaffNotices({ staffUser = {} }) {
                 </button>
               </div>
 
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* VIEW NOTICE MODAL */}
+      {viewingNotice && (
+        <ModalPortal isOpen={Boolean(viewingNotice)} onClose={() => setViewingNotice(null)}>
+          <div 
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 shadow-2xl p-6 sm:p-8 space-y-6 my-auto text-left" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${getTagBadgeStyle(viewingNotice.tag)}`}>
+                    {viewingNotice.tag || 'Notice'}
+                  </span>
+                  {viewingNotice.urgent && (
+                    <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
+                      URGENT Priority
+                    </span>
+                  )}
+                  {viewingNotice.pinned && (
+                    <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 flex items-center gap-1">
+                      <Pin className="w-3 h-3 text-purple-600" /> Pinned
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl font-extrabold text-slate-900 leading-tight">
+                  {viewingNotice.title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingNotice(null)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Info Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl text-xs border border-slate-100">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Target Audience</p>
+                <p className="font-bold text-slate-800 mt-0.5">{viewingNotice.targetAudience || 'All'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Date Published</p>
+                <p className="font-bold text-slate-800 mt-0.5">{viewingNotice.date || 'Today'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Department</p>
+                <p className="font-bold text-slate-800 mt-0.5">{viewingNotice.department || 'All Departments'}</p>
+              </div>
+            </div>
+
+            {/* Assigned person badge */}
+            {(viewingNotice.assignedToStaffName || viewingNotice.assignedTo?.name) && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎯</span>
+                  <div>
+                    <p className="text-[10px] font-extrabold text-indigo-500 uppercase tracking-wider">Assigned Person (Exclusive Edit Access)</p>
+                    <p className="font-extrabold text-indigo-900 text-sm">
+                      {viewingNotice.assignedToStaffName || viewingNotice.assignedTo?.name}
+                      {viewingNotice.assignedToStaffId && <span className="font-mono text-xs text-indigo-600 font-semibold ml-2">({viewingNotice.assignedToStaffId})</span>}
+                    </p>
+                  </div>
+                </div>
+                {canEditNotice(viewingNotice) && (
+                  <span className="text-[10px] font-black uppercase px-2.5 py-1 bg-indigo-600 text-white rounded-md shadow-xs">
+                    You have edit access
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Reason if provided */}
+            {viewingNotice.reason && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs flex items-center gap-2 text-amber-900">
+                <span className="font-extrabold uppercase text-[10px] px-2 py-0.5 rounded bg-amber-200/70 text-amber-900">Reason</span>
+                <span className="font-semibold">{viewingNotice.reason}</span>
+              </div>
+            )}
+
+            {/* Content Body */}
+            <div className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line bg-white p-4 rounded-2xl border border-slate-100">
+              {viewingNotice.body || viewingNotice.content}
+            </div>
+
+            {/* Attachments */}
+            {viewingNotice.attachments && viewingNotice.attachments.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">Attachments ({viewingNotice.attachments.length})</p>
+                <div className="space-y-2">
+                  {viewingNotice.attachments.map((att, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">{att.name}</p>
+                          <p className="text-[10px] text-slate-400">{att.size}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAttachment(att)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg flex items-center gap-1 shadow-xs cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Author Meta */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between text-xs">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Published By</p>
+                <p className="font-bold text-slate-900">{viewingNotice.postedBy || viewingNotice.author || 'Faculty Member'}</p>
+                <p className="text-[11px] text-slate-500">{viewingNotice.department || 'VCAS Portal'}</p>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              {canEditNotice(viewingNotice) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const toEdit = viewingNotice;
+                    setViewingNotice(null);
+                    openEditModal(toEdit);
+                  }}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Edit Notice</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setViewingNotice(null)}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </ModalPortal>

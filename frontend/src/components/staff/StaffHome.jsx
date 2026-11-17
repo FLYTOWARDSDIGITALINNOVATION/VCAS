@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE, BACKEND_URL } from '../../apiConfig';
+import { isNoticeVisible } from '../../utils/noticeAudience';
 import {
   CheckSquare, BookMarked, BookOpen, Bell, UserCheck,
   ChevronRight, TrendingUp, Clock, AlertCircle, CalendarCheck2,
@@ -33,7 +34,10 @@ export default function StaffHome({ staffUser, onNavigate }) {
       if (resClasses.status === 'fulfilled' && resClasses.value?.success) setDbClasses(resClasses.value.classes || []);
       if (resAtt.status === 'fulfilled' && resAtt.value?.success) setDbHistory(resAtt.value.sessions || []);
       if (resTt.status === 'fulfilled' && resTt.value?.success && resTt.value.schedule) setDbTimetable(resTt.value.schedule);
-      if (resNotices.status === 'fulfilled' && resNotices.value?.success) setDbNotices(resNotices.value.notices || []);
+      if (resNotices.status === 'fulfilled' && resNotices.value?.success) {
+        const rawNotices = resNotices.value.notices || [];
+        setDbNotices(rawNotices.filter(n => isNoticeVisible(n, staffUser)));
+      }
       if (resAssign.status === 'fulfilled' && resAssign.value?.success) setDbAssignments(resAssign.value.assignments || []);
       if (resLeave.status === 'fulfilled' && resLeave.value?.success && resLeave.value.summary) {
         setPendingLeaveCount(resLeave.value.summary.pendingCount || 0);

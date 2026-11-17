@@ -120,6 +120,19 @@ const DEFAULT_SCHOLARSHIPS = [
   }
 ];
 
+const DEFAULT_MISC_FEES = [
+  { feeType: 'Lab Fees', amount: 2500 },
+  { feeType: 'Library Fees', amount: 1000 },
+  { feeType: 'Sports & Culturals Fees', amount: 1500 },
+  { feeType: 'Special Amenities Fees', amount: 1200 },
+  { feeType: 'ID Card / Badge Fees', amount: 300 },
+  { feeType: 'Registration / Admission Fees', amount: 2000 },
+  { feeType: 'Certificate / Verification Fees', amount: 500 },
+  { feeType: 'Seminar & Workshop Fees', amount: 800 },
+  { feeType: 'Hostel Maintenance Fees', amount: 5000 },
+  { feeType: 'Other / Custom Fees', amount: 1000 }
+];
+
 // @desc    Get current Fee Structure
 // @route   GET /api/fee-structure
 exports.getFeeStructure = async (req, res) => {
@@ -130,22 +143,33 @@ exports.getFeeStructure = async (req, res) => {
         academicYear: '2025–2026',
         clusters: DEFAULT_CLUSTERS,
         scholarships: DEFAULT_SCHOLARSHIPS,
+        miscellaneousFees: DEFAULT_MISC_FEES,
         lastUpdatedBy: 'System Default',
         lastUpdatedRole: 'Super Admin',
         lastUpdatedAt: new Date()
       });
     }
 
+    let modified = false;
     if (feeDoc && Array.isArray(feeDoc.clusters)) {
-      const hasTech = feeDoc.clusters.some(c => 
-        (c.cluster || '').toLowerCase().includes('cs') || 
+      const hasTech = feeDoc.clusters.some(c =>
+        (c.cluster || '').toLowerCase().includes('cs') ||
         (c.cluster || '').toLowerCase().includes('computer') ||
         (c.departments || []).some(d => ['cs', 'ai', 'cfs'].includes(d.toLowerCase()))
       );
       if (!hasTech) {
         feeDoc.clusters = DEFAULT_CLUSTERS;
-        await feeDoc.save();
+        modified = true;
       }
+    }
+
+    if (!feeDoc.miscellaneousFees || feeDoc.miscellaneousFees.length === 0) {
+      feeDoc.miscellaneousFees = DEFAULT_MISC_FEES;
+      modified = true;
+    }
+
+    if (modified) {
+      await feeDoc.save();
     }
 
     return res.status(200).json({
@@ -166,7 +190,7 @@ exports.getFeeStructure = async (req, res) => {
 // @route   PUT /api/fee-structure
 exports.updateFeeStructure = async (req, res) => {
   try {
-    const { clusters, scholarships, academicYear, updatedBy, updatedRole } = req.body;
+    const { clusters, scholarships, miscellaneousFees, academicYear, updatedBy, updatedRole } = req.body;
 
     // Shared fee structure should be visible and editable across admin + finance roles.
     let feeDoc = await FeeStructure.findOne().sort({ updatedAt: -1 });
@@ -198,12 +222,21 @@ exports.updateFeeStructure = async (req, res) => {
     if (Array.isArray(scholarships)) {
       updateData.scholarships = scholarships;
     }
+    if (Array.isArray(miscellaneousFees)) {
+      updateData.miscellaneousFees = miscellaneousFees
+        .map(m => ({
+          feeType: String(m.feeType || '').trim(),
+          amount: Math.max(0, Number(m.amount) || 0)
+        }))
+        .filter(m => m.feeType.length > 0);
+    }
 
     if (!feeDoc) {
       feeDoc = new FeeStructure({
         academicYear: academicYear || '2025–2026',
         clusters: updateData.clusters || DEFAULT_CLUSTERS,
         scholarships: updateData.scholarships || DEFAULT_SCHOLARSHIPS,
+        miscellaneousFees: updateData.miscellaneousFees || DEFAULT_MISC_FEES,
         ...updateData
       });
       await feeDoc.save();
@@ -227,6 +260,83 @@ exports.updateFeeStructure = async (req, res) => {
   }
 };
 
+// @desc    Get Miscellaneous Fees List
+// @route   GET /api/fee-structure/miscellaneous-fees
+exports.getMiscellaneousFees = async (req, res) => {
+  try {
+    let feeDoc = await FeeStructure.findOne().sort({ updatedAt: -1 });
+    if (!feeDoc) {
+      feeDoc = await FeeStructure.create({
+        academicYear: '2025–2026',
+        clusters: DEFAULT_CLUSTERS,
+        scholarships: DEFAULT_SCHOLARSHIPS,
+        miscellaneousFees: DEFAULT_MISC_FEES,
+        lastUpdatedBy: 'System Default',
+        lastUpdatedRole: 'Super Admin',
+        lastUpdatedAt: new Date()
+      });
+    } else if (!feeDoc.miscellaneousFees || feeDoc.miscellaneousFees.length === 0) {
+      feeDoc.miscellaneousFees = DEFAULT_MISC_FEES;
+      await feeDoc.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: feeDoc.miscellaneousFees
+    });
+  } catch (err) {
+    console.error('getMiscellaneousFees error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve miscellaneous fees',
+      error: err.message
+    });
+  }
+};
+
+// @desc    Update Miscellaneous Fees Structure (Super Admin exclusive)
+// @route   PUT /api/fee-structure/miscellaneous-fees
+exports.updateMiscellaneousFees = async (req, res) => {
+  try {
+    const { miscellaneousFees, updatedBy, updatedRole } = req.body;
+    let feeDoc = await FeeStructure.findOne().sort({ updatedAt: -1 });
+    if (!feeDoc) {
+      feeDoc = new FeeStructure({
+        academicYear: '2025–2026',
+        clusters: DEFAULT_CLUSTERS,
+        scholarships: DEFAULT_SCHOLARSHIPS,
+        miscellaneousFees: DEFAULT_MISC_FEES
+      });
+    }
+
+    if (Array.isArray(miscellaneousFees)) {
+      feeDoc.miscellaneousFees = miscellaneousFees
+        .map(m => ({
+          feeType: String(m.feeType || '').trim(),
+          amount: Math.max(0, Number(m.amount) || 0)
+        }))
+        .filter(m => m.feeType.length > 0);
+    }
+    feeDoc.lastUpdatedBy = updatedBy || 'Super Admin';
+    feeDoc.lastUpdatedRole = updatedRole || 'Super Admin';
+    feeDoc.lastUpdatedAt = new Date();
+    await feeDoc.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Miscellaneous fees structure saved successfully',
+      data: feeDoc.miscellaneousFees
+    });
+  } catch (err) {
+    console.error('updateMiscellaneousFees error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update miscellaneous fees',
+      error: err.message
+    });
+  }
+};
+
 // @desc    Reset Fee Structure to official defaults
 // @route   POST /api/fee-structure/reset
 exports.resetFeeStructure = async (req, res) => {
@@ -238,6 +348,7 @@ exports.resetFeeStructure = async (req, res) => {
       academicYear: '2025–2026',
       clusters: DEFAULT_CLUSTERS,
       scholarships: DEFAULT_SCHOLARSHIPS,
+      miscellaneousFees: DEFAULT_MISC_FEES,
       lastUpdatedBy: resetBy || 'Super Admin',
       lastUpdatedRole: resetRole || 'Super Admin',
       lastUpdatedAt: new Date()

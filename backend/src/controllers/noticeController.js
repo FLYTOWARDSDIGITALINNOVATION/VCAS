@@ -31,7 +31,22 @@ exports.getNotices = async (req, res) => {
 // @desc   Publish a new notice
 exports.createNotice = async (req, res) => {
   try {
-    const { title, body, tag, postedBy, postedByStaffId, department, urgent, pinned, targetAudience, reason, attachments } = req.body;
+    const { 
+      title, 
+      body, 
+      tag, 
+      postedBy, 
+      postedByStaffId, 
+      department, 
+      urgent, 
+      pinned, 
+      targetAudience, 
+      reason, 
+      attachments,
+      assignedTo,
+      assignedToStaffId,
+      assignedToStaffName
+    } = req.body;
 
     if (!title || !title.trim() || !body || !body.trim()) {
       return res.status(400).json({ success: false, message: 'Notice title and body are required.' });
@@ -47,6 +62,14 @@ exports.createNotice = async (req, res) => {
       postedByStaffId: postedByStaffId || '',
       department: department || 'All',
       targetAudience: targetAudience || 'All',
+      assignedTo: assignedTo || {
+        staffId: assignedToStaffId || '',
+        name: assignedToStaffName || '',
+        department: '',
+        designation: ''
+      },
+      assignedToStaffId: (assignedToStaffId || assignedTo?.staffId || '').trim(),
+      assignedToStaffName: (assignedToStaffName || assignedTo?.name || '').trim(),
       reason: (reason || '').trim(),
       date: todayStr,
       urgent: Boolean(urgent),
@@ -66,7 +89,18 @@ exports.createNotice = async (req, res) => {
 exports.updateNotice = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, body, tag, urgent, targetAudience, reason, attachments } = req.body;
+    const { 
+      title, 
+      body, 
+      tag, 
+      urgent, 
+      targetAudience, 
+      reason, 
+      attachments,
+      assignedTo,
+      assignedToStaffId,
+      assignedToStaffName
+    } = req.body;
 
     const notice = await Notice.findById(id);
     if (!notice) {
@@ -80,6 +114,14 @@ exports.updateNotice = async (req, res) => {
     if (targetAudience)        notice.targetAudience = targetAudience;
     if (reason !== undefined)  notice.reason = reason.trim();
     if (attachments !== undefined && Array.isArray(attachments)) notice.attachments = attachments;
+    if (assignedTo !== undefined) {
+      notice.assignedTo = assignedTo;
+      notice.assignedToStaffId = (assignedTo?.staffId || assignedToStaffId || '').trim();
+      notice.assignedToStaffName = (assignedTo?.name || assignedToStaffName || '').trim();
+    } else {
+      if (assignedToStaffId !== undefined) notice.assignedToStaffId = assignedToStaffId.trim();
+      if (assignedToStaffName !== undefined) notice.assignedToStaffName = assignedToStaffName.trim();
+    }
 
     await notice.save();
     res.status(200).json({ success: true, message: 'Notice updated successfully.', notice });

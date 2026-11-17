@@ -50,6 +50,7 @@ import ExaminationManagement from './ExaminationManagement';
 import TimetableManagement from './TimetableManagement';
 import AssignmentManagement from './AssignmentManagement';
 import NoticesManagement from './NoticesManagement';
+import { isNoticeVisible } from '../utils/noticeAudience';
 import EventsManagement from './EventsManagement';
 import ReportsManagement from './ReportsManagement';
 import UsersRolesManagement from './UsersRolesManagement';
@@ -387,9 +388,10 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       }
 
       // Process notices & assignments
-      const noticesList = Array.isArray(noticesData?.notices)
+      const rawNoticesList = Array.isArray(noticesData?.notices)
         ? noticesData.notices
         : (Array.isArray(noticesData) ? noticesData : []);
+      const noticesList = rawNoticesList.filter(n => isNoticeVisible(n, user));
       const totalNoticesCount = noticesList.length;
 
       const assignmentsList = assignmentsData?.assignments || [];
@@ -553,7 +555,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
         staff: staffList,
         courses: classesList,
         departments: rawDeptsList,
-        notices: Array.isArray(noticesData?.notices) ? noticesData.notices : []
+        notices: noticesList
       });
     } catch (err) {
       console.error('Error fetching dashboard real data:', err);
@@ -1340,7 +1342,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           </main>
         ) : activeNav === 'Notices' ? (
           <main className="flex-1">
-            <NoticesManagement />
+            <NoticesManagement user={user} />
           </main>
         ) : activeNav === 'Reports' ? (
           <main className="flex-1">

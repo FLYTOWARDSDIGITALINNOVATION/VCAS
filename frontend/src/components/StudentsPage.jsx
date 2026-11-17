@@ -978,13 +978,33 @@ Unauthorized reproduction or distribution is strictly prohibited.
       });
       const result = await res.json();
       if (res.ok && result.success) {
+        const deletedId = deleteModalStudent.id;
+        const deletedMongoId = deleteModalStudent._id || deleteModalStudent.mongoId;
+        const deletedRollNo = deleteModalStudent.rollNo;
         setStudents(prev => {
-          const next = prev.filter(s => s.id !== deleteModalStudent.id && s._id !== deleteModalStudent._id);
+          const next = prev.filter(s => s.id !== deletedId && s._id !== deletedMongoId);
           try {
             localStorage.setItem('vcas_students_cache', JSON.stringify(next));
           } catch (e) { }
           return next;
         });
+        // Also purge deleted student from fee caches so accountant side stays in sync
+        try {
+          const feeRecords = JSON.parse(localStorage.getItem('vcas_real_fee_records') || '[]');
+          const updatedFeeRecords = feeRecords.filter(r =>
+            r.id !== deletedId &&
+            r.mongoId !== deletedMongoId &&
+            r.rollNo !== deletedRollNo &&
+            r.id !== deletedMongoId
+          );
+          localStorage.setItem('vcas_real_fee_records', JSON.stringify(updatedFeeRecords));
+        } catch (e) { }
+        try {
+          const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
+          if (deletedId && savedPayments[deletedId]) delete savedPayments[deletedId];
+          if (deletedRollNo && savedPayments[deletedRollNo]) delete savedPayments[deletedRollNo];
+          localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
+        } catch (e) { }
         try {
           window.dispatchEvent(new Event('vcas_students_updated'));
         } catch (_) { }
@@ -1022,14 +1042,26 @@ Unauthorized reproduction or distribution is strictly prohibited.
         throw new Error(result.message || 'Failed to delete selected students');
       }
 
+      const validIds = new Set(ids);
       setStudents(prev => {
-        const validIds = new Set(ids);
         const next = prev.filter(student => !validIds.has(getStudentIdentifier(student)));
         try {
           localStorage.setItem('vcas_students_cache', JSON.stringify(next));
         } catch (e) { }
         return next;
       });
+
+      // Also purge deleted students from fee caches so accountant side stays in sync
+      try {
+        const feeRecords = JSON.parse(localStorage.getItem('vcas_real_fee_records') || '[]');
+        const updatedFeeRecords = feeRecords.filter(r => !validIds.has(r.id) && !validIds.has(r.mongoId) && !validIds.has(r.rollNo));
+        localStorage.setItem('vcas_real_fee_records', JSON.stringify(updatedFeeRecords));
+      } catch (e) { }
+      try {
+        const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
+        validIds.forEach(id => { if (savedPayments[id]) delete savedPayments[id]; });
+        localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
+      } catch (e) { }
 
       setSelectedRows([]);
       setShowBulkSelection(false);

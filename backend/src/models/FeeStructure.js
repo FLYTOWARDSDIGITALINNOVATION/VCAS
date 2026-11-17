@@ -95,6 +95,19 @@ const scholarshipSlabSchema = new mongoose.Schema({
   }
 }, { _id: true });
 
+const miscFeeSchema = new mongoose.Schema({
+  feeType: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  amount: {
+    type: Number,
+    required: true,
+    default: 0
+  }
+}, { _id: true });
+
 const feeStructureSchema = new mongoose.Schema({
   academicYear: {
     type: String,
@@ -103,6 +116,7 @@ const feeStructureSchema = new mongoose.Schema({
   },
   clusters: [feeClusterSchema],
   scholarships: [scholarshipSlabSchema],
+  miscellaneousFees: [miscFeeSchema],
   lastUpdatedBy: {
     type: String,
     default: 'Super Admin'
