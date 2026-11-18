@@ -319,6 +319,38 @@ exports.addClass = async (req, res) => {
       }
     }
 
+    // Automatically sync class into Subject catalog so it is available across all modules
+    try {
+      let existingSubject = await Subject.findOne({ code: newClass.code });
+      if (!existingSubject) {
+        await Subject.create({
+          code: newClass.code,
+          name: newClass.name,
+          department: newClass.dept || 'General',
+          year: Number(newClass.year) || 1,
+          sem: newClass.semester ? `Sem ${newClass.semester}` : 'Sem 1',
+          credits: Number(newClass.credits) || 3,
+          type: finalLabHours > 0 ? 'Practical / Lab' : 'Theory',
+          faculty: finalStaffName || 'Unassigned',
+          theoryHours: finalTheoryHours,
+          labHours: finalLabHours,
+          isContinuousLab: finalIsContinuousLab,
+          hours: finalHoursStr,
+          ltp: finalLabHours > 0 ? `${finalTheoryHours}-0-${finalLabHours}` : `${finalTheoryHours}-0-0`,
+          prerequisite: 'None'
+        });
+      } else {
+        existingSubject.name = newClass.name;
+        if (newClass.dept) existingSubject.department = newClass.dept;
+        if (newClass.year) existingSubject.year = Number(newClass.year);
+        if (newClass.semester) existingSubject.sem = `Sem ${newClass.semester}`;
+        if (finalStaffName) existingSubject.faculty = finalStaffName;
+        await existingSubject.save();
+      }
+    } catch (syncErr) {
+      console.error('Error syncing class to subject catalog:', syncErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: `Class ${newClass.code} created successfully.`,

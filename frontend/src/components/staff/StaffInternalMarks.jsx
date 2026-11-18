@@ -248,16 +248,94 @@ export default function StaffInternalMarks({ staffUser }) {
   }, [componentId, passMarksConfig, activeComp]);
 
   const dropdownSubjects = useMemo(() => {
-    const legacyExclusions = ['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004'];
-    const list = staffSubjects.filter(s => {
-      const code = (s.code || '').toUpperCase().trim();
-      return !legacyExclusions.includes(code);
-    });
-    if (subjectCode && !list.some((s) => s.code === subjectCode) && !legacyExclusions.includes(subjectCode.toUpperCase())) {
-      list.unshift({ code: subjectCode, name: (subjectName && subjectName !== 'Course') ? subjectName : subjectCode });
+    let list = staffSubjects;
+
+    // Filter by department if a specific department is selected
+    if (filterDept && filterDept !== 'All') {
+      const target = filterDept.trim().toLowerCase();
+      const deptFiltered = list.filter(s => {
+        const d = String(s.dept || s.department || '').trim().toLowerCase();
+        return d === target || d.includes(target) || target.includes(d);
+      });
+      if (deptFiltered.length > 0) {
+        list = deptFiltered;
+      }
     }
-    return list;
-  }, [staffSubjects, subjectCode, subjectName]);
+
+    // Filter by year if selected
+    if (filterYear && filterYear !== 'All') {
+      const parseYearNum = (val) => {
+        const s = String(val || '').toLowerCase();
+        if (s.includes('3') || s.includes('iii')) return 3;
+        if (s.includes('2') || s.includes('ii')) return 2;
+        if (s.includes('1') || s.includes('i')) return 1;
+        return null;
+      };
+      const targetYear = parseYearNum(filterYear);
+      if (targetYear) {
+        const yearFiltered = list.filter(s => {
+          if (!s.year) return true;
+          const yNum = parseYearNum(s.year);
+          return yNum === null || yNum === targetYear;
+        });
+        if (yearFiltered.length > 0) {
+          list = yearFiltered;
+        }
+      }
+    }
+
+    // Filter by semester if selected
+    if (filterSem && filterSem !== 'All') {
+      const parseSemNum = (val) => {
+        const s = String(val || '').replace(/\D/g, '');
+        return s ? parseInt(s, 10) : null;
+      };
+      const targetSem = parseSemNum(filterSem);
+      if (targetSem) {
+        const semFiltered = list.filter(s => {
+          if (!s.semester) return true;
+          const sNum = parseSemNum(s.semester);
+          return sNum === null || sNum === targetSem;
+        });
+        if (semFiltered.length > 0) {
+          list = semFiltered;
+        }
+      }
+    }
+
+    // Deduplicate by unique subject code (never skip different codes that share similar names)
+    const seenCodes = new Set();
+    const deduplicated = [];
+    list.forEach(sub => {
+      const cleanCode = (sub.code || '').trim().toUpperCase();
+      if (!cleanCode || seenCodes.has(cleanCode)) {
+        return;
+      }
+      seenCodes.add(cleanCode);
+      deduplicated.push(sub);
+    });
+
+    // Sort: Staff's own department subjects first, then alphabetically by code
+    const staffDept = String(staffUser?.department || '').trim().toLowerCase();
+    deduplicated.sort((a, b) => {
+      const aDept = String(a.dept || a.department || '').trim().toLowerCase();
+      const bDept = String(b.dept || b.department || '').trim().toLowerCase();
+      const aMatch = staffDept && aDept && (aDept === staffDept || aDept.includes(staffDept) || staffDept.includes(aDept));
+      const bMatch = staffDept && bDept && (bDept === staffDept || bDept.includes(staffDept) || staffDept.includes(bDept));
+      if (aMatch && !bMatch) return -1;
+      if (!aMatch && bMatch) return 1;
+      return (a.code || '').localeCompare(b.code || '');
+    });
+
+    if (subjectCode && !deduplicated.some((s) => s.code === subjectCode)) {
+      deduplicated.unshift({
+        code: subjectCode,
+        name: (subjectName && subjectName !== 'Course') ? subjectName : subjectCode,
+        dept: currentMarksheetMeta?.department || staffUser?.department || ''
+      });
+    }
+    return deduplicated;
+  }, [staffSubjects, subjectCode, subjectName, filterDept, filterYear, filterSem, staffUser?.department, currentMarksheetMeta?.department]);
 
   // Filter dropdown lists
   const departmentsList = useMemo(() => {
@@ -512,9 +590,30 @@ export default function StaffInternalMarks({ staffUser }) {
 
       const subs = [];
       const seen = new Set();
-      const allSubjects = subjectsData?.data || (Array.isArray(subjectsData) ? subjectsData : []);
+      const seenNamesByDept = new Set();
+
+      // Load official subjects from backend /subjects API and admin subjects cache
+      let cachedAdminSubjects = [];
+      try {
+        const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+        if (Array.isArray(cached)) cachedAdminSubjects = cached;
+      } catch (_) { }
+
+      let scheduledSubjects = [];
+      try {
+        const sched = JSON.parse(localStorage.getItem('vcas_admin_ht_subjects_schedule') || '[]');
+        if (Array.isArray(sched)) scheduledSubjects = sched;
+      } catch (_) { }
+
+      const rawBackendSubjects = Array.isArray(subjectsData?.data)
+        ? subjectsData.data
+        : Array.isArray(subjectsData?.subjects)
+          ? subjectsData.subjects
+          : Array.isArray(subjectsData)
+            ? subjectsData
+            : [];
+      const allSubjects = [...rawBackendSubjects, ...cachedAdminSubjects, ...scheduledSubjects];
       const officialSubjectCodes = new Set(allSubjects.map(s => (s.code || '').toUpperCase().trim()).filter(Boolean));
-      const legacyExclusions = new Set(['CS2001', 'CS2005', 'CS2003', 'CS2006', 'SF76', 'CS001', 'CSDA1', 'CSS004']);
       const roleKey = String(staffUser?.role || '').toUpperCase();
       const designationKey = String(staffUser?.designation || '').toUpperCase();
       const looksLikeHodUser = (value) => {
@@ -545,22 +644,23 @@ export default function StaffInternalMarks({ staffUser }) {
         return ['GENERAL', 'COURSE', 'ALL SUBJECTS', 'UNASSIGNED', 'N/A', 'NA', 'DEFAULT', '-- SELECT --'].includes(candidate);
       };
 
-      const looksLikeDemoSubject = (value) => {
-        const normalized = String(value || '').trim().toLowerCase();
-        if (!normalized) return false;
-        return /(^|\s)(demo|sample|test|example|placeholder|dummy|sanitized)(\s|$|[a-z0-9_-])/.test(normalized) ||
-          /(^test[a-z0-9]+|^demo[a-z0-9]+|^sample[a-z0-9]+|^example[a-z0-9]+)/.test(normalized) ||
-          /sanitized|assignment subject|test assignment/.test(normalized);
-      };
-
-      const addSub = (code, name) => {
+      const addSub = (code, name, meta = {}) => {
         const c = (code || '').trim().toUpperCase();
         const n = String(name || '').trim();
         if (!c || c.length < 2 || seen.has(c)) return;
-        if (isGenericSubjectEntry(c) || isGenericSubjectEntry(n) || looksLikeDemoSubject(c) || looksLikeDemoSubject(n)) return;
-        if (legacyExclusions.has(c) && !officialSubjectCodes.has(c)) return;
+        if (isGenericSubjectEntry(c) || isGenericSubjectEntry(n)) return;
+
         seen.add(c);
-        subs.push({ code: c, name: (n && !isGenericSubjectEntry(n) && !looksLikeDemoSubject(n) && n !== c) ? n : c });
+
+        subs.push({
+          code: c,
+          name: (n && !isGenericSubjectEntry(n) && n !== c) ? n : c,
+          dept: meta.dept || meta.department || '',
+          year: meta.year || null,
+          semester: meta.semester || meta.sem || null,
+          staffId: meta.staffId || '',
+          staffName: meta.staffName || '',
+        });
       };
 
       const matchesStaffIdentity = (value) => {
@@ -578,70 +678,78 @@ export default function StaffInternalMarks({ staffUser }) {
           staffIdNorm.includes(candidateNorm);
       };
 
-      // Allow subjects belonging to staff's department or assigned to staff, or if none, allow all catalog subjects
-      const permittedSubjects = allSubjects.filter(s => {
-        if (!s.code) return false;
-        if (isPrincipalOrAdmin) return true;
-        const subjectDept = String(s.department || s.dept || '').trim().toLowerCase();
-        if (staffDepartment && subjectDept === staffDepartment) return true;
-        return [s.faculty, s.staffName, s.staffId, s.employeeId, s.createdBy, s.createdById, s.createdByName, s.createdByStaffId]
-          .some(matchesStaffIdentity);
+      // 1. Official subjects from Admin Course & Subject Management
+      allSubjects.forEach(s => addSub(s.code, s.name, {
+        ...s,
+        dept: s.department || s.dept,
+        isOfficial: true
+      }));
+
+      // 2. Official department courses configured by Admin in Department Management
+      departmentList.forEach(dept => {
+        const deptName = dept?.name || '';
+        (dept?.coursesList || []).forEach(c => {
+          addSub(c.code, c.name || c.title, {
+            ...c,
+            dept: deptName,
+            isOfficial: true
+          });
+        });
       });
 
-      // If no department match found, fallback to showing all valid subjects
-      const effectivePermitted = permittedSubjects.length > 0 ? permittedSubjects : allSubjects;
-      effectivePermitted.forEach(s => addSub(s.code, s.name));
-
+      // 3. Staff's directly assigned classes
       const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
-      staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+      staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
 
-      if (isHodUser) {
-        const departmentClasses = departmentClassesData?.classes || (Array.isArray(departmentClassesData?.data) ? departmentClassesData.data : []);
-        departmentClasses
-          .filter(c => String(c.dept || c.department || '').trim().toLowerCase() === staffDepartment)
-          .forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+      // 4. Department classes for this staff member (both Staff and HOD)
+      const departmentClasses = departmentClassesData?.classes || (Array.isArray(departmentClassesData?.data) ? departmentClassesData.data : []);
+      departmentClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
+
+      // 5. Classes from allClasses matching department or staff identity
+      const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
+      if (staffDepartment) {
+        allClasses
+          .filter(c => {
+            const cDept = String(c.dept || c.department || '').trim().toLowerCase();
+            return cDept && (cDept === staffDepartment || cDept.includes(staffDepartment) || staffDepartment.includes(cDept));
+          })
+          .forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
       }
 
-      const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
       allClasses
-        .filter(c => c.staffId && c.staffId.trim().toLowerCase() === String(effectiveStaffId || '').trim().toLowerCase())
-        .forEach(c => addSub(c.code || c.classCode, c.name || c.className));
+        .filter(c => matchesStaffIdentity(c.staffId) || matchesStaffIdentity(c.staffName) || matchesStaffIdentity(c.faculty))
+        .forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
 
-      const validCatalogCodes = new Set(officialSubjectCodes);
-      const classroomCodes = new Set(staffClasses.map(c => (c.code || c.classCode || '').toUpperCase().trim()).filter(Boolean));
+      // 6. Existing marks and assignments
+      if (marksData?.success && Array.isArray(marksData.data)) {
+        marksData.data.forEach(m => {
+          addSub(m.subjectCode, m.subjectName || m.subjectCode, m);
+        });
+      }
 
       if (asgtsData?.success && Array.isArray(asgtsData.data)) {
         asgtsData.data.forEach(a => {
-          const code = String(a.subjectCode || '').trim();
-          if (!code) return;
-          const cleanCode = code.toUpperCase();
-          const assignmentUser = String(a.staffId || a.employeeId || a.staffName || a.faculty || '').trim();
-          const isForThisStaff = !assignmentUser || assignmentUser.toLowerCase() === String(effectiveStaffId || '').toLowerCase() || matchesStaffIdentity(a.staffName || a.faculty);
-          if (isForThisStaff || !validCatalogCodes.has(cleanCode)) {
-            validCatalogCodes.add(cleanCode);
-          }
-          addSub(cleanCode, a.subjectName || a.title || cleanCode);
+          addSub(a.subjectCode, a.subjectName || a.title || a.subjectCode, a);
         });
       }
 
-      if (marksData?.success && Array.isArray(marksData.data)) {
-        marksData.data.forEach(m => {
-          const code = String(m.subjectCode || '').trim();
-          if (!code) return;
-          const cleanCode = code.toUpperCase();
-          const marksUser = String(m.staffId || m.employeeId || m.staffName || '').trim();
-          const isForThisStaff = !marksUser || marksUser.toLowerCase() === String(effectiveStaffId || '').toLowerCase() || matchesStaffIdentity(m.staffName || m.faculty);
-          if (isForThisStaff || !validCatalogCodes.has(cleanCode) || classroomCodes.has(cleanCode)) {
-            validCatalogCodes.add(cleanCode);
-          }
-          addSub(cleanCode, m.subjectName || m.subjectCode || cleanCode);
-        });
+      // 7. If still empty, include remaining institution classes
+      if (subs.length === 0) {
+        allClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
       }
+
+      // Sort subjects so staff's own department and assigned subjects appear at the top
+      subs.sort((a, b) => {
+        const aDeptMatch = staffDepartment && String(a.dept || '').trim().toLowerCase() === staffDepartment;
+        const bDeptMatch = staffDepartment && String(b.dept || '').trim().toLowerCase() === staffDepartment;
+        if (aDeptMatch && !bDeptMatch) return -1;
+        if (!aDeptMatch && bDeptMatch) return 1;
+        return (a.code || '').localeCompare(b.code || '');
+      });
 
       const stored = localStorage.getItem('vcas_internal_subject') || sessionStorage.getItem('vcas_internal_subject');
       const storedCode = stored ? stored.trim().toUpperCase() : '';
-      const activeSubs = subs.filter(s => !legacyExclusions.has((s.code || '').toUpperCase()));
-      const availableSubs = activeSubs.length > 0 ? activeSubs : subs;
+      const availableSubs = subs;
       setStaffSubjects(availableSubs);
 
       if (storedCode && !availableSubs.some(s => s.code === storedCode)) {
@@ -700,6 +808,17 @@ export default function StaffInternalMarks({ staffUser }) {
       .catch(() => { });
 
     fetchStaffSubjects();
+
+    const handleSubjectsUpdated = () => {
+      fetchStaffSubjects();
+    };
+    window.addEventListener('vcas_subjects_updated', handleSubjectsUpdated);
+    window.addEventListener('storage', handleSubjectsUpdated);
+
+    return () => {
+      window.removeEventListener('vcas_subjects_updated', handleSubjectsUpdated);
+      window.removeEventListener('storage', handleSubjectsUpdated);
+    };
   }, [fetchStaffSubjects]);
 
   // Always load initial/stored subject on mount
@@ -1604,6 +1723,109 @@ export default function StaffInternalMarks({ staffUser }) {
 
       {/* Subject Input & Component Selector */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 space-y-4">
+        {/* Primary Subject / Course Selector Bar */}
+        <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <BookMarked className="w-4 h-4 text-blue-600" />
+              <span>Select Subject / Course Code</span>
+              {loading && (
+                <span className="text-[11px] text-blue-600 font-medium flex items-center gap-1 ml-2">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Loading...
+                </span>
+              )}
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCustomInput(!showCustomInput)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
+              >
+                {showCustomInput ? "Switch to Subject Dropdown" : "+ Enter Custom Subject Code"}
+              </button>
+            </div>
+          </div>
+
+          {!showCustomInput ? (
+            <div className="relative">
+              <select
+                value={subjectCode}
+                onChange={(e) => {
+                  if (e.target.value) handleLoadSubject(e.target.value);
+                }}
+                className="w-full bg-slate-50 hover:bg-slate-100/90 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer appearance-none pr-10 shadow-xs"
+              >
+                <option value="" disabled>-- Select Subject Code --</option>
+                {dropdownSubjects.map((sub) => (
+                  <option key={sub.code} value={sub.code}>
+                    {sub.code} — {sub.name && sub.name !== 'Course' ? sub.name : sub.code}{sub.dept ? ` (${sub.dept})` : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                list="availableStaffSubjectsDatalist"
+                placeholder="Enter subject code, e.g. BCS101..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleLoadSubject(); }}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 uppercase shadow-xs"
+              />
+              <datalist id="availableStaffSubjectsDatalist">
+                {staffSubjects.map(sub => (
+                  <option key={sub.code} value={sub.code}>
+                    {sub.code} — {sub.name}
+                  </option>
+                ))}
+              </datalist>
+              <button
+                type="button"
+                onClick={() => handleLoadSubject()}
+                disabled={!searchInput.trim() || loading}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm shadow-blue-500/20 shrink-0"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                <span>Load Subject</span>
+              </button>
+            </div>
+          )}
+
+          {/* Quick Select Subject Pills */}
+          {dropdownSubjects.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+              <span className="text-[10px] font-extrabold uppercase text-slate-400 mr-1">
+                Quick Select:
+              </span>
+              {dropdownSubjects.slice(0, 8).map((sub) => {
+                const isSelected = subjectCode === sub.code;
+                return (
+                  <button
+                    key={sub.code}
+                    type="button"
+                    onClick={() => {
+                      setShowCustomInput(false);
+                      handleLoadSubject(sub.code);
+                    }}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 scale-[1.02]"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                      }`}
+                  >
+                    <span>{sub.code}</span>
+                    {sub.name && sub.name !== sub.code && (
+                      <span className="text-[10px] font-medium opacity-80">• {sub.name}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <>
           {/* Multi-Filter Bar: Department, Year, Batch, Semester & Search */}
           <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/80 space-y-3">
@@ -1711,7 +1933,13 @@ export default function StaffInternalMarks({ staffUser }) {
                 </label>
                 <select
                   value={filterSubject}
-                  onChange={(e) => setFilterSubject(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFilterSubject(val);
+                    if (val && val !== "All" && val !== subjectCode) {
+                      handleLoadSubject(val);
+                    }
+                  }}
                   className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
                 >
                   <option value="All">All Subjects</option>

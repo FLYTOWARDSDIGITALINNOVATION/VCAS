@@ -93,6 +93,25 @@ export default function ExcelMarksUploadModal({
   const [targetSubjectName, setTargetSubjectName] = useState(() => currentSubjectName || '');
   const [targetDepartment, setTargetDepartment] = useState(() => currentDepartment || staffUser?.department || 'Computer Science');
   const [targetSemester, setTargetSemester] = useState(() => currentSemester || 1);
+  const [allAvailableSubjects, setAllAvailableSubjects] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+      if (Array.isArray(cached)) return cached;
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    fetch('/api/subjects')
+      .then(r => r.json())
+      .then(d => {
+        const subs = Array.isArray(d?.data) ? d.data : Array.isArray(d?.subjects) ? d.subjects : (Array.isArray(d) ? d : []);
+        if (subs.length > 0) {
+          setAllAvailableSubjects(subs);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Parsed data
   const [parsedRows, setParsedRows] = useState([]);
@@ -450,11 +469,31 @@ export default function ExcelMarksUploadModal({
                   <input
                     type="text"
                     required
+                    list="availableSubjectCodesModal"
                     placeholder="e.g., CS2001"
                     value={targetSubjectCode}
-                    onChange={(e) => setTargetSubjectCode(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setTargetSubjectCode(val);
+                      const matched = allAvailableSubjects.find(s => (s.code || '').toUpperCase() === val);
+                      if (matched) {
+                        if (matched.name) setTargetSubjectName(matched.name);
+                        if (matched.department || matched.dept) setTargetDepartment(matched.department || matched.dept);
+                        if (matched.sem || matched.semester) {
+                          const sNum = parseInt(String(matched.sem || matched.semester).replace(/\D/g, ''), 10);
+                          if (sNum) setTargetSemester(sNum);
+                        }
+                      }
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
+                  <datalist id="availableSubjectCodesModal">
+                    {allAvailableSubjects.map(s => (
+                      <option key={s.code} value={s.code}>
+                        {s.code}{s.name ? ` — ${s.name}` : ''}
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-[11px] font-extrabold text-slate-600 mb-1">Subject Name</label>

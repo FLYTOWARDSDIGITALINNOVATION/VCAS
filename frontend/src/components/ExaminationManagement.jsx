@@ -3425,9 +3425,19 @@ export default function ExaminationManagement({ user }) {
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
                 >
                   <option value="All">All Subjects</option>
-                  {Array.from(new Set(internalMarksheets.map(ms => ms.subjectCode).filter(Boolean))).sort().map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {(() => {
+                    const codesFromSheets = internalMarksheets.map(ms => ms.subjectCode).filter(Boolean);
+                    const codesFromSubjects = (availableSubjects || []).map(s => s.code).filter(Boolean);
+                    const allCodes = Array.from(new Set([...codesFromSheets, ...codesFromSubjects])).sort();
+                    return allCodes.map(c => {
+                      const foundSub = (availableSubjects || []).find(s => s.code === c);
+                      return (
+                        <option key={c} value={c}>
+                          {c}{foundSub?.name && foundSub.name !== c ? ` — ${foundSub.name}` : ''}
+                        </option>
+                      );
+                    });
+                  })()}
                 </select>
               </div>
               {/* Batch */}

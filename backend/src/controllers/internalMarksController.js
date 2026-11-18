@@ -446,11 +446,32 @@ const toggleLock = async (req, res) => {
 const listMarksheets = async (req, res) => {
   try {
     const { staffId } = req.params;
+    const Staff = require("../models/Staff");
+    let staffName = '';
+    if (staffId) {
+      const staff = await Staff.findOne({
+        $or: [
+          { staffId: staffId.trim() },
+          { _id: staffId.match(/^[0-9a-fA-F]{24}$/) ? staffId : null }
+        ].filter(Boolean)
+      });
+      if (staff) staffName = staff.name;
+    }
+
+    const orConditions = [{ staffId: staffId ? staffId.trim() : "EMP001" }];
+    if (staffName) {
+      orConditions.push({ staffName: new RegExp('^' + staffName.trim() + '$', 'i') });
+    }
+
     const records = await InternalMarks.find({
-      staffId,
-      $or: [
-        { subjectCode: { $regex: /^.{3,}$/ } },
-        { "students.0": { $exists: true } }
+      $or: orConditions,
+      $and: [
+        {
+          $or: [
+            { subjectCode: { $regex: /^.{3,}$/ } },
+            { "students.0": { $exists: true } }
+          ]
+        }
       ]
     }).select("-students");
     res.json({ success: true, data: records });

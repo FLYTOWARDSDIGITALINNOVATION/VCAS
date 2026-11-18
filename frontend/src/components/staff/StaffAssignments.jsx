@@ -307,21 +307,13 @@ export default function StaffAssignments({ staffUser }) {
     const added = new Set();
     const genericValues = new Set(['GENERAL', 'COURSE', 'ALL SUBJECTS', 'UNASSIGNED', 'N/A', 'NA', 'DEFAULT', '-- SELECT --']);
 
-    const looksLikeDemoSubject = (value) => {
-      const normalized = String(value || '').trim().toLowerCase();
-      if (!normalized) return false;
-      return /(^|\s)(demo|sample|test|example|placeholder|dummy|sanitized)(\s|$|[a-z0-9_-])/.test(normalized) ||
-        /(^test[a-z0-9]+|^demo[a-z0-9]+|^sample[a-z0-9]+|^example[a-z0-9]+)/.test(normalized) ||
-        /sanitized|assignment subject|test assignment/.test(normalized);
-    };
-
     const addOption = (rawCode, rawName) => {
       const code = String(rawCode || '').trim();
       const name = String(rawName || '').trim();
       const normalizedCode = code.toUpperCase();
       const normalizedName = name.toUpperCase();
       const hasGenericValue = (!code && !name) || genericValues.has(normalizedCode) || genericValues.has(normalizedName);
-      if (hasGenericValue || looksLikeDemoSubject(code) || looksLikeDemoSubject(name)) return;
+      if (hasGenericValue) return;
 
       const value = code || name;
       if (!value || added.has(value)) return;

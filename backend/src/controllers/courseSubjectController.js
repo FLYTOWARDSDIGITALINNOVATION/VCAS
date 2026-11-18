@@ -257,7 +257,47 @@ exports.deleteCourse = async (req, res) => {
 
 exports.getSubjects = async (req, res) => {
   try {
-    const subjects = await Subject.find().sort({ department: 1, year: 1, sem: 1, code: 1 });
+    let subjects = await Subject.find().sort({ department: 1, year: 1, sem: 1, code: 1 });
+
+    // Also pull in any classes from Class collection that are not yet in Subject collection
+    try {
+      const classes = await Class.find();
+      const existingCodes = new Set(subjects.map(s => (s.code || '').toUpperCase().trim()));
+      const missingClasses = classes.filter(c => {
+        const cCode = (c.code || '').toUpperCase().trim();
+        return cCode && !existingCodes.has(cCode);
+      });
+
+      if (missingClasses.length > 0) {
+        const newSubjectDocs = [];
+        for (const c of missingClasses) {
+          const cCode = (c.code || '').toUpperCase().trim();
+          existingCodes.add(cCode);
+          const tHours = Number(c.theoryHours) >= 0 ? Number(c.theoryHours) : 3;
+          const lHours = Number(c.labHours) >= 0 ? Number(c.labHours) : 0;
+          const subObj = {
+            code: cCode,
+            name: c.name || c.className || cCode,
+            department: c.dept || c.department || 'General',
+            year: Number(c.year) || 1,
+            sem: c.semester ? `Sem ${c.semester}` : 'Sem 1',
+            credits: Number(c.credits) || 3,
+            type: lHours > 0 ? 'Practical / Lab' : 'Theory',
+            faculty: c.staffName || 'Unassigned',
+            theoryHours: tHours,
+            labHours: lHours,
+            isContinuousLab: Boolean(c.isContinuousLab || lHours > 0),
+            hours: c.hours || (lHours > 0 ? `${tHours}h Theory + ${lHours}h Continuous Lab` : `${tHours} hrs/wk`),
+            ltp: lHours > 0 ? `${tHours}-0-${lHours}` : `${tHours}-0-0`,
+            prerequisite: 'None'
+          };
+          newSubjectDocs.push(subObj);
+          // Persist to Subject in background
+          Subject.create(subObj).catch(() => {});
+        }
+        subjects = [...subjects, ...newSubjectDocs];
+      }
+    } catch (_) {}
 
     res.status(200).json({
       success: true,
