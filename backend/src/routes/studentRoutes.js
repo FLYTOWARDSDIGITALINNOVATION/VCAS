@@ -19,7 +19,8 @@ const {
   bulkImportStudents,
   uploadExcelStudents,
   getSemesterInfo,
-  migrateBatchFields
+  migrateBatchFields,
+  fixBatchFromAcademicYear
 } = require('../controllers/studentController');
 
 router.route('/')
@@ -36,6 +37,10 @@ router.post('/upload-excel', upload.single('file'), uploadExcelStudents);
 // Supports both GET (browser-friendly) and POST
 router.get('/migrate-batch-fields', migrateBatchFields);
 router.post('/migrate-batch-fields', migrateBatchFields);
+
+// One-time fix: recalculate batch from academicYear + year columns (Excel-sourced)
+router.get('/fix-batch-from-academic-year', fixBatchFromAcademicYear);
+router.post('/fix-batch-from-academic-year', fixBatchFromAcademicYear);
 
 router.route('/:id/credentials')
   .get(getStudentCredentials);

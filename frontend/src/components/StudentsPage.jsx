@@ -69,12 +69,12 @@ function normalizeStudent(s) {
     admNo: s.admNo || s.admissionNo || '',
     admissionNo: s.admNo || s.admissionNo || '',
     rollNo: s.rollNo || '—',
-    year: s.currentYearLabel || s.year || '1st Year',
+    year: s.year || '1st Year',
     loginId: s.loginId || regNo,
     name: s.name || s.fullName || '',
     fullName: s.name || s.fullName || '',
-    sem: s.currentSemLabel || s.sem || s.semester || '1st Sem',
-    semester: s.currentSemLabel || s.sem || s.semester || '1st Sem',
+    sem: s.sem || s.semester || '1st Sem',
+    semester: s.sem || s.semester || '1st Sem',
     department: s.department || '',
     course: s.course || '',
     phone: s.phone || s.mobile || '',
@@ -92,7 +92,7 @@ function normalizeStudent(s) {
     pinCode: s.pinCode || '',
     batch: (s.batch || (s.courseDurationFrom && s.courseDurationTo ? `${s.courseDurationFrom}-${s.courseDurationTo}` : '2022-2026')).replace('–', '-').trim(),
     section: s.section || 'A',
-    cgpa: s.cgpa || '8.0',
+    cgpa: (s.cgpa && s.cgpa !== '8.0' && s.cgpa !== '8') ? s.cgpa : '',
     rank: s.rank || '',
     fatherName: s.fatherName || '',
     nationality: s.nationality || 'Indian',
@@ -1297,11 +1297,10 @@ Unauthorized reproduction or distribution is strictly prohibited.
           <button
             type="button"
             onClick={() => setSelectedBatch('')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
-              !selectedBatch.trim() || selectedBatch.toLowerCase() === 'all' || selectedBatch.toLowerCase() === 'all batches'
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${!selectedBatch.trim() || selectedBatch.toLowerCase() === 'all' || selectedBatch.toLowerCase() === 'all batches'
                 ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/30'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            }`}
+              }`}
           >
             All Batches ({students.length})
           </button>
@@ -1313,16 +1312,14 @@ Unauthorized reproduction or distribution is strictly prohibited.
                 key={b}
                 type="button"
                 onClick={() => setSelectedBatch(b)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer shrink-0 ${
-                  isSelected
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer shrink-0 ${isSelected
                     ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/30'
                     : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200/70'
-                }`}
+                  }`}
               >
                 <span>Batch {b}</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                  isSelected ? 'bg-purple-800 text-white' : 'bg-purple-200 text-purple-900'
-                }`}>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${isSelected ? 'bg-purple-800 text-white' : 'bg-purple-200 text-purple-900'
+                  }`}>
                   {count}
                 </span>
               </button>
@@ -1597,11 +1594,10 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
               {/* Status Badge */}
               <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  student.status === 'Active'
+                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${student.status === 'Active'
                     ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                     : 'bg-slate-100 text-slate-500 border border-slate-200'
-                }`}>
+                  }`}>
                   {student.status || 'Active'}
                 </span>
               </td>
@@ -1867,9 +1863,9 @@ Unauthorized reproduction or distribution is strictly prohibited.
                     {(() => {
                       const yrNum = normalizeYear(editingStudent.year);
                       const sems = yrNum === 1 ? ['1st Sem', '2nd Sem'] :
-                                   yrNum === 2 ? ['3rd Sem', '4th Sem'] :
-                                   yrNum === 3 ? ['5th Sem', '6th Sem'] :
-                                   ['1st Sem', '2nd Sem', '3rd Sem', '4th Sem', '5th Sem', '6th Sem'];
+                        yrNum === 2 ? ['3rd Sem', '4th Sem'] :
+                          yrNum === 3 ? ['5th Sem', '6th Sem'] :
+                            ['1st Sem', '2nd Sem', '3rd Sem', '4th Sem', '5th Sem', '6th Sem'];
                       return sems.map(s => <option key={s} value={s}>{s}</option>);
                     })()}
                   </select>
@@ -2568,8 +2564,8 @@ Unauthorized reproduction or distribution is strictly prohibited.
                                 <label
                                   key={field.id}
                                   className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-all ${isChecked
-                                      ? 'bg-purple-50 border-purple-300 text-purple-900 font-bold shadow-2xs'
-                                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                                    ? 'bg-purple-50 border-purple-300 text-purple-900 font-bold shadow-2xs'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                                     }`}
                                 >
                                   <input
@@ -2637,7 +2633,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         onSuccess={async () => {
           try {
             localStorage.removeItem('vcas_students_cache');
-          } catch (_) {}
+          } catch (_) { }
           setSelectedDept('All Departments');
           setSelectedBatch('');
           setSelectedSubject('All Subjects');

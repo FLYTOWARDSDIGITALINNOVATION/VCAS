@@ -235,20 +235,7 @@ exports.createStudent = async (req, res) => {
       rollNo: (body.rollNo || '').trim().toUpperCase(),
       umisNumber: (body.umisNumber || body.umis || '').trim().toUpperCase(),
       year: body.year || '1st Year',
-      batch: (body.batch || '2022-2026').replace('–', '-').trim(),
-      batchStartYear: body.batchStartYear || (() => {
-        const b = (body.batch || '').replace('–', '-').trim();
-        return b.includes('-') ? (parseInt(b.split('-')[0], 10) || null) : null;
-      })(),
-      courseDurationYears: body.courseDurationYears || (() => {
-        const b = (body.batch || '').replace('–', '-').trim();
-        if (b.includes('-')) {
-          const parts = b.split('-');
-          const dur = parseInt(parts[1], 10) - parseInt(parts[0], 10);
-          return (dur > 0 && dur <= 6) ? dur : 3;
-        }
-        return 3;
-      })(),
+      batch: (body.batch || body.academicYear || '2025-2026').replace('–', '-').trim(),
       isLateralEntry: body.isLateralEntry || false,
       detainedYears: body.detainedYears || 0,
       loginId: (body.loginId || finalRegNo).trim().toUpperCase(),
@@ -455,22 +442,11 @@ exports.updateStudent = async (req, res) => {
     if (updates.pinCode) student.pinCode = updates.pinCode;
     if (updates.country) student.country = updates.country;
     if (updates.batch) {
-      const cleanBatch = String(updates.batch).replace('–', '-').trim();
-      student.batch = cleanBatch;
-      // Auto-update batchStartYear & courseDurationYears when batch is updated
-      if (cleanBatch.includes('-')) {
-        const parts = cleanBatch.split('-');
-        const s = parseInt(parts[0], 10);
-        const e = parseInt(parts[1], 10);
-        if (!isNaN(s)) student.batchStartYear = s;
-        if (!isNaN(s) && !isNaN(e) && e - s > 0 && e - s <= 6) student.courseDurationYears = e - s;
-      }
+      student.batch = String(updates.batch).replace('–', '-').trim();
     }
-    if (updates.batchStartYear != null) student.batchStartYear = Number(updates.batchStartYear);
-    if (updates.courseDurationYears != null) student.courseDurationYears = Number(updates.courseDurationYears);
+    if (updates.academicYear) student.academicYear = updates.academicYear;
     if (updates.isLateralEntry != null) student.isLateralEntry = Boolean(updates.isLateralEntry);
     if (updates.detainedYears != null) student.detainedYears = Number(updates.detainedYears);
-    if (updates.academicYear) student.academicYear = updates.academicYear;
     if (updates.section) student.section = updates.section;
     if (updates.cgpa) student.cgpa = updates.cgpa;
     if (updates.rank) student.rank = updates.rank;
@@ -813,92 +789,30 @@ function normalizeStudentRow(rawRow) {
     admNo = '';
   }
 
-  // 4. Batch & Academic Year
-  let batch = String(getVal('batch', 'batchyear')).replace('–', '-').trim();
-  let batchStartYear = null;
-  let courseDurationYears = 3;
-
-  if (!batch) {
-    let startYear = null;
-    if (rawDoa) {
-      const match = String(rawDoa).match(/(?:19|20)\d{2}/);
-      if (match) startYear = parseInt(match[0], 10);
-    }
-    const acadYr = String(getVal('academicyear', 'session')).trim();
-    if (!startYear && acadYr) {
-      const match = acadYr.match(/((?:19|20)\d{2})/);
-      if (match) startYear = parseInt(match[1], 10);
-    }
-    if (!startYear && rollNo.startsWith('VC')) {
-      const yr2 = rollNo.slice(2, 4);
-      if (/^\d{2}$/.test(yr2)) startYear = 2000 + parseInt(yr2, 10);
-    } else if (!startYear && regNo && /^\d{2}/.test(regNo)) {
-      const yr2 = regNo.slice(0, 2);
-      if (parseInt(yr2, 10) >= 20 && parseInt(yr2, 10) <= 30) {
-        startYear = 2000 + parseInt(yr2, 10);
-      }
-    }
-    if (!startYear) startYear = 2024;
-    const duration = (String(getVal('coursetype') || '').toUpperCase().includes('PG') || course.toUpperCase().startsWith('M.')) ? 2 : 3;
-    batch = `${startYear}-${startYear + duration}`;
-    batchStartYear = startYear;
-    courseDurationYears = duration;
-  } else {
-    // Parse batchStartYear & courseDurationYears from existing batch string e.g. "2024-2027"
-    const batchParts = batch.split('-');
-    if (batchParts.length >= 2) {
-      const s = parseInt(batchParts[0], 10);
-      const e = parseInt(batchParts[1], 10);
-      if (!isNaN(s)) batchStartYear = s;
-      if (!isNaN(s) && !isNaN(e)) courseDurationYears = e - s;
-    }
-  }
-
-  // Auto-detect PG/UG duration from course name if not set properly
-  if (courseDurationYears <= 0 || courseDurationYears > 6) {
-    const isPG = String(getVal('coursetype') || '').toUpperCase().includes('PG') || course.toUpperCase().startsWith('M.');
-    courseDurationYears = isPG ? 2 : 3;
-  }
-
+  // 4. Academic Year — stored EXACTLY as the "Academic Year" column in the Excel sheet.
   const academicYear = String(getVal('academicyear', 'session') || '2025-2026').replace('–', '-').trim();
 
-  // 5. Year of study & Semester
-  const rawYearOfStudy = String(getVal('yearofstudy', 'classyear', 'year') || '1').trim();
-  const yearOfStudy = rawYearOfStudy.toLowerCase().replace(/\s+/g, '');
-  let year = '1st Year';
-  let sem = '1st Sem';
+  // 5. Year of study & Semester — read from "Year of study" column in the Excel sheet.
+  //   "Year of study"  → numeric: 1, 2, 3 …   stored as label e.g. "1st Year"
+  //   "Academic Year"  → e.g. "2024-2025"      stored as-is
+  //   batch            = academicYear (exact "Academic Year" value — no dynamic derivation)
 
-  const studyYearMatch = yearOfStudy.match(/^(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|[1-9]|10)$/i);
-  if (studyYearMatch) {
-    const matched = studyYearMatch[0].toLowerCase();
-    const yearNum = /^(first|1st|1)$/.test(matched) ? 1
-      : /^(second|2nd|2)$/.test(matched) ? 2
-      : /^(third|3rd|3)$/.test(matched) ? 3
-      : /^(fourth|4th|4)$/.test(matched) ? 4
-      : /^(fifth|5th|5)$/.test(matched) ? 5
-      : /^(sixth|6th|6)$/.test(matched) ? 6
-      : /^(seventh|7th|7)$/.test(matched) ? 7
-      : /^(eighth|8th|8)$/.test(matched) ? 8
-      : /^(ninth|9th|9)$/.test(matched) ? 9
-      : 10;
+  const rawYearOfStudy = String(getVal('yearofstudy', 'yearofcoursecompleted', 'classyear', 'year') || '1').trim();
+  const yearNumRaw = parseInt(rawYearOfStudy, 10);
+  const yearNum = isNaN(yearNumRaw) ? 1 : yearNumRaw;
 
-    if (yearNum === 1) {
-      year = '1st Year';
-      sem = '1st Sem';
-    } else if (yearNum === 2) {
-      year = '2nd Year';
-      sem = '3rd Sem';
-    } else if (yearNum === 3) {
-      year = '3rd Year';
-      sem = '5th Sem';
-    } else if (yearNum === 4) {
-      year = '4th Year';
-      sem = '7th Sem';
-    } else {
-      year = `${yearNum}th Year`;
-      sem = `${Math.max(1, (yearNum - 1) * 2 + 1)}th Sem`;
-    }
-  }
+  // Year label — e.g. 1 → "1st Year", 2 → "2nd Year"
+  const yearSuffixes = ['st', 'nd', 'rd'];
+  const yearSuffix = yearNum <= 3 ? (yearSuffixes[yearNum - 1] || 'th') : 'th';
+  const year = `${yearNum}${yearSuffix} Year`;
+
+  // Semester — odd semester (start of academic year)
+  const semNum = (yearNum - 1) * 2 + 1;
+  const semSuffix = semNum === 1 ? 'st' : semNum === 2 ? 'nd' : semNum === 3 ? 'rd' : 'th';
+  const sem = `${semNum}${semSuffix} Sem`;
+
+  // Batch = exact "Academic Year" from the Excel sheet (e.g. "2024-2025")
+  const batch = academicYear;
 
   // 6. Section: ONLY match exact 'section' or 'sec', NEVER 'fathersoccupation'
   let section = String(norm['section'] || norm['sec'] || 'A').trim();
@@ -944,7 +858,7 @@ function normalizeStudentRow(rawRow) {
   const tenthPercentage = String(getVal('tenthpercentage', '10thpercentage', '10thpercent')).trim();
   const twelfthMarks = String(getVal('twelfthmarks', '12thmarks', 'hscmarks', '12th')).trim();
   const twelfthPercentage = String(getVal('twelfthpercentage', '12thpercentage', '12thpercent')).trim();
-  const cgpa = String(getVal('cgpa', 'gpa') || '8.0').trim();
+  const cgpa = String(getVal('cgpa', 'gpa') || '').trim();
   const rawAtt = getVal('attendance', 'attendancepercent');
   const attendance = rawAtt !== '' && !isNaN(Number(rawAtt)) ? Number(rawAtt) : 85;
   const rawFeeStatus = String(getVal('feestatus', 'feesstatus') || 'Pending').trim().toLowerCase();
@@ -1025,8 +939,6 @@ function normalizeStudentRow(rawRow) {
     sem,
     year,
     batch,
-    batchStartYear,
-    courseDurationYears,
     academicYear,
     section,
     gender,
@@ -1661,6 +1573,53 @@ exports.migrateBatchFields = async (req, res) => {
   }
 };
 
+// ─── One-time Migration: set batch = exact academicYear for all students ───────
+
+/**
+ * POST /api/students/fix-batch-from-academic-year
+ * Sets batch = academicYear (exact "Academic Year" value from Excel) for ALL students.
+ * Removes batchStartYear / courseDurationYears dynamic derivation.
+ * Safe to run multiple times — skips already-correct records.
+ */
+exports.fixBatchFromAcademicYear = async (req, res) => {
+  try {
+    const students = await Student.find({}, 'name academicYear batch').lean();
+
+    const ops = [];
+    const changed = [];
+
+    for (const s of students) {
+      const acadYear = (s.academicYear || '').replace('–', '-').trim();
+      if (!acadYear) continue;                  // skip if no academicYear stored
+      if (s.batch === acadYear) continue;       // already correct
+
+      changed.push({ name: s.name, oldBatch: s.batch, newBatch: acadYear });
+      ops.push({
+        updateOne: {
+          filter: { _id: s._id },
+          update: { $set: { batch: acadYear } }
+        }
+      });
+    }
+
+    let modifiedCount = 0;
+    if (ops.length > 0) {
+      const result = await Student.bulkWrite(ops, { ordered: false });
+      modifiedCount = result.modifiedCount;
+    }
+
+    res.json({
+      success: true,
+      message: `Fix complete: ${modifiedCount} students updated (batch set to academicYear).`,
+      updated: modifiedCount,
+      changes: changed
+    });
+  } catch (err) {
+    console.error('fixBatchFromAcademicYear error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ─── Batch-based Semester Info ────────────────────────────────────────────────
 
 /**
@@ -1694,20 +1653,12 @@ exports.getSemesterInfo = async (req, res) => {
     res.json({
       success: true,
       data: {
-        name:                student.name,
-        batch:               student.batch,
-        batchStartYear:      student.batchStartYear,
-        courseDurationYears: student.courseDurationYears,
-        isLateralEntry:      student.isLateralEntry,
-        detainedYears:       student.detainedYears,
-        currentYearOfStudy:  student.currentYearOfStudy,
-        currentYearLabel:    student.currentYearLabel,
-        currentSemNumber:    student.currentSemNumber,
-        currentSemLabel:     student.currentSemLabel,
-        dynamicStatus:       student.dynamicStatus,
-        // Stored (manual) values for reference
-        storedYear:          student.year,
-        storedSem:           student.sem
+        name:         student.name,
+        batch:        student.batch,
+        academicYear: student.academicYear,
+        year:         student.year,
+        sem:          student.sem,
+        status:       student.status
       }
     });
   } catch (err) {
