@@ -156,9 +156,37 @@ export default function MiscellaneousFeesManagement({
     setMiscFeeStructure(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  const handleResetMiscDefaults = () => {
-    if (window.confirm('Reset miscellaneous fees structure to standard defaults?')) {
-      setMiscFeeStructure(DEFAULT_MISC_FEES);
+  const handleResetMiscDefaults = async () => {
+    if (!window.confirm('Reset miscellaneous fees structure to standard defaults? This will also save the defaults to the server and sync with the Accountant portal.')) return;
+
+    setMiscFeeStructure(DEFAULT_MISC_FEES);
+    setIsSavingStructure(true);
+    try {
+      const res = await fetch(`${API_BASE}/fee-structure/miscellaneous-fees`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          miscellaneousFees: DEFAULT_MISC_FEES,
+          updatedBy: currentUser?.name || 'Super Admin',
+          updatedRole: effectiveRole
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMiscFeeStructure(json.data || DEFAULT_MISC_FEES);
+        setStructureToast('Fee structure reset to standard defaults and synced with Accountant portal.');
+        setTimeout(() => setStructureToast(null), 4000);
+        window.dispatchEvent(new Event('vcas_feestructure_updated'));
+      } else {
+        // Local state already reset; notify that server sync failed
+        setStructureToast('Defaults restored locally. Server sync failed — click "Save Fee Structure" to persist.');
+        setTimeout(() => setStructureToast(null), 5000);
+      }
+    } catch (err) {
+      setStructureToast('Defaults restored locally. Server unreachable — click "Save Fee Structure" to persist.');
+      setTimeout(() => setStructureToast(null), 5000);
+    } finally {
+      setIsSavingStructure(false);
     }
   };
 

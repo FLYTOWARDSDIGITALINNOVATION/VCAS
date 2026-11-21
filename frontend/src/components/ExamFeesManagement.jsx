@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
 import { FileText, Save, User, CreditCard, Clock, AlertCircle, Search, Download, Printer, Trash2 } from 'lucide-react';
