@@ -54,27 +54,38 @@ const getMarksheet = async (req, res) => {
       return res.status(400).json({ success: false, message: "Subject code is required." });
     }
 
+    const escapeRegex = (str) => (str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const cleanSub = subjectCode.trim();
     const cleanNoSpaces = cleanSub.replace(/\s+/g, "");
-    const subRegex = new RegExp('^(?:' + cleanSub + '|' + cleanNoSpaces + ')$', 'i');
-    const nameRegex = new RegExp(cleanSub, 'i');
+    const escapedSub = escapeRegex(cleanSub);
+    const escapedNoSpaces = escapeRegex(cleanNoSpaces);
+    const subRegex = new RegExp('^(?:' + escapedSub + '|' + escapedNoSpaces + ')$', 'i');
+    const exactNameRegex = new RegExp('^' + escapedSub + '$', 'i');
+    const nameRegex = exactNameRegex;
     const staffRegex = (staffId && staffId !== "undefined" && staffId !== "null")
-      ? new RegExp('^' + staffId.trim() + '$', 'i')
+      ? new RegExp('^' + escapeRegex(staffId.trim()) + '$', 'i')
       : null;
 
-    // 1. Try finding by staffId + (subjectCode OR subjectName)
+    // 1. Try finding by staffId + subjectCode (or exact subjectName)
     let record = null;
     if (staffRegex) {
       record = await InternalMarks.findOne({
         staffId: staffRegex,
-        $or: [{ subjectCode: subRegex }, { subjectName: nameRegex }]
+        subjectCode: subRegex
       });
+      if (!record) {
+        record = await InternalMarks.findOne({
+          staffId: staffRegex,
+          subjectName: exactNameRegex
+        });
+      }
     }
-    // 2. If not found by staffId, fallback to subjectCode or subjectName alone across all staff
+    // 2. If not found by staffId, fallback to subjectCode or exact subjectName alone across all staff
     if (!record) {
-      record = await InternalMarks.findOne({
-        $or: [{ subjectCode: subRegex }, { subjectName: nameRegex }]
-      });
+      record = await InternalMarks.findOne({ subjectCode: subRegex });
+    }
+    if (!record) {
+      record = await InternalMarks.findOne({ subjectName: exactNameRegex });
     }
 
     // If the found record is an empty test record (e.g. code length < 3 and 0 students), treat as null to search deeper
@@ -92,6 +103,8 @@ const getMarksheet = async (req, res) => {
 
     const Student = require("../models/Student");
     const Subject = require("../models/Subject");
+    const Staff = require("../models/Staff");
+
     const matchingClasses = await Class.find({
       $or: [
         { code: subRegex },
@@ -113,7 +126,7 @@ const getMarksheet = async (req, res) => {
       if (st.regNo) realRollMap.set(st.regNo.toUpperCase().trim(), st);
     });
 
-    // Collect all class students across matching classes
+    // Collect all class students across matching classes in Class collection
     const allEnrolledClassStudents = [];
     matchingClasses.forEach(cls => {
       const cList = (cls.students && cls.students.length > 0) ? cls.students : (cls.enrolledStudents || []);
@@ -124,8 +137,55 @@ const getMarksheet = async (req, res) => {
       });
     });
 
+    // Also collect enrolled students from Staff model embedded classes
+    try {
+      const staffDocs = await Staff.find(staffRegex ? { staffId: staffRegex } : {});
+      staffDocs.forEach(stf => {
+        (stf.classes || []).forEach(cls => {
+          const cCode = (cls.code || '').trim().toUpperCase();
+          const cName = (cls.name || '').trim().toUpperCase();
+          const targetClean = cleanSub.toUpperCase();
+          if (cCode === targetClean || cName === targetClean) {
+            (cls.enrolledStudents || cls.students || []).forEach(s => {
+              if (s.rollNo && s.rollNo.trim()) {
+                allEnrolledClassStudents.push(s);
+              }
+            });
+          }
+        });
+      });
+    } catch (_) { }
+
+    // Deduplicate enrolled class students by roll number
+    const seenRolls = new Set();
+    const uniqueEnrolledStudents = [];
+    allEnrolledClassStudents.forEach(s => {
+      const r = (s.rollNo || '').toUpperCase().trim();
+      if (r && !seenRolls.has(r)) {
+        seenRolls.add(r);
+        uniqueEnrolledStudents.push(s);
+      }
+    });
+
     if (!record) {
-      const classStudents = allEnrolledClassStudents.map(s => ({
+      const canonicalCode = subjectDoc?.code || classDoc?.code || cleanSub.toUpperCase();
+      const canonicalName = subjectDoc?.name || classDoc?.name || cleanSub;
+      const targetDept = subjectDoc?.department || classDoc?.dept || "Computer Science";
+
+      let candidateStudents = uniqueEnrolledStudents;
+      if (candidateStudents.length === 0) {
+        const deptNorm = (targetDept || '').toLowerCase().trim();
+        const deptStudents = realStudents.filter(st => {
+          const sDept = (st.department || st.course || '').toLowerCase().trim();
+          return sDept && (sDept === deptNorm || sDept.includes(deptNorm) || deptNorm.includes(sDept));
+        });
+        candidateStudents = deptStudents.map(s => ({
+          rollNo: (s.rollNo || s.regNo || '').toUpperCase().trim(),
+          name: s.name || s.fullName || s.rollNo
+        })).filter(s => Boolean(s.rollNo));
+      }
+
+      const classStudents = candidateStudents.map(s => ({
         rollNo: s.rollNo.toUpperCase().trim(),
         name: realRollMap.get(s.rollNo.toUpperCase().trim())?.name || s.name || s.rollNo,
         st1: null, st2: null, st3: null, st4: null,
@@ -135,20 +195,26 @@ const getMarksheet = async (req, res) => {
         assignment: null, attendance: null, consolidated: null
       }));
 
-      const canonicalCode = subjectDoc?.code || classDoc?.code || cleanSub.toUpperCase();
-      const canonicalName = subjectDoc?.name || classDoc?.name || cleanSub;
-
-      record = {
+      const recordData = {
         staffId: classDoc?.staffId || staffId || "EMP001",
+        staffName: classDoc?.staffName || "",
         subjectCode: canonicalCode,
         subjectName: canonicalName,
-        department: subjectDoc?.department || classDoc?.dept || "Computer Science",
-        semester: subjectDoc ? (Number(String(subjectDoc.sem).replace(/\D/g, '')) || 1) : (classDoc ? classDoc.semester : 1),
+        department: targetDept,
+        semester: subjectDoc ? (Number(String(subjectDoc.sem || subjectDoc.semester || '').replace(/\D/g, '')) || 1) : (classDoc ? classDoc.semester : 1),
         students: classStudents,
         isLocked: false,
+        approvalStatus: "Draft",
+        currentApprovalStage: "Staff",
         maxMarks: DEFAULT_MAX_MARKS,
         passMarks: DEFAULT_PASS_MARKS,
       };
+
+      try {
+        record = await InternalMarks.create(recordData);
+      } catch (createErr) {
+        record = recordData;
+      }
     } else {
       if (!record.maxMarks) record.maxMarks = DEFAULT_MAX_MARKS;
       if (!record.passMarks) record.passMarks = DEFAULT_PASS_MARKS;
@@ -166,7 +232,7 @@ const getMarksheet = async (req, res) => {
       });
 
       // 2. Add enrolled class students if not already in marksheet
-      allEnrolledClassStudents.forEach(cs => {
+      uniqueEnrolledStudents.forEach(cs => {
         const roll = (cs.rollNo || '').toUpperCase().trim();
         if (roll && !studentMap.has(roll)) {
           studentMap.set(roll, {
@@ -180,11 +246,39 @@ const getMarksheet = async (req, res) => {
           });
         }
       });
+
+      // 3. Also include all registered students belonging to this department/semester so no students are missing
+      const recDept = (record.department || subjectDoc?.department || classDoc?.dept || '').toLowerCase().trim();
+      const recSemNum = Number(String(record.semester || subjectDoc?.sem || subjectDoc?.semester || classDoc?.semester || '').replace(/\D/g, '')) || 0;
+      const isCsDept = recDept.includes('cs') || recDept.includes('computer');
+
+      realStudents.forEach(st => {
+        const roll = (st.rollNo || st.regNo || '').toUpperCase().trim();
+        if (!roll || studentMap.has(roll)) return;
+        const sDept = (st.department || st.course || st.courseAdmitted || st.dept || '').toLowerCase().trim();
+        const sIsCs = sDept.includes('cs') || sDept.includes('computer');
+        const deptMatch = sDept && (sDept === recDept || sDept.includes(recDept) || recDept.includes(sDept) || (isCsDept && sIsCs));
+        const sSemNum = Number(String(st.semester || st.sem || '').replace(/\D/g, '')) || 0;
+        const semMatch = !recSemNum || !sSemNum || sSemNum === recSemNum;
+
+        if (deptMatch && semMatch) {
+          studentMap.set(roll, {
+            rollNo: st.rollNo || st.regNo,
+            name: st.name || st.fullName || roll,
+            st1: null, st2: null, st3: null, st4: null,
+            it1: null, it2: null, cia1: null, cia2: null,
+            model: null, project: null,
+            assignment1: null, assignment2: null, assignment3: null, assignment4: null,
+            assignment: null, attendance: null, consolidated: null
+          });
+        }
+      });
+
       record.students = Array.from(studentMap.values());
 
       // Save sanitized students back to the marksheet
       if (record._id) {
-        await InternalMarks.findByIdAndUpdate(record._id, { 
+        await InternalMarks.findByIdAndUpdate(record._id, {
           students: record.students,
           subjectName: classDoc?.name || record.subjectName
         });
@@ -252,15 +346,15 @@ const saveMarksheet = async (req, res) => {
     }
 
     const updateFields = {
-      staffId:      targetStaffId,
-      subjectCode:  cleanSub,
-      staffName:    staffName    || "",
-      subjectName:  subjectName  || "",
-      department:   department   || "",
-      semester:     semester     || 1,
-      year:         req.body.year || (semester ? (semester <= 2 ? 'I Year' : semester <= 4 ? 'II Year' : 'III Year') : 'I Year'),
+      staffId: targetStaffId,
+      subjectCode: cleanSub,
+      staffName: staffName || "",
+      subjectName: subjectName || "",
+      department: department || "",
+      semester: semester || 1,
+      year: req.body.year || (semester ? (semester <= 2 ? 'I Year' : semester <= 4 ? 'II Year' : 'III Year') : 'I Year'),
       academicYear: academicYear || "",
-      students:     students     || [],
+      students: students || [],
     };
 
     if (maxMarks) {
@@ -443,9 +537,11 @@ const toggleLock = async (req, res) => {
 
 // GET /api/internal-marks/:staffId
 // List all subjects with marks for this staff
+// Supports ?role=HOD&dept=... to include pending approval marksheets for the department
 const listMarksheets = async (req, res) => {
   try {
     const { staffId } = req.params;
+    const { role, dept } = req.query;
     const Staff = require("../models/Staff");
     let staffName = '';
     if (staffId) {
@@ -463,8 +559,20 @@ const listMarksheets = async (req, res) => {
       orConditions.push({ staffName: new RegExp('^' + staffName.trim() + '$', 'i') });
     }
 
+    // If the requesting user is HOD/Admin, also include pending marksheets from their department
+    const roleUpper = String(role || '').toUpperCase().replace(/[^A-Z]/g, '');
+    const isHodOrAdmin = roleUpper.includes('HOD') || roleUpper.includes('ADMIN') || roleUpper.includes('PRINCIPAL');
+    if (isHodOrAdmin && dept && dept.trim() && dept.trim() !== 'All') {
+      // Include all marksheets in the department that are pending approval
+      orConditions.push({
+        department: { $regex: new RegExp(dept.trim(), 'i') },
+        approvalStatus: { $in: ['Pending HOD', 'Pending Principal', 'Pending MD', 'Draft', 'Rejected', 'Approved'] }
+      });
+    }
+
     const records = await InternalMarks.find({
       $or: orConditions,
+      subjectCode: { $nin: ['CS1001', 'CS101', 'CS123'] },
       $and: [
         {
           $or: [
@@ -482,13 +590,36 @@ const listMarksheets = async (req, res) => {
 
 // GET /api/internal-marks
 // List all marksheets with students for admin/super-admin view
+// Supports role-based filtering: ?role=HOD|Admin|SuperAdmin restricts by approvalStatus
 const getAllInternalMarks = async (req, res) => {
   try {
-    const { department, semester, subjectCode } = req.query;
-    const filter = {};
+    const { department, semester, subjectCode, role, staffDept } = req.query;
+    const filter = {
+      subjectCode: { $nin: ['CS1001', 'CS101', 'CS123'] }
+    };
     if (department && department !== 'All Departments') filter.department = department;
     if (semester) filter.semester = Number(semester);
     if (subjectCode) filter.subjectCode = subjectCode.trim();
+
+    // Role-based approval stage filtering
+    // HOD: can see Pending HOD or beyond (submitted by staff)
+    // Admin (Principal): can see Pending Principal or beyond (approved by HOD)
+    // Super Admin (MD): can see Pending MD or Approved (approved by Admin)
+    // If no role param, return all (backward compat for other callers)
+    if (role) {
+      const roleUpper = String(role).toUpperCase().replace(/\s+/g, '');
+      if (roleUpper.includes('SUPERADMIN') || roleUpper.includes('MD') || roleUpper.includes('MANAGINGDIRECTOR')) {
+        filter.approvalStatus = { $in: ['Pending MD', 'Approved'] };
+      } else if (roleUpper.includes('ADMIN') || roleUpper.includes('PRINCIPAL')) {
+        filter.approvalStatus = { $in: ['Pending Principal', 'Pending MD', 'Approved'] };
+      } else if (roleUpper.includes('HOD') || roleUpper.includes('HEADOFDEPT')) {
+        filter.approvalStatus = { $in: ['Pending HOD', 'Pending Principal', 'Pending MD', 'Approved'] };
+        // Also filter by HOD's department if provided
+        if (staffDept && staffDept !== 'All') {
+          filter.department = { $regex: new RegExp(staffDept.trim(), 'i') };
+        }
+      }
+    }
 
     const marksheets = await InternalMarks.find(filter).sort({ department: 1, subjectCode: 1 });
     res.json({ success: true, count: marksheets.length, data: marksheets });
@@ -674,8 +805,8 @@ const submitMarksheetForApproval = async (req, res) => {
 
     marksheet.approvalStatus = 'Pending HOD';
     marksheet.currentApprovalStage = 'HOD';
-    marksheet.isLocked = true;
-    marksheet.lockedAt = new Date();
+    marksheet.isLocked = false; // Do not lock marks after submitting so staff and HOD can still make corrections
+    marksheet.lockedAt = null;
     marksheet.hodApproval = { status: 'Pending', approvedBy: '', approvedAt: null, remarks: '' };
     marksheet.principalApproval = { status: 'Pending', approvedBy: '', approvedAt: null, remarks: '' };
     marksheet.mdApproval = { status: 'Pending', approvedBy: '', approvedAt: null, remarks: '' };
@@ -793,7 +924,7 @@ const getFilteredInternalMarks = async (req, res) => {
     if (batch && batch !== 'All') {
       const batchStudents = await Student.find({ batch: { $regex: new RegExp(batch.trim(), 'i') } }).select('rollNo regNo');
       const rollSet = new Set(batchStudents.map(s => (s.rollNo || s.regNo || '').toUpperCase().trim()).filter(Boolean));
-      
+
       marksheets = marksheets.map(ms => {
         const obj = ms.toObject ? ms.toObject() : { ...ms };
         if (Array.isArray(obj.students)) {
@@ -909,11 +1040,11 @@ const bulkSaveInternalMarks = async (req, res) => {
   }
 };
 
-module.exports = { 
-  getMarksheet, 
-  saveMarksheet, 
-  updateMaxMarks, 
-  toggleLock, 
+module.exports = {
+  getMarksheet,
+  saveMarksheet,
+  updateMaxMarks,
+  toggleLock,
   listMarksheets,
   syncAssignmentsToInternalMarks,
   getAllInternalMarks,

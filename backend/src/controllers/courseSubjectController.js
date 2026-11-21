@@ -257,11 +257,22 @@ exports.deleteCourse = async (req, res) => {
 
 exports.getSubjects = async (req, res) => {
   try {
-    let subjects = await Subject.find().sort({ department: 1, year: 1, sem: 1, code: 1 });
+    const { department } = req.query;
+    const dbFilter = {};
+    if (department && department !== 'All' && department !== 'all' && !/all/i.test(department.trim())) {
+      const cleanDept = department.trim();
+      if (/computer|cs/i.test(cleanDept)) {
+        dbFilter.department = { $regex: /(computer|cs)/i };
+      } else {
+        dbFilter.department = { $regex: new RegExp(cleanDept.split(' ')[0], 'i') };
+      }
+    }
+    let subjects = await Subject.find(dbFilter).sort({ department: 1, year: 1, sem: 1, code: 1 });
 
     // Also pull in any classes from Class collection that are not yet in Subject collection
     try {
-      const classes = await Class.find();
+      const classFilter = dbFilter.department ? { dept: dbFilter.department } : {};
+      const classes = await Class.find(classFilter);
       const existingCodes = new Set(subjects.map(s => (s.code || '').toUpperCase().trim()));
       const missingClasses = classes.filter(c => {
         const cCode = (c.code || '').toUpperCase().trim();

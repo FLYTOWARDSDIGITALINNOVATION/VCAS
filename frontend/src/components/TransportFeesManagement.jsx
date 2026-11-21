@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
 import { Bus, Save, User, CreditCard, Clock, AlertCircle, Search, Gauge, Fuel, Download, Printer, Trash2 } from 'lucide-react';
+import { getStudentBatch } from '../utils/studentFeeUtils';
 
 export default function TransportFeesManagement({
   entryFormData,
@@ -34,16 +35,27 @@ export default function TransportFeesManagement({
 
   const normalizeDeptText = (value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
 
+  const departmentMatches = (actualValue, expectedValue) => {
+    const actual = normalizeDeptText(actualValue);
+    const expected = normalizeDeptText(expectedValue);
+    if (!actual || !expected) return false;
+    if (actual === expected) return true;
+    if (actual.length >= 3 && expected.length >= 3) {
+      return actual.includes(expected) || expected.includes(actual);
+    }
+    return false;
+  };
+
   const getCourseCodeFromDepartment = (selectedDepartment) => {
     const departmentValue = String(selectedDepartment || '').trim();
     if (!departmentValue) return 'B.Com';
 
     const normalized = normalizeDeptText(departmentValue);
+    if (normalized.includes('cfs') || normalized.includes('cafs') || normalized.includes('criminology') || normalized.includes('forensic')) return 'CFS';
     if (normalized.includes('computer') || normalized.includes('cs')) return 'CS';
     if (normalized.includes('ai')) return 'AI';
-    if (normalized.includes('cfs') || normalized.includes('forensic')) return 'CFS';
-    if (normalized.includes('bba')) return 'BBA';
-    if (normalized.includes('commerce')) return 'B.Com';
+    if (normalized.includes('bba') || normalized.includes('management')) return 'BBA';
+    if (normalized.includes('commerce') || normalized.includes('bcom')) return 'B.Com';
 
     const matchedDept = (adminDepartments || []).find(d => {
       const code = String(d.code || '').trim();
@@ -53,6 +65,18 @@ export default function TransportFeesManagement({
 
     return matchedDept?.code || departmentValue;
   };
+
+  // Unique batches dynamically fetched from student details section
+  const availableBatches = useMemo(() => {
+    const set = new Set(['2026-2027', '2025-2026', '2024-2025']);
+    [...(studentOptions || []), ...(recordsList || [])].forEach(s => {
+      const b = String(s.batch || s.academicYear || '').trim().replace('–', '-');
+      if (b && b !== 'All' && !b.toLowerCase().includes('batch')) {
+        set.add(b);
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [studentOptions, recordsList]);
 
   // Auto-fill student details from dropdown
   const handleStudentSelect = (selectedKey) => {
@@ -72,18 +96,30 @@ export default function TransportFeesManagement({
     );
 
     if (found) {
-      const rawDept = found.department || found.course || 'B.Com';
-      const matchingDepartment = (adminDepartments || []).find(d => {
-        const deptName = String(d.name || '').trim();
-        const deptCode = String(d.code || '').trim();
-        const candidate = String(rawDept || '').trim();
-        return normalizeDeptText(deptName) === normalizeDeptText(candidate) || normalizeDeptText(deptCode) === normalizeDeptText(candidate);
-      });
-      const departmentValue = matchingDepartment ? (matchingDepartment.name || matchingDepartment.code || rawDept) : rawDept;
+      const rawDept = String(found.department || found.course || '').trim();
+      const normRaw = normalizeDeptText(rawDept);
+      let matchingDepartment = null;
+      if (normRaw.includes('cfs') || normRaw.includes('cafs') || normRaw.includes('criminology') || normRaw.includes('forensic')) {
+        matchingDepartment = (adminDepartments || []).find(d => {
+          const n = normalizeDeptText(d.name);
+          const c = normalizeDeptText(d.code);
+          return n.includes('criminology') || n.includes('forensic') || c === 'cfs' || c === 'cafs';
+        });
+      } else {
+        matchingDepartment = (adminDepartments || []).find(d => {
+          const deptName = String(d.name || '').trim();
+          const deptCode = String(d.code || '').trim();
+          return departmentMatches(deptName, rawDept) || departmentMatches(deptCode, rawDept);
+        });
+      }
+      const fallbackDepartment = rawDept || 'Commerce';
+      const departmentValue = matchingDepartment ? (matchingDepartment.name || matchingDepartment.code || fallbackDepartment) : (normRaw.includes('cfs') || normRaw.includes('criminology') ? 'Criminology and Forensic Science' : fallbackDepartment);
       const courseValue = getCourseCodeFromDepartment(departmentValue);
       const baseAmt = parseFloat(entryFormData.amount) || 800;
       const fineAmt = parseFloat(entryFormData.fine) || 0;
       const total = baseAmt + fineAmt;
+
+      const studentBatch = (found.batch || getStudentBatch(found) || found.academicYear || availableBatches[0] || '').trim();
 
       setEntryFormData(prev => ({
         ...prev,
@@ -93,7 +129,7 @@ export default function TransportFeesManagement({
         studentMongoId: found.mongoId || found._id || '',
         course: courseValue,
         department: departmentValue,
-        batch: found.batch || found.academicYear || prev.batch || '2025-2028',
+        batch: studentBatch,
         year: found.year || prev.year || 'I',
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
         amount: prev.amount || '800',
@@ -496,14 +532,17 @@ export default function TransportFeesManagement({
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">Batch <span className="text-rose-500">*</span></label>
               <select
-                value={entryFormData.batch || '2025-2028'}
+                value={entryFormData.batch || availableBatches[0] || ''}
                 onChange={(e) => setEntryFormData({ ...entryFormData, batch: e.target.value })}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
               >
-                <option value="2025-2028">2025–2028</option>
-                <option value="2024-2027">2024–2027</option>
-                <option value="2023-2026">2023–2026</option>
-                <option value="2022-2025">2022–2025</option>
+                <option value="">Select Batch</option>
+                {availableBatches.map(b => (
+                  <option key={b} value={b}>{b.replace('-', '–')}</option>
+                ))}
+                {entryFormData.batch && !availableBatches.includes(entryFormData.batch) && (
+                  <option value={entryFormData.batch}>{entryFormData.batch.replace('-', '–')}</option>
+                )}
               </select>
             </div>
 
@@ -839,10 +878,9 @@ export default function TransportFeesManagement({
               className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 focus:outline-none cursor-pointer"
             >
               <option value="All">All Batches</option>
-              <option value="2025-2028">2025–2028</option>
-              <option value="2024-2027">2024–2027</option>
-              <option value="2023-2026">2023–2026</option>
-              <option value="2022-2025">2022–2025</option>
+              {availableBatches.map(b => (
+                <option key={b} value={b}>{b.replace('-', '–')}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -945,7 +983,7 @@ export default function TransportFeesManagement({
                           <button
                             type="button"
                             onClick={() => handleDownloadReceipt(r)}
-                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border border-emerald-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border border-emerald-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
                             title="Download / Print Bill"
                           >
                             <Download className="w-3 h-3" />

@@ -55,8 +55,14 @@ exports.createPlan = async (req, res) => {
     }
 
     const sanitizedTopics = Array.isArray(topics)
-      ? topics.map(t => ({
-          ...t,
+      ? topics.map((t, idx) => ({
+          sNo: Number(t.sNo) || (idx + 1),
+          plannedDate: String(t.plannedDate || ''),
+          noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 1 : Math.max(1, Number(t.noOfHours) || 1),
+          topic: String(t.topic || ''),
+          executionDate: String(t.executionDate || ''),
+          executionHours: (t.executionHours === '' || t.executionHours === null || t.executionHours === undefined) ? 0 : Math.max(0, Number(t.executionHours) || 0),
+          deviation: String(t.deviation || ''),
           sign: t.sign || t.status || 'Pending',
           status: t.status || t.sign || 'Pending'
         }))
@@ -66,8 +72,8 @@ exports.createPlan = async (req, res) => {
       staffId,
       staffName: staffName || '',
       department: department || '',
-      subjectName,
-      subjectCode: subjectCode || '',
+      subjectName: subjectName.trim(),
+      subjectCode: (subjectCode || '').trim(),
       academicYear: academicYear || '2026-2027',
       yearSemester: yearSemester || 'I / I',
       status: status || 'In Progress',
@@ -85,8 +91,14 @@ exports.updatePlan = async (req, res) => {
   try {
     const updateData = { ...req.body };
     if (Array.isArray(updateData.topics)) {
-      updateData.topics = updateData.topics.map(t => ({
-        ...t,
+      updateData.topics = updateData.topics.map((t, idx) => ({
+        sNo: Number(t.sNo) || (idx + 1),
+        plannedDate: String(t.plannedDate || ''),
+        noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 1 : Math.max(1, Number(t.noOfHours) || 1),
+        topic: String(t.topic || ''),
+        executionDate: String(t.executionDate || ''),
+        executionHours: (t.executionHours === '' || t.executionHours === null || t.executionHours === undefined) ? 0 : Math.max(0, Number(t.executionHours) || 0),
+        deviation: String(t.deviation || ''),
         sign: t.sign || t.status || 'Pending',
         status: t.status || t.sign || 'Pending'
       }));

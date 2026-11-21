@@ -5,19 +5,60 @@ const Subject = require('../models/Subject');
 const { autoGenerateExamAndHallTickets } = require('./courseSubjectController');
 const { autoGenerateTimetableSchedule } = require('./timetableController');
 
-// Helper to find a class by ID or Code
-async function findClassByIdOrCode(identifier, staffId = null) {
-  const query = {};
-  if (staffId) query.staffId = staffId;
+// Helper to normalize roles and check if someone is an HOD
+const looksLikeHodUser = (role, designation) => {
+  const norm = (str) => String(str || '').toUpperCase().replace(/[^A-Z]/g, '');
+  const r = norm(role);
+  const d = norm(designation);
+  return r.includes('HOD') || r.includes('HEADOFDEPARTMENT') || (r.includes('HEAD') && r.includes('DEPARTMENT')) || r.includes('HEADOFDEPT') || r.includes('DEPARTMENTHEAD') ||
+         d.includes('HOD') || d.includes('HEADOFDEPARTMENT') || (d.includes('HEAD') && d.includes('DEPARTMENT')) || d.includes('HEADOFDEPT') || d.includes('DEPARTMENTHEAD');
+};
 
-  if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
-    // Valid ObjectId
-    query._id = identifier;
+// Helper to find a class by ID or Code (supports HOD / Admin department-wide access)
+async function findClassByIdOrCode(identifier, staffId = null) {
+  if (!identifier) return null;
+  const cleanId = String(identifier).trim();
+  const query = {};
+
+  if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
+    query._id = cleanId;
   } else {
-    // Treat as class code (e.g. CS401)
-    query.code = identifier.trim().toUpperCase();
+    query.code = cleanId.toUpperCase();
   }
-  return await Class.findOne(query);
+
+  const cls = await Class.findOne(query);
+  if (!cls) return null;
+
+  // If staffId is specified, check if staff is assigned OR is HOD of that department OR Admin
+  if (staffId) {
+    const cleanStaffId = String(staffId).trim();
+    if (cls.staffId && cls.staffId.toUpperCase() === cleanStaffId.toUpperCase()) {
+      return cls;
+    }
+
+    const staffDoc = await Staff.findOne({
+      $or: [
+        { staffId: cleanStaffId },
+        { _id: cleanStaffId.match(/^[0-9a-fA-F]{24}$/) ? cleanStaffId : null }
+      ].filter(Boolean)
+    });
+
+    if (staffDoc) {
+      const isHod = staffDoc.role === 'HOD' || staffDoc.isHod === true || looksLikeHodUser(staffDoc.role, staffDoc.designation);
+      const isAdmin = /admin|principal|md|superadmin/i.test(staffDoc.role || '') || /principal|md/i.test(staffDoc.designation || '');
+
+      if (isAdmin) return cls;
+      if (isHod) {
+        const hodDept = (staffDoc.department || '').trim().toLowerCase();
+        const clsDept = (cls.dept || '').trim().toLowerCase();
+        if (!hodDept || !clsDept || hodDept === clsDept || clsDept.includes(hodDept) || hodDept.includes(clsDept)) {
+          return cls;
+        }
+      }
+    }
+  }
+
+  return cls;
 }
 
 // @desc    Get all classes (with optional filters)
@@ -59,7 +100,7 @@ exports.getAllClasses = async (req, res) => {
   }
 };
 
-// @desc    Get all classes for a specific staff member
+// @desc    Get all classes for a specific staff member (or HOD sees all dept classes)
 // @route   GET /api/classes/staff/:staffId
 exports.getStaffClasses = async (req, res) => {
   try {
@@ -74,7 +115,16 @@ exports.getStaffClasses = async (req, res) => {
     const staffName = staff ? staff.name : '';
     const cleanStaffId = staff ? staff.staffId : staffId.trim();
 
-    // 1. Find any subjects assigned to this staff in the Subject catalog (by faculty name or staff ID)
+    // Determine if this user is HOD or Admin
+    const isHod = staff && (
+      staff.role === 'HOD' ||
+      staff.isHod === true ||
+      looksLikeHodUser(staff.role, staff.designation)
+    );
+    const isAdmin = staff && /admin|principal|md|superadmin/i.test(staff.role || '');
+    const staffDepartment = staff ? (staff.department || '').trim() : '';
+
+    // 1. Auto-create Class entries for subjects assigned to this staff in Subject catalog
     const subjectQuery = [];
     if (cleanStaffId) subjectQuery.push({ faculty: cleanStaffId });
     if (staffName) subjectQuery.push({ faculty: new RegExp('^' + staffName.trim() + '$', 'i') });
@@ -93,7 +143,7 @@ exports.getStaffClasses = async (req, res) => {
           cls = await Class.create({
             code: cleanCode,
             name: subj.name,
-            dept: subj.department || (staff ? staff.department : 'General'),
+            dept: subj.department || staffDepartment || 'General',
             semester: semNum,
             year: yearNum,
             section: 'A',
@@ -112,24 +162,56 @@ exports.getStaffClasses = async (req, res) => {
       }
     }
 
-    // 2. Query Class collection directly for this staff
-    const classQueries = [{ staffId: cleanStaffId }];
-    if (staffName) {
-      classQueries.push({ staffName: new RegExp('^' + staffName.trim() + '$', 'i') });
-    }
-    let classes = await Class.find({ $or: classQueries }).sort({ code: 1 });
+    let classes = [];
 
-    // Fallback: If no classes in Class collection but staff has embedded classes, return them
-    if (classes.length === 0 && staff && staff.classes && staff.classes.length > 0) {
-      classes = staff.classes;
+    if (isAdmin) {
+      // Admin sees all classes
+      classes = await Class.find({}).sort({ dept: 1, code: 1 });
+    } else if (isHod && staffDepartment) {
+      // HOD sees ALL classes in their department (from all staff), plus their own classes
+      const deptRegex = new RegExp(staffDepartment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const deptClasses = await Class.find({ dept: deptRegex }).sort({ code: 1 });
+
+      // Also get own classes (may be in a different dept in edge cases)
+      const ownClasses = await Class.find({
+        $or: [
+          { staffId: cleanStaffId },
+          { staffName: new RegExp('^' + (staffName || '').trim() + '$', 'i') }
+        ]
+      }).sort({ code: 1 });
+
+      // Merge: dept classes first, then own classes not already included
+      const seen = new Set(deptClasses.map(c => String(c._id)));
+      const merged = [...deptClasses];
+      ownClasses.forEach(c => {
+        if (!seen.has(String(c._id))) {
+          seen.add(String(c._id));
+          merged.push(c);
+        }
+      });
+      classes = merged;
+    } else {
+      // Regular staff: only their own classes
+      const classQueries = [{ staffId: cleanStaffId }];
+      if (staffName) {
+        classQueries.push({ staffName: new RegExp('^' + staffName.trim() + '$', 'i') });
+      }
+      classes = await Class.find({ $or: classQueries }).sort({ code: 1 });
+
+      // Fallback: embedded classes in Staff model
+      if (classes.length === 0 && staff && staff.classes && staff.classes.length > 0) {
+        classes = staff.classes;
+      }
     }
 
     res.status(200).json({
       success: true,
       staffId: cleanStaffId,
       staffName: staffName,
-      department: staff ? staff.department : '',
+      department: staffDepartment,
       classTeacherOf: staff ? staff.classTeacherOf : '',
+      isHod,
+      isAdmin,
       classes
     });
   } catch (error) {
@@ -443,6 +525,67 @@ exports.deleteClass = async (req, res) => {
   }
 };
 
+// Helper: Sync enrolled students from Class to InternalMarks collection
+const syncClassStudentsToInternalMarks = async (targetClass) => {
+  try {
+    const InternalMarks = require('../models/InternalMarks');
+    const escapeRegex = (str) => (str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const classCode = (targetClass?.code || '').trim();
+    if (!classCode) return;
+
+    let marksheet = await InternalMarks.findOne({
+      subjectCode: new RegExp('^' + escapeRegex(classCode) + '$', 'i')
+    });
+
+    const enrolled = targetClass.students || targetClass.enrolledStudents || [];
+
+    if (marksheet) {
+      const msExisting = new Set((marksheet.students || []).map(s => String(s.rollNo || '').toUpperCase().trim()));
+      let updated = false;
+      enrolled.forEach(st => {
+        const roll = String(st.rollNo || '').toUpperCase().trim();
+        if (roll && !msExisting.has(roll)) {
+          marksheet.students.push({
+            rollNo: roll,
+            name: st.name || roll,
+            it1: null, it2: null, cia1: null, cia2: null,
+            model: null, semester: null, seminar: null, project: null,
+            assignment1: null, assignment2: null, assignment3: null, assignment4: null,
+            assignment: null, attendance: null, grade: null, consolidated: null
+          });
+          msExisting.add(roll);
+          updated = true;
+        }
+      });
+      if (updated) {
+        await marksheet.save();
+      }
+    } else if (enrolled.length > 0) {
+      await InternalMarks.create({
+        staffId: targetClass.staffId || 'EMP001',
+        staffName: targetClass.staffName || '',
+        subjectCode: classCode.toUpperCase(),
+        subjectName: targetClass.name || classCode,
+        department: targetClass.dept || 'General',
+        semester: targetClass.semester || 1,
+        students: enrolled.map(st => ({
+          rollNo: String(st.rollNo || '').toUpperCase().trim(),
+          name: st.name || st.rollNo,
+          it1: null, it2: null, cia1: null, cia2: null,
+          model: null, semester: null, seminar: null, project: null,
+          assignment1: null, assignment2: null, assignment3: null, assignment4: null,
+          assignment: null, attendance: null, grade: null, consolidated: null
+        })),
+        approvalStatus: 'Draft',
+        currentApprovalStage: 'Staff',
+        isLocked: false
+      });
+    }
+  } catch (mErr) {
+    console.error('Error syncing to InternalMarks:', mErr.message);
+  }
+};
+
 // @desc    Enroll a student into a class
 // @route   POST /api/classes/:idOrCode/students
 // @route   POST /api/classes/staff/:staffId/:classCode/students
@@ -529,6 +672,9 @@ exports.enrollStudent = async (req, res) => {
     } catch (sErr) {
       console.error('Error syncing enrolled student to Student collection:', sErr.message);
     }
+
+    // Sync enrolled student to InternalMarks
+    await syncClassStudentsToInternalMarks(targetClass);
 
     res.status(201).json({
       success: true,
@@ -646,11 +792,78 @@ exports.autoEnrollDeptStudents = async (req, res) => {
           }
         }
       }
+      // Sync enrolled students to InternalMarks
+      await syncClassStudentsToInternalMarks(targetClass);
     }
 
     res.status(200).json({
       success: true,
       message: `Enrolled ${addedCount} student(s) into ${targetClass.code}. Total enrolled: ${targetClass.students.length}.`,
+      totalStudents: targetClass.students.length,
+      class: targetClass
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Bulk enroll selected students into a class and sync to InternalMarks
+// @route   POST /api/classes/staff/:staffId/:classCode/bulk-enroll
+exports.bulkEnrollStudents = async (req, res) => {
+  try {
+    const identifier = req.params.classCode || req.params.idOrCode;
+    const staffId = req.params.staffId || null;
+    const { students } = req.body;
+
+    if (!Array.isArray(students) || students.length === 0) {
+      return res.status(400).json({ success: false, message: 'Students array cannot be empty.' });
+    }
+
+    const targetClass = await findClassByIdOrCode(identifier, staffId);
+    if (!targetClass) {
+      return res.status(404).json({ success: false, message: `Class "${identifier}" not found.` });
+    }
+
+    const existingRolls = new Set(targetClass.students.map(s => s.rollNo.toUpperCase().trim()));
+    const addedStudents = [];
+
+    students.forEach(st => {
+      const roll = String(st.rollNo || '').toUpperCase().trim();
+      if (!roll || existingRolls.has(roll)) return;
+      const newSt = {
+        rollNo: roll,
+        name: (st.name || st.fullName || roll).trim(),
+        phone: (st.phone || '').trim(),
+        email: (st.email || '').trim(),
+        present: true
+      };
+      targetClass.students.push(newSt);
+      existingRolls.add(roll);
+      addedStudents.push(newSt);
+    });
+
+    await targetClass.save();
+
+    // Sync to staff embedded classes if exists
+    if (targetClass.staffId) {
+      const staff = await Staff.findOne({ staffId: targetClass.staffId });
+      if (staff && staff.classes) {
+        const staffCls = staff.classes.find(c => c.code.toUpperCase() === targetClass.code.toUpperCase());
+        if (staffCls) {
+          staffCls.enrolledStudents = targetClass.students;
+          staffCls.totalStudents = targetClass.students.length;
+          await staff.save();
+        }
+      }
+    }
+
+    // Sync to InternalMarks collection for this subject
+    await syncClassStudentsToInternalMarks(targetClass);
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully assigned and enrolled ${addedStudents.length} student(s) into ${targetClass.code}.`,
+      addedCount: addedStudents.length,
       totalStudents: targetClass.students.length,
       class: targetClass
     });

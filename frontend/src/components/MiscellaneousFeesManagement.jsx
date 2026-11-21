@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
 import { 
@@ -20,6 +20,7 @@ import {
   Sparkles,
   DollarSign
 } from 'lucide-react';
+import { getStudentBatch } from '../utils/studentFeeUtils';
 
 const DEFAULT_MISC_FEES = [
   { feeType: 'Lab Fees', amount: 2500 },
@@ -242,6 +243,16 @@ export default function MiscellaneousFeesManagement({
     const raw = String(selectedDepartment || '').trim();
     if (!raw) return '';
 
+    const normalizedRaw = normalizeDeptText(raw);
+    if (normalizedRaw.includes('cfs') || normalizedRaw.includes('cafs') || normalizedRaw.includes('criminology') || normalizedRaw.includes('forensic')) {
+      const cfsDept = (adminDepartments || []).find(d => {
+        const n = normalizeDeptText(d.name);
+        const c = normalizeDeptText(d.code);
+        return n.includes('criminology') || n.includes('forensic') || c === 'cfs' || c === 'cafs';
+      });
+      return cfsDept?.name || cfsDept?.code || 'Criminology and Forensic Science';
+    }
+
     const canonicalMap = {
       commerce: 'Commerce',
       bcom: 'Commerce',
@@ -272,7 +283,6 @@ export default function MiscellaneousFeesManagement({
       chemistry: 'Chemistry'
     };
 
-    const normalizedRaw = normalizeDeptText(raw);
     const explicitCanonical = canonicalMap[normalizedRaw];
     if (explicitCanonical) {
       const adminMatch = (adminDepartments || []).find(d =>
@@ -318,6 +328,18 @@ export default function MiscellaneousFeesManagement({
     return matchedDept?.code || departmentValue;
   };
 
+  // Unique batches dynamically fetched from student details section
+  const availableBatches = useMemo(() => {
+    const set = new Set(['2026-2027', '2025-2026', '2024-2025']);
+    [...(studentOptions || []), ...(recordsList || [])].forEach(s => {
+      const b = String(s.batch || s.academicYear || '').trim().replace('–', '-');
+      if (b && b !== 'All' && !b.toLowerCase().includes('batch')) {
+        set.add(b);
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [studentOptions, recordsList]);
+
   const handleStudentSelect = (selectedKey) => {
     if (!selectedKey) {
       setEntryFormData(prev => ({
@@ -335,8 +357,8 @@ export default function MiscellaneousFeesManagement({
     );
 
     if (found) {
-      const rawDept = found.department || found.course || '';
-      const departmentValue = getDepartmentSelectionValue(rawDept) || rawDept || 'Commerce';
+      const rawDept = String(found.department || found.course || '').trim();
+      const departmentValue = getDepartmentSelectionValue(rawDept) || rawDept || (normalizeDeptText(rawDept).includes('cfs') ? 'Criminology and Forensic Science' : 'Commerce');
       const courseValue = getCourseCodeFromDepartment(departmentValue);
 
       // Auto-fill amount based on currently active fee name
@@ -345,6 +367,8 @@ export default function MiscellaneousFeesManagement({
       const baseAmt = matchedFee ? matchedFee.amount : (parseFloat(entryFormData.amount) || 1000);
       const fineAmt = parseFloat(entryFormData.fine) || 0;
       const total = baseAmt + fineAmt;
+
+      const studentBatch = (found.batch || getStudentBatch(found) || found.academicYear || availableBatches[0] || '').trim();
 
       setEntryFormData(prev => ({
         ...prev,
@@ -356,7 +380,7 @@ export default function MiscellaneousFeesManagement({
         studentMongoId: found.mongoId || found._id || '',
         course: courseValue,
         department: departmentValue,
-        batch: found.batch || found.academicYear || prev.batch || '2025-2028',
+        batch: studentBatch,
         year: found.year || prev.year || 'I',
         academicYear: found.academicYear || prev.academicYear || '2024 - 2025',
         amount: String(baseAmt),
@@ -873,14 +897,17 @@ export default function MiscellaneousFeesManagement({
             <div>
               <label className="block text-slate-700 font-bold mb-1.5">Batch <span className="text-rose-500">*</span></label>
               <select
-                value={entryFormData.batch || '2025-2028'}
+                value={entryFormData.batch || availableBatches[0] || ''}
                 onChange={(e) => setEntryFormData({ ...entryFormData, batch: e.target.value })}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
               >
-                <option value="2025-2028">2025–2028</option>
-                <option value="2024-2027">2024–2027</option>
-                <option value="2023-2026">2023–2026</option>
-                <option value="2022-2025">2022–2025</option>
+                <option value="">Select Batch</option>
+                {availableBatches.map(b => (
+                  <option key={b} value={b}>{b.replace('-', '–')}</option>
+                ))}
+                {entryFormData.batch && !availableBatches.includes(entryFormData.batch) && (
+                  <option value={entryFormData.batch}>{entryFormData.batch.replace('-', '–')}</option>
+                )}
               </select>
             </div>
           </div>

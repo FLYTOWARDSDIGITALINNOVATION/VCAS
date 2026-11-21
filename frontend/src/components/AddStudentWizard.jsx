@@ -33,6 +33,7 @@ const COMMUNITY_OPTIONS = ['OC', 'BC', 'BC(M)', 'MBC', 'DNC', 'SC', 'ST', 'SCA']
 export default function AddStudentWizard({ onBack, onComplete, isSaving = false, user }) {
   const [departmentsList, setDepartmentsList] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
+  const [batchesList, setBatchesList] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCreatedModal, setShowCreatedModal] = useState(null);
   const [showExcelUpload, setShowExcelUpload] = useState(false);
@@ -53,6 +54,20 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
       .then(data => {
         if (data.success && Array.isArray(data.data)) {
           setCoursesList(data.data);
+        }
+      })
+      .catch(() => { });
+
+    fetch(`${BACKEND_URL}/api/students`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          const set = new Set();
+          data.data.forEach(s => {
+            const b = (s.batch || s.academicYear || '').trim().replace('–', '-');
+            if (b && !b.toLowerCase().includes('batch')) set.add(b);
+          });
+          setBatchesList(Array.from(set).sort().reverse());
         }
       })
       .catch(() => { });
@@ -871,11 +886,9 @@ export default function AddStudentWizard({ onBack, onComplete, isSaving = false,
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-rose-500"
                 />
                 <datalist id="batch-suggestions">
-                  <option value="2022-2026" />
-                  <option value="2023-2027" />
-                  <option value="2024-2028" />
-                  <option value="2025-2029" />
-                  <option value="2021-2025" />
+                  {batchesList.map(b => (
+                    <option key={b} value={b} />
+                  ))}
                 </datalist>
               </div>
               <div>

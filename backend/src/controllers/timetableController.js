@@ -156,8 +156,8 @@ exports.updateSlot = async (req, res) => {
         }
       }
 
-      // Clear any scattered old slots for this subject in other days to keep it strictly continuous on this day
-      if (slotData.clearOtherDays !== false) {
+      // Only clear other days if explicitly requested by client (never by default)
+      if (slotData.clearOtherDays === true) {
         Object.keys(currentSchedule).forEach(d => {
           if (d !== day && currentSchedule[d]) {
             Object.keys(currentSchedule[d]).forEach(sl => {
@@ -443,16 +443,7 @@ exports.autoGenerateTimetableSchedule = async ({
     const numLab = Number(labHours) >= 0 ? Number(labHours) : 0;
     const targetDay = day || 'Monday';
 
-    // Clear any existing scattered instances of this subject on other days
-    days.forEach(d => {
-      if (d !== targetDay && currentSchedule[d]) {
-        Object.keys(currentSchedule[d]).forEach(sl => {
-          if (currentSchedule[d][sl]?.code === cleanCode) {
-            delete currentSchedule[d][sl];
-          }
-        });
-      }
-    });
+    // Do not clear other days so subjects taught across multiple days are preserved
 
     // 2. Schedule CONTINUOUS LAB HOURS if labHours > 0
     if (numLab > 0) {

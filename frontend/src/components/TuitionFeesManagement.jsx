@@ -3,6 +3,7 @@ import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
 import { getDepartmentFixedFee } from './FeeStructureView';
 import { FileText, Save, Info, Award, Building2, CheckCircle2, Sparkles, User, CreditCard, Clock, AlertCircle, Search, Download, Printer, Trash2 } from 'lucide-react';
+import { getStudentBatch } from '../utils/studentFeeUtils';
 
 export default function TuitionFeesManagement({
   entryFormData,
@@ -41,7 +42,11 @@ export default function TuitionFeesManagement({
     const actual = normalizeDeptText(actualValue);
     const expected = normalizeDeptText(expectedValue);
     if (!actual || !expected) return false;
-    return actual === expected || actual.includes(expected) || expected.includes(actual);
+    if (actual === expected) return true;
+    if (actual.length >= 3 && expected.length >= 3) {
+      return actual.includes(expected) || expected.includes(actual);
+    }
+    return false;
   };
 
   const getCourseCodeFromDepartment = (selectedDepartment) => {
@@ -49,11 +54,11 @@ export default function TuitionFeesManagement({
     if (!departmentValue) return 'B.Com';
 
     const normalized = normalizeDeptText(departmentValue);
+    if (normalized.includes('cfs') || normalized.includes('cafs') || normalized.includes('criminology') || normalized.includes('forensic')) return 'CFS';
     if (normalized.includes('computer') || normalized.includes('cs')) return 'CS';
     if (normalized.includes('ai')) return 'AI';
-    if (normalized.includes('cfs') || normalized.includes('forensic')) return 'CFS';
-    if (normalized.includes('bba')) return 'BBA';
-    if (normalized.includes('commerce')) return 'B.Com';
+    if (normalized.includes('bba') || normalized.includes('management')) return 'BBA';
+    if (normalized.includes('commerce') || normalized.includes('bcom')) return 'B.Com';
 
     const matchedDept = (adminDepartments || []).find(d => {
       const code = String(d.code || '').trim();
@@ -67,6 +72,16 @@ export default function TuitionFeesManagement({
   const getDepartmentSelectionValue = (selectedDepartment) => {
     const raw = String(selectedDepartment || '').trim();
     if (!raw) return '';
+
+    const normalizedRaw = normalizeDeptText(raw);
+    if (normalizedRaw.includes('cfs') || normalizedRaw.includes('cafs') || normalizedRaw.includes('criminology') || normalizedRaw.includes('forensic')) {
+      const cfsDept = (adminDepartments || []).find(d => {
+        const n = normalizeDeptText(d.name);
+        const c = normalizeDeptText(d.code);
+        return n.includes('criminology') || n.includes('forensic') || c === 'cfs' || c === 'cafs';
+      });
+      return cfsDept?.name || cfsDept?.code || 'Criminology and Forensic Science';
+    }
 
     const canonicalMap = {
       commerce: 'Commerce',
@@ -84,6 +99,7 @@ export default function TuitionFeesManagement({
       criminology: 'Criminology and Forensic Science',
       forensicscience: 'Criminology and Forensic Science',
       cfs: 'Criminology and Forensic Science',
+      cafs: 'Criminology and Forensic Science',
       management: 'Management',
       bba: 'Management',
       'business administration': 'Management',
@@ -94,7 +110,6 @@ export default function TuitionFeesManagement({
       chemistry: 'Chemistry'
     };
 
-    const normalizedRaw = normalizeDeptText(raw);
     const explicitCanonical = canonicalMap[normalizedRaw];
     if (explicitCanonical) return explicitCanonical;
 
@@ -103,7 +118,7 @@ export default function TuitionFeesManagement({
       const name = String(d.name || '').trim();
       const normalizedCode = normalizeDeptText(code);
       const normalizedName = normalizeDeptText(name);
-      return departmentMatches(code, raw) || departmentMatches(name, raw) || normalizedCode === normalizedRaw || normalizedName === normalizedRaw || normalizedCode.includes(normalizedRaw) || normalizedName.includes(normalizedRaw);
+      return departmentMatches(code, raw) || departmentMatches(name, raw) || normalizedCode === normalizedRaw || normalizedName === normalizedRaw || (normalizedCode.length >= 3 && normalizedCode.includes(normalizedRaw)) || (normalizedName.length >= 3 && normalizedName.includes(normalizedRaw));
     });
 
     return directMatch?.name || directMatch?.code || raw;
@@ -182,7 +197,8 @@ export default function TuitionFeesManagement({
         studentName: '',
         rollNo: '',
         studentKey: '',
-        studentMongoId: ''
+        studentMongoId: '',
+        batch: ''
       }));
       return;
     }
@@ -192,7 +208,7 @@ export default function TuitionFeesManagement({
     );
 
     if (found) {
-      const rawDept = found.department || found.course || 'B.Com';
+      const rawDept = found.department || found.course || '';
       const departmentValue = getDepartmentSelectionValue(rawDept);
       const selectedCourseCode = getCourseCodeFromDepartment(departmentValue);
       const fixedInfo = getDepartmentFixedFee(rawDept || departmentValue || selectedCourseCode);
@@ -217,6 +233,8 @@ export default function TuitionFeesManagement({
         ? parseFloat(entryFormData.paidAmount) || 0
         : totalPayable;
 
+      const studentBatch = (found.batch || getStudentBatch(found) || found.academicYear || availableBatches[0] || '').trim();
+
       setEntryFormData(prev => ({
         ...prev,
         studentName: found.name,
@@ -225,7 +243,7 @@ export default function TuitionFeesManagement({
         studentMongoId: found.mongoId || found._id || '',
         course: selectedCourseCode,
         department: departmentValue,
-        batch: found.batch || found.academicYear || prev.batch || '2025-2028',
+        batch: studentBatch,
         year: found.year || prev.year || 'I',
         academicYear: found.academicYear || prev.academicYear || '2025 - 2026',
         amount: String(calcAmt),
@@ -264,6 +282,18 @@ export default function TuitionFeesManagement({
 
   // Filter tuition fee records to list added students
   const tuitionRecords = (recordsList || []).filter(r => matchesFeeSection(r, 'tuition'));
+
+  // Unique batches dynamically fetched from student details section
+  const availableBatches = useMemo(() => {
+    const set = new Set(['2026-2027', '2025-2026', '2024-2025']);
+    [...(studentOptions || []), ...(recordsList || [])].forEach(s => {
+      const b = String(s.batch || s.academicYear || '').trim().replace('–', '-');
+      if (b && b !== 'All' && !b.toLowerCase().includes('batch')) {
+        set.add(b);
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [studentOptions, recordsList]);
 
   // Filtered student options based on search query
   const filteredStudentOptions = (studentOptions || []).filter(s => {
@@ -635,14 +665,17 @@ export default function TuitionFeesManagement({
               <div>
                 <label className="block text-slate-700 font-bold mb-1.5">Batch <span className="text-rose-500">*</span></label>
                 <select
-                  value={entryFormData.batch || '2025-2028'}
+                  value={entryFormData.batch || availableBatches[0] || ''}
                   onChange={(e) => setEntryFormData({ ...entryFormData, batch: e.target.value })}
                   className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
                 >
-                  <option value="2025-2028">2025–2028</option>
-                  <option value="2024-2027">2024–2027</option>
-                  <option value="2023-2026">2023–2026</option>
-                  <option value="2022-2025">2022–2025</option>
+                  <option value="">Select Batch</option>
+                  {availableBatches.map(b => (
+                    <option key={b} value={b}>{b.replace('-', '–')}</option>
+                  ))}
+                  {entryFormData.batch && !availableBatches.includes(entryFormData.batch) && (
+                    <option value={entryFormData.batch}>{entryFormData.batch.replace('-', '–')}</option>
+                  )}
                 </select>
               </div>
 
@@ -1158,10 +1191,9 @@ export default function TuitionFeesManagement({
               className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
             >
               <option value="All">All Batches</option>
-              <option value="2025-2028">2025–2028</option>
-              <option value="2024-2027">2024–2027</option>
-              <option value="2023-2026">2023–2026</option>
-              <option value="2022-2025">2022–2025</option>
+              {availableBatches.map(b => (
+                <option key={b} value={b}>{b.replace('-', '–')}</option>
+              ))}
             </select>
           </div>
         </div>

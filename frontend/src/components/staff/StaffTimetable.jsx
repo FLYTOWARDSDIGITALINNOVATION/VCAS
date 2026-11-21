@@ -493,7 +493,7 @@ export default function StaffTimetable({ staffUser }) {
           labHours: parsedPeriods.length,
           continuousSlots: parsedPeriods,
           periods: parsedPeriods,
-          clearOtherDays: true,
+          clearOtherDays: false,
           partTimeSchedule: slotForm.type === 'part-time' ? (slotForm.partTimeSchedule || 'before-break') : undefined,
           combinedDept: slotForm.type === 'combined' ? (slotForm.combinedDept || '') : undefined,
           combinedYear: slotForm.type === 'combined' ? (slotForm.combinedYear || '') : undefined

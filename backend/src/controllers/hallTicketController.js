@@ -3,6 +3,8 @@ const Class = require('../models/Class');
 const Student = require('../models/Student');
 const Department = require('../models/Department');
 const Course = require('../models/Course');
+const Subject = require('../models/Subject');
+const InternalMarks = require('../models/InternalMarks');
 const { Exam, ExamHall } = require('../models/Exam');
 
 // Helper: Normalize & deduplicate subjects array
@@ -189,7 +191,7 @@ exports.getEligibleStudents = async (req, res) => {
 
     // Flexible regex for Computer Science / CS matching
     let deptRegex = null;
-    if (department && department !== 'All') {
+    if (department && department !== 'All' && !/all/i.test(department.trim())) {
       if (/computer|cs/i.test(department)) {
         deptRegex = /(computer|cs|bsc\s*cs|b\.sc\s*cs)/i;
       } else {
@@ -266,6 +268,68 @@ exports.getEligibleStudents = async (req, res) => {
         }
       }
     });
+
+    // Also include subjects from the official Subject catalog
+    try {
+      const dbSubjects = await Subject.find(deptRegex ? { $or: [{ department: deptRegex }, { department: { $exists: false } }, { department: '' }] } : {});
+      dbSubjects.forEach(sub => {
+        const c = (sub.code || '').trim().toUpperCase();
+        if (c && !subjectsMap.has(c) && !['SF76', 'CS2003', 'CS2006'].includes(c)) {
+          const savedInfo = customTimingsMap.get(c);
+          subjectsMap.set(c, {
+            code: c,
+            name: savedInfo?.name || (sub.name || sub.title || c).trim(),
+            department: sub.department || '',
+            semester: sub.semester || sub.sem || 1,
+            date: savedInfo?.date || '2026-04-20',
+            session: savedInfo?.session || 'Forenoon (FN)',
+            time: (savedInfo?.time !== undefined && savedInfo?.time !== null) ? savedInfo.time : '09:30 AM - 12:30 PM'
+          });
+        }
+      });
+    } catch (_) { }
+
+    // Also include department courses configured by Admin in Department Management
+    try {
+      const depts = await Department.find(deptRegex ? { name: deptRegex } : {});
+      depts.forEach(d => {
+        (d.coursesList || []).forEach(c => {
+          const code = (c.code || '').trim().toUpperCase();
+          if (code && !subjectsMap.has(code) && !['SF76', 'CS2003', 'CS2006'].includes(code)) {
+            const savedInfo = customTimingsMap.get(code);
+            subjectsMap.set(code, {
+              code,
+              name: savedInfo?.name || (c.name || c.title || code).trim(),
+              department: d.name || '',
+              semester: c.semester || c.sem || 1,
+              date: savedInfo?.date || '2026-04-20',
+              session: savedInfo?.session || 'Forenoon (FN)',
+              time: (savedInfo?.time !== undefined && savedInfo?.time !== null) ? savedInfo.time : '09:30 AM - 12:30 PM'
+            });
+          }
+        });
+      });
+    } catch (_) { }
+
+    // Also include subjects from InternalMarks records
+    try {
+      const internalMarksDocs = await InternalMarks.find(deptRegex ? { department: deptRegex } : {});
+      internalMarksDocs.forEach(m => {
+        const code = (m.subjectCode || '').trim().toUpperCase();
+        if (code && !subjectsMap.has(code) && !['SF76', 'CS2003', 'CS2006'].includes(code)) {
+          const savedInfo = customTimingsMap.get(code);
+          subjectsMap.set(code, {
+            code,
+            name: savedInfo?.name || (m.subjectName || code).trim(),
+            department: m.department || '',
+            semester: m.semester || 1,
+            date: savedInfo?.date || '2026-04-20',
+            session: savedInfo?.session || 'Forenoon (FN)',
+            time: (savedInfo?.time !== undefined && savedInfo?.time !== null) ? savedInfo.time : '09:30 AM - 12:30 PM'
+          });
+        }
+      });
+    } catch (_) { }
 
     // Also include any subjects saved in HallTicket that were not in Class collection
     customTimingsMap.forEach((info, c) => {
@@ -1064,41 +1128,46 @@ exports.updateSubjectSchedule = async (req, res) => {
 // @route   POST /api/hall-tickets/remove-subject-schedule
 exports.removeSubjectSchedule = async (req, res) => {
   try {
-    const { code, department, semester } = req.body;
+    const { code, department, semester, allocationId } = req.body;
     if (!code) {
       return res.status(400).json({ success: false, message: 'Subject code is required' });
     }
     const cleanCode = code.trim().toUpperCase();
 
     const filter = {};
-    if (department && department !== 'All') {
-      filter.department = new RegExp(department.trim().split(' ')[0], 'i');
-    }
-    if (semester && semester !== 'All') {
-      filter.semester = Number(semester);
-    }
-
-    // Pull from commonSubjects and students.subjects
-    await HallTicket.updateMany(
-      filter,
-      {
-        $pull: {
-          commonSubjects: { code: cleanCode },
-          'students.$[].subjects': { code: cleanCode }
-        }
+    if (allocationId) {
+      filter._id = allocationId;
+    } else {
+      if (department && department !== 'All') {
+        filter.department = new RegExp(department.trim().split(' ')[0], 'i');
       }
-    );
-
-    // Also remove from Exam collection
-    const examFilter = { code: cleanCode };
-    if (department && department !== 'All') {
-      examFilter.department = new RegExp(department.trim().split(' ')[0], 'i');
+      if (semester && semester !== 'All') {
+        filter.semester = Number(semester);
+      }
     }
-    await Exam.deleteMany(examFilter);
+
+    const allocations = await HallTicket.find(filter);
+
+    await Promise.all(allocations.map(async (allocation) => {
+      allocation.commonSubjects = (allocation.commonSubjects || []).filter(
+        subject => String(subject.code || '').trim().toUpperCase() !== cleanCode
+      );
+
+      allocation.students = (allocation.students || []).map(student => {
+        student.subjects = (student.subjects || []).filter(
+          subject => String(subject.code || '').trim().toUpperCase() !== cleanCode
+        );
+        return student;
+      });
+
+      await allocation.save();
+    }));
 
     return res.status(200).json({
       success: true,
-      message: `Subject ${cleanCode} removed from schedule successfully.`
+      removedCode: cleanCode,
+      updatedAllocations: allocations.length,
+      message: `Subject ${cleanCode} removed from the selected hall-ticket schedule successfully.`
     });
   } catch (error) {
     console.error('removeSubjectSchedule error:', error);

@@ -71,19 +71,7 @@ export default function ExaminationManagement({ user }) {
   const [examsList, setExamsList] = useState([]);
   const [studentMarksList, setStudentMarksList] = useState([]);
   const [hallsList, setHallsList] = useState([]);
-  const [availableSubjects, setAvailableSubjects] = useState(() => {
-    try {
-      const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
-      if (Array.isArray(cached) && cached.length > 0) {
-        return cached.map(s => ({
-          code: (s.code || '').toUpperCase().trim(),
-          name: s.name || s.title || s.code,
-          department: s.department || s.dept || ''
-        })).filter(s => Boolean(s.code));
-      }
-    } catch (_) { }
-    return [];
-  });
+  const [availableSubjects, setAvailableSubjects] = useState([]);
   const [availableDepartments, setAvailableDepartments] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('vcas_departments_cache') || '[]');
@@ -128,6 +116,8 @@ export default function ExaminationManagement({ user }) {
   const fetchAllExaminationData = async () => {
     try {
       setIsSyncing(true);
+      // Clear ONLY the subjects cache (not the hall ticket schedule — that's user-managed)
+      try { localStorage.removeItem('vcas_subjects_cache'); } catch (_) { }
       const [resExams, resMarks, resHalls, resStudents, resTickets, resSubjects, resClasses, resDepts, resStaff, resCourses] = await Promise.allSettled([
         fetch(`${API_BASE}/exams`),
         fetch(`${API_BASE}/internal-marks`),
@@ -233,8 +223,9 @@ export default function ExaminationManagement({ user }) {
       if (resMarks.status === 'fulfilled' && resMarks.value.ok) {
         const d = await resMarks.value.json();
         if (d.success && Array.isArray(d.data)) {
-          staffMarksheets = d.data;
-          setInternalMarksheets(d.data);
+          const validSheets = d.data.filter(m => !['CS1001', 'CS101', 'CS123', 'CS2001'].includes((m.subjectCode || '').toUpperCase().trim()));
+          staffMarksheets = validSheets;
+          setInternalMarksheets(validSheets);
         }
       }
 
@@ -254,61 +245,64 @@ export default function ExaminationManagement({ user }) {
         }
       }
 
-      // Process Registered Curriculum Subjects, Department Courses, Program Courses, and Classes
+      // Process Registered Curriculum Subjects from /api/subjects, department courses, classes and internal marks
+      // Matches the internal marks subjects dropdown so all relevant subjects are available in hall ticket dropdowns
       const subsMap = new Map();
+      const isGenericSubjectEntry = (value) => {
+        const normalized = String(value || '').trim();
+        if (!normalized) return true;
+        const candidate = normalized.toUpperCase();
+        return ['GENERAL', 'COURSE', 'ALL SUBJECTS', 'UNASSIGNED', 'N/A', 'NA', 'DEFAULT', '-- SELECT --'].includes(candidate);
+      };
+
+      const addSubToMap = (code, name, dept = '', sem = '') => {
+        const c = String(code || '').trim().toUpperCase();
+        const n = String(name || '').trim();
+        if (!c || c.length < 2 || subsMap.has(c)) return;
+        if (isGenericSubjectEntry(c) || isGenericSubjectEntry(n)) return;
+        if (['CS1001', 'CS101', 'CS123', 'CS2001', 'SF76', 'CS2003', 'CS2006'].includes(c)) return;
+
+        subsMap.set(c, {
+          code: c,
+          name: (n && !isGenericSubjectEntry(n) && n !== c) ? n : c,
+          department: dept || '',
+          semester: sem || ''
+        });
+      };
 
       // a) Database Subjects (/api/subjects)
       if (resSubjects.status === 'fulfilled' && resSubjects.value.ok) {
         const d = await resSubjects.value.json();
         const list = Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : []);
         list.forEach(s => {
-          const code = (s.code || '').toUpperCase().trim();
-          if (code) {
-            subsMap.set(code, {
-              code,
-              name: s.name || s.title || code,
-              department: s.department || s.dept || '',
-              semester: s.semester || s.sem || ''
-            });
-          }
+          addSubToMap(s.code, s.name || s.title, s.department || s.dept, s.semester || s.sem);
         });
       }
 
-      // b) Department Courses from /api/departments (coursesList inside each department)
-      rawDepts.forEach(dept => {
-        if (Array.isArray(dept.coursesList)) {
-          dept.coursesList.forEach(c => {
-            const code = (c.code || '').toUpperCase().trim();
-            if (code && !subsMap.has(code)) {
-              subsMap.set(code, {
-                code,
-                name: c.name || c.title || code,
-                department: dept.name || '',
-                semester: c.semester || c.sem || ''
-              });
-            }
+      // b) Department courses configured in Department collection
+      if (resDepts.status === 'fulfilled' && resDepts.value.ok && Array.isArray(rawDepts)) {
+        rawDepts.forEach(dept => {
+          const deptName = dept?.name || '';
+          (dept?.coursesList || []).forEach(c => {
+            addSubToMap(c.code, c.name || c.title, deptName, c.semester || c.sem);
           });
-        }
-      });
+        });
+      }
 
-
-      // d) Classes (/api/classes)
+      // c) Classes from Class collection
       if (resClasses.status === 'fulfilled' && resClasses.value.ok) {
-        const d = await resClasses.value.json();
-        const clsList = d?.classes || (Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : []));
-        if (Array.isArray(clsList)) {
-          clsList.forEach(c => {
-            const code = (c.code || '').toUpperCase().trim();
-            if (code && !subsMap.has(code)) {
-              subsMap.set(code, {
-                code,
-                name: c.name || code,
-                department: c.department || c.dept || '',
-                semester: c.semester || c.sem || ''
-              });
-            }
-          });
-        }
+        const clsData = await resClasses.value.json();
+        const clsList = Array.isArray(clsData?.classes) ? clsData.classes : (Array.isArray(clsData?.data) ? clsData.data : (Array.isArray(clsData) ? clsData : []));
+        clsList.forEach(cls => {
+          addSubToMap(cls.code || cls.classCode, cls.name || cls.className, cls.dept || cls.department, cls.semester || cls.sem);
+        });
+      }
+
+      // d) Internal marks subjects
+      if (Array.isArray(staffMarksheets)) {
+        staffMarksheets.forEach(m => {
+          addSubToMap(m.subjectCode, m.subjectName, m.department, m.semester);
+        });
       }
 
       const allSubs = Array.from(subsMap.values());
@@ -317,7 +311,9 @@ export default function ExaminationManagement({ user }) {
         localStorage.setItem('vcas_subjects_cache', JSON.stringify(allSubs));
       } catch (_) { }
 
-      // Synchronize Admin Hall Ticket Scheduled subjects strictly from real active records
+      // Synchronize Admin Hall Ticket Scheduled subjects from backend hall-ticket allocations.
+      // We preserve the locally-saved schedule (user-managed) and only update entries whose
+      // subject codes still exist in the backend subject list.
       const activeScheduleList = [];
       const seenScheduleCodes = new Set();
       hallTicketAllocations.forEach(alloc => {
@@ -350,11 +346,19 @@ export default function ExaminationManagement({ user }) {
           });
         }
       });
+
       if (activeScheduleList.length > 0) {
+        // Backend has authoritative schedule — use it and persist
         setAdminHtSchedule(activeScheduleList);
-        try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(activeScheduleList)); } catch (_) {}
+        try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(activeScheduleList)); } catch (_) { }
       } else {
-        setAdminHtSchedule(prev => prev.filter(s => subsMap.has((s.code || '').toUpperCase().trim())));
+        // No backend schedule yet — keep user's locally-saved schedule but purge any
+        // entries whose subject codes no longer exist in the backend
+        setAdminHtSchedule(prev => {
+          const cleaned = prev.filter(s => subsMap.has((s.code || '').toUpperCase().trim()));
+          try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(cleaned)); } catch (_) { }
+          return cleaned;
+        });
       }
 
 
@@ -371,13 +375,13 @@ export default function ExaminationManagement({ user }) {
         const effectiveRoll = rawRoll || rawReg;
 
         const attNum = typeof st.attendance === 'number' ? st.attendance : parseFloat(st.attendance) || 0;
-        
+
         // Fee check: must be explicitly Paid or marked feeCleared
         const rawFeeStatus = (st.feeStatus || 'Pending').trim();
         const isFeeCleared = rawFeeStatus.toLowerCase() === 'paid' || st.feeCleared === true;
         const hasAttendance = attNum >= 75;
         const isEligible = hasAttendance && isFeeCleared;
-        
+
         let statusStr = 'Eligible';
         if (!isFeeCleared && !hasAttendance) {
           statusStr = 'Ineligible (Fee & Attendance Shortage)';
@@ -428,8 +432,8 @@ export default function ExaminationManagement({ user }) {
           gradePoint: null,
           status: statusStr,
           result: '-',
-          sgpa: Number(st.sgpa || 0),
-          cgpa: Number(st.cgpa || 0)
+          sgpa: st.sgpa ? Number(st.sgpa) : null,
+          cgpa: (st.cgpa && st.cgpa !== '8.0' && st.cgpa !== '8') ? Number(st.cgpa) : null
         });
 
         // Index for fast lookup by regNo, _id, or roll+department
@@ -526,6 +530,8 @@ export default function ExaminationManagement({ user }) {
               totalMarks: total,
               grade,
               gradePoint,
+              sgpa: gradePoint !== null ? Number(gradePoint).toFixed(2) : existing.sgpa,
+              cgpa: (existing.cgpa && existing.cgpa !== '8.0' && existing.cgpa !== '8') ? existing.cgpa : (gradePoint !== null ? Number(gradePoint).toFixed(2) : null),
               status: statusStr,
               result: total !== null ? (total >= 50 ? 'PASS' : 'FAIL') : '-',
               uploadedByStaff: sheet.staffName || sheet.staffId || 'Faculty',
@@ -603,15 +609,8 @@ export default function ExaminationManagement({ user }) {
           if (!st.subjects || st.subjects.length === 0) {
             if (activeScheduleList.length > 0) {
               st.subjects = [...activeScheduleList];
-            } else if (allSubs.length > 0) {
-              st.subjects = allSubs.slice(0, 5).map(s => ({
-                code: s.code,
-                name: s.name,
-                date: '2026-10-20',
-                session: 'Forenoon (FN)',
-                time: '09:30 AM - 12:30 PM'
-              }));
             }
+            // Do NOT fall back to allSubs — only admin-scheduled subjects should appear
           }
         }
       });
@@ -721,11 +720,11 @@ export default function ExaminationManagement({ user }) {
       if (!exInv || exInv === 'Assigned Faculty' || exInv === 'Staff In-Charge') return false;
       const isSameDate = exDate === targetDate;
       const isSameSession = (targetSession.includes('an') && exSession.includes('an')) ||
-                            (targetSession.includes('fn') && exSession.includes('fn')) ||
-                            targetSession === exSession;
+        (targetSession.includes('fn') && exSession.includes('fn')) ||
+        targetSession === exSession;
       const isSamePerson = exInv.toLowerCase() === inv.toLowerCase() ||
-                           exInv.toLowerCase().includes(inv.toLowerCase()) ||
-                           inv.toLowerCase().includes(exInv.toLowerCase());
+        exInv.toLowerCase().includes(inv.toLowerCase()) ||
+        inv.toLowerCase().includes(exInv.toLowerCase());
       return isSameDate && isSameSession && isSamePerson;
     });
   }, [scheduleForm.invigilator, scheduleForm.customInvigilator, scheduleForm.date, scheduleForm.session, examsList]);
@@ -744,8 +743,8 @@ export default function ExaminationManagement({ user }) {
       if (!exHall) return false;
       const isSameDate = exDate === targetDate;
       const isSameSession = (targetSession.includes('an') && exSession.includes('an')) ||
-                            (targetSession.includes('fn') && exSession.includes('fn')) ||
-                            targetSession === exSession;
+        (targetSession.includes('fn') && exSession.includes('fn')) ||
+        targetSession === exSession;
       const isSameHall = exHall.toLowerCase() === hall.toLowerCase();
       return isSameDate && isSameSession && isSameHall;
     });
@@ -768,11 +767,11 @@ export default function ExaminationManagement({ user }) {
       if (!exInv || exInv === 'Assigned Faculty' || exInv === 'Staff In-Charge') return false;
       const isSameDate = exDate === targetDate;
       const isSameSession = (targetSession.includes('an') && exSession.includes('an')) ||
-                            (targetSession.includes('fn') && exSession.includes('fn')) ||
-                            targetSession === exSession;
+        (targetSession.includes('fn') && exSession.includes('fn')) ||
+        targetSession === exSession;
       const isSamePerson = exInv.toLowerCase() === inv.toLowerCase() ||
-                           exInv.toLowerCase().includes(inv.toLowerCase()) ||
-                           inv.toLowerCase().includes(exInv.toLowerCase());
+        exInv.toLowerCase().includes(inv.toLowerCase()) ||
+        inv.toLowerCase().includes(exInv.toLowerCase());
       return isSameDate && isSameSession && isSamePerson;
     });
   }, [editingExamSchedule, examsList]);
@@ -793,8 +792,8 @@ export default function ExaminationManagement({ user }) {
       if (!exHall) return false;
       const isSameDate = exDate === targetDate;
       const isSameSession = (targetSession.includes('an') && exSession.includes('an')) ||
-                            (targetSession.includes('fn') && exSession.includes('fn')) ||
-                            targetSession === exSession;
+        (targetSession.includes('fn') && exSession.includes('fn')) ||
+        targetSession === exSession;
       const isSameHall = exHall.toLowerCase() === hall.toLowerCase();
       return isSameDate && isSameSession && isSameHall;
     });
@@ -845,9 +844,8 @@ export default function ExaminationManagement({ user }) {
   const [adminHtSchedule, setAdminHtSchedule] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('vcas_admin_ht_subjects_schedule') || '[]');
-      if (Array.isArray(cached) && cached.length > 0) return cached;
-    } catch (_) {}
-    return [];
+      return Array.isArray(cached) ? cached : [];
+    } catch (_) { return []; }
   });
   const [isSavingHtAllocation, setIsSavingHtAllocation] = useState(false);
 
@@ -908,7 +906,7 @@ export default function ExaminationManagement({ user }) {
 
     setAdminHtSchedule(prev => {
       const updated = prev.map(s => ((s.code || '').toUpperCase() === editingHtSubjectCode.toUpperCase() ? updatedEntry : s));
-      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) {}
+      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) { }
       return updated;
     });
 
@@ -925,7 +923,7 @@ export default function ExaminationManagement({ user }) {
       const currentTimings = JSON.parse(localStorage.getItem('vcas_staff_custom_subjects_timing') || '{}');
       currentTimings[editingHtSubjectCode.toUpperCase()] = updatedEntry;
       localStorage.setItem('vcas_staff_custom_subjects_timing', JSON.stringify(currentTimings));
-    } catch (_) {}
+    } catch (_) { }
 
     // Synchronize to backend so Staff side and student hall tickets immediately update
     try {
@@ -974,16 +972,23 @@ export default function ExaminationManagement({ user }) {
   };
 
   const handleDeleteAdminHtSubject = async (codeToRemove) => {
+    const cleanCode = (codeToRemove || '').toUpperCase();
     setAdminHtSchedule(prev => {
-      const updated = prev.filter(s => !((s.code || '').toUpperCase() === codeToRemove.toUpperCase() && (!s.department || (s.department || '').toLowerCase() === (adminHtDept || '').toLowerCase())));
-      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) {}
+      const updated = prev.filter(s => !((s.code || '').toUpperCase() === cleanCode && (!s.department || (s.department || '').toLowerCase() === (adminHtDept || '').toLowerCase())));
+      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) { }
+      return updated;
+    });
+    // Also remove from availableSubjects so dropdown clears immediately
+    setAvailableSubjects(prev => {
+      const updated = prev.filter(s => (s.code || '').toUpperCase() !== cleanCode);
+      try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(updated)); } catch (_) { }
       return updated;
     });
     setStudentMarksList(prev => prev.map(st => {
       if (!Array.isArray(st.subjects)) return st;
       return {
         ...st,
-        subjects: st.subjects.filter(s => (s.code || '').toUpperCase() !== codeToRemove.toUpperCase())
+        subjects: st.subjects.filter(s => (s.code || '').toUpperCase() !== cleanCode)
       };
     }));
     try {
@@ -996,24 +1001,34 @@ export default function ExaminationManagement({ user }) {
           semester: Number(adminHtSem) || 1
         })
       });
-    } catch (_) {}
+    } catch (_) { }
     showToast(`Subject ${codeToRemove} removed from ${adminHtDept} schedule.`);
   };
 
-  // Available catalog subjects strictly filtered for the chosen department
+  // Available catalog subjects strictly filtered for the chosen department.
+  // Matches Internal Marks behavior: prioritizes chosen department, but never returns empty if catalog has subjects.
   const adminHtCatalogSubjects = useMemo(() => {
-    if (!adminHtDept) return [];
+    if (!adminHtDept) {
+      return availableSubjects;
+    }
     const target = adminHtDept.toLowerCase().trim();
-    return availableSubjects.filter(s => {
+    if (target === 'all' || target === 'all departments') {
+      return availableSubjects;
+    }
+    const isCsTarget = target.includes('cs') || target.includes('computer');
+    const deptFiltered = availableSubjects.filter(s => {
       const sDept = (s.department || '').toLowerCase().trim();
-      return sDept === target || sDept.includes(target) || target.includes(sDept);
+      const isCsSubject = sDept.includes('cs') || sDept.includes('computer');
+      return !sDept || sDept === target || sDept.includes(target) || target.includes(sDept) || (isCsTarget && isCsSubject);
     });
+    return deptFiltered.length > 0 ? deptFiltered : availableSubjects;
   }, [availableSubjects, adminHtDept]);
 
   // Scheduled subjects strictly for the currently selected department
   const currentDeptScheduledSubjects = useMemo(() => {
     if (!adminHtDept) return [];
     const target = adminHtDept.toLowerCase().trim();
+    if (target === 'all' || target === 'all departments') return adminHtSchedule;
     return adminHtSchedule.filter(s => {
       const sDept = (s.department || '').toLowerCase().trim();
       return sDept === target || sDept.includes(target) || target.includes(sDept);
@@ -1037,8 +1052,17 @@ export default function ExaminationManagement({ user }) {
     setAdminHtSchedule(prev => {
       const filtered = prev.filter(s => !(s.code.toUpperCase() === effectiveCode && (s.department || '').toLowerCase() === (adminHtDept || '').toLowerCase()));
       const updated = [...filtered, newEntry];
-      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) {}
+      try { localStorage.setItem('vcas_admin_ht_subjects_schedule', JSON.stringify(updated)); } catch (_) { }
       return updated;
+    });
+
+    setAvailableSubjects(prev => {
+      if (!prev.some(s => (s.code || '').toUpperCase() === effectiveCode)) {
+        const next = [{ code: effectiveCode, name: adminHtNewName.trim(), department: adminHtDept }, ...prev];
+        try { localStorage.setItem('vcas_subjects_cache', JSON.stringify(next)); } catch (_) { }
+        return next;
+      }
+      return prev;
     });
 
     setStudentMarksList(prev => prev.map(st => {
@@ -1077,7 +1101,7 @@ export default function ExaminationManagement({ user }) {
           if (name) set.add(name);
         });
       }
-    } catch (_) {}
+    } catch (_) { }
     if (set.size === 0) {
       set.add('Hall D1');
       set.add('Hall D2');
@@ -1207,7 +1231,7 @@ export default function ExaminationManagement({ user }) {
           }))
         })
       }).catch(e => console.warn('Auto-save student hall failed:', e));
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const handleBatchAssignHall = (chosenHall) => {
@@ -1263,7 +1287,7 @@ export default function ExaminationManagement({ user }) {
           }))
         })
       }).catch(e => console.warn('Auto-save batch hall allocation failed:', e));
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const handleSaveAndPublishHtSchedule = async () => {
@@ -1370,7 +1394,7 @@ export default function ExaminationManagement({ user }) {
         examSemNorm.includes(filterSemNorm) ||
         filterSemNorm.includes(examSemNorm);
 
-      const matchesType = selectedType === 'ALL' || 
+      const matchesType = selectedType === 'ALL' ||
         String(e.type || '').toLowerCase().trim() === String(selectedType).toLowerCase().trim() ||
         String(e.type || '').toLowerCase().replace(/\s+/g, '') === String(selectedType).toLowerCase().replace(/\s+/g, '');
 
@@ -1422,6 +1446,21 @@ export default function ExaminationManagement({ user }) {
   const filteredInternalMarksRows = useMemo(() => {
     const rows = [];
     internalMarksheets.forEach(ms => {
+      // Role-based visibility check:
+      // Super Admin: only view after Admin submits (Pending MD or Approved)
+      // Admin: only view after HOD submits (Pending Principal or beyond)
+      // HOD: only view after Staff submits (Pending HOD or beyond)
+      const msStatus = ms.approvalStatus || 'Draft';
+      if (isSuperAdmin) {
+        if (!['Pending MD', 'Approved'].includes(msStatus)) return;
+      } else if (isAdminUser) {
+        if (!['Pending Principal', 'Pending MD', 'Approved'].includes(msStatus)) return;
+      } else if (isHodUser) {
+        if (!['Pending HOD', 'Pending Principal', 'Pending MD', 'Approved'].includes(msStatus)) return;
+      } else {
+        return;
+      }
+
       // Dept filter
       if (marksFilterDept !== 'All') {
         const msDept = (ms.department || '').toLowerCase();
@@ -1637,7 +1676,7 @@ export default function ExaminationManagement({ user }) {
             semester: Number(String(scheduleForm.sem).replace(/\D/g, '')) || 1
           })
         });
-      } catch (_) {}
+      } catch (_) { }
 
       // Add to scheduled hall ticket subjects for this dept
       const newSubjectEntry = {
@@ -1818,8 +1857,8 @@ export default function ExaminationManagement({ user }) {
             department: payload.department,
             semester: Number(String(payload.sem).replace(/\D/g, '')) || 1
           })
-        }).catch(() => {});
-      } catch (_) {}
+        }).catch(() => { });
+      } catch (_) { }
 
       showToast(`Exam schedule & timing for ${payload.code} updated successfully!`);
       setIsEditScheduleOpen(false);
@@ -1883,25 +1922,38 @@ export default function ExaminationManagement({ user }) {
   }, [hallForm.hallName, hallsList, editingHallId]);
 
   const deptFilteredSubjects = useMemo(() => {
-    return availableSubjects.filter(s => {
-      let matchesDept = true;
-      if (selectedHallDept) {
-        const sDept = (s.department || '').toLowerCase();
-        const target = selectedHallDept.toLowerCase();
-        matchesDept = sDept.includes(target) || target.includes(sDept);
+    // Build the set of already-allocated subject codes so they don't re-appear in the dropdown
+    const allocatedCodes = new Set(hallAllocatedSubjects.map(s => (s.code || '').toUpperCase()));
+
+    let list = availableSubjects.filter(s => !allocatedCodes.has((s.code || '').toUpperCase()));
+    if (list.length === 0) list = availableSubjects;
+
+    if (selectedHallDept && selectedHallDept !== 'All' && selectedHallDept !== 'ALL') {
+      const target = selectedHallDept.toLowerCase().trim();
+      const isCsTarget = target.includes('cs') || target.includes('computer');
+      const deptFiltered = list.filter(s => {
+        const sDept = (s.department || '').toLowerCase().trim();
+        const isCsSubject = sDept.includes('cs') || sDept.includes('computer');
+        return !sDept || sDept === target || sDept.includes(target) || target.includes(sDept) || (isCsTarget && isCsSubject);
+      });
+      if (deptFiltered.length > 0) {
+        list = deptFiltered;
       }
-      let matchesSem = true;
-      if (selectedHallSem && selectedHallSem !== 'ALL') {
-        const norm = (val) => String(val || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const targetSem = norm(selectedHallSem);
-        const targetDigit = selectedHallSem.replace(/\D/g, '');
-        const subSem = norm(s.semester || s.sem);
+    }
+
+    if (selectedHallSem && selectedHallSem !== 'ALL' && selectedHallSem !== 'All') {
+      const targetDigit = selectedHallSem.replace(/\D/g, '');
+      const semFiltered = list.filter(s => {
         const subDigit = String(s.semester || s.sem || '').replace(/\D/g, '');
-        matchesSem = !subSem || subSem === targetSem || (targetDigit && subDigit === targetDigit);
+        return !subDigit || subDigit === targetDigit;
+      });
+      if (semFiltered.length > 0) {
+        list = semFiltered;
       }
-      return matchesDept && matchesSem;
-    });
-  }, [availableSubjects, selectedHallDept, selectedHallSem]);
+    }
+
+    return list;
+  }, [availableSubjects, selectedHallDept, selectedHallSem, hallAllocatedSubjects]);
 
   const handleAddSubjectToHall = () => {
     let code = selectedHallSubjectCode;
@@ -2539,8 +2591,8 @@ export default function ExaminationManagement({ user }) {
         <button
           onClick={() => setActiveTab('schedules')}
           className={`flex items-center gap-2 px-4 sm:px-5 py-3 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'schedules'
-              ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
+            ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
+            : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
             }`}
         >
           <Calendar className="w-4 h-4" />
@@ -2550,8 +2602,8 @@ export default function ExaminationManagement({ user }) {
         <button
           onClick={() => setActiveTab('hall-tickets')}
           className={`flex items-center gap-2 px-4 sm:px-5 py-3 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'hall-tickets'
-              ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
+            ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
+            : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
             }`}
         >
           <QrCode className="w-4 h-4" />
@@ -2561,8 +2613,8 @@ export default function ExaminationManagement({ user }) {
         <button
           onClick={() => setActiveTab('internal-marks')}
           className={`flex items-center gap-2 px-4 sm:px-5 py-3 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'internal-marks'
-              ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
+            ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
+            : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
             }`}
         >
           <Edit className="w-4 h-4" />
@@ -2572,8 +2624,8 @@ export default function ExaminationManagement({ user }) {
         <button
           onClick={() => setActiveTab('results')}
           className={`flex items-center gap-2 px-4 sm:px-5 py-3 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'results'
-              ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
+            ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
+            : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
             }`}
         >
           <Award className="w-4 h-4" />
@@ -2583,8 +2635,8 @@ export default function ExaminationManagement({ user }) {
         <button
           onClick={() => setActiveTab('seating')}
           className={`flex items-center gap-2 px-4 sm:px-5 py-3 font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'seating'
-              ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
+            ? 'border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl'
+            : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
             }`}
         >
           <Building2 className="w-4 h-4" />
@@ -2860,7 +2912,7 @@ export default function ExaminationManagement({ user }) {
                   >
                     <option value="">-- Choose Subject from Catalog --</option>
                     {adminHtCatalogSubjects.length === 0 ? (
-                      <option value="" disabled>-- No subjects registered for {adminHtDept} (Use Custom Code) --</option>
+                      <option disabled value="">No subjects available for this department</option>
                     ) : (
                       adminHtCatalogSubjects.map(s => (
                         <option key={s.code} value={s.code}>{s.code} - {s.name || s.title}</option>
@@ -3232,8 +3284,8 @@ export default function ExaminationManagement({ user }) {
 
                         <td className="py-4 px-4">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${s.status === 'Eligible'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : (s.status?.includes('Fee') ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200')
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : (s.status?.includes('Fee') ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200')
                             }`}>
                             {s.status}
                           </span>
@@ -3264,10 +3316,10 @@ export default function ExaminationManagement({ user }) {
                                 onChange={(e) => {
                                   const newSeat = e.target.value;
                                   const targetIdentifier = s.studentKey || s.id || s._id || s.regNo;
-                                  setStudentMarksList(prev => prev.map(item => 
+                                  setStudentMarksList(prev => prev.map(item =>
                                     ((targetIdentifier && (item.studentKey === targetIdentifier || item.id === targetIdentifier || item._id === targetIdentifier || item.regNo === targetIdentifier)) ||
-                                     (!targetIdentifier && (item.rollNo || '').toUpperCase() === (s.rollNo || '').toUpperCase()))
-                                      ? { ...item, seatNo: newSeat } 
+                                      (!targetIdentifier && (item.rollNo || '').toUpperCase() === (s.rollNo || '').toUpperCase()))
+                                      ? { ...item, seatNo: newSeat }
                                       : item
                                   ));
                                 }}
@@ -3316,22 +3368,148 @@ export default function ExaminationManagement({ user }) {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Save Marks Button */}
               <button
-                onClick={() => {
-                  setIsMarksLocked(!isMarksLocked);
-                  showToast(
-                    isMarksLocked
-                      ? 'Marks unlocked for editing.'
-                      : isSuperAdmin
-                        ? 'Marks approved and finalized by MD.'
-                        : isAdminUser
-                          ? 'Marks submitted to MD for approval.'
-                          : 'Marks successfully locked and frozen for CoE evaluation!'
-                  );
+                onClick={async () => {
+                  try {
+                    const sheetsToSave = internalMarksheets.filter(ms =>
+                      !isHodUser || !userDepartment || !ms.department || ms.department.toUpperCase() === userDepartment.toUpperCase()
+                    );
+                    if (sheetsToSave.length === 0 && internalMarksheets.length > 0) {
+                      sheetsToSave.push(...internalMarksheets);
+                    }
+                    if (sheetsToSave.length === 0) {
+                      showToast('No marksheets found to save.', true);
+                      return;
+                    }
+                    await Promise.all(sheetsToSave.map(ms =>
+                      fetch(`${API_BASE}/internal-marks/${ms.staffId || 'EMP001'}/${encodeURIComponent(ms.subjectCode)}/save`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          staffId: ms.staffId || 'EMP001',
+                          subjectCode: ms.subjectCode,
+                          subjectName: ms.subjectName,
+                          department: ms.department || userDepartment,
+                          semester: ms.semester,
+                          students: ms.students || []
+                        })
+                      })
+                    ));
+                    showToast('Internal marks saved successfully!');
+                  } catch (err) {
+                    showToast('Failed to save marks: ' + err.message, true);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 font-bold text-xs rounded-xl transition-all border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 cursor-pointer shadow-xs"
+                title="Save current entered marks to database"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Marks</span>
+              </button>
+
+              {/* Submit / Approve / Lock Button */}
+              <button
+                onClick={async () => {
+                  try {
+                    if (isSuperAdmin) {
+                      // Final approve by Super Admin (MD)
+                      const targetSheets = internalMarksheets.filter(ms => ms.approvalStatus === 'Pending MD');
+                      if (targetSheets.length === 0) {
+                        showToast('No marksheets are currently pending Super Admin approval.', true);
+                        return;
+                      }
+                      await Promise.all(targetSheets.map(ms =>
+                        fetch(`${API_BASE}/internal-marks/${ms.staffId || 'EMP001'}/${encodeURIComponent(ms.subjectCode)}/stage-approval`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            stage: 'MD',
+                            action: 'Approved',
+                            approvedBy: currentUser?.name || 'Super Admin',
+                            remarks: 'Final approval and published by Super Admin'
+                          })
+                        })
+                      ));
+                      setInternalMarksheets(prev => prev.map(ms => ms.approvalStatus === 'Pending MD' ? { ...ms, approvalStatus: 'Approved' } : ms));
+                      showToast('Internal marks approved and finalized by Super Admin!');
+                    } else if (isAdminUser) {
+                      // Admin forwards to Super Admin
+                      const targetSheets = internalMarksheets.filter(ms => ms.approvalStatus === 'Pending Principal');
+                      if (targetSheets.length === 0) {
+                        showToast('No marksheets are currently pending Admin submission to Super Admin.', true);
+                        return;
+                      }
+                      await Promise.all(targetSheets.map(ms =>
+                        fetch(`${API_BASE}/internal-marks/${ms.staffId || 'EMP001'}/${encodeURIComponent(ms.subjectCode)}/stage-approval`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            stage: 'Principal',
+                            action: 'Approved',
+                            approvedBy: currentUser?.name || 'Admin',
+                            remarks: 'Verified and submitted to Super Admin'
+                          })
+                        })
+                      ));
+                      setInternalMarksheets(prev => prev.map(ms => ms.approvalStatus === 'Pending Principal' ? { ...ms, approvalStatus: 'Pending MD' } : ms));
+                      showToast('Marks verified and submitted to Super Admin for final approval.');
+                    } else if (isHodUser) {
+                      // HOD submits department marks to Principal
+                      const deptSheets = internalMarksheets.filter(ms =>
+                        (!userDepartment || !ms.department || ms.department.toUpperCase() === userDepartment.toUpperCase()) &&
+                        (ms.approvalStatus === 'Draft' || ms.approvalStatus === 'Pending HOD' || !ms.approvalStatus)
+                      );
+                      const sheetsToSubmit = deptSheets.length > 0 ? deptSheets : internalMarksheets.filter(ms => ms.approvalStatus !== 'Approved' && ms.approvalStatus !== 'Pending MD');
+                      if (sheetsToSubmit.length === 0) {
+                        showToast('All marksheets are already submitted or pending approval.', true);
+                        return;
+                      }
+                      await Promise.all(sheetsToSubmit.map(async ms => {
+                        // Persist sheet students
+                        if (Array.isArray(ms.students) && ms.students.length > 0) {
+                          await fetch(`${API_BASE}/internal-marks/${ms.staffId || 'EMP001'}/${encodeURIComponent(ms.subjectCode)}/save`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              staffId: ms.staffId || 'EMP001',
+                              subjectCode: ms.subjectCode,
+                              subjectName: ms.subjectName,
+                              department: ms.department || userDepartment,
+                              semester: ms.semester,
+                              students: ms.students
+                            })
+                          }).catch(() => { });
+                        }
+                        return fetch(`${API_BASE}/internal-marks/${ms.staffId || 'EMP001'}/${encodeURIComponent(ms.subjectCode)}/stage-approval`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            stage: 'HOD',
+                            action: 'Approved',
+                            approvedBy: currentUser?.name || 'HOD',
+                            remarks: 'Verified and submitted to Principal by HOD'
+                          })
+                        });
+                      }));
+                      setInternalMarksheets(prev => prev.map(ms =>
+                        sheetsToSubmit.some(s => s.subjectCode === ms.subjectCode)
+                          ? { ...ms, approvalStatus: 'Pending Principal', currentApprovalStage: 'Principal' }
+                          : ms
+                      ));
+                      setIsMarksLocked(true);
+                      showToast(`Marks successfully submitted to Principal for approval by HOD (${sheetsToSubmit.length} subjects)!`);
+                    } else {
+                      setIsMarksLocked(!isMarksLocked);
+                      showToast(isMarksLocked ? 'Marks unlocked for editing.' : 'Marks locked.');
+                    }
+                  } catch (err) {
+                    showToast('Failed to update stage approval: ' + err.message, true);
+                  }
                 }}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-2 font-bold text-xs rounded-xl transition-all border cursor-pointer ${isMarksLocked
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
                   }`}
               >
                 {isMarksLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
@@ -3339,10 +3517,12 @@ export default function ExaminationManagement({ user }) {
                   {isMarksLocked
                     ? 'Unlock Marks'
                     : isSuperAdmin
-                      ? 'Approve'
+                      ? 'Final Approve & Publish'
                       : isAdminUser
-                        ? 'Submit to MD'
-                        : 'Lock & Submit to CoE'}
+                        ? 'Submit to Super Admin'
+                        : isHodUser
+                          ? 'Submit Marks to Principal'
+                          : 'Lock & Submit'}
                 </span>
               </button>
             </div>
@@ -3351,17 +3531,6 @@ export default function ExaminationManagement({ user }) {
           {/* ── Filter Bar ── */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs">
             <div className="flex flex-wrap gap-3 items-end">
-              {/* Search */}
-              <div className="relative flex-1 min-w-[160px]">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={marksSearchQuery}
-                  onChange={e => setMarksSearchQuery(e.target.value)}
-                  placeholder="Search roll no / name..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
-                />
-              </div>
               {/* Department */}
               <div className="min-w-[150px]">
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Department</label>
@@ -3409,9 +3578,9 @@ export default function ExaminationManagement({ user }) {
                   {(() => {
                     const yr = marksFilterYear;
                     const list = yr === 'I Year' ? [1, 2] :
-                                 yr === 'II Year' ? [3, 4] :
-                                 yr === 'III Year' ? [5, 6] :
-                                 [1, 2, 3, 4, 5, 6];
+                      yr === 'II Year' ? [3, 4] :
+                        yr === 'III Year' ? [5, 6] :
+                          [1, 2, 3, 4, 5, 6];
                     return list.map(n => <option key={n} value={n}>Sem {n}</option>);
                   })()}
                 </select>
@@ -3426,9 +3595,9 @@ export default function ExaminationManagement({ user }) {
                 >
                   <option value="All">All Subjects</option>
                   {(() => {
+                    // Only show subjects that staff have actually uploaded marksheets for
                     const codesFromSheets = internalMarksheets.map(ms => ms.subjectCode).filter(Boolean);
-                    const codesFromSubjects = (availableSubjects || []).map(s => s.code).filter(Boolean);
-                    const allCodes = Array.from(new Set([...codesFromSheets, ...codesFromSubjects])).sort();
+                    const allCodes = Array.from(new Set(codesFromSheets)).sort();
                     return allCodes.map(c => {
                       const foundSub = (availableSubjects || []).find(s => s.code === c);
                       return (
@@ -3726,8 +3895,8 @@ export default function ExaminationManagement({ user }) {
                       </td>
 
                       <td className="py-3.5 px-4 text-center">
-                        <span className="font-black text-emerald-600">{s.sgpa} SGPA</span>
-                        <span className="block text-[11px] text-slate-400">CGPA: {s.cgpa}</span>
+                        <span className="font-black text-emerald-600">{s.sgpa && s.sgpa !== '-' ? `${s.sgpa} SGPA` : '—'}</span>
+                        <span className="block text-[11px] text-slate-400">CGPA: {s.cgpa && s.cgpa !== '-' ? s.cgpa : '—'}</span>
                       </td>
 
                       <td className="py-3.5 px-6 text-right">
@@ -3860,10 +4029,10 @@ export default function ExaminationManagement({ user }) {
                           <span>Capacity: {cap} Seats</span>
                         </span>
                         <span className={`px-2.5 py-0.5 font-bold text-xs rounded-lg border ${h.status === 'Fully Allocated'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : h.status === 'Allocated'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : h.status === 'Allocated'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
                           }`}>
                           {h.status || (isFull ? 'Fully Allocated' : 'Allocated')}
                         </span>
@@ -4433,8 +4602,8 @@ export default function ExaminationManagement({ user }) {
                 </div>
 
                 <div className="text-right">
-                  <span className="text-2xl font-black text-emerald-600">{viewingGradeCardStudent.sgpa} SGPA</span>
-                  <p className="text-[11px] text-slate-500 font-bold">CGPA: {viewingGradeCardStudent.cgpa}</p>
+                  <span className="text-2xl font-black text-emerald-600">{viewingGradeCardStudent.sgpa && viewingGradeCardStudent.sgpa !== '-' ? `${viewingGradeCardStudent.sgpa} SGPA` : '—'}</span>
+                  <p className="text-[11px] text-slate-500 font-bold">CGPA: {viewingGradeCardStudent.cgpa && viewingGradeCardStudent.cgpa !== '-' ? viewingGradeCardStudent.cgpa : '—'}</p>
                 </div>
               </div>
 
@@ -4642,7 +4811,7 @@ export default function ExaminationManagement({ user }) {
                   {/* 3. Pick Subject under that department & semester & Add */}
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                      3. Subject ({deptFilteredSubjects.length} Found)
+                      3. Subject ({deptFilteredSubjects.length} Available)
                     </label>
                     <div className="flex gap-2">
                       <select
@@ -4651,11 +4820,15 @@ export default function ExaminationManagement({ user }) {
                         className="flex-1 px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                       >
                         <option value="">-- Select Subject --</option>
-                        {deptFilteredSubjects.map(s => (
-                          <option key={s.code} value={s.code}>
-                            {s.code} — {s.name} {s.semester || s.sem ? `[${s.semester || s.sem}]` : ''}
-                          </option>
-                        ))}
+                        {deptFilteredSubjects.length === 0 ? (
+                          <option disabled value="">No subjects available for this filter</option>
+                        ) : (
+                          deptFilteredSubjects.map(s => (
+                            <option key={s.code} value={s.code}>
+                              {s.code} — {s.name} {s.semester || s.sem ? `[${s.semester || s.sem}]` : ''}
+                            </option>
+                          ))
+                        )}
                         <option value="CUSTOM">+ Enter Custom Code...</option>
                       </select>
 
@@ -5112,11 +5285,11 @@ export default function ExaminationManagement({ user }) {
                   {viewingExamDetails.date || '2026-10-20'}
                 </p>
                 <p className="text-xs font-bold text-rose-600">
-                  {viewingExamDetails.time 
+                  {viewingExamDetails.time
                     ? `${viewingExamDetails.session || (viewingExamDetails.time.includes('09:') ? 'Forenoon (FN)' : 'Afternoon (AN)')} • ${viewingExamDetails.time}`
                     : (viewingExamDetails.session?.includes('AN') || viewingExamDetails.session?.toLowerCase().includes('afternoon')
-                        ? 'Afternoon Session (AN) • 01:30 PM - 04:30 PM'
-                        : 'Forenoon Session (FN) • 09:30 AM - 12:30 PM')}
+                      ? 'Afternoon Session (AN) • 01:30 PM - 04:30 PM'
+                      : 'Forenoon Session (FN) • 09:30 AM - 12:30 PM')}
                 </p>
                 <p className="text-[11px] text-slate-500 font-medium">
                   Candidate Reporting Time: {

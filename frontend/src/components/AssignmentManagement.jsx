@@ -76,7 +76,7 @@ export default function AssignmentManagement({ user }) {
   const [availableClasses, setAvailableClasses] = useState([]);
   const [availableDepartments, setAvailableDepartments] = useState(() => getKnownDepartments());
   const [subjectCatalog, setSubjectCatalog] = useState([]);
-  const [batchCatalog, setBatchCatalog] = useState(['2024-2027', '2023-2026', '2022-2025', '2025-2028']);
+  const [batchCatalog, setBatchCatalog] = useState(['2026-2027', '2025-2026', '2024-2025']);
   const [yearCatalog, setYearCatalog] = useState(['1st Year', '2nd Year', '3rd Year', '4th Year']);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = React.useRef(null);
@@ -192,7 +192,7 @@ export default function AssignmentManagement({ user }) {
       status: a.status || 'Active',
       category: a.category || 'Regular',
       projectPhase: a.projectPhase || '',
-      batch: a.batch || '2024-2027',
+      batch: a.batch || '2026-2027',
       description: a.description || '',
       attachedDoc: a.attachmentName || a.attachedDoc || `${a.subjectCode || 'Assignment'}_Brief.pdf`,
       attachmentName: a.attachmentName || '',
@@ -357,7 +357,7 @@ export default function AssignmentManagement({ user }) {
     code: '',
     subject: '',
     department: 'Computer Science',
-    batch: '2024-2027',
+    batch: '2026-2027',
     year: '1st Year',
     sem: 'Sem 1',
     faculty: currentUser?.name || currentUser?.fullName || 'Admin',
@@ -510,7 +510,7 @@ export default function AssignmentManagement({ user }) {
     code: '',
     subject: '',
     department: 'Computer Science',
-    batch: '2024-2027',
+    batch: '2026-2027',
     year: '1st Year',
     sem: 'Sem 1',
     faculty: currentUser?.name || currentUser?.fullName || 'Admin',
@@ -601,7 +601,7 @@ export default function AssignmentManagement({ user }) {
       code: a.code || a.subjectCode || '',
       subject: a.subject || a.subjectName || '',
       department: a.department || 'Computer Science',
-      batch: a.batch || '2024-2027',
+      batch: a.batch || '2026-2027',
       year: typeof a.year === 'number' ? `${a.year === 1 ? '1st' : a.year === 2 ? '2nd' : a.year === 3 ? '3rd' : `${a.year}th`} Year` : (a.year || '1st Year'),
       sem: a.sem || (a.semester ? `Sem ${a.semester}` : 'Sem 1'),
       faculty: a.faculty || a.staffName || 'Admin',
@@ -639,7 +639,7 @@ export default function AssignmentManagement({ user }) {
       subjectCode: (assignmentForm.code || '').trim().toUpperCase(),
       subjectName: (assignmentForm.subject || '').trim(),
       department: assignmentForm.department || 'Computer Science',
-      batch: assignmentForm.batch || '2024-2027',
+      batch: assignmentForm.batch || '2026-2027',
       year: assignmentForm.year || '1st Year',
       semester: assignmentForm.sem ? parseInt(String(assignmentForm.sem).replace(/\D/g, '')) || 1 : 1,
       dueDate: assignmentForm.dueDate,

@@ -24,9 +24,9 @@ import {
 const API_BASE = BACKEND_URL;
 
 export default function StaffCoursePlan({ staffUser }) {
-  const staffId = staffUser?.staffId || staffUser?._id || 'STF001';
-  const staffName = staffUser?.name || 'Faculty Member';
-  const department = staffUser?.department || 'Computer Science';
+  const staffId = staffUser?.staffId || staffUser?._id || staffUser?.id || staffUser?.username || 'STF001';
+  const staffName = staffUser?.name || staffUser?.fullName || 'Faculty Member';
+  const department = staffUser?.department || staffUser?.dept || 'Computer Science';
 
   const [activeTab, setActiveTab] = useState('course_plan'); // 'course_plan' | 'portion_completion'
   const [coursePlans, setCoursePlans] = useState([]);
@@ -240,7 +240,7 @@ export default function StaffCoursePlan({ staffUser }) {
 
   // Save / Update Plan
   const handleSavePlan = async () => {
-    if (!planForm.subjectName.trim()) {
+    if (!planForm.subjectName || !planForm.subjectName.trim()) {
       setErrorMsg('Please enter the Subject Name for this Course Plan.');
       return;
     }
@@ -250,27 +250,28 @@ export default function StaffCoursePlan({ staffUser }) {
       setErrorMsg('');
       setSuccessMsg('');
 
-      const sanitizedTopics = planForm.topics.map(t => ({
-        ...t,
-        sNo: Number(t.sNo) || 1,
-        plannedDate: String(t.plannedDate || ''),
-        noOfHours: t.noOfHours === '' ? 1 : (Number(t.noOfHours) || 1),
-        topic: String(t.topic || ''),
-        executionDate: String(t.executionDate || ''),
-        executionHours: t.executionHours === '' ? 0 : (Number(t.executionHours) || 0),
-        deviation: String(t.deviation || ''),
-        sign: t.sign || t.status || 'Pending',
-        status: t.status || t.sign || 'Pending'
-      }));
+      const sanitizedTopics = (planForm.topics && planForm.topics.length > 0)
+        ? planForm.topics.map((t, idx) => ({
+            sNo: Number(t.sNo) || (idx + 1),
+            plannedDate: String(t.plannedDate || ''),
+            noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 1 : Math.max(1, Number(t.noOfHours) || 1),
+            topic: String(t.topic || ''),
+            executionDate: String(t.executionDate || ''),
+            executionHours: (t.executionHours === '' || t.executionHours === null || t.executionHours === undefined) ? 0 : Math.max(0, Number(t.executionHours) || 0),
+            deviation: String(t.deviation || ''),
+            sign: t.sign || t.status || 'Pending',
+            status: t.status || t.sign || 'Pending'
+          }))
+        : [{ sNo: 1, plannedDate: '', noOfHours: 1, topic: '', executionDate: '', executionHours: 0, deviation: '', sign: 'Pending', status: 'Pending' }];
 
       const payload = {
-        staffId,
-        staffName,
+        staffId: staffId || 'STF001',
+        staffName: staffName || 'Faculty Member',
         department: planForm.department || department,
         subjectName: planForm.subjectName.trim(),
-        subjectCode: planForm.subjectCode.trim(),
-        academicYear: planForm.academicYear,
-        yearSemester: planForm.yearSemester,
+        subjectCode: (planForm.subjectCode || '').trim(),
+        academicYear: planForm.academicYear || '2026-2027',
+        yearSemester: planForm.yearSemester || 'I / I',
         status: planForm.status || 'In Progress',
         topics: sanitizedTopics
       };
@@ -284,9 +285,10 @@ export default function StaffCoursePlan({ staffUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
 
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
         setSuccessMsg(isNew ? 'Course Plan created and saved!' : 'Course Plan updated successfully!');
         const savedId = (data.data && data.data._id) ? data.data._id : selectedPlanId;
         setSelectedPlanId(savedId);
@@ -295,9 +297,10 @@ export default function StaffCoursePlan({ staffUser }) {
         } catch (e) {}
         await fetchPlans(savedId);
       } else {
-        setErrorMsg(data.message || 'Failed to save Course Plan');
+        setErrorMsg(data.message || `Failed to save Course Plan (Status: ${res.status})`);
       }
     } catch (err) {
+      console.error('Course plan save error:', err);
       setErrorMsg('Server connection error. Please ensure the backend server is active.');
     } finally {
       setSaving(false);
@@ -354,11 +357,11 @@ export default function StaffCoursePlan({ staffUser }) {
             <span className="text-xs text-slate-400 font-bold">•</span>
             <span className="text-xs font-semibold text-slate-500">Date, Topic, Hours</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+          <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-blue-600" />
             Course Plan & Portion Completion
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-sm text-slate-500 mt-0.5">
             Manage semester syllabus action plans and track real-time topic portion completion status
           </p>
         </div>
@@ -486,48 +489,48 @@ export default function StaffCoursePlan({ staffUser }) {
           </div>
 
           {/* Metadata Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-6 text-xs sm:text-sm font-semibold border-2 border-slate-900 rounded-xl p-4 mb-6 bg-slate-50/50">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3.5 gap-x-6 text-sm font-semibold border-2 border-slate-900 rounded-xl p-4 sm:p-5 mb-6 bg-slate-50/50">
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 min-w-[140px]">Name of the Faculty:</span>
-              <span className="font-bold text-blue-950 uppercase">{staffName}</span>
+              <span className="font-extrabold text-slate-900 min-w-[150px] text-sm sm:text-base">Name of the Faculty:</span>
+              <span className="font-black text-blue-950 uppercase text-sm sm:text-base">{staffName}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 min-w-[130px]">Academic Year:</span>
+              <span className="font-extrabold text-slate-900 min-w-[140px] text-sm sm:text-base">Academic Year:</span>
               <input
                 type="text"
                 value={planForm.academicYear}
                 onChange={(e) => setPlanForm({ ...planForm, academicYear: e.target.value })}
                 placeholder="2026-2027"
-                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold w-36 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
+                className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold w-40 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 min-w-[140px]">Subject Name:</span>
+              <span className="font-extrabold text-slate-900 min-w-[150px] text-sm sm:text-base">Subject Name:</span>
               <input
                 type="text"
                 required
                 value={planForm.subjectName}
                 onChange={(e) => setPlanForm({ ...planForm, subjectName: e.target.value })}
                 placeholder="Enter Subject Name..."
-                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold flex-1 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
+                className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold flex-1 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 min-w-[130px]">Year / Semester:</span>
+              <span className="font-extrabold text-slate-900 min-w-[140px] text-sm sm:text-base">Year / Semester:</span>
               <input
                 type="text"
                 value={planForm.yearSemester}
                 onChange={(e) => setPlanForm({ ...planForm, yearSemester: e.target.value })}
                 placeholder="I / I"
-                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold w-28 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
+                className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold w-32 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 min-w-[140px]">Plan Status:</span>
+              <span className="font-extrabold text-slate-900 min-w-[150px] text-sm sm:text-base">Plan Status:</span>
               <select
                 value={planForm.status || 'In Progress'}
                 onChange={(e) => setPlanForm({ ...planForm, status: e.target.value })}
-                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
+                className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-blue-600 print:border-none print:p-0 cursor-pointer"
               >
                 <option value="In Progress">In Progress</option>
                 <option value="Completed">Completed</option>
@@ -560,9 +563,9 @@ export default function StaffCoursePlan({ staffUser }) {
 
           {/* ── COURSE PLAN TABLE (DATE, TOPIC, HRS) ───────────────── */}
           <div className="overflow-x-auto rounded-xl border-2 border-slate-900 mb-6">
-            <table className="w-full border-collapse text-left text-xs">
+            <table className="w-full border-collapse text-left text-sm">
               <thead>
-                <tr className="bg-slate-100 text-slate-900 font-extrabold border-b-2 border-slate-900 uppercase tracking-tight text-[11px] text-center">
+                <tr className="bg-slate-100 text-slate-900 font-extrabold border-b-2 border-slate-900 uppercase tracking-tight text-sm text-center">
                   <th className="py-2.5 px-2 border-r border-slate-400 w-12">S.No</th>
                   <th className="py-2.5 px-3 border-r border-slate-400 w-28">Planned Date</th>
                   <th className="py-2.5 px-2 border-r border-slate-400 w-20">No. Of Hours</th>
@@ -578,7 +581,7 @@ export default function StaffCoursePlan({ staffUser }) {
                 {planForm.topics.map((t, idx) => (
                   <tr key={idx} className="hover:bg-blue-50/40 transition-colors">
                     {/* S.No */}
-                    <td className="py-2 px-2 text-center font-bold border-r border-slate-300 bg-slate-50/50">
+                    <td className="py-2 px-2 text-center font-bold border-r border-slate-300 bg-slate-50/50 text-sm">
                       {t.sNo || idx + 1}
                     </td>
 
@@ -589,7 +592,7 @@ export default function StaffCoursePlan({ staffUser }) {
                         value={t.plannedDate}
                         onChange={(e) => handleTopicChange(idx, 'plannedDate', e.target.value)}
                         placeholder=""
-                        className="w-full p-1 bg-transparent border-0 font-bold text-center text-xs focus:ring-1 focus:ring-blue-500 rounded"
+                        className="w-full p-1 bg-transparent border-0 font-bold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded"
                       />
                     </td>
 
@@ -602,7 +605,7 @@ export default function StaffCoursePlan({ staffUser }) {
                         value={t.noOfHours}
                         onChange={(e) => handleTopicChange(idx, 'noOfHours', e.target.value)}
                         placeholder=""
-                        className="w-full p-1 bg-transparent border-0 font-bold text-center text-xs focus:ring-1 focus:ring-blue-500 rounded"
+                        className="w-full p-1 bg-transparent border-0 font-bold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded"
                       />
                     </td>
 
@@ -613,7 +616,7 @@ export default function StaffCoursePlan({ staffUser }) {
                         value={t.topic}
                         onChange={(e) => handleTopicChange(idx, 'topic', e.target.value)}
                         placeholder=""
-                        className="w-full p-1.5 bg-transparent border-0 font-semibold text-xs leading-relaxed focus:ring-1 focus:ring-blue-500 rounded resize-y"
+                        className="w-full p-1.5 bg-transparent border-0 font-semibold text-sm leading-relaxed focus:ring-1 focus:ring-blue-500 rounded resize-y"
                       />
                     </td>
 
@@ -624,7 +627,7 @@ export default function StaffCoursePlan({ staffUser }) {
                         value={t.executionDate}
                         onChange={(e) => handleTopicChange(idx, 'executionDate', e.target.value)}
                         placeholder=""
-                        className="w-full p-1 bg-transparent border-0 font-semibold text-center text-xs focus:ring-1 focus:ring-blue-500 rounded"
+                        className="w-full p-1 bg-transparent border-0 font-semibold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded"
                       />
                     </td>
 
@@ -637,7 +640,7 @@ export default function StaffCoursePlan({ staffUser }) {
                         value={t.executionHours}
                         onChange={(e) => handleTopicChange(idx, 'executionHours', e.target.value)}
                         placeholder=""
-                        className="w-full p-1 bg-transparent border-0 font-semibold text-center text-xs focus:ring-1 focus:ring-blue-500 rounded"
+                        className="w-full p-1 bg-transparent border-0 font-semibold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded"
                       />
                     </td>
 
@@ -648,7 +651,7 @@ export default function StaffCoursePlan({ staffUser }) {
                         value={t.deviation}
                         onChange={(e) => handleTopicChange(idx, 'deviation', e.target.value)}
                         placeholder=""
-                        className="w-full p-1 bg-transparent border-0 text-slate-700 text-xs focus:ring-1 focus:ring-blue-500 rounded"
+                        className="w-full p-1 bg-transparent border-0 text-slate-700 text-sm focus:ring-1 focus:ring-blue-500 rounded"
                       />
                     </td>
 
@@ -657,7 +660,7 @@ export default function StaffCoursePlan({ staffUser }) {
                       <select
                         value={t.sign || t.status || 'Pending'}
                         onChange={(e) => handleTopicChange(idx, 'sign', e.target.value)}
-                        className={`text-[11px] font-bold rounded-lg px-2 py-1 border transition-colors focus:outline-none cursor-pointer ${
+                        className={`text-xs font-bold rounded-lg px-2 py-1 border transition-colors focus:outline-none cursor-pointer ${
                           t.sign === 'Completed' || t.sign === 'Signed'
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold'
                             : t.sign === 'In Progress'
@@ -833,19 +836,19 @@ export default function StaffCoursePlan({ staffUser }) {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px]">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase font-black text-xs">
                   <tr>
-                    <th className="py-3 px-4 w-12 text-center">S.No</th>
-                    <th className="py-3 px-4">Topic / Syllabus Module</th>
-                    <th className="py-3 px-3 text-center w-24">Planned Hrs</th>
-                    <th className="py-3 px-3 text-center w-28">Planned Date</th>
-                    <th className="py-3 px-3 text-center w-28">Execution Date</th>
-                    <th className="py-3 px-3 text-center w-32">Status</th>
-                    <th className="py-3 px-4 text-center w-52">Quick Status Action</th>
+                    <th className="py-3.5 px-4 w-12 text-center">S.No</th>
+                    <th className="py-3.5 px-4">Topic / Syllabus Module</th>
+                    <th className="py-3.5 px-3 text-center w-24">Planned Hrs</th>
+                    <th className="py-3.5 px-3 text-center w-28">Planned Date</th>
+                    <th className="py-3.5 px-3 text-center w-28">Execution Date</th>
+                    <th className="py-3.5 px-3 text-center w-32">Status</th>
+                    <th className="py-3.5 px-4 text-center w-52">Quick Status Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 font-medium">
                   {planForm.topics.map((t, idx) => {
                     const isCompleted = t.sign === 'Completed' || t.sign === 'Signed';
                     const isInProgress = t.sign === 'In Progress';
@@ -853,26 +856,26 @@ export default function StaffCoursePlan({ staffUser }) {
 
                     return (
                       <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3 px-4 text-center font-bold text-slate-500">{t.sNo || idx + 1}</td>
+                        <td className="py-3 px-4 text-center font-bold text-slate-600 text-sm">{t.sNo || idx + 1}</td>
                         <td className="py-3 px-4">
-                          <p className="font-bold text-slate-800">{t.topic || <span className="text-slate-400 italic font-normal">Topic not specified</span>}</p>
+                          <p className="font-bold text-slate-900 text-sm">{t.topic || <span className="text-slate-400 italic font-normal">Topic not specified</span>}</p>
                           {t.deviation && (
-                            <p className="text-[10px] text-amber-600 font-semibold mt-0.5">Deviation: {t.deviation}</p>
+                            <p className="text-xs text-amber-600 font-semibold mt-0.5">Deviation: {t.deviation}</p>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-center font-bold text-slate-700">{t.noOfHours ? `${t.noOfHours}h` : '--'}</td>
-                        <td className="py-3 px-3 text-center font-semibold text-slate-600">{t.plannedDate || '--'}</td>
-                        <td className="py-3 px-3 text-center font-semibold text-slate-600">
+                        <td className="py-3 px-3 text-center font-bold text-slate-800 text-sm">{t.noOfHours ? `${t.noOfHours}h` : '--'}</td>
+                        <td className="py-3 px-3 text-center font-semibold text-slate-700 text-sm">{t.plannedDate || '--'}</td>
+                        <td className="py-3 px-3 text-center font-semibold text-slate-700">
                           <input
                             type="text"
                             value={t.executionDate}
                             onChange={(e) => handleTopicChange(idx, 'executionDate', e.target.value)}
                             placeholder="DD.MM.YY"
-                            className="w-24 text-center p-1 bg-slate-50 border border-slate-200 rounded text-xs font-semibold focus:bg-white focus:outline-none"
+                            className="w-24 text-center p-1.5 bg-slate-50 border border-slate-200 rounded text-sm font-semibold focus:bg-white focus:outline-none"
                           />
                         </td>
                         <td className="py-3 px-3 text-center">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-black uppercase ${
                             isCompleted
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                               : isInProgress
@@ -887,7 +890,7 @@ export default function StaffCoursePlan({ staffUser }) {
                             <button
                               type="button"
                               onClick={() => handleUpdatePortionStatus(idx, 'Completed')}
-                              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer transition-all ${
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition-all ${
                                 isCompleted
                                   ? 'bg-emerald-600 text-white'
                                   : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
@@ -898,7 +901,7 @@ export default function StaffCoursePlan({ staffUser }) {
                             <button
                               type="button"
                               onClick={() => handleUpdatePortionStatus(idx, 'In Progress')}
-                              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer transition-all ${
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition-all ${
                                 isInProgress
                                   ? 'bg-amber-500 text-white'
                                   : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
@@ -909,7 +912,7 @@ export default function StaffCoursePlan({ staffUser }) {
                             <button
                               type="button"
                               onClick={() => handleUpdatePortionStatus(idx, 'Pending')}
-                              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer transition-all ${
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition-all ${
                                 isPending
                                   ? 'bg-slate-600 text-white'
                                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'

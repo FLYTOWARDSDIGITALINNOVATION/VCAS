@@ -424,7 +424,7 @@ export default function FeeStructureView({ user }) {
   // Calculator state
   const [calcDept, setCalcDept] = useState('B.Com');
   const [calcYear, setCalcYear] = useState('I');
-  const [calcBatch, setCalcBatch] = useState('2025-2028');
+  const [calcBatch, setCalcBatch] = useState('2026-2027');
   const [calcScholarship, setCalcScholarship] = useState('none');
   const [specialAmount, setSpecialAmount] = useState(5000);
   const [calcPeriod, setCalcPeriod] = useState('year'); // 'year', 'sem1', 'sem2'
@@ -947,10 +947,9 @@ export default function FeeStructureView({ user }) {
                 onChange={(e) => setCalcBatch(e.target.value)}
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:bg-white focus:border-blue-500 focus:outline-none shadow-2xs cursor-pointer"
               >
-                <option value="2025-2028">2025 – 2028</option>
-                <option value="2024-2027">2024 – 2027</option>
-                <option value="2023-2026">2023 – 2026</option>
-                <option value="2022-2025">2022 – 2025</option>
+                <option value="2026-2027">2026 – 2027</option>
+                <option value="2025-2026">2025 – 2026</option>
+                <option value="2024-2025">2024 – 2025</option>
               </select>
             </div>
 

@@ -887,7 +887,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
         year: editingStudent.year || '1st Year',
         sem: editingStudent.sem || editingStudent.semester || '1st Sem',
         semester: editingStudent.sem || editingStudent.semester || '1st Sem',
-        batch: (editingStudent.batch || '2022-2026').replace('–', '-').trim(),
+        batch: (editingStudent.batch || '').replace('–', '-').trim(),
         loginId: (editingStudent.loginId || editingStudent.regNo || editingStudent.studentId || '').trim().toUpperCase(),
         password: editingStudent.dob,
         studentId: editingStudent.regNo || editingStudent.studentId || editingStudent.id,
@@ -1875,7 +1875,7 @@ Unauthorized reproduction or distribution is strictly prohibited.
                   <input
                     type="text"
                     list="edit-batch-suggestions"
-                    value={editingStudent.batch || '2022-2026'}
+                    value={editingStudent.batch || ''}
                     onChange={(e) => setEditingStudent({ ...editingStudent, batch: e.target.value })}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none"
                     placeholder="2022-2026"
@@ -1884,10 +1884,6 @@ Unauthorized reproduction or distribution is strictly prohibited.
                     {uniqueBatches.map(b => (
                       <option key={b} value={b} />
                     ))}
-                    <option value="2022-2026" />
-                    <option value="2023-2027" />
-                    <option value="2024-2028" />
-                    <option value="2025-2029" />
                   </datalist>
                 </div>
               </div>
@@ -1948,11 +1944,26 @@ Unauthorized reproduction or distribution is strictly prohibited.
                     onChange={(e) => setEditingStudent({
                       ...editingStudent,
                       courseAdmitted: e.target.value.toUpperCase(),
-                      course: e.target.value.toUpperCase(),
-                      department: e.target.value.toUpperCase()
+                      course: e.target.value.toUpperCase()
                     })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
                   />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Department *</label>
+                  <input
+                    type="text"
+                    list="edit-dept-suggestions"
+                    value={editingStudent.department || ''}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, department: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:outline-none"
+                    placeholder="e.g. Commerce, Computer Science"
+                  />
+                  <datalist id="edit-dept-suggestions">
+                    {Array.from(new Set(students.map(s => (s.department || '').trim()).filter(Boolean))).sort().map(d => (
+                      <option key={d} value={d} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
 

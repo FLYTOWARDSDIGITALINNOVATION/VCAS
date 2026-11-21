@@ -780,6 +780,14 @@ export default function CourseSubjectManagement({ user }) {
         }
       } catch (_) {}
 
+      // Persist the deletion globally so Hall Ticket and cached subject lists stay clean after reload.
+      try {
+        const saved = JSON.parse(localStorage.getItem('vcas_deleted_subject_codes') || '[]');
+        const deletedCodes = new Set(Array.isArray(saved) ? saved.map(code => String(code).trim().toUpperCase()).filter(Boolean) : []);
+        deletedCodes.add(codeToDelete);
+        localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(deletedCodes)));
+      } catch (_) {}
+
       // Dispatch event so other components immediately know a subject was removed
       try {
         window.dispatchEvent(new CustomEvent('vcas_subject_removed', { detail: { code: codeToDelete, id: targetId } }));
@@ -1778,7 +1786,7 @@ export default function CourseSubjectManagement({ user }) {
                           S{semNumber}
                         </span>
                         <div>
-                          <h4 className="font-extrabold text-sm text-slate-900">Semester {semNumber}</h4>
+                          <h4 className="font-extrabold text-sm text-slate-900 leading-tight truncate" title={fac.name}>{semLabel}</h4>
                           <p className="text-[11px] text-slate-400 font-medium">Year {Math.ceil(semNumber / 2)} Curriculum</p>
                         </div>
                       </div>
@@ -2142,7 +2150,7 @@ export default function CourseSubjectManagement({ user }) {
                     value={subjectForm.code}
                     onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })}
                     placeholder="CS502"
-                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs sm:text-sm font-mono font-bold focus:bg-white focus:outline-none uppercase transition-all ${
+                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs sm:text-sm font-bold focus:bg-white focus:outline-none uppercase transition-all ${
                       formErrors.code ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-purple-500'
                     }`}
                   />
@@ -2310,7 +2318,7 @@ export default function CourseSubjectManagement({ user }) {
                     type="text"
                     value={subjectForm.ltp}
                     onChange={(e) => setSubjectForm({ ...subjectForm, ltp: e.target.value })}
-                    placeholder="e.g. 3-0-3"
+                    placeholder="e.g. 3-1-0"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:border-purple-500 focus:outline-none font-mono"
                   />
                 </div>
@@ -2554,7 +2562,7 @@ export default function CourseSubjectManagement({ user }) {
                     .filter(f => !programForm.department || f.department === programForm.department)
                     .map(f => (
                       <option key={f.staffId || f._id || f.name} value={f.name}>
-                        {f.name} ({f.role || f.designation || 'Faculty'})
+                        {f.name} {f.designation ? `(${f.designation})` : f.department ? `(${f.department})` : ''}
                       </option>
                     ))}
                   {/* Fallback to show all faculty if needed */}

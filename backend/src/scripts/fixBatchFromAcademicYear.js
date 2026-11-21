@@ -9,15 +9,15 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Student  = require('../models/Student');
+const Student = require('../models/Student');
 
 // Parse numeric year of study from stored label e.g. "2nd Year" → 2
 function parseYearNum(yearLabel) {
   if (!yearLabel) return null;
   const s = String(yearLabel).toLowerCase().trim();
-  if (s.startsWith('1') || s.startsWith('first'))  return 1;
+  if (s.startsWith('1') || s.startsWith('first')) return 1;
   if (s.startsWith('2') || s.startsWith('second')) return 2;
-  if (s.startsWith('3') || s.startsWith('third'))  return 3;
+  if (s.startsWith('3') || s.startsWith('third')) return 3;
   if (s.startsWith('4') || s.startsWith('fourth')) return 4;
   const m = s.match(/\d+/);
   return m ? parseInt(m[0], 10) : null;
@@ -35,12 +35,12 @@ async function run() {
   const ops = [];
 
   for (const s of students) {
-    const acadYear   = (s.academicYear || '').replace('–', '-').trim();
-    const yearLabel  = (s.year || '').trim();
-    const course     = (s.course || '').toUpperCase();
+    const acadYear = (s.academicYear || '').replace('–', '-').trim();
+    const yearLabel = (s.year || '').trim();
+    const course = (s.course || '').toUpperCase();
 
-    const acadStart  = parseInt((acadYear || '').split('-')[0], 10);
-    const yearNum    = parseYearNum(yearLabel);
+    const acadStart = parseInt((acadYear || '').split('-')[0], 10);
+    const yearNum = parseYearNum(yearLabel);
 
     if (isNaN(acadStart) || !yearNum) {
       console.warn(`  ⚠️  Skip ${s.name} — cannot parse acadYear="${acadYear}" year="${yearLabel}"`);
@@ -48,10 +48,10 @@ async function run() {
       continue;
     }
 
-    const isPG             = course.startsWith('M.') || course.includes('MBA') || course.includes('MCA') || course.includes('M.SC') || course.includes('MSC');
+    const isPG = course.startsWith('M.') || course.includes('MBA') || course.includes('MCA') || course.includes('M.SC') || course.includes('MSC');
     const courseDurationYears = isPG ? 2 : 3;
-    const batchStartYear   = acadStart - yearNum + 1;
-    const batch            = `${batchStartYear}-${batchStartYear + courseDurationYears}`;
+    const batchStartYear = acadStart - yearNum + 1;
+    const batch = `${batchStartYear}-${batchStartYear + courseDurationYears}`;
 
     if (s.batch === batch && s.batchStartYear === batchStartYear && s.courseDurationYears === courseDurationYears) {
       skipped++;

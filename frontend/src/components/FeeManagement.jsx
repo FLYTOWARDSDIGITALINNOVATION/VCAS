@@ -33,6 +33,7 @@ import MiscellaneousFeesManagement from './MiscellaneousFeesManagement';
 import FeeStructureView, { getDepartmentFixedFee } from './FeeStructureView';
 import { Building2 } from 'lucide-react';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
+import { getStudentBatch } from '../utils/studentFeeUtils';
 
 export default function FeeManagement({ defaultFeeType = 'All', user }) {
   // Mode state: 'list' or 'form'
@@ -70,7 +71,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     course: '',
     department: '',
     year: 'I',
-    batch: '2025-2028',
+    batch: '',
     academicYear: '2025 - 2026',
     feeType: 'Exam Fees',
     miscFeeName: 'Lab Fees',
@@ -228,7 +229,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
             const savedBreakdown = savedPayments[sid]?.feeBreakdown || {};
 
             const rawYear = st.year || st.academicYearNum || (st.semester ? Math.ceil(Number(st.semester) / 2) : 1);
-            const rawBatch = st.batch || st.academicYear || (rawYear === 1 ? '2025-2028' : rawYear === 2 ? '2024-2027' : '2023-2026');
+            const rawBatch = (st.batch || getStudentBatch(st) || st.academicYear || '').trim();
             const rawDept = st.department || st.course || 'Computer Science';
             const rawSem = st.sem || st.semester || (rawYear === 1 ? '1st Sem' : rawYear === 2 ? '3rd Sem' : '5th Sem');
 
@@ -288,7 +289,11 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               sem: rawSem,
               semester: rawSem,
               batch: rawBatch,
-              academicYear: rawBatch,
+              academicYear: st.academicYear || rawBatch,
+              courseDurationFrom: st.courseDurationFrom,
+              courseDurationTo: st.courseDurationTo,
+              courseDurationYears: st.courseDurationYears,
+              batchStartYear: st.batchStartYear,
               feeType: 'Tuition Fees',
               totalFee: totalFee,
               totalFeeDisplay: `₹${Number(totalFee).toLocaleString('en-IN')}`,
@@ -720,7 +725,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           course,
           department,
           year: entryFormData.year || rec.year || 'I',
-          batch: entryFormData.batch || rec.batch || '2025-2028',
+          batch: entryFormData.batch || rec.batch || '2026-2027',
           academicYear: entryFormData.academicYear || rec.academicYear || '2025 - 2026',
           feeType: feeTypeName,
           baseAmount: baseAmount,
@@ -888,7 +893,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         course,
         department: department,
         year: entryFormData.year || 'I',
-        batch: entryFormData.batch || '2025-2028',
+        batch: entryFormData.batch || '2026-2027',
         academicYear: entryFormData.academicYear || '2025 - 2026',
         feeType: feeTypeName,
         routeStop: entryFormData.routeStop || '',
@@ -1421,6 +1426,17 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       };
     });
   };
+
+  const availableBatches = useMemo(() => {
+    const set = new Set();
+    (feeRecords || []).forEach(r => {
+      const b = String(r.batch || r.academicYear || '').trim().replace('–', '-');
+      if (b && b !== 'All' && !b.toLowerCase().includes('batch')) {
+        set.add(b);
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [feeRecords]);
 
   // Filter students based on search, status, course, feeType, year, batch
   const filteredRecords = feeRecords.filter(rec => {
@@ -2018,10 +2034,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                   className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 py-1.5 px-3 focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
                   <option value="All">All Batches</option>
-                  <option value="2025-2028">2025–2028</option>
-                  <option value="2024-2027">2024–2027</option>
-                  <option value="2023-2026">2023–2026</option>
-                  <option value="2022-2025">2022–2025</option>
+                  {availableBatches.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
                 </select>
               </div>
 

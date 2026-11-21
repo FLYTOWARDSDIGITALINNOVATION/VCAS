@@ -77,7 +77,17 @@ export default function StaffAttendance({ staffUser }) {
   const [downloadMode, setDownloadMode] = useState('department'); // 'department' | 'year' | 'batch' | 'semester' | 'all'
   const [downloadDept, setDownloadDept] = useState(() => staffUser?.department || 'Computer Science');
   const [downloadYear, setDownloadYear] = useState('I Year');
-  const [downloadBatch, setDownloadBatch] = useState('2022-2026');
+  const [downloadBatch, setDownloadBatch] = useState('');
+
+  // Unique batches dynamically fetched from student details section
+  const availableBatches = useMemo(() => {
+    const set = new Set();
+    (allRegisteredStudents || []).forEach(s => {
+      const b = String(s.batch || s.academicYear || '').trim().replace('–', '-');
+      if (b && !b.toLowerCase().includes('batch')) set.add(b);
+    });
+    return Array.from(set).sort().reverse();
+  }, [allRegisteredStudents]);
   const [downloadSemester, setDownloadSemester] = useState('1');
 
   // Quick date range state — visible directly in the header for fast download
@@ -1848,14 +1858,16 @@ export default function StaffAttendance({ staffUser }) {
                   <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-2">
                     <label className="block text-xs font-bold text-slate-700">Choose Batch</label>
                     <select
-                      value={downloadBatch}
+                      value={downloadBatch || availableBatches[0] || ''}
                       onChange={(e) => setDownloadBatch(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                     >
-                      <option value="2021-2025">Batch 2021-2025</option>
-                      <option value="2022-2026">Batch 2022-2026</option>
-                      <option value="2023-2027">Batch 2023-2027</option>
-                      <option value="2024-2028">Batch 2024-2028</option>
+                      {availableBatches.map(b => (
+                        <option key={b} value={b}>Batch {b}</option>
+                      ))}
+                      {downloadBatch && !availableBatches.includes(downloadBatch) && (
+                        <option value={downloadBatch}>Batch {downloadBatch}</option>
+                      )}
                     </select>
                     <p className="text-[10px] text-slate-400">Downloads student attendance summaries strictly for Batch {downloadBatch}.</p>
                   </div>

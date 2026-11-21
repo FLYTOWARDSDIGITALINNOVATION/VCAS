@@ -280,7 +280,7 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
           studentMap.set(key, {
             name: s.name || s.fullName,
             department: s.department || 'Computer Science',
-            batch: s.batch || '2024–2027',
+            batch: s.batch || '2026-2027',
             year: s.year || '1st Year'
           });
         }

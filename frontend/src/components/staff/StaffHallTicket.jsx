@@ -21,6 +21,9 @@ const DEFAULT_INSTRUCTIONS = [
 const ALL_SEMESTERS = [1, 2, 3, 4, 5, 6];
 const DEFAULT_DEPTS = getKnownDepartments();
 
+// Oldly deleted / dummy test subject codes that should never appear in schedules or dropdowns
+const OLD_DELETED_CODES = new Set(['CS2003', 'CS2006', 'SF76', '123', 'CS2005', 'TESTA1', 'TESTA2']);
+
 // Local storage helpers for persisting custom subject timing and dates across reloads
 const getSavedCustomTimings = () => {
   try {
@@ -46,6 +49,42 @@ const saveCustomTiming = (code, timingObj) => {
   }
 };
 
+const scheduleRemovedStorageKey = 'vcas_removed_schedule_codes_by_allocation';
+
+const getRemovedScheduleCodes = (allocationId) => {
+  if (!allocationId) return new Set();
+  try {
+    const saved = JSON.parse(localStorage.getItem(scheduleRemovedStorageKey) || '{}');
+    return new Set((saved[String(allocationId)] || []).map(code => String(code).trim().toUpperCase()));
+  } catch {
+    return new Set();
+  }
+};
+
+const markScheduleSubjectRemoved = (allocationId, code) => {
+  if (!allocationId || !code) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(scheduleRemovedStorageKey) || '{}');
+    const key = String(allocationId);
+    const codes = new Set((saved[key] || []).map(value => String(value).trim().toUpperCase()));
+    codes.add(String(code).trim().toUpperCase());
+    saved[key] = Array.from(codes);
+    localStorage.setItem(scheduleRemovedStorageKey, JSON.stringify(saved));
+  } catch { }
+};
+
+const unmarkScheduleSubjectRemoved = (allocationId, code) => {
+  if (!allocationId || !code) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(scheduleRemovedStorageKey) || '{}');
+    const key = String(allocationId);
+    const codes = new Set((saved[key] || []).map(value => String(value).trim().toUpperCase()));
+    codes.delete(String(code).trim().toUpperCase());
+    saved[key] = Array.from(codes);
+    localStorage.setItem(scheduleRemovedStorageKey, JSON.stringify(saved));
+  } catch { }
+};
+
 export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   // Navigation tabs: 'allocate' (Hall Allocation Setup) | 'tickets' (Hall Tickets & Print)
   const [activeTab, setActiveTab] = useState(initialTab || 'allocate');
@@ -56,6 +95,18 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const [selectedAllocationId, setSelectedAllocationId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [hallFilter, setHallFilter] = useState('All');
+  const [subjectFilter, setSubjectFilter] = useState('All');
+
+  // Set of subject codes explicitly removed by staff so they never re-appear (placed early to prevent TDZ)
+  const [deletedSubjectCodes, setDeletedSubjectCodes] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('vcas_deleted_subject_codes') || '[]');
+      return new Set(Array.isArray(saved) ? saved.map(code => String(code).trim().toUpperCase()).filter(Boolean) : []);
+    } catch (_) {
+      return new Set();
+    }
+  });
+
   const [allocationToDelete, setAllocationToDelete] = useState(null);
   const [isDeletingAllocation, setIsDeletingAllocation] = useState(false);
   const [showResetInstructionsModal, setShowResetInstructionsModal] = useState(false);
@@ -66,7 +117,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     return allocations.find(a => a._id === selectedAllocationId) || allocations[0] || null;
   }, [allocations, selectedAllocationId]);
 
-  // Unique halls in current allocation for dropdown filter and in-use calculation
+  // Unique halls and subjects in the current allocation for dropdown filters
   const currentAllocationHalls = useMemo(() => {
     if (!currentAllocation?.students) return [];
     const set = new Set();
@@ -78,6 +129,35 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     });
     return Array.from(set);
   }, [currentAllocation]);
+
+  const currentAllocationSubjects = useMemo(() => {
+    const subjectMap = new Map();
+    const removedCodes = getRemovedScheduleCodes(currentAllocation?._id);
+
+    (currentAllocation?.commonSubjects || []).forEach(subject => {
+      const code = String(subject?.code || '').trim().toUpperCase();
+      if (!code || deletedSubjectCodes.has(code) || removedCodes.has(code) || OLD_DELETED_CODES.has(code)) return;
+      subjectMap.set(code, {
+        code,
+        name: String(subject?.name || '').trim()
+      });
+    });
+
+    (currentAllocation?.students || []).forEach(student => {
+      (student?.subjects || []).forEach(subject => {
+        const code = String(subject?.code || '').trim().toUpperCase();
+        if (!code || deletedSubjectCodes.has(code) || removedCodes.has(code) || OLD_DELETED_CODES.has(code)) return;
+        subjectMap.set(code, {
+          code,
+          name: String(subject?.name || '').trim()
+        });
+      });
+    });
+
+    return Array.from(subjectMap.values()).sort((a, b) =>
+      `${a.code} ${a.name}`.localeCompare(`${b.code} ${b.name}`)
+    );
+  }, [currentAllocation, deletedSubjectCodes]);
 
   // Actual count of students who have an assigned hall
   const allocatedStudentsCount = useMemo(() => {
@@ -97,9 +177,12 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         st.rollNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         st.seatNo?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesHall = hallFilter === 'All' || st.hallNo === hallFilter;
-      return matchesSearch && matchesHall;
+      const matchesSubject = subjectFilter === 'All' || (st.subjects || []).some(subject =>
+        String(subject?.code || '').trim().toUpperCase() === String(subjectFilter).trim().toUpperCase()
+      );
+      return matchesSearch && matchesHall && matchesSubject;
     });
-  }, [currentAllocation, searchQuery, hallFilter]);
+  }, [currentAllocation, searchQuery, hallFilter, subjectFilter]);
 
   // Single preview modal
   const [previewStudent, setPreviewStudent] = useState(null);
@@ -179,11 +262,18 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const [newHallName, setNewHallName] = useState('');
   const [newHallCap, setNewHallCap] = useState(30);
 
-  // Subjects schedule for this exam (restores cached subjects across reloads)
+  // Subjects schedule for this exam (restores cached subjects across reloads, excluding deleted ones)
   const [subjectsSchedule, setSubjectsSchedule] = useState(() => {
     try {
+      const deleted = new Set(
+        (JSON.parse(localStorage.getItem('vcas_deleted_subject_codes') || '[]') || [])
+          .map(c => String(c).trim().toUpperCase()).filter(Boolean)
+      );
       const raw = localStorage.getItem('vcas_staff_subjects_schedule');
-      return raw ? JSON.parse(raw) : [];
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter(s => s && s.code && !deleted.has(String(s.code).trim().toUpperCase()))
+        : [];
     } catch {
       return [];
     }
@@ -318,20 +408,6 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const [newSubSession, setNewSubSession] = useState('Forenoon (FN)');
   const [newSubTime, setNewSubTime] = useState('');
 
-  // Set of subject codes explicitly removed by staff so they never re-appear
-  const [deletedSubjectCodes, setDeletedSubjectCodes] = useState(() => {
-    try {
-      const saved = localStorage.getItem('vcas_deleted_subject_codes');
-      const base = new Set(['SF76', 'CS2003', 'CS2006']);
-      if (saved) {
-        JSON.parse(saved).forEach(c => base.add(c));
-      }
-      return base;
-    } catch {
-      return new Set(['SF76', 'CS2003', 'CS2006']);
-    }
-  });
-
   // Listen for subject removals across the entire system
   useEffect(() => {
     const handleSubjectRemoved = (e) => {
@@ -341,7 +417,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         setDeletedSubjectCodes(prev => {
           const next = new Set(prev);
           next.add(clean);
-          try { localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next))); } catch {}
+          try { localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next))); } catch { }
           return next;
         });
         setCatalogSubjects(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
@@ -400,12 +476,34 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
           ? Array.from(new Set(realDepts))
           : DEFAULT_DEPTS;
 
-        setAvailableDepts(finalDepts);
+        const roleKey = String(staffUser?.role || '').toUpperCase().replace(/[^A-Z]/g, '');
+        const desigKey = String(staffUser?.designation || '').toUpperCase().replace(/[^A-Z]/g, '');
+        const isSuperAdminOrAdmin = roleKey.includes('SUPERADMIN') || roleKey.includes('MANAGINGDIRECTOR') || roleKey.includes('MD') || roleKey.includes('ADMIN') || roleKey.includes('PRINCIPAL') || desigKey.includes('PRINCIPAL') || desigKey.includes('MANAGINGDIRECTOR') || desigKey.includes('MD');
+        const staffDept = String(staffUser?.department || '').trim();
+        const matchingOwnDept = staffDept
+          ? finalDepts.find(d =>
+            d.toLowerCase() === staffDept.toLowerCase() ||
+            d.toLowerCase().includes(staffDept.toLowerCase()) ||
+            staffDept.toLowerCase().includes(d.toLowerCase())
+          )
+          : null;
+
+        // Staff and HOD users must see only their assigned department.
+        // Only privileged admin accounts may browse every department.
+        if (!isSuperAdminOrAdmin && staffDept) {
+          setAvailableDepts(matchingOwnDept ? [matchingOwnDept] : [staffDept]);
+        } else {
+          setAvailableDepts(finalDepts);
+        }
+
         setAvailableSemesters(ALL_SEMESTERS);
 
-        // Pick matching department or first
-        const match = finalDepts.find(d => staffUser?.department && d.toLowerCase().includes(staffUser.department.toLowerCase()));
-        const targetDept = match || finalDepts[0] || 'Computer Science';
+        // Pick matching department or the staff/HOD department
+        const allowedDepts = !isSuperAdminOrAdmin && staffDept
+          ? (matchingOwnDept ? [matchingOwnDept] : [staffDept])
+          : finalDepts;
+        const match = allowedDepts.find(d => staffDept && d.toLowerCase().includes(staffDept.toLowerCase()));
+        const targetDept = match || allowedDepts[0] || 'Computer Science';
         setFormDept(targetDept);
         setPlanFilterDept(targetDept);
         loadAvailableSubjects(targetDept, formSemester, formSection);
@@ -431,8 +529,11 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       }
       if (Array.isArray(currentAllocation.commonSubjects) && currentAllocation.commonSubjects.length > 0) {
         const cachedTimings = getSavedCustomTimings();
+        const removedCodes = getRemovedScheduleCodes(currentAllocation._id);
         const enriched = currentAllocation.commonSubjects
-          .filter(s => !deletedSubjectCodes.has(s.code.toUpperCase()))
+          .filter(s => !removedCodes.has(String(s.code || '').trim().toUpperCase()))
+          .filter(s => !deletedSubjectCodes.has(String(s.code || '').trim().toUpperCase()))
+          .filter(s => !OLD_DELETED_CODES.has(String(s.code || '').trim().toUpperCase()))
           .map(s => {
             const custom = cachedTimings[s.code.toUpperCase()];
             return {
@@ -446,7 +547,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         setSubjectsSchedule(enriched);
         try {
           localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(enriched));
-        } catch {}
+        } catch { }
       }
     }
   }, [currentAllocation?._id]);
@@ -498,15 +599,54 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     }
   }, [currentAllocation]);
 
-  // Fetch available subjects for the chosen department & semester
+  // Fetch available subjects for the chosen department & semester (matches StaffInternalMarks logic)
   const loadAvailableSubjects = async (dept, sem, sec) => {
     try {
-      const activeDept = dept || formDept;
+      const activeDept = dept || formDept || staffUser?.department || '';
       const params = new URLSearchParams();
       if (activeDept && activeDept !== 'All') params.append('department', activeDept);
 
-      const res = await fetch(`${API_BASE}/hall-tickets/eligible-students?${params.toString()}`);
-      const data = await res.json();
+      const staffId = String(staffUser?.staffId || staffUser?.employeeId || '').trim();
+      const effectiveStaffId = staffId || 'EMP001';
+
+      const roleKey = String(staffUser?.role || '').toUpperCase().replace(/[^A-Z]/g, '');
+      const desigKey = String(staffUser?.designation || '').toUpperCase().replace(/[^A-Z]/g, '');
+      const isSuperAdminUser = roleKey.includes('SUPERADMIN') || roleKey.includes('MANAGINGDIRECTOR') || roleKey.includes('MD') || desigKey.includes('MANAGINGDIRECTOR') || desigKey.includes('MD');
+      const isAdminUser = !isSuperAdminUser && (roleKey.includes('ADMIN') || roleKey.includes('PRINCIPAL') || desigKey.includes('PRINCIPAL'));
+
+      const looksLikeHodUser = (value) => {
+        const normalized = String(value || '').toUpperCase();
+        return normalized.includes('HOD') ||
+          normalized.includes('HEAD OF DEPARTMENT') ||
+          normalized.includes('HEADOFDEPARTMENT') ||
+          (normalized.includes('HEAD') && normalized.includes('DEPARTMENT')) ||
+          normalized.includes('DEPARTMENT HEAD');
+      };
+      const normalizeIdentity = (value) => String(value || '').trim().toLowerCase().replace(/^(dr|prof|mr|mrs|ms|miss)\.?\s+/i, '').replace(/[^a-z0-9]/g, '');
+
+      const marksRoleParam = (looksLikeHodUser(staffUser?.role) || looksLikeHodUser(staffUser?.designation) || staffUser?.isHod || isAdminUser || isSuperAdminUser)
+        ? `?role=${encodeURIComponent(staffUser?.role || (staffUser?.isHod ? 'HOD' : isAdminUser ? 'Admin' : 'SuperAdmin'))}&dept=${encodeURIComponent(staffUser?.department || activeDept || '')}`
+        : '';
+
+      const [resEligible, resStaffClasses, resAllClasses, resSubjects, resDepts, resDeptClasses, resMarks, resAsgts] = await Promise.allSettled([
+        fetch(`${API_BASE}/hall-tickets/eligible-students?${params.toString()}`).then(r => r.json()),
+        staffId ? fetch(`${API_BASE}/classes/staff/${encodeURIComponent(staffId)}`).then(r => r.json()) : Promise.resolve(null),
+        fetch(`${API_BASE}/classes`).then(r => r.json()),
+        fetch(`${API_BASE}/subjects`).then(r => r.json()),
+        fetch(`${API_BASE}/departments`).then(r => r.json()),
+        fetch(`${API_BASE}/classes?dept=${encodeURIComponent(activeDept || staffUser?.department || '')}`).then(r => r.json()),
+        fetch(`${API_BASE}/internal-marks/${effectiveStaffId}${marksRoleParam}`).then(r => r.json()),
+        staffId ? fetch(`${API_BASE}/assignments/${effectiveStaffId}`).then(r => r.json()) : Promise.resolve(null)
+      ]);
+
+      const data = (resEligible.status === 'fulfilled' && resEligible.value) ? resEligible.value : { success: false, students: [], subjects: [] };
+      const staffClsData = (resStaffClasses.status === 'fulfilled' && resStaffClasses.value) ? resStaffClasses.value : null;
+      const allClassesData = (resAllClasses.status === 'fulfilled' && resAllClasses.value) ? resAllClasses.value : null;
+      const subjectsData = (resSubjects.status === 'fulfilled' && resSubjects.value) ? resSubjects.value : null;
+      const departmentsData = (resDepts.status === 'fulfilled' && resDepts.value) ? resDepts.value : null;
+      const departmentClassesData = (resDeptClasses.status === 'fulfilled' && resDeptClasses.value) ? resDeptClasses.value : null;
+      const marksData = (resMarks.status === 'fulfilled' && resMarks.value) ? resMarks.value : null;
+      const asgtsData = (resAsgts.status === 'fulfilled' && resAsgts.value) ? resAsgts.value : null;
 
       let fetchedStudents = (data.success && Array.isArray(data.students)) ? data.students : [];
 
@@ -539,7 +679,6 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                 dept: st.dept || st.department || cur.dept || activeDept,
                 semester: st.semester || (st.sem ? parseInt(st.sem) || cur.semester : cur.semester) || 1,
                 section: st.section || cur.section || 'A',
-                subjects: (cur.subjects && cur.subjects.length > 0) ? cur.subjects : cleanSubs
               });
             } else {
               existingMap.set(roll, {
@@ -561,97 +700,202 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         });
       }
 
-      if (data.success && Array.isArray(data.subjects) && data.subjects.length > 0) {
-        const staffIdLower = String(staffUser?.staffId || staffUser?.employeeId || '').trim().toLowerCase();
-        const staffNameLower = String(staffUser?.name || '').trim().toLowerCase();
-        const staffDeptLower = String(staffUser?.department || '').trim().toLowerCase();
-        const isHod = Boolean(
-          staffUser?.isHod ||
-          String(staffUser?.role || '').toUpperCase().includes('HOD') ||
-          String(staffUser?.designation || '').toUpperCase().includes('HOD')
-        );
+      // Collect subjects exactly like StaffInternalMarks fetchStaffSubjects
+      const subs = [];
+      const seen = new Set();
+      const departmentList = departmentsData?.data || (Array.isArray(departmentsData) ? departmentsData : []);
+      const targetDept = String(dept || formDept || staffUser?.department || '').trim().toLowerCase();
 
-        const filteredSubjects = data.subjects.filter((s) => {
-          if (!s || !s.code) return false;
-          if (deletedSubjectCodes.has((s.code || '').toUpperCase())) return false;
+      const isGenericSubjectEntry = (value) => {
+        const normalized = String(value || '').trim();
+        if (!normalized) return true;
+        const candidate = normalized.toUpperCase();
+        return ['GENERAL', 'COURSE', 'ALL SUBJECTS', 'UNASSIGNED', 'N/A', 'NA', 'DEFAULT', '-- SELECT --'].includes(candidate);
+      };
 
-          const faculty = String(s.faculty || s.staffName || '').trim().toLowerCase();
-          const staffIdField = String(s.staffId || s.employeeId || s.createdByStaffId || '').trim().toLowerCase();
-          const createdBy = String(s.createdBy || s.createdById || '').trim().toLowerCase();
-          const createdByName = String(s.createdByName || '').trim().toLowerCase();
-          const subjectDept = String(s.department || s.dept || '').trim().toLowerCase();
-          const sameFaculty = Boolean(faculty && (faculty === staffIdLower || faculty === staffNameLower || faculty.includes(staffNameLower) || staffIdField === staffIdLower || staffIdField === staffNameLower));
-          const sameCreatedBy = Boolean((createdBy && (createdBy === staffIdLower || createdBy === staffNameLower)) || (createdByName && (createdByName === staffNameLower || createdByName.includes(staffNameLower))));
-          const sameDept = Boolean(staffDeptLower && subjectDept && subjectDept === staffDeptLower);
-          return sameFaculty || sameCreatedBy || (isHod && sameDept);
+      const addSub = (code, name, meta = {}) => {
+        const c = (code || '').trim().toUpperCase();
+        const n = String(name || '').trim();
+        if (!c || c.length < 2 || seen.has(c)) return;
+        if (isGenericSubjectEntry(c) || isGenericSubjectEntry(n)) return;
+        if (OLD_DELETED_CODES.has(c) || deletedSubjectCodes.has(c)) return;
+
+        seen.add(c);
+        subs.push({
+          code: c,
+          name: (n && !isGenericSubjectEntry(n) && n !== c) ? n : c,
+          department: meta.dept || meta.department || activeDept || '',
+          dept: meta.dept || meta.department || activeDept || '',
+          year: meta.year || null,
+          semester: meta.semester || meta.sem || 1,
+          sem: meta.semester ? `Sem ${meta.semester}` : (meta.sem || 'Sem 1'),
+          staffId: meta.staffId || '',
+          staffName: meta.staffName || '',
+          date: meta.date || 'TBA',
+          session: meta.session || 'Forenoon (FN)',
+          time: meta.time || '09:30 AM - 12:30 PM'
         });
+      };
 
-        const cleanCatalog = filteredSubjects;
-        setCatalogSubjects(cleanCatalog);
-        const cachedTimings = getSavedCustomTimings();
+      // 1. Official subjects from /subjects and cache
+      let cachedAdminSubjects = [];
+      try {
+        const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
+        if (Array.isArray(cached)) cachedAdminSubjects = cached;
+      } catch (_) { }
 
-        setSubjectsSchedule(prev => {
-          const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
-          const merged = [];
+      let scheduledSubjects = [];
+      try {
+        const sched = JSON.parse(localStorage.getItem('vcas_admin_ht_subjects_schedule') || '[]');
+        if (Array.isArray(sched)) scheduledSubjects = sched;
+      } catch (_) { }
 
-          // Filter out subjects that staff explicitly removed
-          const validSubs = cleanCatalog;
+      const rawBackendSubjects = Array.isArray(subjectsData?.data)
+        ? subjectsData.data
+        : Array.isArray(subjectsData?.subjects)
+          ? subjectsData.subjects
+          : Array.isArray(subjectsData)
+            ? subjectsData
+            : [];
+      const allSubjects = [...rawBackendSubjects, ...cachedAdminSubjects, ...scheduledSubjects];
 
-          validSubs.forEach((dbSub, idx) => {
-            const code = dbSub.code.toUpperCase();
-            const baseDay = 15 + (idx * 3);
-            const defaultDate = `2026-04-${baseDay < 10 ? '0' + baseDay : baseDay}`;
-            const custom = cachedTimings[code];
+      allSubjects.forEach(s => addSub(s.code, s.name || s.title, {
+        ...s,
+        dept: s.department || s.dept,
+        isOfficial: true
+      }));
 
-            const resolvedDate = custom?.date || (dbSub.date && dbSub.date !== 'TBA' ? dbSub.date : defaultDate);
-            const resolvedSession = custom?.session || dbSub.session || 'Forenoon (FN)';
-            const resolvedTime = (custom?.time !== undefined && custom?.time !== null)
-              ? custom.time
-              : (dbSub.time !== undefined && dbSub.time !== null ? dbSub.time : '09:30 AM - 12:30 PM');
-            const resolvedName = custom?.name || dbSub.name;
-
-            if (prevMap.has(code)) {
-              const existing = prevMap.get(code);
-              merged.push({
-                ...existing,
-                name: resolvedName || existing.name,
-                date: (existing.date && existing.date !== 'TBA') ? existing.date : resolvedDate,
-                session: existing.session || resolvedSession,
-                time: (existing.time !== undefined && existing.time !== null && existing.time !== '')
-                  ? existing.time
-                  : resolvedTime
-              });
-              prevMap.delete(code);
-            } else {
-              merged.push({
-                code: dbSub.code,
-                name: resolvedName,
-                date: resolvedDate,
-                session: resolvedSession,
-                time: resolvedTime
-              });
-            }
+      // 2. Official department courses configured by Admin in Department Management
+      departmentList.forEach(deptItem => {
+        const deptName = deptItem?.name || '';
+        (deptItem?.coursesList || []).forEach(c => {
+          addSub(c.code, c.name || c.title, {
+            ...c,
+            dept: deptName,
+            isOfficial: true
           });
+        });
+      });
 
-          // Keep user-added custom subjects that are not in DB (as long as not deleted)
-          prevMap.forEach(customSub => {
-            if (!deletedSubjectCodes.has(customSub.code.toUpperCase())) {
-              const custom = cachedTimings[customSub.code.toUpperCase()];
-              merged.push({
-                ...customSub,
-                name: custom?.name || customSub.name,
-                date: custom?.date || customSub.date,
-                session: custom?.session || customSub.session,
-                time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : customSub.time
-              });
-            }
-          });
-          try {
-            localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(merged));
-          } catch {}
-          return merged;
+      // 3. Staff's directly assigned classes
+      const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
+      staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
+
+      // 4. Department classes for this staff member (both Staff and HOD)
+      const departmentClasses = departmentClassesData?.classes || (Array.isArray(departmentClassesData?.data) ? departmentClassesData.data : []);
+      departmentClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
+
+      // 5. Classes from allClasses
+      const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
+      allClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
+
+      // 6. Existing marks and assignments
+      if (marksData?.success && Array.isArray(marksData.data)) {
+        marksData.data.forEach(m => {
+          addSub(m.subjectCode, m.subjectName || m.subjectCode, m);
         });
       }
+
+      if (asgtsData?.success && Array.isArray(asgtsData.data)) {
+        asgtsData.data.forEach(a => {
+          addSub(a.subjectCode, a.subjectName || a.title || a.subjectCode, a);
+        });
+      }
+
+      // 7. Also include eligible subjects from hall-tickets/eligible-students endpoint
+      const rawEligibleSubs = (data.success && Array.isArray(data.subjects)) ? data.subjects : [];
+      rawEligibleSubs.forEach(s => addSub(s.code, s.name, s));
+
+      // Department filter matching StaffInternalMarks:
+      // If department filter matches, use filtered list; otherwise fall back to all subjects so dropdown is never empty
+      let cleanCatalog = subs;
+      if (targetDept && targetDept !== 'all' && targetDept !== 'all departments') {
+        const isCsTarget = targetDept.includes('cs') || targetDept.includes('computer');
+        const deptFiltered = subs.filter(s => {
+          const sDept = String(s.department || s.dept || '').trim().toLowerCase();
+          if (!sDept) return true;
+          const isCsSubject = sDept.includes('cs') || sDept.includes('computer');
+          return sDept === targetDept || sDept.includes(targetDept) || targetDept.includes(sDept) || (isCsTarget && isCsSubject);
+        });
+        if (deptFiltered.length > 0) {
+          cleanCatalog = deptFiltered;
+        }
+      }
+
+      // Sort: Target department and assigned subjects appear at the top, then alphabetically
+      cleanCatalog.sort((a, b) => {
+        const aDeptMatch = targetDept && String(a.dept || a.department || '').trim().toLowerCase() === targetDept;
+        const bDeptMatch = targetDept && String(b.dept || b.department || '').trim().toLowerCase() === targetDept;
+        if (aDeptMatch && !bDeptMatch) return -1;
+        if (!aDeptMatch && bDeptMatch) return 1;
+        return (a.code || '').localeCompare(b.code || '');
+      });
+
+      setCatalogSubjects(cleanCatalog);
+      const cachedTimings = getSavedCustomTimings();
+
+      setSubjectsSchedule(prev => {
+        const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
+        const merged = [];
+
+        // Filter out subjects that staff explicitly removed from this allocation's schedule
+        const removedScheduleCodes = getRemovedScheduleCodes(currentAllocation?._id);
+        const validSubs = cleanCatalog.filter(s => !removedScheduleCodes.has(String(s.code || '').trim().toUpperCase()));
+
+        validSubs.forEach((dbSub, idx) => {
+          const code = dbSub.code.toUpperCase();
+          const baseDay = 15 + (idx * 3);
+          const defaultDate = `2026-04-${baseDay < 10 ? '0' + baseDay : baseDay}`;
+          const custom = cachedTimings[code];
+
+          const resolvedDate = custom?.date || (dbSub.date && dbSub.date !== 'TBA' ? dbSub.date : defaultDate);
+          const resolvedSession = custom?.session || dbSub.session || 'Forenoon (FN)';
+          const resolvedTime = (custom?.time !== undefined && custom?.time !== null)
+            ? custom.time
+            : (dbSub.time !== undefined && dbSub.time !== null ? dbSub.time : '09:30 AM - 12:30 PM');
+          const resolvedName = custom?.name || dbSub.name;
+
+          if (prevMap.has(code)) {
+            const existing = prevMap.get(code);
+            merged.push({
+              ...existing,
+              name: resolvedName || existing.name,
+              date: (existing.date && existing.date !== 'TBA') ? existing.date : resolvedDate,
+              session: existing.session || resolvedSession,
+              time: (existing.time !== undefined && existing.time !== null && existing.time !== '')
+                ? existing.time
+                : resolvedTime
+            });
+            prevMap.delete(code);
+          } else {
+            merged.push({
+              code: dbSub.code,
+              name: resolvedName,
+              date: resolvedDate,
+              session: resolvedSession,
+              time: resolvedTime
+            });
+          }
+        });
+
+        // Keep user-added custom subjects that are not in DB (as long as not removed from schedule)
+        prevMap.forEach(customSub => {
+          if (!removedScheduleCodes.has(customSub.code.toUpperCase())) {
+            const custom = cachedTimings[customSub.code.toUpperCase()];
+            merged.push({
+              ...customSub,
+              name: custom?.name || customSub.name,
+              date: custom?.date || customSub.date,
+              session: custom?.session || customSub.session,
+              time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : customSub.time
+            });
+          }
+        });
+        try {
+          localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(merged));
+        } catch { }
+        return merged;
+      });
     } catch (err) {
       console.error('Error loading subjects:', err);
     }
@@ -689,7 +933,9 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
             const merged = [];
 
-            const validSubs = data.subjects.filter(s => !deletedSubjectCodes.has(s.code.toUpperCase()));
+            const validSubs = data.subjects
+              .filter(s => !deletedSubjectCodes.has(String(s.code || '').trim().toUpperCase()))
+              .filter(s => !OLD_DELETED_CODES.has(String(s.code || '').trim().toUpperCase()));
 
             validSubs.forEach((dbSub, idx) => {
               const code = dbSub.code.toUpperCase();
@@ -741,7 +987,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             });
             try {
               localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(merged));
-            } catch {}
+            } catch { }
             return merged;
           });
         }
@@ -886,7 +1132,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
           invigilator: staffUser?.name || 'Staff In-Charge'
         })
       });
-    } catch (_) {}
+    } catch (_) { }
 
     setNewHallName('');
     setNewHallCap(30);
@@ -1046,13 +1292,14 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     const cleanSession = newSubSession || 'Forenoon (FN)';
     const cleanTime = newSubTime.trim() || '';
 
+    // If previously removed from this allocation, restore it here.
+    unmarkScheduleSubjectRemoved(currentAllocation?._id, cleanCode);
+
     // If previously deleted, un-delete it
     setDeletedSubjectCodes(prev => {
       const next = new Set(prev);
       next.delete(cleanCode);
-      try {
-        localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next)));
-      } catch { }
+      try { localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next))); } catch { }
       return next;
     });
 
@@ -1092,7 +1339,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       }
       try {
         localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -1155,33 +1402,67 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const handleRemoveSubject = (code) => {
     const cleanCode = code.toUpperCase();
 
-    // Remember in deletedSubjectCodes persistently so it is never re-fetched
-    setDeletedSubjectCodes(prev => {
-      const next = new Set(prev);
-      next.add(cleanCode);
-      try {
-        localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next)));
-      } catch { }
+    // Remove from local schedule and persist to localStorage
+    setSubjectsSchedule(prev => {
+      const next = prev.filter(s => s.code.toUpperCase() !== cleanCode);
+      try { localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next)); } catch { }
       return next;
     });
 
-    setSubjectsSchedule(prev => prev.filter(s => s.code.toUpperCase() !== cleanCode));
+    // NOTE: Do NOT remove from catalogSubjects or deletedSubjectCodes!
+    // The subject must remain in the dropdown catalog so staff can select or re-add it whenever needed.
 
     if (selectedAllocationSubject && selectedAllocationSubject.toUpperCase() === cleanCode) {
-      setSelectedAllocationSubject('');
+      setSelectedAllocationSubject('ALL');
     }
 
+    if (subjectFilter.toUpperCase() === cleanCode) {
+      setSubjectFilter('All');
+    }
+
+    // Mark this subject as removed for the current allocation
+    markScheduleSubjectRemoved(currentAllocation?._id, cleanCode);
+
+    // Update allocations state to reflect the subject removal
     if (currentAllocation?._id) {
       setAllocations(prev => prev.map(a => {
         if (a._id === currentAllocation._id) {
           return {
             ...a,
-            commonSubjects: (a.commonSubjects || []).filter(s => s.code.toUpperCase() !== cleanCode)
+            commonSubjects: (a.commonSubjects || []).filter(s => s.code.toUpperCase() !== cleanCode),
+            students: (a.students || []).map(st => ({
+              ...st,
+              subjects: (st.subjects || []).filter(s => (s.code || '').toUpperCase() !== cleanCode)
+            }))
           };
         }
         return a;
       }));
     }
+
+    // Remove from studentsToAllocate in memory so it disappears immediately from matrix
+    setStudentsToAllocate(prev => prev.map(st => ({
+      ...st,
+      subjects: (st.subjects || []).filter(s => (s.code || '').toUpperCase() !== cleanCode)
+    })));
+
+    try {
+      const cur = getSavedCustomTimings();
+      delete cur[cleanCode];
+      localStorage.setItem('vcas_staff_custom_subjects_timing', JSON.stringify(cur));
+    } catch { }
+
+    // Persist removal to backend (removes from HallTicket & Exam collections)
+    fetch(`${API_BASE}/hall-tickets/remove-subject-schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        department: formDept,
+        semester: Number(formSemester) || 1,
+        allocationId: currentAllocation?._id
+      })
+    }).catch(e => console.warn('Could not remove subject from backend:', e));
 
     setStatusMessage({ type: 'info', text: `Removed subject ${code} from schedule.` });
     setTimeout(() => setStatusMessage(null), 3000);
@@ -1201,7 +1482,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       });
       try {
         localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -1259,6 +1540,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
 
   const handleStartEditSubject = (sub) => {
     setEditingSubCode(sub.code);
+
     let cleanDate = '';
     if (sub.date && /^\d{4}-\d{2}-\d{2}$/.test(sub.date.trim())) {
       cleanDate = sub.date.trim();
@@ -1324,7 +1606,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       });
       try {
         localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -1660,9 +1942,9 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         return {
           code: sub.code.toUpperCase(),
           name: sub.name || matched?.name || sub.code,
-          date: (sub.date && sub.date !== 'TBA') ? sub.date : (matched?.date || (sub.code === 'CS2001' ? '2026-04-15' : '2026-04-18')),
-          session: sub.session || matched?.session || 'Forenoon (FN)',
-          time: (sub.time !== undefined && sub.time !== null && sub.time !== '') ? sub.time : (matched?.time !== undefined && matched?.time !== null ? matched.time : (sub.time || ''))
+          date: (matched?.date && matched.date !== 'TBA') ? matched.date : (sub.date || ''),
+          session: matched?.session || sub.session || 'Forenoon (FN)',
+          time: matched?.time || sub.time || '09:30 AM - 12:30 PM'
         };
       }).filter(s => !['CS2003', 'CS2006', 'SF76'].includes(s.code));
 
@@ -1709,8 +1991,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      }).then(() => fetchAllocations()).catch(() => {});
-    } catch (_) {}
+      }).then(() => fetchAllocations()).catch(() => { });
+    } catch (_) { }
   };
 
   // Toggle a specific subject for an individual student
@@ -1838,8 +2120,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
-        }).catch(() => {});
-      } catch (_) {}
+        }).catch(() => { });
+      } catch (_) { }
     }
   };
 
@@ -2022,7 +2304,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
           const yr = String(d.getFullYear()).slice(-2);
           return `${day}.${month}.${yr}`;
         }
-      } catch (e) {}
+      } catch (e) { }
       return dateStr;
     };
     const formatSessionShort = (session) => {
@@ -2034,7 +2316,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
 
     const ticketsHtml = studentsList.map((st, index) => {
       const subjects = (st.subjects && st.subjects.length > 0) ? st.subjects : (examData?.commonSubjects || subjectsSchedule);
-      const studentDept = st.dept || examData?.department || 'CFS';
+      const studentDept = st.dept || st.department || examData?.department || '';
       const semNum = st.semester || examData?.semester || 1;
       const yearRoman = getYearRoman(semNum);
       const semRoman = toRoman(semNum);
@@ -2061,28 +2343,36 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
               <div class="title-wrap">
                 <div class="college-name">VIVEKANANDA COLLEGE OF ARTS AND SCIENCE</div>
                 <div class="college-loc">Vellalankulam, Tenkasi Dist</div>
-                <div class="college-contact">PHONE: 04636298128, 7094462393, 7094462394 &nbsp;&nbsp; EMAIL: vivekanandacas@gmail.com</div>
+                <div class="college-contact">PHONE: 04636298128, 
                 <div class="exam-title">${examTitle.toUpperCase()}</div>
                 <div class="ticket-badge">HALL TICKET</div>
               </div>
             </div>
 
             <!-- Dept / Year / Semester Meta Row -->
-            <div class="meta-row">
+            <div className="meta-row">
               <div><strong>DEPARTMENT:</strong> ${studentDept.toUpperCase()}</div>
-              <div><strong>YEAR:</strong> ${yearRoman}</div>
-              <div><strong>SEMESTER:</strong> ${semRoman}</div>
+              <div><strong>YEAR:</strong> ${(() => {
+          const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+          const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
+          return map[Math.ceil(s / 2)] || 'I';
+        })()}</div>
+              <div><strong>SEMESTER:</strong> ${(() => {
+          const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+          const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+          return map[s] || 'I';
+        })()}</div>
             </div>
 
             <!-- Student Particulars Table -->
             <table class="student-table">
               <tr>
                 <td class="st-lbl">Student Name:</td>
-                <td class="st-val">${(st.name || '').toUpperCase()}</td>
+                <td class="st-val">${(previewStudent.name || '').toUpperCase()}</td>
               </tr>
               <tr>
                 <td class="st-lbl">Register No :</td>
-                <td class="st-val font-bold">${st.rollNo || st.regNo || ''}</td>
+                <td class="st-val font-bold">${previewStudent.rollNo || previewStudent.regNo || ''}</td>
               </tr>
             </table>
 
@@ -2359,8 +2649,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             <button
               onClick={() => setActiveTab('allocate')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'allocate'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
               <Building2 className="w-4 h-4" />
@@ -2369,8 +2659,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             <button
               onClick={() => setActiveTab('tickets')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'tickets'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
               <Ticket className="w-4 h-4" />
@@ -2379,8 +2669,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             <button
               onClick={() => setActiveTab('arrear')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'arrear'
-                  ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
               <Award className="w-4 h-4" />
@@ -2392,8 +2682,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         {statusMessage && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95">
             <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border pointer-events-auto ${statusMessage.type === 'error'
-                ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
-                : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
+              ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
+              : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
               }`}>
               {statusMessage.type === 'error' ? (
                 <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
@@ -2588,12 +2878,12 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by student name, roll number, or seat..."
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-500">Hall:</span>
+                  <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Hall:</span>
                   <select
                     value={hallFilter}
                     onChange={(e) => setHallFilter(e.target.value)}
@@ -2606,6 +2896,22 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                   </select>
                 </div>
 
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Subject:</span>
+                  <select
+                    value={subjectFilter}
+                    onChange={(e) => setSubjectFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="All">All Subjects</option>
+                    {currentAllocationSubjects.map(sub => (
+                      <option key={sub.code} value={sub.code}>
+                        {sub.code} - {sub.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="text-xs font-bold text-slate-500 ml-auto">
                   Showing <span className="text-blue-600">{filteredStudents.length}</span> candidates
                 </div>
@@ -2613,7 +2919,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             </div>
 
             {/* Students Table */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs text-slate-600">
                   <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
@@ -2674,7 +2980,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                               </button>
                               <button
                                 onClick={() => printHallTickets([st], currentAllocation)}
-                                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
+                                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-all"
                                 title="Download / Print this Student's Hall Ticket"
                               >
                                 <Printer className="w-3 h-3" />
@@ -2789,7 +3095,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                       }}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      {availableSemesters.map(s => <option key={s} value={s}>Semester {s}</option>)}
+                      {availableSemesters.map(s => <option key={s} value={s}>Sem {s}</option>)}
                     </select>
                   </div>
                   <div>
@@ -2800,11 +3106,10 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                           key={parity}
                           type="button"
                           onClick={() => setFormSemesterParity(parity)}
-                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all ${
-                            formSemesterParity === parity
+                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all ${formSemesterParity === parity
                               ? parity === 'Odd' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-emerald-600 text-white border-emerald-600'
                               : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
+                            }`}
                         >
                           {parity === 'Odd' ? '☀️ Odd' : '🌙 Even'}
                         </button>
@@ -2879,7 +3184,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                   <button
                     type="button"
                     onClick={handleAddHall}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center gap-1 shrink-0 shadow-sm"
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center gap-1"
                   >
                     <Plus className="w-4 h-4" />
                     Add Hall
@@ -2933,7 +3238,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             <div className="bg-white p-6 rounded-2xl border border-violet-200/80 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-violet-100">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center font-bold text-xs">⊞</div>
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">⊞</div>
                   <div>
                     <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-wider">Hall Seating Layout Grid</h3>
                     <p className="text-xs text-slate-500">Manual seat entry — {hallGridRows} Rows × {hallGridCols} Cols. Enter roll nos in each seat cell.</p>
@@ -2941,10 +3246,10 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-[11px] font-bold text-slate-500">Rows:</label>
-                  <input type="number" min={1} max={20} value={hallGridRows} onChange={e => { const r=Math.max(1,Math.min(20,Number(e.target.value))); setHallGridRows(r); setHallGrid(Array.from({length:r},(_,ri)=>Array.from({length:hallGridCols},(__,ci)=>(hallGrid[ri]&&hallGrid[ri][ci])||''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
+                  <input type="number" min={1} max={20} value={hallGridRows} onChange={e => { const r = Math.max(1, Math.min(20, Number(e.target.value))); setHallGridRows(r); setHallGrid(Array.from({ length: r }, (_, ri) => Array.from({ length: hallGridCols }, __ => ''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
                   <label className="text-[11px] font-bold text-slate-500">Cols:</label>
-                  <input type="number" min={1} max={10} value={hallGridCols} onChange={e => { const c=Math.max(1,Math.min(10,Number(e.target.value))); setHallGridCols(c); setHallGrid(Array.from({length:hallGridRows},(_,ri)=>Array.from({length:c},(__,ci)=>(hallGrid[ri]&&hallGrid[ri][ci])||''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
-                  <button type="button" onClick={()=>setHallGrid(Array.from({length:hallGridRows},()=>Array(hallGridCols).fill('')))} className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200 hover:bg-rose-100">Clear</button>
+                  <input type="number" min={1} max={10} value={hallGridCols} onChange={e => { const c = Math.max(1, Math.min(10, Number(e.target.value))); setHallGridCols(c); setHallGrid(Array.from({ length: hallGridRows }, (_, ri) => Array.from({ length: c }, __ => ''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
+                  <button type="button" onClick={() => setHallGrid(Array.from({ length: hallGridRows }, () => Array(hallGridCols).fill('')))} className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200 hover:bg-rose-100">Clear</button>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -2952,22 +3257,22 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                   <thead>
                     <tr>
                       <th className="bg-slate-100 text-slate-500 font-black px-2 py-1.5 border border-slate-300 text-[10px]">Row</th>
-                      {Array.from({length:hallGridCols},(_,ci)=>(
-                        <th key={ci} className="bg-blue-50 text-blue-700 font-black px-2 py-1.5 border border-slate-300 min-w-[100px] text-[10px]">Col {ci+1}</th>
+                      {Array.from({ length: hallGridCols }, (_, ci) => (
+                        <th key={ci} className="bg-blue-50 text-blue-700 font-black px-2 py-1.5 border border-slate-300 min-w-[100px] text-[10px]">Col {ci + 1}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {Array.from({length:hallGridRows},(_,ri)=>(
-                      <tr key={ri} className={ri%2===0?'bg-white':'bg-slate-50/60'}>
-                        <td className="text-center text-[10px] font-black text-slate-500 border border-slate-200 px-2 py-1">R{ri+1}</td>
-                        {Array.from({length:hallGridCols},(__,ci)=>(
+                    {Array.from({ length: hallGridRows }, (_, ri) => (
+                      <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                        <td className="text-center text-[10px] font-black text-slate-500 border border-slate-200 px-2 py-1">R{ri + 1}</td>
+                        {Array.from({ length: hallGridCols }, (_, ci) => (
                           <td key={ci} className="border border-slate-200 p-0.5">
                             <input
                               type="text"
-                              value={hallGrid[ri]?.[ci]||''}
-                              onChange={e=>{const val=e.target.value.toUpperCase();setHallGrid(prev=>{const next=prev.map(r=>[...r]);if(!next[ri])next[ri]=Array(hallGridCols).fill('');next[ri][ci]=val;return next;});}}
-                              placeholder={`R${ri+1}C${ci+1}`}
+                              value={hallGrid[ri]?.[ci] || ''}
+                              onChange={e => { const val = e.target.value.toUpperCase(); setHallGrid(prev => { const next = prev.map(r => [...r]); if (!next[ri]) next[ri] = Array(hallGridCols).fill(''); next[ri][ci] = val; return next; }); }}
+                              placeholder={`R${ri + 1}C${ci + 1}`}
                               className="w-full text-[10px] font-mono font-bold text-slate-800 text-center bg-transparent px-1 py-1.5 focus:outline-none focus:bg-blue-50 rounded transition-colors placeholder-slate-300"
                             />
                           </td>
@@ -2993,8 +3298,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
               </div>
 
               {/* Add Subject Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-                <div className={newSubCode === 'CUSTOM' ? '' : 'md:col-span-2'}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div>
                   <select
                     value={newSubCode}
                     onChange={(e) => {
@@ -3015,7 +3320,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     <option value="">-- Choose Subject from Catalog --</option>
                     {catalogSubjects.map(cs => (
                       <option key={cs.code} value={cs.code}>
-                        {cs.code} - {cs.name}
+                        {cs.code} — {cs.name && cs.name !== 'Course' ? cs.name : cs.code}{(cs.dept || cs.department) ? ` (${cs.dept || cs.department})` : ''}
                       </option>
                     ))}
                     <option value="CUSTOM">+ Type Custom Code</option>
@@ -3040,7 +3345,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     value={newSubName}
                     onChange={(e) => setNewSubName(e.target.value)}
                     placeholder="Subject Name"
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800"
                   />
                 </div>
 
@@ -3049,7 +3354,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     type="date"
                     value={newSubDate}
                     onChange={(e) => setNewSubDate(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800"
                   />
                 </div>
 
@@ -3061,7 +3366,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                       setNewSubSession(sess);
                       setNewSubTime(sess.includes('AN') ? '01:30 PM - 04:30 PM' : '09:30 AM - 12:30 PM');
                     }}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 cursor-pointer"
                   >
                     <option value="Forenoon (FN)">Forenoon (FN)</option>
                     <option value="Afternoon (AN)">Afternoon (AN)</option>
@@ -3074,7 +3379,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     value={newSubTime}
                     onChange={(e) => setNewSubTime(e.target.value)}
                     placeholder="Time (09:30 AM - 12:30 PM)"
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800"
                   />
                 </div>
 
@@ -3092,7 +3397,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
               {/* Subjects Table */}
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <table className="w-full text-left text-xs text-slate-600">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
                     <tr>
                       <th className="px-4 py-2.5">Subject Code</th>
                       <th className="px-4 py-2.5">Subject Title</th>
@@ -3105,7 +3410,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                   <tbody className="divide-y divide-slate-100">
                     {subjectsSchedule.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="px-4 py-6 text-center text-slate-400 font-medium">
+                        <td colSpan="6" className="px-4 py-6 text-center text-slate-400">
                           No subjects scheduled yet. Add a course subject above to print it on hall tickets.
                         </td>
                       </tr>
@@ -3158,39 +3463,18 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                                   <option value="Afternoon (AN)">Afternoon (AN)</option>
                                 </select>
                               </td>
-                              <td className="px-3 py-2">
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="text"
-                                    value={editSubForm.time}
-                                    onChange={(e) => setEditSubForm(prev => ({ ...prev, time: e.target.value }))}
-                                    placeholder="Time (e.g. 10:00 AM - 01:00 PM)"
-                                    className="w-full bg-white border border-blue-300 rounded px-2 py-1 text-xs font-medium text-slate-700 focus:ring-1 focus:ring-blue-500"
-                                  />
-                                  {editSubForm.time && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditSubForm(prev => ({ ...prev, time: '' }))}
-                                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
-                                      title="Delete / Clear Exam Time"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
                               <td className="px-3 py-2 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
                                   <button
                                     onClick={() => handleSaveEditSubject(sub.code)}
-                                    className="p-1.5 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                                    className="p-1.5 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
                                     title="Save Subject Changes"
                                   >
                                     <Check className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={handleCancelEditSubject}
-                                    className="p-1.5 rounded bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                                    className="p-1.5 rounded bg-slate-100 text-slate-500 hover:bg-slate-200"
                                     title="Cancel"
                                   >
                                     <X className="w-3.5 h-3.5" />
@@ -3218,7 +3502,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                                       className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
                                       title="Delete / Clear Exam Time"
                                     >
-                                      <Trash2 className="w-3 h-3" />
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   )}
                                 </div>
@@ -3257,7 +3541,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">ℹ️</div>
                   <div>
-                    <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-wider">
+                    <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-wider">
                       Hall Ticket Instructions to Candidates (Editable)
                     </h3>
                     <p className="text-xs text-slate-500">Edit, add, or remove rules that will be printed on student hall tickets</p>
@@ -3272,8 +3556,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                 </button>
               </div>
 
-              {/* Add New Instruction Input */}
-              <div className="flex items-center gap-2">
+              {/* Add Rule Input */}
+              <div className="flex items-center gap-2 shrink-0">
                 <input
                   type="text"
                   value={newInstructionText}
@@ -3285,20 +3569,19 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     }
                   }}
                   placeholder="Type new instruction for candidates..."
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-800"
                 />
                 <button
                   type="button"
                   onClick={handleAddInstruction}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center gap-1 shrink-0"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
                 >
-                  <Plus className="w-3.5 h-3.5" />
                   Add Rule
                 </button>
               </div>
 
-              {/* List of Instructions */}
-              <div className="space-y-2">
+              {/* Instruction List */}
+              <div className="space-y-2 overflow-y-auto flex-1 pr-1">
                 {instructionsList.map((inst, idx) => {
                   const isEditingThis = editingInstructionIdx === idx;
                   return (
@@ -3312,17 +3595,13 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                             type="text"
                             value={editingInstructionText}
                             onChange={(e) => setEditingInstructionText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveInstructionEdit(idx);
-                            }}
-                            className="flex-1 bg-white border border-blue-400 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="flex-1 bg-white border border-blue-400 rounded-lg px-2.5 py-1 text-xs"
                             autoFocus
                           />
                           <button
                             type="button"
                             onClick={() => handleSaveInstructionEdit(idx)}
                             className="p-1.5 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                            title="Save"
                           >
                             <Check className="w-3.5 h-3.5" />
                           </button>
@@ -3333,7 +3612,6 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                               setEditingInstructionText('');
                             }}
                             className="p-1.5 rounded bg-slate-100 text-slate-500 hover:bg-slate-200"
-                            title="Cancel"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -3365,734 +3643,37 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                   );
                 })}
               </div>
-            </div>
 
-            {/* Step 4: Students Matrix */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">4</div>
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-wider">
-                      Student Hall & Seat Allocation Matrix ({displayedStudents.length} Candidates Displayed)
-                    </h3>
-                    <p className="text-xs text-slate-500">First choose the subject below, review enrolled candidates, and assign their hall & seat</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Subject Selector for Allocation */}
-              <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50/70 to-blue-50 border-2 border-blue-300 shadow-sm space-y-3">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div>
-                    <label className="block text-xs font-black text-blue-950 uppercase tracking-wide">
-                      Select Subject to Allocate:
-                    </label>
-                    <p className="text-[11px] text-blue-800 font-medium">
-                      Select an examination subject first. Enrolled students studying this subject will be displayed below for hall & seat allocation.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedAllocationSubject}
-                      onChange={(e) => {
-                        const subCode = e.target.value;
-                        setSelectedAllocationSubject(subCode);
-                        if (subCode && subCode !== 'ALL') {
-                          loadEligibleStudents(formDept, formSemester, formSection, subCode);
-                        }
-                      }}
-                      className="bg-white border-2 border-blue-500 rounded-xl px-4 py-2 text-xs font-black text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm min-w-[280px]"
-                    >
-                      <option value="ALL">📋 All Subjects & All Allocated Candidates ({studentsToAllocate.length})</option>
-                      {subjectsSchedule.map(s => (
-                        <option key={s.code} value={s.code}>
-                          {s.code} — {s.name} ({s.date || 'TBA'} · {s.session})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {selectedAllocationSubject ? (
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-blue-200 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-blue-950">Selected Subject:</span>
-                      <span className="px-2.5 py-0.5 rounded-lg bg-blue-600 text-white font-black text-xs">
-                        {selectedAllocationSubject}
-                      </span>
-                      <span className="text-blue-900 font-bold">
-                        {subjectsSchedule.find(s => s.code.toUpperCase() === selectedAllocationSubject.toUpperCase())?.name || ''}
-                      </span>
-                      <span className="text-blue-700 font-medium">
-                        ({displayedStudents.length} candidate(s) studying this subject)
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (subjectsSchedule.length === 0) {
-                            alert('No subjects scheduled yet in Step 1.');
-                            return;
-                          }
-                          setStudentsToAllocate(prev => prev.map(st => {
-                            const allSubs = subjectsSchedule.map(s => ({
-                              code: s.code.toUpperCase(),
-                              name: s.name,
-                              date: (s.date && s.date !== 'TBA') ? s.date : (s.code === 'CS2001' ? '2026-04-15' : '2026-04-18'),
-                              session: s.session || 'Forenoon (FN)',
-                              time: s.time || '09:30 AM - 12:30 PM'
-                            }));
-                            return { ...st, subjects: allSubs };
-                          }));
-                          setStatusMessage({ type: 'success', text: `Assigned all scheduled subjects with timings to all ${studentsToAllocate.length} candidates!` });
-                          setTimeout(() => setStatusMessage(null), 3500);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] shadow-xs transition-all flex items-center gap-1"
-                      >
-                        ⚡ Assign All Subjects &amp; Timing to All
-                      </button>
-
-                      {hallsList.length > 0 && displayedStudents.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-slate-600">Quick Hall:</span>
-                          {hallsList.map(h => (
-                            <button
-                              key={h.hallNo}
-                              type="button"
-                              onClick={() => handleAssignHallToAll(h.hallNo)}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] border border-indigo-200 transition-all"
-                            >
-                              Assign {h.hallNo} to All
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center gap-2 text-xs text-amber-800 font-semibold">
-                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Please choose a subject from the dropdown above. The students enrolled in that subject will appear below for hall allocation.</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Add Student Manually Form */}
-              <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100 space-y-2">
-                <p className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                  <UserPlus className="w-3.5 h-3.5 text-blue-600" />
-                  Add Student Manually to this Examination
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2">
-                  <div>
-                    <input
-                      type="text"
-                      value={manualRollNo}
-                      onChange={(e) => setManualRollNo(e.target.value)}
-                      placeholder="Roll No (e.g. 22UCS041)"
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 uppercase"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <input
-                      type="text"
-                      value={manualName}
-                      onChange={(e) => setManualName(e.target.value)}
-                      placeholder="Student Full Name"
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800"
-                    />
-                  </div>
-                  <div>
-                    <select
-                      value={manualHall}
-                      onChange={(e) => setManualHall(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-800"
-                    >
-                      <option value="">-- Hall --</option>
-                      {allSelectableHalls.map(h => <option key={h.hallNo} value={h.hallNo}>{h.hallNo}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={manualSeat}
-                      onChange={(e) => setManualSeat(e.target.value)}
-                      placeholder="Seat (e.g. H101-01)"
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-800"
-                    />
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={handleAddManualStudent}
-                      className="w-full h-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-sm"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Student
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Matrix Table */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[480px] overflow-y-auto">
-                <table className="w-full text-left text-xs text-slate-600">
-                  <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider z-10">
-                    <tr>
-                      <th className="px-4 py-3">Roll No</th>
-                      <th className="px-4 py-3">Student Name</th>
-                      <th className="px-4 py-3">Subjects to Write</th>
-                      <th className="px-4 py-3">Allocated Hall / Room</th>
-                      <th className="px-4 py-3">Allocated Seat No</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {displayedStudents.length > 0 ? (
-                      displayedStudents.map((st) => (
-                        <tr key={st.rollNo} className="hover:bg-slate-50/70">
-                          <td className="px-4 py-2.5 font-bold text-blue-600">{st.rollNo}</td>
-                          <td className="px-4 py-2.5 font-semibold text-slate-900">{st.name}</td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex flex-col gap-1 max-w-sm">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {subjectsSchedule.map(sub => {
-                                  const isEnrolled = (st.subjects || []).some(s => s.code.toUpperCase() === sub.code.toUpperCase());
-                                  return (
-                                    <button
-                                      key={sub.code}
-                                      type="button"
-                                      onClick={() => toggleStudentSubject(st.rollNo, sub)}
-                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all flex items-center gap-1 ${isEnrolled
-                                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                          : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
-                                        }`}
-                                      title={`${isEnrolled ? 'Remove' : 'Select'} ${sub.code} (${sub.name})`}
-                                    >
-                                      <span>{sub.code}</span>
-                                      <span>{isEnrolled ? '✓' : '+'}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {st.subjects && st.subjects.length > 0 ? (
-                                <div className="text-[10px] text-slate-600 font-medium leading-tight">
-                                  {st.subjects.map(s => `${s.code}: ${s.date || 'TBA'} (${s.session?.includes('AN') ? 'AN' : 'FN'})`).join(' • ')}
-                                </div>
-                              ) : (
-                                <span className="text-[10px] text-amber-600 font-semibold italic">No subject selected (Click + above)</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5">
-                              <select
-                                value={st.hallNo || ''}
-                                onChange={(e) => handleStudentFieldChange(st.rollNo, 'hallNo', e.target.value)}
-                                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 min-w-[130px]"
-                              >
-                                <option value="">-- Select Hall --</option>
-                                {allSelectableHalls.map(h => (
-                                  <option key={h.hallNo} value={h.hallNo}>{h.hallNo}</option>
-                                ))}
-                              </select>
-                              {st.hallNo && st.hallNo !== 'TBA' && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px] border border-blue-100 shrink-0">
-                                  <Building2 className="w-2.5 h-2.5" />
-                                  {st.hallNo}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <input
-                              type="text"
-                              value={st.seatNo || ''}
-                              onChange={(e) => handleStudentFieldChange(st.rollNo, 'seatNo', e.target.value)}
-                              placeholder="e.g. H101-01"
-                              className="w-28 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-slate-800"
-                            />
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {st.hallNo && st.hallNo !== 'TBA' && st.hallNo !== 'Unassigned' ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Allocated
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-500">
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                Pending
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5 text-right">
-                            <button
-                              onClick={() => handleRemoveStudent(st.rollNo)}
-                              className="p-1 rounded text-slate-400 hover:text-rose-600"
-                              title="Remove student"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    ) : !selectedAllocationSubject ? (
-                      <tr>
-                        <td colSpan="7" className="px-6 py-12 text-center text-slate-500 bg-slate-50/50">
-                          <BookOpen className="w-10 h-10 mx-auto mb-2 text-blue-500" />
-                          <p className="font-bold text-sm text-slate-800">Please Select an Examination Subject First</p>
-                          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                            Choose the subject from the dropdown above. The students studying that subject will appear here so you can allocate their examination hall & seat.
-                          </p>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr>
-                        <td colSpan="7" className="px-6 py-10 text-center text-slate-400">
-                          <Users className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                          <p className="font-semibold text-xs text-slate-600">No students enrolled in subject {selectedAllocationSubject} found</p>
-                          <p className="text-xs text-slate-400 mt-1">You can add students manually using the form above.</p>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Save Allocation Button */}
-              <div className="pt-4 flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
                 <button
-                  onClick={() => setActiveTab('tickets')}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs transition-all"
+                  type="button"
+                  onClick={handleResetInstructions}
+                  className="text-xs text-slate-500 hover:text-blue-600 font-semibold"
                 >
-                  Cancel
+                  Reset Defaults
                 </button>
-                <button
-                  onClick={handleSaveAllocation}
-                  disabled={savingAllocation}
-                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md shadow-blue-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  {savingAllocation ? 'Saving Allocations...' : 'Save & Publish Hall Tickets'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ------------------- TAB 3: ARREAR STUDENTS ------------------- */}
-        {activeTab === 'arrear' && (
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-gradient-to-br from-rose-900 via-rose-800 to-red-950 text-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
-              <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-rose-500/10 to-transparent pointer-events-none" />
-              <div className="relative z-10">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/30 text-rose-200 border border-rose-400/30 uppercase tracking-wider">Arrear Management</span>
-                </div>
-                <h2 className="text-lg font-black text-white">Student Arrear Papers</h2>
-                <p className="text-xs text-rose-200 mt-0.5">View students with arrear subjects — S.No, Reg No, Sub Code, Sub Name, Semester, Department, Overall Count</p>
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
-                <div className="relative xl:col-span-2">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search by name, reg no, subject..."
-                    value={arrearSearch}
-                    onChange={e => setArrearSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs font-medium border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                  />
-                </div>
-
-                <select
-                  value={arrearDept}
-                  onChange={e => setArrearDept(e.target.value)}
-                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
-                >
-                  <option value="">All Departments</option>
-                  {availableDepts.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-
-                <select
-                  value={arrearYear}
-                  onChange={e => setArrearYear(e.target.value)}
-                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
-                >
-                  {arrearYearOptions.map(value => (
-                    <option key={value} value={value}>{value === 'All Years' ? 'All Years' : value}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={arrearSemester}
-                  onChange={e => setArrearSemester(e.target.value)}
-                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
-                >
-                  <option value="All Semesters">All Semesters</option>
-                  {ALL_SEMESTERS.map(sem => <option key={sem} value={String(sem)}>{sem}</option>)}
-                </select>
-
-                <select
-                  value={arrearBatch}
-                  onChange={e => setArrearBatch(e.target.value)}
-                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
-                >
-                  {arrearBatchOptions.map(value => (
-                    <option key={value} value={value}>{value === 'All Batches' ? 'All Batches' : value}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={arrearSubject}
-                  onChange={e => setArrearSubject(e.target.value)}
-                  className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
-                >
-                  {arrearSubjectOptions.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  {filteredArrearStudents.length} student(s) matched
-                </span>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setArrearDept('');
-                      setArrearYear('All Years');
-                      setArrearSemester('All Semesters');
-                      setArrearBatch('All Batches');
-                      setArrearSubject('All Subjects');
-                      setArrearSearch('');
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 hover:bg-slate-50"
+                    onClick={() => setShowInstructionsModal(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" /> Reset
+                    Close
                   </button>
                   <button
-                    onClick={async () => {
-                      setLoadingArrear(true);
-                      try {
-                        const url = arrearDept
-                          ? `${API_BASE}/students?department=${encodeURIComponent(arrearDept)}`
-                          : `${API_BASE}/students`;
-                        const res = await fetch(url);
-                        const data = await res.json();
-                        const list = data.success ? (data.students || data.data || []) : [];
-                        setArrearOptionStudents(list);
-                        const withArrears = list.filter(s =>
-                          (Number(s.arrearsYetToBeCleared || 0) > 0) ||
-                          (Number(s.totalArrearsTillLastSem || 0) > 0) ||
-                          (Number(s.totalArrears || 0) > 0)
-                        );
-                        setArrearStudents(withArrears);
-                        setSelectedArrearStudent(null);
-                      } catch (e) {
-                        alert('Failed to fetch students: ' + e.message);
-                      } finally {
-                        setLoadingArrear(false);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-500/20 transition-all"
+                    type="button"
+                    onClick={handleSaveInstructionsToAllocation}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/20"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingArrear ? 'animate-spin' : ''}`} />
-                    Load Arrear List
+                    Save & Apply Instructions
                   </button>
                 </div>
-              </div>
-            </div>
-
-            {selectedArrearStudent && (
-              <div className="bg-gradient-to-r from-rose-50 via-white to-amber-50 border border-rose-200 rounded-2xl p-4 shadow-sm">
-                <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-rose-600">Selected Student</p>
-                    <h3 className="text-lg font-black text-slate-900">{selectedArrearStudent.name}</h3>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Reg No: <span className="font-bold text-slate-700">{selectedArrearStudent.regNo || selectedArrearStudent.rollNo || '—'}</span>
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-[10px] font-bold">
-                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">Dept: {selectedArrearStudent.department || '—'}</span>
-                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">Year: {selectedArrearStudent.year || '—'}</span>
-                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">Sem: {selectedArrearStudent.semester || selectedArrearStudent.sem || '—'}</span>
-                    <span className="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">Batch: {selectedArrearStudent.batch || '—'}</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid md:grid-cols-4 gap-3">
-                  <div className="rounded-xl bg-white border border-slate-200 p-3">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Arrears</div>
-                    <div className="mt-1 text-xl font-black text-rose-600">{Number(selectedArrearStudent.totalArrearsTillLastSem || selectedArrearStudent.totalArrears || 0)}</div>
-                  </div>
-                  <div className="rounded-xl bg-white border border-slate-200 p-3">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Cleared</div>
-                    <div className="mt-1 text-xl font-black text-emerald-600">{Number(selectedArrearStudent.arrearsClearedThisSem || 0)}</div>
-                  </div>
-                  <div className="rounded-xl bg-white border border-slate-200 p-3">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Pending</div>
-                    <div className="mt-1 text-xl font-black text-amber-600">{Number(selectedArrearStudent.arrearsYetToBeCleared || Math.max(0, (Number(selectedArrearStudent.totalArrearsTillLastSem || selectedArrearStudent.totalArrears || 0) - Number(selectedArrearStudent.arrearsClearedThisSem || 0))))}</div>
-                  </div>
-                  <div className="rounded-xl bg-white border border-slate-200 p-3">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Arrear Subjects</div>
-                    <div className="mt-1 text-xl font-black text-indigo-600">{getStudentArrearList(selectedArrearStudent).length}</div>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Subject Breakdown</p>
-                  <div className="flex flex-wrap gap-2">
-                    {getStudentArrearList(selectedArrearStudent).length > 0 ? getStudentArrearList(selectedArrearStudent).map((subject, idx) => (
-                      <div key={`${subject.code}-${idx}`} className="rounded-xl bg-white border border-rose-200 px-3 py-2 min-w-[170px]">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-rose-600">{subject.code || `AR${idx + 1}`}</div>
-                        <div className="mt-1 text-xs font-bold text-slate-800">{subject.name || 'Arrear Subject'}</div>
-                      </div>
-                    )) : (
-                      <div className="text-xs font-semibold text-slate-500">No subject details available for this student.</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Arrear Table */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                <p className="text-xs font-black text-slate-700 uppercase tracking-wider">Arrear Students — All Subjects</p>
-                <span className="text-[11px] font-semibold text-slate-400">{filteredArrearStudents.length} records</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">S.No</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Reg No</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Student Name</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Department</th>
-                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">Year</th>
-                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">Sem</th>
-                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-rose-600 uppercase tracking-wider">Total Arrears</th>
-                      <th className="px-3 py-2.5 text-center text-[10px] font-black text-amber-600 uppercase tracking-wider">Yet to Clear</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Arrear Subjects</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredArrearStudents.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
-                          {loadingArrear ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <RefreshCw className="w-4 h-4 animate-spin text-rose-500" />
-                              <span className="text-sm font-semibold">Loading arrear data...</span>
-                            </div>
-                          ) : (
-                            <>
-                              <Award className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                              <p className="font-semibold text-slate-500">No arrear students found</p>
-                              <p className="text-[11px] mt-1">Try changing the filters or click "Load Arrear List" again.</p>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredArrearStudents.map((s, idx) => {
-                        const totalArrears = Number(s.totalArrearsTillLastSem || s.totalArrears || 0);
-                        const cleared = Number(s.arrearsClearedThisSem || 0);
-                        const yetToClear = Number(s.arrearsYetToBeCleared || Math.max(0, totalArrears - cleared));
-                        const subjectList = getStudentArrearList(s);
-                        const isSelected = (selectedArrearStudent && (selectedArrearStudent._id || selectedArrearStudent.regNo || selectedArrearStudent.rollNo) === (s._id || s.regNo || s.rollNo));
-                        return (
-                          <tr
-                            key={s._id || idx}
-                            onClick={() => setSelectedArrearStudent(s)}
-                            className={`border-b border-slate-100 transition-colors cursor-pointer ${isSelected ? 'bg-rose-50/70' : 'hover:bg-rose-50/30'}`}
-                          >
-                            <td className="px-3 py-2.5 font-bold text-slate-500">{idx + 1}</td>
-                            <td className="px-3 py-2.5 font-mono font-bold text-blue-700">{s.regNo || s.rollNo || '—'}</td>
-                            <td className="px-3 py-2.5 font-bold text-slate-900">{s.name}</td>
-                            <td className="px-3 py-2.5 text-slate-600 font-medium">{s.department || '—'}</td>
-                            <td className="px-3 py-2.5 text-center text-slate-600 font-semibold">{s.year || '—'}</td>
-                            <td className="px-3 py-2.5 text-center text-slate-600 font-semibold">{s.semester || s.sem || '—'}</td>
-                            <td className="px-3 py-2.5 text-center">
-                              <span className="px-2 py-0.5 bg-rose-100 text-rose-700 font-black rounded-full text-[10px]">{totalArrears}</span>
-                            </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <span className={`px-2 py-0.5 font-black rounded-full text-[10px] ${yetToClear > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{yetToClear}</span>
-                            </td>
-                            <td className="px-3 py-2.5">
-                              {subjectList.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {subjectList.slice(0, 4).map((sub, si) => (
-                                    <span key={`${sub.code || 'x'}-${si}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-semibold">
-                                      <span className="font-mono font-black">{sub.code || `AR${si + 1}`}</span>
-                                      {sub.name && <span className="text-rose-500">— {sub.name}</span>}
-                                    </span>
-                                  ))}
-                                  {subjectList.length > 4 && <span className="text-[10px] font-bold text-slate-500">+{subjectList.length - 4} more</span>}
-                                </div>
-                              ) : (
-                                <span className="text-slate-400 text-[10px] italic">No subject details</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
               </div>
             </div>
           </div>
         )}
 
       </div>
-
-      {/* ------------------- MODAL: EDIT CANDIDATE INSTRUCTIONS ------------------- */}
-      {showInstructionsModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm">ℹ️</div>
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900">Edit Hall Ticket Candidate Instructions</h3>
-                  <p className="text-xs text-slate-500">Changes will be printed on all student hall tickets for this examination</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowInstructionsModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Add Rule Input */}
-            <div className="flex items-center gap-2 shrink-0">
-              <input
-                type="text"
-                value={newInstructionText}
-                onChange={(e) => setNewInstructionText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddInstruction();
-                  }
-                }}
-                placeholder="Type new instruction for candidates..."
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-800"
-              />
-              <button
-                type="button"
-                onClick={handleAddInstruction}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
-              >
-                Add Rule
-              </button>
-            </div>
-
-            {/* Instruction List */}
-            <div className="space-y-2 overflow-y-auto flex-1 pr-1">
-              {instructionsList.map((inst, idx) => {
-                const isEditingThis = editingInstructionIdx === idx;
-                return (
-                  <div key={idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 flex items-start gap-3">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                      {idx + 1}
-                    </span>
-                    {isEditingThis ? (
-                      <div className="flex-1 flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={editingInstructionText}
-                          onChange={(e) => setEditingInstructionText(e.target.value)}
-                          className="flex-1 bg-white border border-blue-400 rounded-lg px-2.5 py-1 text-xs"
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSaveInstructionEdit(idx)}
-                          className="p-1.5 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingInstructionIdx(null);
-                            setEditingInstructionText('');
-                          }}
-                          className="p-1.5 rounded bg-slate-100 text-slate-500 hover:bg-slate-200"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex items-start justify-between gap-2">
-                        <p className="text-xs text-slate-700 leading-relaxed font-medium">{inst}</p>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditInstruction(idx, inst)}
-                            className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteInstruction(idx)}
-                            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
-              <button
-                type="button"
-                onClick={handleResetInstructions}
-                className="text-xs text-slate-500 hover:text-blue-600 font-semibold"
-              >
-                Reset Defaults
-              </button>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowInstructionsModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveInstructionsToAllocation}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20"
-                >
-                  Save & Apply Instructions
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ------------------- MODAL: SINGLE STUDENT HALL TICKET PREVIEW ------------------- */}
       {previewStudent && (
@@ -4148,17 +3729,26 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
 
                 {/* Dept / Year / Sem Meta Row */}
                 <div className="flex items-center justify-between text-[11px] font-bold py-2 px-1 text-black">
-                  <div><span>DEPARTMENT:</span> {(previewStudent.dept || previewExam?.department || 'CFS').toUpperCase()}</div>
-                  <div><span>YEAR:</span> {(() => {
-                    const s = Number(previewStudent.semester || previewExam?.semester) || 1;
-                    const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
-                    return map[Math.ceil(s / 2)] || 'I';
-                  })()}</div>
-                  <div><span>SEMESTER:</span> {(() => {
-                    const s = Number(previewStudent.semester || previewExam?.semester) || 1;
-                    const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
-                    return map[s] || 'I';
-                  })()}</div>
+                  <div>
+                    <span>DEPARTMENT:</span>{' '}
+                    {(previewStudent.dept || previewStudent.department || previewExam?.department || '').toUpperCase()}
+                  </div>
+                  <div>
+                    <span>YEAR:</span>{' '}
+                    {(() => {
+                      const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+                      const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
+                      return map[Math.ceil(s / 2)] || 'I';
+                    })()}
+                  </div>
+                  <div>
+                    <span>SEMESTER:</span>{' '}
+                    {(() => {
+                      const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+                      const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+                      return map[s] || 'I';
+                    })()}
+                  </div>
                 </div>
 
                 {/* Candidate Info 2-Row Box */}
@@ -4186,10 +3776,10 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     <tr className="border-b border-black bg-slate-50 text-center font-bold">
                       <th className="border border-black px-1.5 py-1 w-8">NO</th>
                       <th className="border border-black px-1.5 py-1 w-24">DATE</th>
-                      <th className="border border-black px-1 py-1 w-12">FN<br/>AN</th>
+                      <th className="border border-black px-1 py-1 w-12">FN<br />AN</th>
                       <th className="border border-black px-2 py-1">SUBJECT</th>
                       <th className="border border-black px-1.5 py-1 w-20">Sub. Code</th>
-                      <th className="border border-black px-1.5 py-1 w-12">Sign</th>
+                      <th className="border border-black px-1 py-1 w-12">Sign</th>
                     </tr>
                   </thead>
                   <tbody>

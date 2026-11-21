@@ -26,6 +26,9 @@ import {
   Clock,
   ArrowRight,
   UploadCloud,
+  Users,
+  UserCheck,
+  Trash2,
 } from "lucide-react";
 import ModalPortal from "../ModalPortal";
 import ExcelMarksUploadModal from "./ExcelMarksUploadModal";
@@ -175,7 +178,7 @@ export default function StaffInternalMarks({ staffUser }) {
   const [downloadFilterType, setDownloadFilterType] = useState('subject');
   const [downloadDept, setDownloadDept] = useState(staffUser?.department || 'Computer Science');
   const [downloadYear, setDownloadYear] = useState('I Year');
-  const [downloadBatch, setDownloadBatch] = useState('2022-2026');
+  const [downloadBatch, setDownloadBatch] = useState('');
   const [downloadSemester, setDownloadSemester] = useState('1');
   const [downloadFormat, setDownloadFormat] = useState('excel'); // 'excel' | 'csv'
   const [isExporting, setIsExporting] = useState(false);
@@ -193,7 +196,6 @@ export default function StaffInternalMarks({ staffUser }) {
   const roleKey = normalizeRole(staffUser?.role);
   const designationKey = normalizeRole(staffUser?.designation);
 
-  const isAdminUser = roleKey.includes('ADMIN') && !roleKey.includes('SUPERADMIN');
   const isSuperAdminUser = roleKey.includes('SUPERADMIN') ||
     roleKey.includes('SUPERADMINISTRATOR') ||
     roleKey.includes('MANAGINGDIRECTOR') ||
@@ -201,12 +203,27 @@ export default function StaffInternalMarks({ staffUser }) {
     designationKey.includes('MANAGINGDIRECTOR') ||
     designationKey.includes('MD');
 
-  const isHod = looksLikeHod(staffUser?.role) ||
+  const isAdminUser = !isSuperAdminUser && (
+    roleKey.includes('ADMIN') ||
+    roleKey.includes('ADMINISTRATOR') ||
+    roleKey.includes('PRINCIPAL') ||
+    designationKey.includes('PRINCIPAL')
+  );
+
+  const isHod = !isSuperAdminUser && !isAdminUser && (
+    looksLikeHod(staffUser?.role) ||
     looksLikeHod(staffUser?.designation) ||
-    staffUser?.isHod === true;
-  const isPrincipal = roleKey.includes('PRINCIPAL') ||
-    designationKey.includes('PRINCIPAL');
+    staffUser?.isHod === true ||
+    staffUser?.canAllocateTasks === true
+  );
+
+  const isPrincipal = roleKey.includes('PRINCIPAL') || designationKey.includes('PRINCIPAL');
   const isMD = isSuperAdminUser;
+  const isStaffOnly = !isSuperAdminUser && !isAdminUser && !isHod;
+
+  // Student selection & assignment state
+  const [selectedStudentsToAssign, setSelectedStudentsToAssign] = useState(new Set());
+  const [showAssignPanel, setShowAssignPanel] = useState(true);
 
   // Configurable Max & Pass Marks per component
   const [maxMarksConfig, setMaxMarksConfig] = useState({ ...DEFAULT_MAX_CONFIG });
@@ -230,7 +247,7 @@ export default function StaffInternalMarks({ staffUser }) {
   );
 
   const currentMax = useMemo(() => {
-    if (componentId === "all") return 100;
+    if (componentId === "all") return maxMarksConfig.consolidated || 25;
     if (componentId === "st") return maxMarksConfig.st1 || 20;
     if (componentId === "it") return maxMarksConfig.it1 || 25;
     if (componentId === "assignment") return maxMarksConfig.assignment1 || 5;
@@ -249,6 +266,15 @@ export default function StaffInternalMarks({ staffUser }) {
 
   const dropdownSubjects = useMemo(() => {
     let list = staffSubjects;
+
+    // For HOD or regular staff (non-SuperAdmin), restrict subjects strictly to their own department
+    const staffDept = String(staffUser?.department || '').trim().toLowerCase();
+    if ((isHod || isStaffOnly) && staffDept) {
+      list = list.filter(s => {
+        const d = String(s.dept || s.department || '').trim().toLowerCase();
+        return !d || d === staffDept || d.includes(staffDept) || staffDept.includes(d);
+      });
+    }
 
     // Filter by department if a specific department is selected
     if (filterDept && filterDept !== 'All') {
@@ -316,7 +342,6 @@ export default function StaffInternalMarks({ staffUser }) {
     });
 
     // Sort: Staff's own department subjects first, then alphabetically by code
-    const staffDept = String(staffUser?.department || '').trim().toLowerCase();
     deduplicated.sort((a, b) => {
       const aDept = String(a.dept || a.department || '').trim().toLowerCase();
       const bDept = String(b.dept || b.department || '').trim().toLowerCase();
@@ -335,10 +360,13 @@ export default function StaffInternalMarks({ staffUser }) {
       });
     }
     return deduplicated;
-  }, [staffSubjects, subjectCode, subjectName, filterDept, filterYear, filterSem, staffUser?.department, currentMarksheetMeta?.department]);
+  }, [staffSubjects, subjectCode, subjectName, filterDept, filterYear, filterSem, staffUser?.department, currentMarksheetMeta?.department, isHod, isStaffOnly]);
 
   // Filter dropdown lists
   const departmentsList = useMemo(() => {
+    if ((isHod || isStaffOnly) && staffUser?.department) {
+      return [staffUser.department];
+    }
     const set = new Set();
 
     adminDepartments.forEach(d => {
@@ -351,20 +379,21 @@ export default function StaffInternalMarks({ staffUser }) {
     }
 
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [adminDepartments, staffUser?.department]);
+  }, [adminDepartments, staffUser?.department, isHod, isStaffOnly]);
 
   const yearsList = useMemo(() => {
     return ['1st Year', '2nd Year', '3rd Year'];
   }, []);
 
   const batchesList = useMemo(() => {
-    const set = new Set(['2025-2028', '2024-2027', '2023-2026', '2022-2026', '2021-2025']);
+    const set = new Set();
     allRegisteredStudents.forEach(s => {
-      if (s.batch) set.add(s.batch);
-      if (s.academicYear) set.add(s.academicYear);
+      const b = (s.batch || s.academicYear || '').trim().replace('–', '-');
+      if (b && !b.toLowerCase().includes('batch')) set.add(b);
     });
     students.forEach(s => {
-      if (s.batch) set.add(s.batch);
+      const b = (s.batch || s.academicYear || '').trim().replace('–', '-');
+      if (b && !b.toLowerCase().includes('batch')) set.add(b);
     });
     return Array.from(set).sort().reverse();
   }, [allRegisteredStudents, students]);
@@ -395,17 +424,42 @@ export default function StaffInternalMarks({ staffUser }) {
       if (key) metaMap.set(key, st);
     });
 
-    return students.map(s => {
+    const enrolledRolls = new Set();
+    const list = students.map(s => {
       const key = (s.rollNo || '').toUpperCase().trim();
+      if (key) enrolledRolls.add(key);
       const meta = metaMap.get(key) || {};
+      const deptVal = s.department || meta.department || meta.course || meta.courseAdmitted || meta.dept || meta.programme || currentMarksheetMeta?.department || '';
       return {
         ...s,
-        department: s.department || meta.department || meta.course || currentMarksheetMeta?.department || '',
+        department: deptVal,
         year: s.year || meta.year || currentMarksheetMeta?.year || '',
         batch: s.batch || meta.batch || meta.academicYear || currentMarksheetMeta?.academicYear || '',
         sem: s.sem || (s.semester ? `Semester ${s.semester}` : '') || meta.sem || (meta.semester ? `Semester ${meta.semester}` : '') || (currentMarksheetMeta?.semester ? `Semester ${currentMarksheetMeta.semester}` : '') || ''
       };
     });
+
+    // Include any registered students in system not yet saved into marksheet so full class is shown
+    allRegisteredStudents.forEach(st => {
+      const key = (st.rollNo || st.regNo || st.studentId || '').toUpperCase().trim();
+      if (!key || enrolledRolls.has(key)) return;
+      const deptVal = st.department || st.course || st.courseAdmitted || st.dept || st.programme || '';
+      list.push({
+        rollNo: st.rollNo || st.regNo,
+        name: st.name || st.fullName || key,
+        department: deptVal,
+        year: st.year || '',
+        batch: st.batch || st.academicYear || '',
+        sem: st.sem || (st.semester ? `Semester ${st.semester}` : '') || '',
+        st1: null, st2: null, st3: null, st4: null,
+        it1: null, it2: null, cia1: null, cia2: null,
+        model: null, project: null,
+        assignment1: null, assignment2: null, assignment3: null, assignment4: null,
+        assignment: null, attendance: null, consolidated: null
+      });
+    });
+
+    return list;
   }, [students, allRegisteredStudents, currentMarksheetMeta]);
 
   // Multi-attribute filter: dep, yr, batch, sem and search query
@@ -418,11 +472,14 @@ export default function StaffInternalMarks({ staffUser }) {
         if (!matchSearch) return false;
       }
 
-      // Department filter
+      // Department filter (robust match supporting CS <-> Computer Science aliases)
       if (filterDept && filterDept !== 'All') {
         const d = (s.department || '').toLowerCase().trim();
         const target = filterDept.toLowerCase().trim();
-        if (d !== target && !d.includes(target) && !target.includes(d)) return false;
+        const isCsTarget = target === 'cs' || target.includes('computer');
+        const isCsStudent = d === 'cs' || d.includes('computer') || d.includes('cse') || d.includes('bsc cs') || d.includes('b sc cs');
+        const deptMatched = (d === target || d.includes(target) || target.includes(d) || (isCsTarget && isCsStudent));
+        if (!deptMatched) return false;
       }
 
       // Year filter (1st, 2nd, 3rd Year)
@@ -435,9 +492,10 @@ export default function StaffInternalMarks({ staffUser }) {
           const m = str.match(/\d+/);
           return m ? parseInt(m[0], 10) : 0;
         };
-        const yNum = getYearNum(s.year) || Math.ceil((parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0) / 2);
+        const semNum = parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0;
+        const yNum = getYearNum(s.year) || (semNum > 0 ? Math.ceil(semNum / 2) : 0);
         const targetNum = getYearNum(filterYear);
-        if (targetNum && yNum !== targetNum) return false;
+        if (targetNum && yNum && yNum !== targetNum) return false;
       }
 
       // Batch filter
@@ -451,14 +509,14 @@ export default function StaffInternalMarks({ staffUser }) {
       if (filterSem && filterSem !== 'All') {
         const numS = parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0;
         const numT = parseInt(String(filterSem).replace(/\D/g, ''), 10) || 0;
-        if (numT && numS !== numT) return false;
+        if (numT && numS && numS !== numT) return false;
       }
 
       // Subject filter
       if (filterSubject && filterSubject !== 'All') {
         const subjectValue = String(s.subjectCode || s.subject || subjectCode || '').toLowerCase().trim();
         const target = filterSubject.toLowerCase().trim();
-        if (!subjectValue || (subjectValue !== target && !subjectValue.includes(target) && !target.includes(subjectValue))) {
+        if (subjectValue && subjectValue !== target && !subjectValue.includes(target) && !target.includes(subjectValue)) {
           return false;
         }
       }
@@ -516,6 +574,13 @@ export default function StaffInternalMarks({ staffUser }) {
     const cleanCode = code.trim().toUpperCase();
     const currentReqId = ++reqIdRef.current;
     setLoading(true);
+    // Immediately reset locked & approval state so changing subjects does not retain previous locked state
+    setIsLocked(false);
+    setApprovalStatus('Draft');
+    setCurrentApprovalStage('Staff');
+    setHodApproval(null);
+    setPrincipalApproval(null);
+    setMdApproval(null);
     try {
       const res = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(cleanCode)}`);
       const json = await res.json();
@@ -578,12 +643,16 @@ export default function StaffInternalMarks({ staffUser }) {
 
   const fetchStaffSubjects = useCallback(async () => {
     try {
+      // Build the marks list URL — for HOD/Admin include dept so backend returns pending marksheets too
+      const marksRoleParam = (isHod || isAdminUser || isSuperAdminUser)
+        ? `?role=${encodeURIComponent(staffUser?.role || (isHod ? 'HOD' : isAdminUser ? 'Admin' : 'SuperAdmin'))}&dept=${encodeURIComponent(staffUser?.department || '')}`
+        : '';
       const [staffClsData, allClassesData, subjectsData, asgtsData, marksData, departmentsData, departmentClassesData] = await Promise.all([
         fetch(`${API}/classes/staff/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
         fetch(`${API}/classes`).then(r => r.json()).catch(() => null),
         fetch(`${API}/subjects`).then(r => r.json()).catch(() => null),
         fetch(`${API}/assignments/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
-        fetch(`${API}/internal-marks/${effectiveStaffId}`).then(r => r.json()).catch(() => null),
+        fetch(`${API}/internal-marks/${effectiveStaffId}${marksRoleParam}`).then(r => r.json()).catch(() => null),
         fetch(`${API}/departments`).then(r => r.json()).catch(() => null),
         fetch(`${API}/classes?dept=${encodeURIComponent(staffUser?.department || '')}`).then(r => r.json()).catch(() => null),
       ]);
@@ -649,6 +718,17 @@ export default function StaffInternalMarks({ staffUser }) {
         const n = String(name || '').trim();
         if (!c || c.length < 2 || seen.has(c)) return;
         if (isGenericSubjectEntry(c) || isGenericSubjectEntry(n)) return;
+        if (['CS1001', 'CS101', 'CS123', 'CS2001'].includes(c)) return;
+
+        // SuperAdmin/Admin sees everything. HOD sees all subjects in their dept (from ALL staff).
+        // Regular staff sees only their dept subjects.
+        // If subject has no department set, always include it.
+        if (!isSuperAdminUser && !isAdminUser && staffDepartment) {
+          const sDept = String(meta.dept || meta.department || '').trim().toLowerCase();
+          if (sDept && sDept !== staffDepartment && !sDept.includes(staffDepartment) && !staffDepartment.includes(sDept)) {
+            return;
+          }
+        }
 
         seen.add(c);
 
@@ -720,9 +800,11 @@ export default function StaffInternalMarks({ staffUser }) {
         .filter(c => matchesStaffIdentity(c.staffId) || matchesStaffIdentity(c.staffName) || matchesStaffIdentity(c.faculty))
         .forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
 
-      // 6. Existing marks and assignments
+      // 6. Existing marks and assignments (only official active subjects, not obsolete/removed codes)
       if (marksData?.success && Array.isArray(marksData.data)) {
         marksData.data.forEach(m => {
+          const mCode = (m.subjectCode || '').toUpperCase().trim();
+          if (!officialSubjectCodes.has(mCode)) return;
           addSub(m.subjectCode, m.subjectName || m.subjectCode, m);
         });
       }
@@ -755,37 +837,38 @@ export default function StaffInternalMarks({ staffUser }) {
       if (storedCode && !availableSubs.some(s => s.code === storedCode)) {
         localStorage.removeItem('vcas_internal_subject');
         sessionStorage.removeItem('vcas_internal_subject');
-        setSubjectCode('');
-        setSearchInput('');
-        setSubjectName('');
+        // Only clear if no other subject is currently selected by user
+        if (!subjectCode) {
+          setSubjectCode('');
+          setSearchInput('');
+          setSubjectName('');
+        }
       }
 
-      if (availableSubs.length > 0) {
-        const match = availableSubs.find(s => s.code === storedCode || s.code === subjectCode);
+      // Only auto-select on initial load (when no subject is currently selected).
+      // If the user has already picked a subject from the dropdown, don't override it.
+      if (availableSubs.length > 0 && !subjectCode) {
+        const match = availableSubs.find(s => s.code === storedCode);
         const target = match ? match.code : availableSubs[0].code;
         const targetName = match ? match.name : availableSubs[0].name;
         setSubjectCode(target);
         setSearchInput(target);
         setSubjectName(targetName);
-        if (!subjectCode || subjectCode !== target) {
-          fetchMarksheet(target);
-        }
+        fetchMarksheet(target);
       }
     } catch (error) {
       console.error('Failed to refresh staff subjects:', error);
     }
-  }, [effectiveStaffId, staffUser, subjectCode, fetchMarksheet]);
+  }, [effectiveStaffId, staffUser, fetchMarksheet, isHod, isAdminUser, isSuperAdminUser]);
 
   // Load available staff subjects, all students, and departments on mount
   useEffect(() => {
-    // Clear legacy dummy CS2001 from storage
+    // Clear legacy dummy codes from storage
     try {
-      if (localStorage.getItem('vcas_internal_subject') === 'CS2001') {
-        localStorage.removeItem('vcas_internal_subject');
-      }
-      if (sessionStorage.getItem('vcas_internal_subject') === 'CS2001') {
-        sessionStorage.removeItem('vcas_internal_subject');
-      }
+      ['CS2001', 'CS1001', 'CS101', 'CS123'].forEach(c => {
+        if (localStorage.getItem('vcas_internal_subject') === c) localStorage.removeItem('vcas_internal_subject');
+        if (sessionStorage.getItem('vcas_internal_subject') === c) sessionStorage.removeItem('vcas_internal_subject');
+      });
     } catch { }
 
     // Fetch registered students and departments for filtering
@@ -832,6 +915,10 @@ export default function StaffInternalMarks({ staffUser }) {
   const handleLoadSubject = (codeToLoad) => {
     const target = (codeToLoad !== undefined ? codeToLoad : searchInput).trim().toUpperCase();
     if (!target) return;
+    try {
+      localStorage.setItem('vcas_internal_subject', target);
+      sessionStorage.setItem('vcas_internal_subject', target);
+    } catch {}
     setSubjectCode(target);
     setFilterSubject(target);
     setSearchInput(target);
@@ -1062,7 +1149,7 @@ export default function StaffInternalMarks({ staffUser }) {
       if (json.success) {
         setApprovalStatus(json.data?.approvalStatus || 'Pending HOD');
         setCurrentApprovalStage(json.data?.currentApprovalStage || 'HOD');
-        setIsLocked(true);
+        setIsLocked(false);
         if (json.data?.hodApproval) setHodApproval(json.data.hodApproval);
         if (json.data?.principalApproval) setPrincipalApproval(json.data.principalApproval);
         if (json.data?.mdApproval) setMdApproval(json.data.mdApproval);
@@ -1284,6 +1371,7 @@ export default function StaffInternalMarks({ staffUser }) {
 
   // -- Generic Cell Change (supports numbers, decimals, letter grades like A/B, "AB", "-") -----
   const handleCellChange = (rollNo, field, val) => {
+    if (isLocked && !(isHod || isAdminUser || isSuperAdminUser)) return;
     if (isLocked) return;
     setErrorMsg("");
 
@@ -1585,9 +1673,270 @@ export default function StaffInternalMarks({ staffUser }) {
     setShowConfigModal(true);
   };
 
-  const canSubmitToHod = Boolean(subjectCode) && !isHod && !isPrincipal && !isMD;
-  const canSubmitToPrincipal = Boolean(subjectCode) && isHod && !isPrincipal && !isMD;
-  const canUnlockMarks = Boolean(subjectCode) && isLocked && (canSubmitToHod || canSubmitToPrincipal);
+  // Only staff submit to HOD - HOD does not submit to HOD
+  const canSubmitToHod = Boolean(subjectCode) && isStaffOnly && !isHod;
+  // HOD submit to admin: must stay visible after clicking and after popup (never disappear)
+  const isHodSubmitted = hodApproval?.status === 'Approved' || ['Pending Principal', 'Pending MD', 'Approved'].includes(approvalStatus);
+  const canHodApprove = Boolean(subjectCode) && (isHod || (isAdminUser && approvalStatus === 'Pending HOD'));
+  const canAdminApprove = Boolean(subjectCode) && (isAdminUser || isPrincipal) && approvalStatus === 'Pending Principal';
+  const canSuperAdminApprove = Boolean(subjectCode) && isSuperAdminUser && approvalStatus === 'Pending MD';
+  const canUnlockMarks = Boolean(subjectCode) && isLocked && (isHod || isAdminUser || isSuperAdminUser);
+
+  // Role-based marks visibility:
+  // - Regular Staff: Can view & edit marks in 'Draft' / 'Rejected'. Once submitted ("after the staff entry itself it should not viewed"), marks are hidden & locked.
+  // - HOD: Can ONLY view marks after staff submits ('Pending HOD', 'Pending Principal', 'Pending MD', 'Approved').
+  // - Admin: Can ONLY view marks after HOD submits ('Pending Principal', 'Pending MD', 'Approved').
+  // - Super Admin: Can ONLY view marks after Admin submits ('Pending MD', 'Approved').
+  const canViewMarks = useMemo(() => {
+    if (isSuperAdminUser) {
+      return ['Pending MD', 'Approved'].includes(approvalStatus);
+    }
+    if (isAdminUser || isPrincipal) {
+      return ['Pending Principal', 'Pending MD', 'Approved'].includes(approvalStatus);
+    }
+    // Both Staff and HOD can always view marks without locking
+    return true;
+  }, [isSuperAdminUser, isAdminUser, isPrincipal, approvalStatus]);
+
+  const restrictedNotice = useMemo(() => {
+    if (canViewMarks) return null;
+
+    if (isStaffOnly) {
+      return {
+        badge: 'Submitted & Locked',
+        title: 'Marksheet Submitted to HOD',
+        desc: 'Your marks entry has been successfully submitted to the Head of Department (HOD) for review. As per college examination rules, marks cannot be viewed or edited after submission until reviewed.',
+        stage: approvalStatus === 'Pending HOD' ? 'Awaiting HOD Review' : approvalStatus === 'Pending Principal' ? 'Forwarded to Admin' : 'Under Final Review by Super Admin',
+        theme: 'bg-blue-50/90 border-blue-200 text-blue-900',
+        badgeTheme: 'bg-blue-100 text-blue-800 border border-blue-300'
+      };
+    }
+
+    if (isHod) {
+      // HOD who teaches this subject: they are in Draft — no restriction message
+      if (approvalStatus === 'Draft' || approvalStatus === 'Rejected' || !approvalStatus) {
+        return null; // HOD can view and edit marks they teach
+      }
+      return {
+        badge: 'Not Yet Submitted',
+        title: 'Awaiting Staff Submission',
+        desc: 'This marksheet is currently being prepared by the subject staff and has not been submitted yet. HOD can only view marks after the staff submits the entry.',
+        stage: 'Pending Staff Entry',
+        theme: 'bg-amber-50/90 border-amber-200 text-amber-900',
+        badgeTheme: 'bg-amber-100 text-amber-800 border border-amber-300'
+      };
+    }
+
+    if (isAdminUser || isPrincipal) {
+      return {
+        badge: 'Pending HOD Approval',
+        title: 'Awaiting HOD Submission',
+        desc: 'This marksheet has not yet been submitted by the Head of Department (HOD). The Admin can only view marks after the HOD has verified and submitted them.',
+        stage: approvalStatus === 'Pending HOD' ? 'With HOD for Review' : 'With Staff for Entry',
+        theme: 'bg-amber-50/90 border-amber-200 text-amber-900',
+        badgeTheme: 'bg-amber-100 text-amber-800 border border-amber-300'
+      };
+    }
+
+    if (isSuperAdminUser) {
+      return {
+        badge: 'Pending Admin Approval',
+        title: 'Awaiting Admin Submission',
+        desc: 'This marksheet has not yet been submitted by the College Admin. The Super Admin can only view marks after the Admin has verified and submitted them.',
+        stage: approvalStatus === 'Pending Principal' ? 'With Admin for Review' : approvalStatus === 'Pending HOD' ? 'With HOD for Review' : 'With Staff for Entry',
+        theme: 'bg-amber-50/90 border-amber-200 text-amber-900',
+        badgeTheme: 'bg-amber-100 text-amber-800 border border-amber-300'
+      };
+    }
+
+    return {
+      badge: 'Access Restricted',
+      title: 'Marks Unavailable at Current Stage',
+      desc: 'You do not have permission to view marks at this approval stage.',
+      stage: approvalStatus || 'Draft',
+      theme: 'bg-slate-50 border-slate-200 text-slate-800',
+      badgeTheme: 'bg-slate-100 text-slate-800 border border-slate-300'
+    };
+  }, [canViewMarks, isStaffOnly, isHod, isAdminUser, isPrincipal, isSuperAdminUser, approvalStatus]);
+
+  // Set of roll numbers already enrolled in the marksheet
+  const enrolledRollSet = useMemo(() => {
+    return new Set(students.map(s => String(s.rollNo || '').toUpperCase().trim()));
+  }, [students]);
+
+  // Students eligible to assign based on current Department, Year, and Semester filters
+  // Deduplicates by _id first, then by rollNo (prefers student whose regNo === rollNo)
+  const eligibleStudentsToAssign = useMemo(() => {
+    const filtered = allRegisteredStudents.filter(s => {
+      // Dept filter
+      if (filterDept && filterDept !== 'All') {
+        const d = String(s.department || s.course || '').toLowerCase().trim();
+        const target = filterDept.toLowerCase().trim();
+        if (d !== target && !d.includes(target) && !target.includes(d)) return false;
+      }
+      // Year filter (1st, 2nd, 3rd Year)
+      if (filterYear && filterYear !== 'All') {
+        const getYearNum = (v) => {
+          const str = String(v || '').toLowerCase().trim();
+          if (str.includes('3') || str.includes('iii') || str.startsWith('third')) return 3;
+          if (str.includes('2') || str.includes('ii') || str.startsWith('second')) return 2;
+          if (str.includes('1') || str.includes('i') || str.startsWith('first')) return 1;
+          const m = str.match(/\d+/);
+          return m ? parseInt(m[0], 10) : 0;
+        };
+        const yNum = getYearNum(s.year) || Math.ceil((parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0) / 2);
+        const targetNum = getYearNum(filterYear);
+        if (targetNum && yNum !== targetNum) return false;
+      }
+      // Semester filter
+      if (filterSem && filterSem !== 'All') {
+        const numS = parseInt(String(s.sem || s.semester || '').replace(/\D/g, ''), 10) || 0;
+        const numT = parseInt(String(filterSem).replace(/\D/g, ''), 10) || 0;
+        if (numT && numS !== numT) return false;
+      }
+      return true;
+    });
+
+    // Deduplicate: prefer student whose regNo/studentId matches their rollNo (true rollNo owner)
+    const seenRolls = new Map();
+    const seenIds = new Set();
+    const deduped = [];
+    for (const s of filtered) {
+      const uid = String(s._id || s.studentId || s.regNo || '').trim();
+      if (uid && seenIds.has(uid)) continue;
+      if (uid) seenIds.add(uid);
+      const roll = String(s.rollNo || '').toUpperCase().trim();
+      if (roll) {
+        if (!seenRolls.has(roll)) {
+          seenRolls.set(roll, deduped.length);
+          deduped.push(s);
+        } else {
+          // If this student's regNo/studentId matches their rollNo, they are the primary — replace
+          const prevIdx = seenRolls.get(roll);
+          const prev = deduped[prevIdx];
+          const prevMatch = (prev.regNo || prev.studentId || '').toUpperCase().trim() === roll;
+          const thisMatch = (s.regNo || s.studentId || '').toUpperCase().trim() === roll;
+          if (thisMatch && !prevMatch) {
+            deduped[prevIdx] = s;
+          }
+        }
+      } else {
+        deduped.push(s);
+      }
+    }
+    return deduped;
+  }, [allRegisteredStudents, filterDept, filterYear, filterSem]);
+
+  const handleSelectAllEligible = () => {
+    const unassigned = eligibleStudentsToAssign
+      .filter(s => !enrolledRollSet.has(String(s.rollNo || '').toUpperCase().trim()))
+      .map(s => String(s.rollNo || '').toUpperCase().trim());
+    setSelectedStudentsToAssign(new Set(unassigned));
+  };
+
+  const handleClearSelectedStudents = () => {
+    setSelectedStudentsToAssign(new Set());
+  };
+
+  const handleToggleStudentSelect = (rollNo) => {
+    const cleanRoll = String(rollNo || '').toUpperCase().trim();
+    setSelectedStudentsToAssign(prev => {
+      const next = new Set(prev);
+      if (next.has(cleanRoll)) next.delete(cleanRoll);
+      else next.add(cleanRoll);
+      return next;
+    });
+  };
+
+  const handleAssignSelectedStudents = async () => {
+    if (!subjectCode) {
+      toast("Please select a subject first.", true);
+      return;
+    }
+    if (selectedStudentsToAssign.size === 0) {
+      toast("Please select at least one student to assign.", true);
+      return;
+    }
+
+    const studentsToAdd = eligibleStudentsToAssign.filter(s =>
+      selectedStudentsToAssign.has(String(s.rollNo || '').toUpperCase().trim()) &&
+      !enrolledRollSet.has(String(s.rollNo || '').toUpperCase().trim())
+    );
+
+    if (studentsToAdd.length === 0) {
+      toast("All selected students are already in the marksheet.", true);
+      return;
+    }
+
+    const newStudentObjects = studentsToAdd.map(s => ({
+      rollNo: String(s.rollNo || '').toUpperCase().trim(),
+      name: s.name || s.fullName || s.rollNo,
+      department: s.department || (filterDept !== 'All' ? filterDept : staffUser?.department || ''),
+      year: s.year || (filterYear !== 'All' ? filterYear : 'I Year'),
+      sem: s.sem || (filterSem !== 'All' ? filterSem : 'Semester 1'),
+      batch: s.batch || (filterBatch !== 'All' ? filterBatch : '2026-2027'),
+      st1: null, st2: null, st3: null, st4: null,
+      it1: null, it2: null, cia1: null, cia2: null,
+      model: null, semester: null, seminar: null, project: null,
+      assignment1: null, assignment2: null, assignment3: null, assignment4: null,
+      assignment: null, attendance: null, grade: null, consolidated: null
+    }));
+
+    const updatedStudentsList = [...students, ...newStudentObjects];
+    setStudents(updatedStudentsList);
+    setSelectedStudentsToAssign(new Set());
+
+    try {
+      setSaving(true);
+      const res = await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffName,
+          subjectName: subjectName || subjectCode,
+          department: filterDept !== 'All' ? filterDept : (staffUser?.department || ""),
+          year: filterYear !== 'All' ? filterYear : 'I Year',
+          semester: filterSem !== 'All' ? (parseInt(filterSem.replace(/\D/g, ''), 10) || 1) : 1,
+          academicYear: staffUser?.academicYear || "2025-2026",
+          students: updatedStudentsList,
+          maxMarks: maxMarksConfig,
+          passMarks: passMarksConfig,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast(`Successfully assigned ${studentsToAdd.length} student(s) to ${subjectCode}!`);
+      } else {
+        toast(json.message || "Saved locally.", true);
+      }
+    } catch {
+      toast("Error saving assigned students to database.", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveStudentFromMarksheet = async (rollNoToRemove) => {
+    if (isLocked) return;
+    if (!window.confirm(`Are you sure you want to remove ${rollNoToRemove} from this subject marksheet?`)) return;
+    const cleanRoll = String(rollNoToRemove || '').toUpperCase().trim();
+    const updated = students.filter(s => String(s.rollNo || '').toUpperCase().trim() !== cleanRoll);
+    setStudents(updated);
+    toast(`Removed student ${cleanRoll} from marksheet.`);
+    try {
+      await fetch(`${API}/internal-marks/${effectiveStaffId}/${encodeURIComponent(subjectCode)}/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffName, subjectName,
+          department: staffUser?.department || "",
+          students: updated,
+          maxMarks: maxMarksConfig,
+          passMarks: passMarksConfig,
+        }),
+      });
+    } catch (_) { }
+  };
 
   return (
     <div className="p-5 sm:p-7 space-y-6 max-w-7xl mx-auto">
@@ -1663,28 +2012,97 @@ export default function StaffInternalMarks({ staffUser }) {
                 <Download className="w-3.5 h-3.5 text-slate-500" /> Export CSV
               </button>
 
+              {/* 1. Staff: Submit to HOD */}
               {canSubmitToHod && (
                 <button
                   onClick={handleSubmitForApproval}
                   disabled={isSubmittingApproval || students.length === 0}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
-                  title="Submit marksheet to the HOD"
+                  title="Submit marksheet to the Head of Department (HOD)"
                 >
                   {isSubmittingApproval ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   <span>Submit to HOD</span>
                 </button>
               )}
 
-              {canSubmitToPrincipal && (
-                <button
-                  onClick={() => handleStageApprovalAction('HOD', 'Approved')}
-                  disabled={isProcessingStage || students.length === 0}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
-                  title="Forward the approved marksheet to the Principal"
-                >
-                  {isProcessingStage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  <span>Submit to the Principal</span>
-                </button>
+              {/* 2. HOD: Approve & Submit to Admin OR Reject to Staff (stays visible after clicking) */}
+              {canHodApprove && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleStageApprovalAction('HOD', 'Rejected')}
+                    disabled={isProcessingStage}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 border border-rose-200 hover:bg-rose-100 disabled:opacity-60 text-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    title="Reject marksheet and return to staff for correction"
+                  >
+                    <X className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Return to Staff</span>
+                  </button>
+                  <button
+                    onClick={() => handleStageApprovalAction('HOD', 'Approved')}
+                    disabled={isProcessingStage || students.length === 0}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 ${
+                      isHodSubmitted ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+                    } disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer`}
+                    title="HOD verifies and forwards marksheet to Admin"
+                  >
+                    {isProcessingStage ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : isHodSubmitted ? (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isHodSubmitted ? 'Submitted to Admin' : 'Submit to Admin'}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* 3. Admin: Approve to Super Admin OR Reject to HOD */}
+              {canAdminApprove && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleStageApprovalAction('Principal', 'Rejected')}
+                    disabled={isProcessingStage}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 border border-rose-200 hover:bg-rose-100 disabled:opacity-60 text-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    title="Reject marksheet and return to HOD"
+                  >
+                    <X className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Return to HOD</span>
+                  </button>
+                  <button
+                    onClick={() => handleStageApprovalAction('Principal', 'Approved')}
+                    disabled={isProcessingStage || students.length === 0}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+                    title="Admin verifies and forwards marksheet to Super Admin"
+                  >
+                    {isProcessingStage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    <span>Approve & Submit to Super Admin</span>
+                  </button>
+                </div>
+              )}
+
+              {/* 4. Super Admin: Final Approve & Publish OR Reject to Admin */}
+              {canSuperAdminApprove && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleStageApprovalAction('MD', 'Rejected')}
+                    disabled={isProcessingStage}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 border border-rose-200 hover:bg-rose-100 disabled:opacity-60 text-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    title="Reject marksheet and return to Admin"
+                  >
+                    <X className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Return to Admin</span>
+                  </button>
+                  <button
+                    onClick={() => handleStageApprovalAction('MD', 'Approved')}
+                    disabled={isProcessingStage || students.length === 0}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
+                    title="Super Admin final approval and publication"
+                  >
+                    {isProcessingStage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                    <span>Final Approve & Publish</span>
+                  </button>
+                </div>
               )}
 
               {canUnlockMarks && (
@@ -1721,14 +2139,119 @@ export default function StaffInternalMarks({ staffUser }) {
         </div>
       )}
 
-      {/* Subject Input & Component Selector */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 space-y-4">
-        {/* Primary Subject / Course Selector Bar */}
-        <div>
+      {/* Subject & Student Assignment Master Section */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5 space-y-4">
+        {/* Section 1: Department, Year & Semester Filter for Subject & Students */}
+        <div className="bg-gradient-to-r from-slate-50 via-blue-50/30 to-indigo-50/20 p-3.5 sm:p-4 rounded-xl border border-slate-200 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                  Subject Side Filters (Department • Year • Semester)
+                </h3>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Select criteria to filter subjects and populate the eligible student roster
+                </p>
+              </div>
+            </div>
+
+            {(filterDept !== 'All' || filterYear !== 'All' || filterSem !== 'All' || filterBatch !== 'All') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterDept('All');
+                  setFilterYear('All');
+                  setFilterSem('All');
+                  setFilterBatch('All');
+                  setSearchQuery('');
+                }}
+                className="text-[11px] font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <X className="w-3 h-3" /> Reset Filters
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+            {/* Department Filter */}
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-600 tracking-wider mb-1">
+                1. Department (Dep)
+              </label>
+              <select
+                value={filterDept}
+                onChange={(e) => setFilterDept(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs cursor-pointer"
+              >
+                <option value="All">All Departments</option>
+                {departmentsList.map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Year Filter */}
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-600 tracking-wider mb-1">
+                2. Year (Yr)
+              </label>
+              <select
+                value={filterYear}
+                onChange={(e) => handleYearFilterChange(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs cursor-pointer"
+              >
+                <option value="All">All Years</option>
+                {yearsList.map(yr => (
+                  <option key={yr} value={yr}>{yr}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Semester Filter */}
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-600 tracking-wider mb-1">
+                3. Semester (Sem)
+              </label>
+              <select
+                value={filterSem}
+                onChange={(e) => setFilterSem(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs cursor-pointer"
+              >
+                <option value="All">All Semesters</option>
+                {semestersList.map(sem => (
+                  <option key={sem} value={sem}>{sem}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Batch Filter */}
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-600 tracking-wider mb-1">
+                4. Batch
+              </label>
+              <select
+                value={filterBatch}
+                onChange={(e) => setFilterBatch(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs cursor-pointer"
+              >
+                <option value="All">All Batches</option>
+                {batchesList.map(batch => (
+                  <option key={batch} value={batch}>{batch}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Subject Selector Bar (Filtered by Dept / Yr / Sem) */}
+        <div className="pt-1">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+            <label className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
               <BookMarked className="w-4 h-4 text-blue-600" />
-              <span>Select Subject / Course Code</span>
+              <span>Select Subject to Assign & Enter Marks</span>
               {loading && (
                 <span className="text-[11px] text-blue-600 font-medium flex items-center gap-1 ml-2">
                   <Loader2 className="w-3 h-3 animate-spin" /> Loading...
@@ -1826,179 +2349,45 @@ export default function StaffInternalMarks({ staffUser }) {
           )}
         </div>
 
-        <>
-          {/* Multi-Filter Bar: Department, Year, Batch, Semester & Search */}
-          <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/80 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
-                <span>Filter Students List</span>
-                {(filterDept !== 'All' || filterYear !== 'All' || filterBatch !== 'All' || filterSem !== 'All' || filterSubject !== 'All' || searchQuery) && (
-                  <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
-                    Filters Active
+
+
+
+        {/* Section 5: Assessment Tabs with Live Max & Pass Marks Display */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Assessment View
+            </label>
+            {!isLocked && (
+              <button
+                onClick={openConfigModal}
+                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+              >
+                <Edit3 className="w-3 h-3" /> Set Max & Pass Criteria
+              </button>
+            )}
+          </div>
+          <div className="flex overflow-x-auto gap-1.5 p-1 bg-slate-100/80 rounded-xl border border-slate-200/70">
+            {ASSESSMENT_COMPONENTS.map((comp) => {
+              const isSelected = componentId === comp.id;
+              return (
+                <button
+                  key={comp.id}
+                  onClick={() => setComponentId(comp.id)}
+                  className={`flex-1 min-w-[130px] py-2 px-3 rounded-lg text-xs font-bold transition-all text-center whitespace-nowrap flex flex-col items-center justify-center gap-0.5 cursor-pointer ${isSelected ? "bg-white text-blue-600 shadow-xs border border-slate-200/60" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"}`}
+                >
+                  <span>{comp.shortLabel}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold ${isSelected ? "bg-blue-50 text-blue-700" : "bg-slate-200/60 text-slate-500"}`}>
+                    {comp.id === "all" ? "College Register" : `Max: ${maxMarksConfig[comp.id] ?? comp.defaultMax} | Pass: ${passMarksConfig[comp.id] ?? comp.defaultPass}`}
                   </span>
-                )}
-              </div>
-              {(filterDept !== 'All' || filterYear !== 'All' || filterBatch !== 'All' || filterSem !== 'All' || filterSubject !== 'All' || searchQuery) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterDept('All');
-                    setFilterYear('All');
-                    setFilterBatch('All');
-                    setFilterSem('All');
-                    setFilterSubject('All');
-                    setSearchQuery('');
-                  }}
-                  className="text-[11px] font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  <X className="w-3 h-3" /> Reset Filters
                 </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              {/* Department Filter */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
-                  Department (Dep)
-                </label>
-                <select
-                  value={filterDept}
-                  onChange={(e) => setFilterDept(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
-                >
-                  <option value="All">All Departments</option>
-                  {departmentsList.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Year Filter */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
-                  Year (Yr)
-                </label>
-                <select
-                  value={filterYear}
-                  onChange={(e) => handleYearFilterChange(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
-                >
-                  <option value="All">All Years</option>
-                  {yearsList.map(yr => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Batch Filter */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
-                  Batch
-                </label>
-                <select
-                  value={filterBatch}
-                  onChange={(e) => setFilterBatch(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
-                >
-                  <option value="All">All Batches</option>
-                  {batchesList.map(batch => (
-                    <option key={batch} value={batch}>{batch}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Semester Filter */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
-                  Semester (Sem)
-                </label>
-                <select
-                  value={filterSem}
-                  onChange={(e) => setFilterSem(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
-                >
-                  <option value="All">All Semesters</option>
-                  {semestersList.map(sem => (
-                    <option key={sem} value={sem}>{sem}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Subject Filter */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
-                  Subject
-                </label>
-                <select
-                  value={filterSubject}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setFilterSubject(val);
-                    if (val && val !== "All" && val !== subjectCode) {
-                      handleLoadSubject(val);
-                    }
-                  }}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
-                >
-                  <option value="All">All Subjects</option>
-                  {dropdownSubjects.map(sub => (
-                    <option key={sub.code} value={sub.code}>{sub.code}{sub.name && sub.name !== sub.code ? ` — ${sub.name}` : ''}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Search Bar */}
-            <div className="relative pt-1">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-[calc(50%+2px)] -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search by student name or roll number..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
-              />
-            </div>
+              );
+            })}
           </div>
-
-          {/* Assessment Tabs with Live Max & Pass Marks Display */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Assessment View
-              </label>
-              {!isLocked && (
-                <button
-                  onClick={openConfigModal}
-                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" /> Set Max & Pass Criteria
-                </button>
-              )}
-            </div>
-            <div className="flex overflow-x-auto gap-1.5 p-1 bg-slate-100/80 rounded-xl border border-slate-200/70">
-              {ASSESSMENT_COMPONENTS.map((comp) => {
-                const isSelected = componentId === comp.id;
-                return (
-                  <button
-                    key={comp.id}
-                    onClick={() => setComponentId(comp.id)}
-                    className={`flex-1 min-w-[130px] py-2 px-3 rounded-lg text-xs font-bold transition-all text-center whitespace-nowrap flex flex-col items-center justify-center gap-0.5 ${isSelected ? "bg-white text-blue-600 shadow-xs border border-slate-200/60" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"}`}
-                  >
-                    <span>{comp.shortLabel}</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold ${isSelected ? "bg-blue-50 text-blue-700" : "bg-slate-200/60 text-slate-500"}`}>
-                      {comp.id === "all" ? "College Register" : `Max: ${maxMarksConfig[comp.id] ?? comp.defaultMax} | Pass: ${passMarksConfig[comp.id] ?? comp.defaultPass}`}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
+        </div>
       </div>
 
+      {/* Main Content Area: Subject prompt / Loading / Role Restricted Guard / Marksheet Table */}
       {!subjectCode ? (
         <div className="bg-white rounded-2xl border border-slate-100 p-10 text-center text-slate-400">
           <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 text-slate-200" />
@@ -2007,6 +2396,24 @@ export default function StaffInternalMarks({ staffUser }) {
       ) : loading ? (
         <div className="flex items-center justify-center py-16 text-slate-400">
           <Loader2 className="w-6 h-6 animate-spin mr-2" /><span className="text-sm font-medium">Loading register sheet...</span>
+        </div>
+      ) : !canViewMarks ? (
+        /* Role-Based Visibility Guard: Hide marks until preceding stage submits */
+        <div className={`rounded-3xl border p-8 sm:p-12 text-center shadow-xs ${restrictedNotice.theme}`}>
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-white shadow-xs border border-slate-200/80 flex items-center justify-center mb-4">
+            <Lock className="w-8 h-8 text-slate-700" />
+          </div>
+          <span className={`inline-block px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider mb-2.5 ${restrictedNotice.badgeTheme}`}>
+            {restrictedNotice.badge}
+          </span>
+          <h3 className="text-xl sm:text-2xl font-black text-slate-900 mb-2">{restrictedNotice.title}</h3>
+          <p className="text-xs sm:text-sm font-medium text-slate-600 max-w-xl mx-auto mb-5 leading-relaxed">{restrictedNotice.desc}</p>
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-xs rounded-xl border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
+            <Clock className="w-3.5 h-3.5 text-blue-600" />
+            <span>Workflow Stage: <b className="text-slate-900">{restrictedNotice.stage}</b></span>
+            <span>•</span>
+            <span>Approval Status: <b className="text-slate-900">{approvalStatus || 'Draft'}</b></span>
+          </div>
         </div>
       ) : (
         <>
@@ -2125,8 +2532,22 @@ export default function StaffInternalMarks({ staffUser }) {
                         ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         : overallGrade === "C" ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-rose-50 text-rose-700 border border-rose-200";
                       return (
-                        <tr key={s.rollNo} className="hover:bg-blue-50/40 transition-colors">
-                          <td className="px-2 py-2 text-center font-bold text-slate-500 border-r border-slate-200">{idx + 1}</td>
+                        <tr key={s.rollNo} className="hover:bg-blue-50/40 transition-colors group">
+                          <td className="px-1.5 py-2 text-center font-bold text-slate-500 border-r border-slate-200">
+                            <div className="flex items-center justify-center gap-1">
+                              <span>{idx + 1}</span>
+                              {!isLocked && isStaffOnly && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStudentFromMarksheet(s.rollNo)}
+                                  title={`Remove ${s.rollNo} from this subject`}
+                                  className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-600 transition-opacity p-0.5 cursor-pointer"
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-3 py-2 text-left border-r border-slate-200">
                             <div className="font-extrabold text-slate-900">{s.name}</div>
                             <div className="text-[10px] font-mono font-semibold text-slate-400">{s.rollNo}</div>
@@ -2875,14 +3296,16 @@ export default function StaffInternalMarks({ staffUser }) {
                       Choose Student Batch
                     </label>
                     <select
-                      value={downloadBatch}
+                      value={downloadBatch || batchesList[0] || ''}
                       onChange={(e) => setDownloadBatch(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                     >
-                      <option value="2021-2025">Batch 2021-2025</option>
-                      <option value="2022-2026">Batch 2022-2026</option>
-                      <option value="2023-2027">Batch 2023-2027</option>
-                      <option value="2024-2028">Batch 2024-2028</option>
+                      {batchesList.map(b => (
+                        <option key={b} value={b}>Batch {b}</option>
+                      ))}
+                      {downloadBatch && !batchesList.includes(downloadBatch) && (
+                        <option value={downloadBatch}>Batch {downloadBatch}</option>
+                      )}
                     </select>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-500">
