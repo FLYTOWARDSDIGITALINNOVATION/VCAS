@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
 import { 
@@ -18,7 +19,9 @@ import {
   Shield,
   RotateCcw,
   Sparkles,
-  DollarSign
+  DollarSign,
+  Eye,
+  X
 } from 'lucide-react';
 import { getStudentBatch } from '../utils/studentFeeUtils';
 
@@ -34,6 +37,145 @@ const DEFAULT_MISC_FEES = [
   { feeType: 'Hostel Maintenance Fees', amount: 5000 },
   { feeType: 'Other / Custom Fees', amount: 1000 }
 ];
+
+export const getAllFeeItems = (record, feeStructure = DEFAULT_MISC_FEES) => {
+  if (!record) return [];
+  const breakdown = record.feeBreakdown || {};
+  const items = [];
+
+  // 1. Tuition Fees
+  const tPaid = Number(breakdown.tuition?.paid || 0);
+  const tTotal = Number(breakdown.tuition?.total || 0);
+  if (tPaid > 0 || (tTotal > 0 && String(record.feeType || '').toLowerCase().includes('tuition'))) {
+    items.push({
+      section: 'Tuition Fees',
+      feeType: 'Tuition Fees',
+      amount: tTotal > 0 ? tTotal : tPaid,
+      paid: tPaid,
+      balance: Math.max(0, (tTotal > 0 ? tTotal : tPaid) - tPaid),
+      status: tPaid >= tTotal && tTotal > 0 ? 'Paid' : (tPaid > 0 ? 'Partial' : 'Pending')
+    });
+  }
+
+  // 2. Exam Fees
+  const ePaid = Number(breakdown.exam?.paid || 0);
+  const eTotal = Number(breakdown.exam?.total || 0);
+  if (ePaid > 0 || (eTotal > 0 && String(record.feeType || '').toLowerCase().includes('exam'))) {
+    items.push({
+      section: 'Exam Fees',
+      feeType: 'Exam Fees',
+      amount: eTotal > 0 ? eTotal : ePaid,
+      paid: ePaid,
+      balance: Math.max(0, (eTotal > 0 ? eTotal : ePaid) - ePaid),
+      status: ePaid >= eTotal && eTotal > 0 ? 'Paid' : (ePaid > 0 ? 'Partial' : 'Pending')
+    });
+  }
+
+  // 3. Transport Fees
+  const trPaid = Number(breakdown.transport?.paid || 0);
+  const trTotal = Number(breakdown.transport?.total || 0);
+  if (trPaid > 0 || (trTotal > 0 && String(record.feeType || '').toLowerCase().includes('transport'))) {
+    items.push({
+      section: 'Transport Fees',
+      feeType: 'Transport Fees' + (record.routeStop ? ` (${record.routeStop})` : ''),
+      amount: trTotal > 0 ? trTotal : trPaid,
+      paid: trPaid,
+      balance: Math.max(0, (trTotal > 0 ? trTotal : trPaid) - trPaid),
+      status: trPaid >= trTotal && trTotal > 0 ? 'Paid' : (trPaid > 0 ? 'Partial' : 'Pending')
+    });
+  }
+
+  // 4. Miscellaneous Fees & Individual items
+  const mData = breakdown.misc || {};
+  const rawPaid = mData.paid !== undefined && mData.paid !== null && mData.paid !== ''
+    ? Number(mData.paid)
+    : (String(record.feeType || '').toLowerCase().includes('misc')
+        ? Number(record.paidAmount !== undefined && record.paidAmount !== '' ? record.paidAmount : (record.baseAmount || record.paidFee || 0))
+        : 0);
+  const rawTotal = mData.total !== undefined && mData.total !== null && mData.total !== ''
+    ? Number(mData.total)
+    : (String(record.feeType || '').toLowerCase().includes('misc') ? Number(record.totalFee || rawPaid) : rawPaid);
+
+  const storedMisc = (record.allMiscItems && record.allMiscItems.length > 0)
+    ? record.allMiscItems
+    : (mData.items && mData.items.length > 0 ? mData.items : null);
+
+  if (storedMisc && storedMisc.length > 0) {
+    storedMisc.forEach(item => {
+      const iPaid = Number(item.paid ?? item.amount ?? 0);
+      const iTotal = Number(item.amount ?? item.total ?? iPaid);
+      items.push({
+        section: 'Miscellaneous Fees',
+        feeType: item.feeType || item.name || 'Miscellaneous Fees',
+        amount: iTotal,
+        paid: iPaid,
+        balance: Math.max(0, iTotal - iPaid),
+        status: iPaid >= iTotal && iTotal > 0 ? 'Paid' : (iPaid > 0 ? 'Partial' : 'Pending')
+      });
+    });
+  } else if (rawPaid > 0 || rawTotal > 0) {
+    const rawName = mData.name || record.miscFeeName || 'Miscellaneous Fees';
+    const isIdCard = rawName.toLowerCase().includes('id card') || rawName.toLowerCase().includes('badge');
+
+    if (isIdCard) {
+      const idCardAssessed = 300;
+      const idCardPaid = Math.min(300, rawPaid > 0 ? rawPaid : 300);
+      items.push({
+        section: 'Miscellaneous Fees',
+        feeType: 'ID Card / Badge Fees',
+        amount: idCardAssessed,
+        paid: idCardPaid,
+        balance: Math.max(0, idCardAssessed - idCardPaid),
+        status: idCardPaid >= idCardAssessed ? 'Paid' : (idCardPaid > 0 ? 'Partial' : 'Pending')
+      });
+
+      const remainderPaid = rawPaid - idCardPaid;
+      if (remainderPaid > 0) {
+        const remainderTotal = Math.max(remainderPaid, rawTotal - idCardAssessed);
+        items.push({
+          section: 'Miscellaneous Fees',
+          feeType: 'Other Miscellaneous Fees',
+          amount: remainderTotal,
+          paid: remainderPaid,
+          balance: Math.max(0, remainderTotal - remainderPaid),
+          status: remainderPaid >= remainderTotal ? 'Paid' : 'Partial'
+        });
+      }
+    } else {
+      items.push({
+        section: 'Miscellaneous Fees',
+        feeType: rawName,
+        amount: rawTotal > 0 ? rawTotal : rawPaid,
+        paid: rawPaid,
+        balance: Math.max(0, (rawTotal > 0 ? rawTotal : rawPaid) - rawPaid),
+        status: rawPaid >= rawTotal && rawTotal > 0 ? 'Paid' : (rawPaid > 0 ? 'Partial' : 'Pending')
+      });
+    }
+  }
+
+  if (items.length === 0) {
+    const pAmt = Number(record.paidAmount || record.paidFee || 0);
+    const tAmt = Number(record.totalAmount || record.totalFee || pAmt);
+    items.push({
+      section: record.feeType || 'Miscellaneous Fees',
+      feeType: record.miscFeeName || record.feeType || 'General Fee',
+      amount: tAmt,
+      paid: pAmt,
+      balance: Math.max(0, tAmt - pAmt),
+      status: pAmt >= tAmt && tAmt > 0 ? 'Paid' : (pAmt > 0 ? 'Partial' : 'Pending')
+    });
+  }
+
+  return items;
+};
+
+// Miscellaneous-fee-only view for the miscellaneous fee slip / receipt.
+// Tuition, exam and transport sections are intentionally excluded so the
+// slip lists each miscellaneous item separately and totals only those items.
+export const getMiscFeeItems = (record, feeStructure = DEFAULT_MISC_FEES) =>
+  getAllFeeItems(record, feeStructure).filter((item) =>
+    String(item.section || '').toLowerCase().includes('misc')
+  );
 
 export default function MiscellaneousFeesManagement({
   entryFormData,
@@ -52,6 +194,7 @@ export default function MiscellaneousFeesManagement({
   const [tableYearFilter, setTableYearFilter] = useState('All');
   const [tableSemFilter, setTableSemFilter] = useState('All');
   const [tableBatchFilter, setTableBatchFilter] = useState('All');
+  const [viewRecord, setViewRecord] = useState(null);
 
   // Super Admin vs Accountant Role detection
   const currentUser = user || (typeof window !== 'undefined' && JSON.parse(sessionStorage.getItem('vcas_user') || '{}'));
@@ -478,31 +621,11 @@ export default function MiscellaneousFeesManagement({
     const studentName = r.name || 'Student';
     const rollNo = r.rollNo || r.id || 'N/A';
     const dept = r.department || r.course || 'UG Program';
-    const breakdown = r.feeBreakdown || {};
-    const miscData = breakdown.misc || {};
-    const miscBase = Number(r.baseAmount || 0);
-    const feeName = miscData.name || r.miscFeeName || (r.feeType === 'Miscellaneous Fees' ? (r.miscFeeName || 'Lab Fees') : 'Miscellaneous Fees');
+    const feeItems = getMiscFeeItems(r, miscFeeStructure);
     
-    // Exact fee amount assessed for this specific miscellaneous fee
-    let totalFee = Number(
-      (miscData.total !== undefined && miscData.total !== null && miscData.total !== '')
-        ? miscData.total
-        : (miscBase > 0 ? miscBase : (r.totalFee || 0))
-    );
-    
-    // Exact fee amount paid for this specific miscellaneous fee
-    let paidFee = Number(
-      (miscData.paid !== undefined && miscData.paid !== null && miscData.paid !== '')
-        ? miscData.paid
-        : (r.feeType?.toLowerCase().includes('misc')
-            ? (r.paidAmount !== undefined && r.paidAmount !== '' ? r.paidAmount : (r.baseAmount || r.paidFee || 0))
-            : (r.paidAmount || 0))
-    );
-    
-    // Ensure total assessed reflects at least the total paid when multiple payments are made
-    if (paidFee > totalFee) {
-      totalFee = paidFee;
-    }
+    let totalFee = feeItems.reduce((acc, it) => acc + Number(it.amount || it.paid || 0), 0);
+    let paidFee = feeItems.reduce((acc, it) => acc + Number(it.paid || 0), 0);
+    if (paidFee > totalFee) totalFee = paidFee;
     const pendingFee = Math.max(0, totalFee - paidFee);
     const receiptNo = r.receiptNo || '';
     const txnRef = r.referenceNo || r.paymentRef || '';
@@ -512,7 +635,7 @@ export default function MiscellaneousFeesManagement({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Miscellaneous Fee Bill - ${studentName} (${rollNo})</title>
+          <title>Fee Bill Receipt - ${studentName} (${rollNo})</title>
           <style>
             @page { size: A6 portrait; margin: 6mm; }
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; margin: 0; padding: 8px; }
@@ -541,7 +664,7 @@ export default function MiscellaneousFeesManagement({
               ${getCollegeLogoHtml(44)}
               <h1 class="college-title">VIVEKANANDA COLLEGE OF ARTS AND SCIENCE</h1>
               <p class="college-sub">Vellalankulam, Sivakasi • Official Fee Receipt</p>
-              <div class="badge">${feeName.toUpperCase()} RECEIPT</div>
+              <div class="badge">MISCELLANEOUS FEES RECEIPT</div>
             </div>
             <div class="meta-grid">
               ${receiptNo ? `<div class="meta-item"><span>Receipt No:</span> <strong>${receiptNo}</strong></div>` : ''}
@@ -554,29 +677,39 @@ export default function MiscellaneousFeesManagement({
             <table>
               <thead>
                 <tr>
-                  <th style="width: 10%;">S.No</th>
-                  <th>Fee Description / Particulars</th>
-                  <th style="text-align: right; width: 25%;">Amount (₹)</th>
+                  <th style="width: 8%;">#</th>
+                  <th>Miscellaneous Fee Particulars</th>
+                  <th style="text-align: right; width: 22%;">Assessed (₹)</th>
+                  <th style="text-align: right; width: 22%;">Paid (₹)</th>
+                  <th style="text-align: center; width: 14%;">Status</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style="text-align: center;">1</td>
-                  <td><strong>${feeName}</strong></td>
-                  <td style="text-align: right;">₹${paidFee.toLocaleString('en-IN')}</td>
-                </tr>
+                ${feeItems.map((item, idx) => `
+                  <tr>
+                    <td style="text-align: center;">${idx + 1}</td>
+                    <td>
+                      <strong>${item.feeType}</strong>
+                      ${item.section && item.section !== item.feeType ? `<div style="font-size: 7.5px; color: #64748b;">${item.section}</div>` : ''}
+                    </td>
+                    <td style="text-align: right;">₹${Number(item.amount || item.paid || 0).toLocaleString('en-IN')}</td>
+                    <td style="text-align: right; font-weight: bold; color: #047857;">₹${Number(item.paid || 0).toLocaleString('en-IN')}</td>
+                    <td style="text-align: center; font-size: 7.5px; font-weight: bold;">${item.status}</td>
+                  </tr>
+                `).join('')}
                 <tr class="total-row">
-                  <td colspan="2" style="text-align: right;">Total Assessed:</td>
-                  <td style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
+                  <td colspan="2" style="text-align: right;">Total Miscellaneous Fees:</td>
+                  <td colspan="3" style="text-align: right;">₹${totalFee.toLocaleString('en-IN')}</td>
                 </tr>
                 <tr class="paid-row">
-                  <td colspan="2" style="text-align: right;">Amount Paid:</td>
-                  <td style="text-align: right;">₹${paidFee.toLocaleString('en-IN')}</td>
+                  <td colspan="2" style="text-align: right;">Total Amount Paid:</td>
+                  <td colspan="3" style="text-align: right;">₹${paidFee.toLocaleString('en-IN')}</td>
                 </tr>
+                ${pendingFee > 0 ? `
                 <tr class="due-row">
                   <td colspan="2" style="text-align: right;">Balance Outstanding:</td>
-                  <td style="text-align: right;">₹${pendingFee.toLocaleString('en-IN')}</td>
-                </tr>
+                  <td colspan="3" style="text-align: right;">₹${pendingFee.toLocaleString('en-IN')}</td>
+                </tr>` : ''}
               </tbody>
             </table>
             <div class="footer-sign">
@@ -1199,7 +1332,7 @@ export default function MiscellaneousFeesManagement({
                 <th className="p-3">Paid (₹)</th>
                 <th className="p-3">Total (₹)</th>
                 <th className="p-3">Status</th>
-                <th className="p-3 text-center">Receipt</th>
+                <th className="p-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -1240,6 +1373,14 @@ export default function MiscellaneousFeesManagement({
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
+                            onClick={() => setViewRecord(r)}
+                            className="p-1 hover:text-indigo-600 text-slate-500 cursor-pointer"
+                            title="View Fee Breakdown"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleDownloadReceipt(r)}
                             className="p-1 hover:text-blue-600 text-slate-500 cursor-pointer"
                             title="Print / Download Receipt"
@@ -1272,6 +1413,148 @@ export default function MiscellaneousFeesManagement({
           </table>
         </div>
       </div>
+      {/* ======================================================== */}
+      {/* VIEW FEE BREAKDOWN MODAL                                  */}
+      {/* ======================================================== */}
+      {viewRecord && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/75 backdrop-blur-md">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-cyan-50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center border border-indigo-200">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 leading-tight">Miscellaneous Fees Breakdown</h3>
+                  <p className="text-[11px] text-slate-500">Individual miscellaneous fee items paid for this student</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setViewRecord(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Student Info */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+              <div><span className="text-slate-500 font-medium">Student: </span><span className="font-bold text-slate-800">{viewRecord.name}</span></div>
+              <div><span className="text-slate-500 font-medium">Roll No: </span><span className="font-bold text-slate-800">{viewRecord.rollNo || viewRecord.id}</span></div>
+              <div><span className="text-slate-500 font-medium">Course: </span><span className="font-bold text-slate-800">{viewRecord.course}</span></div>
+              <div><span className="text-slate-500 font-medium">Dept: </span><span className="font-bold text-slate-800">{viewRecord.department || viewRecord.course}</span></div>
+              {viewRecord.receiptNo && (
+                <div><span className="text-slate-500 font-medium">Receipt No: </span><span className="font-bold text-slate-800">{viewRecord.receiptNo}</span></div>
+              )}
+              <div><span className="text-slate-500 font-medium">Date: </span><span className="font-bold text-slate-800">{viewRecord.lastPaymentDate || viewRecord.paymentDate || '—'}</span></div>
+            </div>
+
+            {/* Fee Items Table */}
+            <div className="px-6 py-5 space-y-3 max-h-80 overflow-y-auto">
+              <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Miscellaneous Fees & Item Breakdown</h4>
+              <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-800 text-white">
+                      <th className="px-4 py-2.5 text-left font-bold w-8">#</th>
+                      <th className="px-4 py-2.5 text-left font-bold">Miscellaneous Fee / Description</th>
+                      <th className="px-4 py-2.5 text-right font-bold">Amount (₹)</th>
+                      <th className="px-4 py-2.5 text-center font-bold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(() => {
+                      const allItems = getMiscFeeItems(viewRecord, miscFeeStructure);
+
+                      return allItems.map((item, i) => {
+                        const itemPaid = Number(item.paid ?? item.amount ?? 0);
+                        const itemTotal = Number(item.amount ?? item.total ?? 0);
+                        const itemStatus = item.status || (itemPaid >= itemTotal && itemTotal > 0 ? 'Paid' : (itemPaid > 0 ? 'Partial' : 'Pending'));
+                        return (
+                          <tr key={i} className="hover:bg-slate-50/80">
+                            <td className="px-4 py-2.5 text-slate-400 font-mono text-center">{i + 1}</td>
+                            <td className="px-4 py-2.5 font-semibold text-slate-800">
+                              <div>{item.feeType || item.name}</div>
+                              {item.section && item.section !== item.feeType && (
+                                <div className="text-[10px] text-slate-400 font-normal">{item.section}</div>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              <span className="font-bold text-emerald-700">₹{itemPaid.toLocaleString('en-IN')}</span>
+                              {itemTotal > 0 && itemPaid !== itemTotal && (
+                                <span className="text-slate-400 ml-1">/ ₹{itemTotal.toLocaleString('en-IN')}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                itemStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : itemStatus === 'Partial' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}>{itemStatus}</span>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                  <tfoot>
+                    {(() => {
+                      const allItems = getMiscFeeItems(viewRecord, miscFeeStructure);
+                      const paidTotal = allItems.reduce((acc, it) => acc + Number(it.paid || 0), 0);
+                      let feeTotal = allItems.reduce((acc, it) => acc + Number(it.amount || it.paid || 0), 0);
+                      if (paidTotal > feeTotal) feeTotal = paidTotal;
+                      const balanceTotal = Math.max(0, feeTotal - paidTotal);
+                      return (
+                        <>
+                          <tr className="bg-slate-50 border-t border-slate-200">
+                            <td colSpan="2" className="px-4 py-2.5 text-right font-bold text-slate-600 text-xs">Total Miscellaneous Fees:</td>
+                            <td className="px-4 py-2.5 text-right font-black text-slate-800">₹{feeTotal.toLocaleString('en-IN')}</td>
+                            <td />
+                          </tr>
+                          <tr className="bg-emerald-50/60 border-t border-emerald-100">
+                            <td colSpan="2" className="px-4 py-2.5 text-right font-bold text-emerald-700 text-xs">Amount Paid:</td>
+                            <td className="px-4 py-2.5 text-right font-black text-emerald-700">₹{paidTotal.toLocaleString('en-IN')}</td>
+                            <td />
+                          </tr>
+                          {balanceTotal > 0 && (
+                            <tr className="bg-rose-50/60 border-t border-rose-100">
+                              <td colSpan="2" className="px-4 py-2.5 text-right font-bold text-rose-700 text-xs">Balance Outstanding:</td>
+                              <td className="px-4 py-2.5 text-right font-black text-rose-700">₹{balanceTotal.toLocaleString('en-IN')}</td>
+                              <td />
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => { setViewRecord(null); handleDownloadReceipt(viewRecord); }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print Receipt
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewRecord(null)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-all shadow-md"
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 }

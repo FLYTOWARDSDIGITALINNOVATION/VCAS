@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
+import { useStudentBatches, mergeBatches } from '../utils/useStudentBatches';
 import { createPortal } from 'react-dom';
 import {
   FileSpreadsheet,
@@ -1410,13 +1411,14 @@ export default function ExaminationManagement({ user }) {
   const [marksFilterBatch, setMarksFilterBatch] = useState('All');
   const [marksSearchQuery, setMarksSearchQuery] = useState('');
 
-  // Unique batches from internalMarksheets
+  // Unique batches from internalMarksheets + live Students section batches
+  const studentBatches = useStudentBatches();
   const availableBatches = useMemo(() => {
-    const set = new Set();
-    internalMarksheets.forEach(ms => { if (ms.academicYear) set.add(ms.academicYear); });
-    studentMarksList.forEach(s => { if (s.batch) set.add(s.batch); });
-    return Array.from(set).sort();
-  }, [internalMarksheets, studentMarksList]);
+    const fromRecords = [];
+    internalMarksheets.forEach(ms => { if (ms.academicYear) fromRecords.push(ms.academicYear); });
+    studentMarksList.forEach(s => { if (s.batch) fromRecords.push(s.batch); });
+    return mergeBatches(studentBatches, fromRecords);
+  }, [internalMarksheets, studentMarksList, studentBatches]);
 
   // Filtered Students for Hall Tickets / Results (no marks filter)
   const filteredStudents = useMemo(() => {

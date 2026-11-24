@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { API_BASE, BACKEND_URL, getKnownDepartments } from '../../apiConfig';
+import { useStudentBatches, mergeBatches } from '../../utils/useStudentBatches';
 import {
   FileSpreadsheet,
   Search,
@@ -385,18 +386,17 @@ export default function StaffInternalMarks({ staffUser }) {
     return ['1st Year', '2nd Year', '3rd Year'];
   }, []);
 
+  const studentBatches = useStudentBatches();
   const batchesList = useMemo(() => {
-    const set = new Set();
+    const fromRecords = [];
     allRegisteredStudents.forEach(s => {
-      const b = (s.batch || s.academicYear || '').trim().replace('–', '-');
-      if (b && !b.toLowerCase().includes('batch')) set.add(b);
+      fromRecords.push(s.batch || s.academicYear);
     });
     students.forEach(s => {
-      const b = (s.batch || s.academicYear || '').trim().replace('–', '-');
-      if (b && !b.toLowerCase().includes('batch')) set.add(b);
+      fromRecords.push(s.batch || s.academicYear);
     });
-    return Array.from(set).sort().reverse();
-  }, [allRegisteredStudents, students]);
+    return mergeBatches(studentBatches, fromRecords);
+  }, [allRegisteredStudents, students, studentBatches]);
 
   const semestersList = useMemo(() => {
     const yr = String(filterYear || '').toLowerCase();

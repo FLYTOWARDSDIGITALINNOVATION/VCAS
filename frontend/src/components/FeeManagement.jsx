@@ -157,7 +157,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       const paid = sectionPaid > 0 ? sectionPaid : (Number(rec.paidFee) || 0);
 
       let total = Number(rec.totalFee);
-      if (!total || isNaN(total) || total === 25000 || total === 35000 || total === 34050) {
+      if (!total || isNaN(total) || total === 25000 || total === 35000 || total === 34050 || total === 34850 || (fixedAnnualFee > 0 && total > fixedAnnualFee && paid <= fixedAnnualFee)) {
         total = fixedAnnualFee;
       }
       if (total < paid) {
@@ -200,7 +200,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         const sp = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
         let spChanged = false;
         Object.keys(sp).forEach(k => {
-          if (sp[k].total === 34050 || sp[k].total === 35000 || sp[k].total === 25000) {
+          if (sp[k].total === 34050 || sp[k].total === 35000 || sp[k].total === 25000 || sp[k].total === 34850 || (sp[k].total && sp[k].total > 28000)) {
             delete sp[k].total;
             spChanged = true;
           }
@@ -209,185 +209,186 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       } catch (e) { }
 
       const savedLocalRecords = (() => {
-          try {
-            const saved = localStorage.getItem('vcas_real_fee_records');
-            if (!saved) return [];
-            const parsed = JSON.parse(saved);
-            return Array.isArray(parsed) ? parsed : [];
-          } catch (e) {
-            return [];
-          }
-        })();
-
-        const res = await fetch(`${API_BASE}/students`);
-        const json = await res.json();
-
-        if (json.success && Array.isArray(json.data)) {
-          const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
-          const mapped = json.data.map((st, idx) => {
-            const sid = (st.rollNo || st.studentId || st.admNo || `STU${idx + 1}`).toUpperCase();
-            const savedBreakdown = savedPayments[sid]?.feeBreakdown || {};
-
-            const rawYear = st.year || st.academicYearNum || (st.semester ? Math.ceil(Number(st.semester) / 2) : 1);
-            const rawBatch = (st.batch || getStudentBatch(st) || st.academicYear || '').trim();
-            const rawDept = st.department || st.course || 'Computer Science';
-            const rawSem = st.sem || st.semester || (rawYear === 1 ? '1st Sem' : rawYear === 2 ? '3rd Sem' : '5th Sem');
-
-            const deptFeeInfo = getDepartmentFixedFee(rawDept || st.course);
-            const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
-
-            const breakdown = {
-              tuition: {
-                total: Number(st.feeBreakdown?.tuition?.total || savedBreakdown.tuition?.total || fixedAnnualFee),
-                paid: Number(st.feeBreakdown?.tuition?.paid || savedBreakdown.tuition?.paid || 0),
-                pending: Number(st.feeBreakdown?.tuition?.pending || savedBreakdown.tuition?.pending || fixedAnnualFee)
-              },
-              exam: { total: Number(st.feeBreakdown?.exam?.total || savedBreakdown.exam?.total || 0), paid: Number(st.feeBreakdown?.exam?.paid || savedBreakdown.exam?.paid || 0), pending: Number(st.feeBreakdown?.exam?.pending || savedBreakdown.exam?.pending || 0) },
-              transport: { total: Number(st.feeBreakdown?.transport?.total || savedBreakdown.transport?.total || 0), paid: Number(st.feeBreakdown?.transport?.paid || savedBreakdown.transport?.paid || 0), pending: Number(st.feeBreakdown?.transport?.pending || savedBreakdown.transport?.pending || 0) },
-              misc: { total: Number(st.feeBreakdown?.misc?.total || savedBreakdown.misc?.total || 0), paid: Number(st.feeBreakdown?.misc?.paid || savedBreakdown.misc?.paid || 0), pending: Number(st.feeBreakdown?.misc?.pending || savedBreakdown.misc?.pending || 0), name: st.feeBreakdown?.misc?.name || savedBreakdown.misc?.name || 'Miscellaneous Fees' }
-            };
-
-            // Fix tuition total to department annual fee if not customized
-            if (!breakdown.tuition.total || breakdown.tuition.total === 25000 || breakdown.tuition.total === 35000) {
-              breakdown.tuition.total = fixedAnnualFee;
-              breakdown.tuition.pending = Math.max(0, fixedAnnualFee - Number(breakdown.tuition.paid || 0));
-            }
-
-            const tuitionPaid = Number(breakdown.tuition?.paid || 0);
-            const examPaid = Number(breakdown.exam?.paid || 0);
-            const transportPaid = Number(breakdown.transport?.paid || 0);
-            const miscPaid = Number(breakdown.misc?.paid || 0);
-            const sectionPaid = tuitionPaid + examPaid + transportPaid + miscPaid;
-            const totalPaid = sectionPaid > 0 ? sectionPaid : (Number(st.paidFee) || 0);
-
-            let totalFee = Number(st.totalFee);
-            if (!totalFee || isNaN(totalFee) || totalFee === 25000 || totalFee === 35000 || totalFee === 34050) {
-              totalFee = fixedAnnualFee;
-            }
-            if (totalFee < totalPaid) {
-              totalFee = totalPaid;
-            }
-
-            const pending = Math.max(0, totalFee - totalPaid);
-            const status = totalFee > 0 && totalPaid > 0 && pending === 0 ? 'Paid' : (totalPaid > 0 ? 'Partial' : 'Pending');
-            const hasPaymentRecord = savedPayments[sid] !== undefined;
-            const paid = hasPaymentRecord ? (Number(savedPayments[sid]?.paid) || totalPaid) : totalPaid;
-            const finalPending = Math.max(0, totalFee - paid);
-
-            return {
-              id: sid,
-              mongoId: String(st._id || st.id || `student_${idx}`),
-              rollNo: st.rollNo,
-              regNo: st.regNo,
-              studentId: st.studentId,
-              admNo: st.admNo,
-              name: st.name || st.fullName || 'Student',
-              avatar: (st.name || 'S').charAt(0).toUpperCase(),
-              course: rawDept,
-              department: rawDept,
-              year: rawYear,
-              sem: rawSem,
-              semester: rawSem,
-              batch: rawBatch,
-              academicYear: st.academicYear || rawBatch,
-              courseDurationFrom: st.courseDurationFrom,
-              courseDurationTo: st.courseDurationTo,
-              courseDurationYears: st.courseDurationYears,
-              batchStartYear: st.batchStartYear,
-              feeType: 'Tuition Fees',
-              totalFee: totalFee,
-              totalFeeDisplay: `₹${Number(totalFee).toLocaleString('en-IN')}`,
-              paidFee: paid,
-              paidFeeDisplay: `₹${Number(paid).toLocaleString('en-IN')}`,
-              pendingFee: finalPending,
-              pendingFeeDisplay: finalPending > 0 ? `₹${Number(finalPending).toLocaleString('en-IN')}` : '₹0',
-              dueDate: st.lastPaymentDate || '2026-11-30',
-              status: finalPending === 0 && (paid > 0 || totalFee === 0) ? 'Paid' : (paid > 0 ? 'Partial' : 'Pending'),
-              feeBreakdown: breakdown,
-              phone: st.phone || st.mobile || 'N/A',
-              email: st.email || `${sid.toLowerCase()}@vcas.edu`
-            };
-          });
-
-          // Enrich with local changes strictly for existing database students (no orphan additions!)
-          const dbKeyMap = new Map();
-          mapped.forEach(rec => {
-            if (rec.mongoId) dbKeyMap.set(String(rec.mongoId).toLowerCase(), rec);
-            if (rec.id) dbKeyMap.set(String(rec.id).toLowerCase(), rec);
-            if (rec.rollNo) dbKeyMap.set(String(rec.rollNo).toLowerCase(), rec);
-            if (rec.studentId) dbKeyMap.set(String(rec.studentId).toLowerCase(), rec);
-          });
-
-          savedLocalRecords.forEach(savedRec => {
-            const lookupKey = String(savedRec.mongoId || savedRec._id || savedRec.id || savedRec.rollNo || savedRec.studentId || '').toLowerCase();
-            const existing = dbKeyMap.get(lookupKey);
-            if (!existing) return; // Ignore orphan records not present in database
-
-            const recBreakdown = savedRec.feeBreakdown || existing.feeBreakdown || {};
-            const tPaid = Number(recBreakdown.tuition?.paid || 0);
-            const ePaid = Number(recBreakdown.exam?.paid || 0);
-            const trPaid = Number(recBreakdown.transport?.paid || 0);
-            const mPaid = Number(recBreakdown.misc?.paid || 0);
-            const secPaid = tPaid + ePaid + trPaid + mPaid;
-            const paid = secPaid > 0 ? secPaid : (Number(savedRec.paidFee) || Number(existing.paidFee) || 0);
-
-            const deptFeeInfo = getDepartmentFixedFee(existing.department || existing.course);
-            const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
-            let tot = Number(savedRec.totalFee);
-            if (!tot || isNaN(tot) || tot === 25000 || tot === 35000 || tot === 34050) {
-              tot = fixedAnnualFee;
-            }
-            if (tot < paid) tot = paid;
-            const pend = Math.max(0, tot - paid);
-
-            existing.paidFee = paid;
-            existing.paidFeeDisplay = `₹${paid.toLocaleString('en-IN')}`;
-            existing.totalFee = tot;
-            existing.totalFeeDisplay = `₹${tot.toLocaleString('en-IN')}`;
-            existing.pendingFee = pend;
-            existing.pendingFeeDisplay = pend > 0 ? `₹${pend.toLocaleString('en-IN')}` : '₹0';
-            existing.status = tot > 0 && pend === 0 ? 'Paid' : (paid > 0 ? 'Partial' : 'Pending');
-            existing.feeBreakdown = {
-              tuition: { total: Number(recBreakdown.tuition?.total || fixedAnnualFee), paid: tPaid, pending: Math.max(0, Number(recBreakdown.tuition?.total || fixedAnnualFee) - tPaid) },
-              exam: { total: Number(recBreakdown.exam?.total || 0), paid: ePaid, pending: Math.max(0, Number(recBreakdown.exam?.total || 0) - ePaid) },
-              transport: { total: Number(recBreakdown.transport?.total || 0), paid: trPaid, pending: Math.max(0, Number(recBreakdown.transport?.total || 0) - trPaid) },
-              misc: { total: Number(recBreakdown.misc?.total || 0), paid: mPaid, pending: Math.max(0, Number(recBreakdown.misc?.total || 0) - mPaid), name: recBreakdown.misc?.name || 'Miscellaneous Fees' }
-            };
-            if (savedRec.paymentMode) existing.paymentMode = savedRec.paymentMode;
-            if (savedRec.receiptNo) existing.receiptNo = savedRec.receiptNo;
-            if (savedRec.paymentRef || savedRec.referenceNo) existing.paymentRef = savedRec.paymentRef || savedRec.referenceNo;
-            if (savedRec.lastPaymentDate) existing.lastPaymentDate = savedRec.lastPaymentDate;
-          });
-
-          const finalRecords = sanitizeRecords(mapped);
-          setFeeRecords(finalRecords);
-          try {
-            localStorage.setItem('vcas_real_fee_records', JSON.stringify(finalRecords));
-          } catch (e) { }
-          return;
-        }
-
-        if (Array.isArray(savedLocalRecords) && savedLocalRecords.length) {
-          const sanitized = sanitizeRecords(savedLocalRecords);
-          setFeeRecords(sanitized);
-          try {
-            localStorage.setItem('vcas_real_fee_records', JSON.stringify(sanitized));
-          } catch (e) { }
-        }
-      } catch (err) {
-        console.error('Failed to load students for fee management:', err);
         try {
-          const saved = JSON.parse(localStorage.getItem('vcas_real_fee_records') || '[]');
-          if (Array.isArray(saved) && saved.length > 0) {
-            const sanitized = sanitizeRecords(saved);
-            setFeeRecords(sanitized);
-            localStorage.setItem('vcas_real_fee_records', JSON.stringify(sanitized));
+          const saved = localStorage.getItem('vcas_real_fee_records');
+          if (!saved) return [];
+          const parsed = JSON.parse(saved);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          return [];
+        }
+      })();
+
+      const res = await fetch(`${API_BASE}/students`);
+      const json = await res.json();
+
+      if (json.success && Array.isArray(json.data)) {
+        const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
+        const mapped = json.data.map((st, idx) => {
+          const sid = (st.rollNo || st.studentId || st.admNo || `STU${idx + 1}`).toUpperCase();
+          const savedBreakdown = savedPayments[sid]?.feeBreakdown || {};
+
+          const rawYear = st.year || st.academicYearNum || (st.semester ? Math.ceil(Number(st.semester) / 2) : 1);
+          const rawBatch = (st.batch || getStudentBatch(st) || st.academicYear || '').trim();
+          const rawDept = st.department || st.course || 'Computer Science';
+          const rawSem = st.sem || st.semester || (rawYear === 1 ? '1st Sem' : rawYear === 2 ? '3rd Sem' : '5th Sem');
+
+          const deptFeeInfo = getDepartmentFixedFee(rawDept || st.course);
+          const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
+
+          const breakdown = {
+            tuition: {
+              total: Number(st.feeBreakdown?.tuition?.total || savedBreakdown.tuition?.total || fixedAnnualFee),
+              paid: Number(st.feeBreakdown?.tuition?.paid || savedBreakdown.tuition?.paid || 0),
+              pending: Number(st.feeBreakdown?.tuition?.pending || savedBreakdown.tuition?.pending || fixedAnnualFee)
+            },
+            exam: { total: Number(st.feeBreakdown?.exam?.total || savedBreakdown.exam?.total || 0), paid: Number(st.feeBreakdown?.exam?.paid || savedBreakdown.exam?.paid || 0), pending: Number(st.feeBreakdown?.exam?.pending || savedBreakdown.exam?.pending || 0) },
+            transport: { total: Number(st.feeBreakdown?.transport?.total || savedBreakdown.transport?.total || 0), paid: Number(st.feeBreakdown?.transport?.paid || savedBreakdown.transport?.paid || 0), pending: Number(st.feeBreakdown?.transport?.pending || savedBreakdown.transport?.pending || 0) },
+            misc: { total: Number(st.feeBreakdown?.misc?.total || savedBreakdown.misc?.total || 0), paid: Number(st.feeBreakdown?.misc?.paid || savedBreakdown.misc?.paid || 0), pending: Number(st.feeBreakdown?.misc?.pending || savedBreakdown.misc?.pending || 0), name: st.feeBreakdown?.misc?.name || savedBreakdown.misc?.name || 'Miscellaneous Fees' }
+          };
+
+          // Fix tuition total to department annual fee if not customized
+          if (!breakdown.tuition.total || breakdown.tuition.total === 25000 || breakdown.tuition.total === 35000) {
+            breakdown.tuition.total = fixedAnnualFee;
+            breakdown.tuition.pending = Math.max(0, fixedAnnualFee - Number(breakdown.tuition.paid || 0));
           }
+
+          const tuitionPaid = Number(breakdown.tuition?.paid || 0);
+          const examPaid = Number(breakdown.exam?.paid || 0);
+          const transportPaid = Number(breakdown.transport?.paid || 0);
+          const miscPaid = Number(breakdown.misc?.paid || 0);
+          const sectionPaid = tuitionPaid + examPaid + transportPaid + miscPaid;
+          const totalPaid = sectionPaid > 0 ? sectionPaid : (Number(st.paidFee) || 0);
+
+          let totalFee = Number(st.totalFee);
+          if (!totalFee || isNaN(totalFee) || totalFee === 25000 || totalFee === 35000 || totalFee === 34050 || totalFee === 34850 || (fixedAnnualFee > 0 && totalFee > fixedAnnualFee && totalPaid <= fixedAnnualFee)) {
+            totalFee = fixedAnnualFee;
+          }
+          if (totalFee < totalPaid) {
+            totalFee = totalPaid;
+          }
+
+          const pending = Math.max(0, totalFee - totalPaid);
+          const status = totalFee > 0 && totalPaid > 0 && pending === 0 ? 'Paid' : (totalPaid > 0 ? 'Partial' : 'Pending');
+          const hasPaymentRecord = savedPayments[sid] !== undefined;
+          const paid = hasPaymentRecord ? (Number(savedPayments[sid]?.paid) || totalPaid) : totalPaid;
+          const finalPending = Math.max(0, totalFee - paid);
+
+          return {
+            id: sid,
+            mongoId: String(st._id || st.id || `student_${idx}`),
+            rollNo: st.rollNo,
+            regNo: st.regNo,
+            studentId: st.studentId,
+            admNo: st.admNo,
+            name: st.name || st.fullName || 'Student',
+            avatar: (st.name || 'S').charAt(0).toUpperCase(),
+            course: rawDept,
+            department: rawDept,
+            year: rawYear,
+            sem: rawSem,
+            semester: rawSem,
+            batch: rawBatch,
+            academicYear: st.academicYear || rawBatch,
+            courseDurationFrom: st.courseDurationFrom,
+            courseDurationTo: st.courseDurationTo,
+            courseDurationYears: st.courseDurationYears,
+            batchStartYear: st.batchStartYear,
+            feeType: 'Tuition Fees',
+            totalFee: totalFee,
+            totalFeeDisplay: `₹${Number(totalFee).toLocaleString('en-IN')}`,
+            paidFee: paid,
+            paidFeeDisplay: `₹${Number(paid).toLocaleString('en-IN')}`,
+            pendingFee: finalPending,
+            pendingFeeDisplay: finalPending > 0 ? `₹${Number(finalPending).toLocaleString('en-IN')}` : '₹0',
+            dueDate: st.lastPaymentDate || '2026-11-30',
+            status: finalPending === 0 && (paid > 0 || totalFee === 0) ? 'Paid' : (paid > 0 ? 'Partial' : 'Pending'),
+            feeBreakdown: breakdown,
+            phone: st.phone || st.mobile || 'N/A',
+            email: st.email || `${sid.toLowerCase()}@vcas.edu`
+          };
+        });
+
+        // Enrich with local changes strictly for existing database students (no orphan additions!)
+        const dbKeyMap = new Map();
+        mapped.forEach(rec => {
+          if (rec.mongoId) dbKeyMap.set(String(rec.mongoId).toLowerCase(), rec);
+          if (rec.id) dbKeyMap.set(String(rec.id).toLowerCase(), rec);
+          if (rec.rollNo) dbKeyMap.set(String(rec.rollNo).toLowerCase(), rec);
+          if (rec.studentId) dbKeyMap.set(String(rec.studentId).toLowerCase(), rec);
+        });
+
+        savedLocalRecords.forEach(savedRec => {
+          const lookupKey = String(savedRec.mongoId || savedRec._id || savedRec.id || savedRec.rollNo || savedRec.studentId || '').toLowerCase();
+          const existing = dbKeyMap.get(lookupKey);
+          if (!existing) return; // Ignore orphan records not present in database
+
+          const recBreakdown = savedRec.feeBreakdown || existing.feeBreakdown || {};
+          const tPaid = Number(recBreakdown.tuition?.paid || 0);
+          const ePaid = Number(recBreakdown.exam?.paid || 0);
+          const trPaid = Number(recBreakdown.transport?.paid || 0);
+          const mPaid = Number(recBreakdown.misc?.paid || 0);
+          const secPaid = tPaid + ePaid + trPaid + mPaid;
+          const paid = secPaid > 0 ? secPaid : (Number(savedRec.paidFee) || Number(existing.paidFee) || 0);
+
+          const deptFeeInfo = getDepartmentFixedFee(existing.department || existing.course);
+          const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
+          let tot = Number(savedRec.totalFee);
+          if (!tot || isNaN(tot) || tot === 25000 || tot === 35000 || tot === 34050 || tot === 34850 || (fixedAnnualFee > 0 && tot > fixedAnnualFee && paid <= fixedAnnualFee)) {
+            tot = fixedAnnualFee;
+          }
+          if (tot < paid) tot = paid;
+          const pend = Math.max(0, tot - paid);
+
+          existing.paidFee = paid;
+          existing.paidFeeDisplay = `₹${paid.toLocaleString('en-IN')}`;
+          existing.totalFee = tot;
+          existing.totalFeeDisplay = `₹${tot.toLocaleString('en-IN')}`;
+          existing.pendingFee = pend;
+          existing.pendingFeeDisplay = pend > 0 ? `₹${pend.toLocaleString('en-IN')}` : '₹0';
+          existing.status = tot > 0 && pend === 0 ? 'Paid' : (paid > 0 ? 'Partial' : 'Pending');
+          existing.feeBreakdown = {
+            tuition: { total: Number(recBreakdown.tuition?.total || fixedAnnualFee), paid: tPaid, pending: Math.max(0, Number(recBreakdown.tuition?.total || fixedAnnualFee) - tPaid) },
+            exam: { total: Number(recBreakdown.exam?.total || 0), paid: ePaid, pending: Math.max(0, Number(recBreakdown.exam?.total || 0) - ePaid) },
+            transport: { total: Number(recBreakdown.transport?.total || 0), paid: trPaid, pending: Math.max(0, Number(recBreakdown.transport?.total || 0) - trPaid) },
+            misc: { total: Number(recBreakdown.misc?.total || 0), paid: mPaid, pending: Math.max(0, Number(recBreakdown.misc?.total || 0) - mPaid), name: recBreakdown.misc?.name || 'Miscellaneous Fees', items: savedRec.allMiscItems || recBreakdown.misc?.items || [] }
+          };
+          existing.allMiscItems = savedRec.allMiscItems || recBreakdown.misc?.items || existing.allMiscItems || [];
+          if (savedRec.paymentMode) existing.paymentMode = savedRec.paymentMode;
+          if (savedRec.receiptNo) existing.receiptNo = savedRec.receiptNo;
+          if (savedRec.paymentRef || savedRec.referenceNo) existing.paymentRef = savedRec.paymentRef || savedRec.referenceNo;
+          if (savedRec.lastPaymentDate) existing.lastPaymentDate = savedRec.lastPaymentDate;
+        });
+
+        const finalRecords = sanitizeRecords(mapped);
+        setFeeRecords(finalRecords);
+        try {
+          localStorage.setItem('vcas_real_fee_records', JSON.stringify(finalRecords));
         } catch (e) { }
-      } finally {
-        setIsRefreshingStudents(false);
+        return;
       }
-    }, []);
+
+      if (Array.isArray(savedLocalRecords) && savedLocalRecords.length) {
+        const sanitized = sanitizeRecords(savedLocalRecords);
+        setFeeRecords(sanitized);
+        try {
+          localStorage.setItem('vcas_real_fee_records', JSON.stringify(sanitized));
+        } catch (e) { }
+      }
+    } catch (err) {
+      console.error('Failed to load students for fee management:', err);
+      try {
+        const saved = JSON.parse(localStorage.getItem('vcas_real_fee_records') || '[]');
+        if (Array.isArray(saved) && saved.length > 0) {
+          const sanitized = sanitizeRecords(saved);
+          setFeeRecords(sanitized);
+          localStorage.setItem('vcas_real_fee_records', JSON.stringify(sanitized));
+        }
+      } catch (e) { }
+    } finally {
+      setIsRefreshingStudents(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchStudentsForFees();
@@ -480,7 +481,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
     const paid = paidBreakdown > 0 ? paidBreakdown : (Number(record?.paidFee) || 0);
     let total = Number(record?.totalFee);
-    if (!total || isNaN(total) || total === 25000 || total === 35000 || total === 34050) {
+    if (!total || isNaN(total) || total === 25000 || total === 35000 || total === 34050 || total === 34850 || (fixedAnnualFee > 0 && total > fixedAnnualFee && paid <= fixedAnnualFee)) {
       total = fixedAnnualFee;
     }
     if (total < paid) {
@@ -695,24 +696,82 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         const matchesEditRecord = rec.id === editingFeeRecord.id || rec.rollNo === editingFeeRecord.rollNo || rec.mongoId === editingFeeRecord.mongoId;
         if (!matchesEditRecord) return rec;
 
+        let updatedMiscItems = Array.isArray(rec.allMiscItems) ? [...rec.allMiscItems] : (Array.isArray(rec.feeBreakdown?.misc?.items) ? [...rec.feeBreakdown.misc.items] : []);
+        if (feeKey === 'misc') {
+          const mItemName = entryFormData.miscFeeName || 'Miscellaneous Fees';
+          const existingItemIdx = updatedMiscItems.findIndex(it => (it.feeType || it.name || '').toLowerCase() === mItemName.toLowerCase());
+          if (existingItemIdx >= 0) {
+            const prevIt = updatedMiscItems[existingItemIdx];
+            const nextPaid = Number(prevIt.paid || 0) + Number(paidAmount || 0);
+            const nextTot = Math.max(Number(prevIt.amount || prevIt.total || 0), Number(totalAmount || 0), nextPaid);
+            updatedMiscItems[existingItemIdx] = {
+              ...prevIt,
+              feeType: mItemName,
+              amount: nextTot,
+              paid: nextPaid,
+              balance: Math.max(0, nextTot - nextPaid),
+              status: nextPaid >= nextTot ? 'Paid' : 'Partial',
+              date: payDate,
+              receiptNo: finalReceiptNo || prevIt.receiptNo
+            };
+          } else {
+            const prevTotalRecorded = updatedMiscItems.reduce((s, it) => s + Number(it.paid || 0), 0);
+            const prevMiscPaid = Number(rec.feeBreakdown?.misc?.paid || 0);
+            if (prevMiscPaid > prevTotalRecorded) {
+              const diffPaid = prevMiscPaid - prevTotalRecorded;
+              const prevName = rec.feeBreakdown?.misc?.name || rec.miscFeeName || 'Other Miscellaneous Fees';
+              updatedMiscItems.push({
+                feeType: prevName !== mItemName ? prevName : 'Other Miscellaneous Fees',
+                amount: diffPaid,
+                paid: diffPaid,
+                balance: 0,
+                status: 'Paid'
+              });
+            }
+            updatedMiscItems.push({
+              feeType: mItemName,
+              amount: totalAmount || paidAmount,
+              paid: paidAmount,
+              balance: Math.max(0, (totalAmount || paidAmount) - paidAmount),
+              status: paidAmount >= totalAmount && totalAmount > 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'),
+              date: payDate,
+              receiptNo: finalReceiptNo
+            });
+          }
+        }
+
         const nextBreakdown = {
           tuition: { total: feeKey === 'tuition' ? totalAmount : Number(rec.feeBreakdown?.tuition?.total || 0), paid: feeKey === 'tuition' ? paidAmount : Number(rec.feeBreakdown?.tuition?.paid || 0), pending: feeKey === 'tuition' ? pendingAmount : Number(rec.feeBreakdown?.tuition?.pending || 0) },
           exam: { total: feeKey === 'exam' ? totalAmount : Number(rec.feeBreakdown?.exam?.total || 0), paid: feeKey === 'exam' ? paidAmount : Number(rec.feeBreakdown?.exam?.paid || 0), pending: feeKey === 'exam' ? pendingAmount : Number(rec.feeBreakdown?.exam?.pending || 0) },
           transport: { total: feeKey === 'transport' ? totalAmount : Number(rec.feeBreakdown?.transport?.total || 0), paid: feeKey === 'transport' ? paidAmount : Number(rec.feeBreakdown?.transport?.paid || 0), pending: feeKey === 'transport' ? pendingAmount : Number(rec.feeBreakdown?.transport?.pending || 0) },
-          misc: { total: feeKey === 'misc' ? totalAmount : Number(rec.feeBreakdown?.misc?.total || 0), paid: feeKey === 'misc' ? paidAmount : Number(rec.feeBreakdown?.misc?.paid || 0), pending: feeKey === 'misc' ? pendingAmount : Number(rec.feeBreakdown?.misc?.pending || 0), name: entryFormData.miscFeeName || 'Miscellaneous Fees' }
+          misc: {
+            total: feeKey === 'misc' ? (updatedMiscItems.length > 0 ? updatedMiscItems.reduce((s, it) => s + Number(it.amount || it.total || it.paid || 0), 0) : totalAmount) : Number(rec.feeBreakdown?.misc?.total || 0),
+            paid: feeKey === 'misc' ? (updatedMiscItems.length > 0 ? updatedMiscItems.reduce((s, it) => s + Number(it.paid || 0), 0) : paidAmount) : Number(rec.feeBreakdown?.misc?.paid || 0),
+            pending: feeKey === 'misc' ? Math.max(0, (updatedMiscItems.reduce((s, it) => s + Number(it.amount || it.total || it.paid || 0), 0)) - (updatedMiscItems.reduce((s, it) => s + Number(it.paid || 0), 0))) : Number(rec.feeBreakdown?.misc?.pending || 0),
+            name: feeKey === 'misc' ? (entryFormData.miscFeeName || 'Miscellaneous Fees') : (rec.feeBreakdown?.misc?.name || 'Miscellaneous Fees'),
+            items: updatedMiscItems
+          }
         };
 
-        const secTuitionTotal = Number(nextBreakdown.tuition?.total || nextBreakdown.tuition?.paid || 0);
-        const secExamTotal = Number(nextBreakdown.exam?.total || nextBreakdown.exam?.paid || 0);
-        const secTransportTotal = Number(nextBreakdown.transport?.total || nextBreakdown.transport?.paid || 0);
-        const secMiscTotal = Number(nextBreakdown.misc?.total || nextBreakdown.misc?.paid || 0);
-        const calculatedTotal = secTuitionTotal + secExamTotal + secTransportTotal + secMiscTotal;
+        const deptFeeInfo = getDepartmentFixedFee(department || course || rec.department || rec.course);
+        const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
 
         const secTuitionPaid = Number(nextBreakdown.tuition?.paid || 0);
         const secExamPaid = Number(nextBreakdown.exam?.paid || 0);
         const secTransportPaid = Number(nextBreakdown.transport?.paid || 0);
         const secMiscPaid = Number(nextBreakdown.misc?.paid || 0);
         const calculatedPaid = secTuitionPaid + secExamPaid + secTransportPaid + secMiscPaid;
+
+        // Total fee remains the student's department annual fee (e.g. 28,000 for CS)
+        // Fee payments reduce the balance dues from the total fee, NOT adding on top of it.
+        let baseTotal = Number(rec.totalFee);
+        if (!baseTotal || isNaN(baseTotal) || baseTotal === 34850 || baseTotal === 34050 || baseTotal === 35000 || baseTotal === 25000 || (fixedAnnualFee > 0 && baseTotal > fixedAnnualFee && calculatedPaid <= fixedAnnualFee)) {
+          baseTotal = fixedAnnualFee;
+        }
+        let calculatedTotal = baseTotal;
+        if (calculatedPaid > calculatedTotal) {
+          calculatedTotal = calculatedPaid;
+        }
 
         const calculatedPending = Math.max(0, calculatedTotal - calculatedPaid);
         const calculatedStatus = calculatedTotal > 0 && calculatedPending === 0 ? 'Paid' : (calculatedPaid > 0 ? 'Partial' : 'Pending');
@@ -750,7 +809,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           receiptNo: finalReceiptNo,
           paymentRef: txnRef,
           referenceNo: txnRef,
-          feeBreakdown: nextBreakdown
+          feeBreakdown: nextBreakdown,
+          allMiscItems: updatedMiscItems
         };
         return updated;
       });
@@ -770,20 +830,15 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              feeStatus,
-              totalFee: Number(totalAmount) || 0,
-              paidFee: Number(paidAmount) || 0,
-              pendingFee: Number(pendingAmount) || 0,
-              feeBreakdown: {
-                tuition: { total: feeKey === 'tuition' ? totalAmount : 0, paid: feeKey === 'tuition' ? paidAmount : 0, pending: feeKey === 'tuition' ? pendingAmount : 0 },
-                exam: { total: feeKey === 'exam' ? totalAmount : 0, paid: feeKey === 'exam' ? paidAmount : 0, pending: feeKey === 'exam' ? pendingAmount : 0 },
-                transport: { total: feeKey === 'transport' ? totalAmount : 0, paid: feeKey === 'transport' ? paidAmount : 0, pending: feeKey === 'transport' ? pendingAmount : 0 },
-                misc: { total: feeKey === 'misc' ? totalAmount : 0, paid: feeKey === 'misc' ? paidAmount : 0, pending: feeKey === 'misc' ? pendingAmount : 0, name: entryFormData.miscFeeName || 'Miscellaneous Fees' }
-              },
+              feeStatus: calculatedStatus,
+              totalFee: calculatedTotal,
+              paidFee: calculatedPaid,
+              pendingFee: calculatedPending,
+              feeBreakdown: nextBreakdown,
               lastPaymentDate: payDate,
               paymentMode: entryFormData.paymentMode || 'Online / UPI',
               referenceNo: txnRef,
-              receiptNo: generatedReceiptNo
+              receiptNo: finalReceiptNo
             })
           });
         }
@@ -808,6 +863,50 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       if (matchRoll || matchName) {
         matched = true;
         targetMongoId = rec.mongoId;
+        let updatedMiscItems = Array.isArray(rec.allMiscItems) ? [...rec.allMiscItems] : (Array.isArray(rec.feeBreakdown?.misc?.items) ? [...rec.feeBreakdown.misc.items] : []);
+        if (feeKey === 'misc') {
+          const mItemName = entryFormData.miscFeeName || 'Miscellaneous Fees';
+          const existingItemIdx = updatedMiscItems.findIndex(it => (it.feeType || it.name || '').toLowerCase() === mItemName.toLowerCase());
+          if (existingItemIdx >= 0) {
+            const prevIt = updatedMiscItems[existingItemIdx];
+            const nextPaid = Number(prevIt.paid || 0) + Number(paidAmount || 0);
+            const nextTot = Math.max(Number(prevIt.amount || prevIt.total || 0), Number(totalAmount || 0), nextPaid);
+            updatedMiscItems[existingItemIdx] = {
+              ...prevIt,
+              feeType: mItemName,
+              amount: nextTot,
+              paid: nextPaid,
+              balance: Math.max(0, nextTot - nextPaid),
+              status: nextPaid >= nextTot ? 'Paid' : 'Partial',
+              date: payDate,
+              receiptNo: finalReceiptNo || prevIt.receiptNo
+            };
+          } else {
+            const prevTotalRecorded = updatedMiscItems.reduce((s, it) => s + Number(it.paid || 0), 0);
+            const prevMiscPaid = Number(rec.feeBreakdown?.misc?.paid || 0);
+            if (prevMiscPaid > prevTotalRecorded) {
+              const diffPaid = prevMiscPaid - prevTotalRecorded;
+              const prevName = rec.feeBreakdown?.misc?.name || rec.miscFeeName || 'Other Miscellaneous Fees';
+              updatedMiscItems.push({
+                feeType: prevName !== mItemName ? prevName : 'Other Miscellaneous Fees',
+                amount: diffPaid,
+                paid: diffPaid,
+                balance: 0,
+                status: 'Paid'
+              });
+            }
+            updatedMiscItems.push({
+              feeType: mItemName,
+              amount: totalAmount || paidAmount,
+              paid: paidAmount,
+              balance: Math.max(0, (totalAmount || paidAmount) - paidAmount),
+              status: paidAmount >= totalAmount && totalAmount > 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'),
+              date: payDate,
+              receiptNo: finalReceiptNo
+            });
+          }
+        }
+
         const nextBreakdown = {
           ...(rec.feeBreakdown || {
             tuition: { total: 0, paid: 0, pending: 0 },
@@ -824,20 +923,29 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           total: resolvedTypeTotal,
           paid: newTypePaid,
           pending: Math.max(0, resolvedTypeTotal - newTypePaid),
-          name: feeKey === 'misc' ? (entryFormData.miscFeeName || currentType.name || 'Miscellaneous Fees') : currentType.name
+          name: feeKey === 'misc' ? (entryFormData.miscFeeName || currentType.name || 'Miscellaneous Fees') : currentType.name,
+          items: feeKey === 'misc' ? updatedMiscItems : (currentType.items || [])
         };
 
-        const secTuitionTotal = Number(nextBreakdown.tuition?.total || nextBreakdown.tuition?.paid || 0);
-        const secExamTotal = Number(nextBreakdown.exam?.total || nextBreakdown.exam?.paid || 0);
-        const secTransportTotal = Number(nextBreakdown.transport?.total || nextBreakdown.transport?.paid || 0);
-        const secMiscTotal = Number(nextBreakdown.misc?.total || nextBreakdown.misc?.paid || 0);
-        const newTotal = secTuitionTotal + secExamTotal + secTransportTotal + secMiscTotal;
+        const deptFeeInfo = getDepartmentFixedFee(rec.department || entryFormData.department || rec.course || entryFormData.course);
+        const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
 
         const secTuitionPaid = Number(nextBreakdown.tuition?.paid || 0);
         const secExamPaid = Number(nextBreakdown.exam?.paid || 0);
         const secTransportPaid = Number(nextBreakdown.transport?.paid || 0);
         const secMiscPaid = Number(nextBreakdown.misc?.paid || 0);
         const newPaid = secTuitionPaid + secExamPaid + secTransportPaid + secMiscPaid;
+
+        // Total fee remains the student's department annual fee (e.g. 28k for CS).
+        // Payments reduce the balance dues from the total fee, NOT adding on top of it!
+        let baseTotal = Number(rec.totalFee);
+        if (!baseTotal || isNaN(baseTotal) || baseTotal === 34850 || baseTotal === 34050 || baseTotal === 35000 || baseTotal === 25000 || (fixedAnnualFee > 0 && baseTotal > fixedAnnualFee && newPaid <= fixedAnnualFee)) {
+          baseTotal = fixedAnnualFee;
+        }
+        let newTotal = baseTotal;
+        if (newPaid > newTotal) {
+          newTotal = newPaid;
+        }
 
         const newPending = Math.max(0, newTotal - newPaid);
         const newStatus = newTotal > 0 && newPending === 0 ? 'Paid' : (newPaid > 0 ? 'Partial' : 'Pending');
@@ -869,6 +977,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           paymentRef: txnRef,
           referenceNo: txnRef,
           feeBreakdown: nextBreakdown,
+          allMiscItems: updatedMiscItems
         };
         matchedRecord = updated;
         return updated;
@@ -984,9 +1093,15 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           name: feeKey === 'misc' ? (entryFormData.miscFeeName || currentType.name || 'Miscellaneous Fees') : currentType.name
         };
 
+        const deptFeeInfo = getDepartmentFixedFee(department || course);
+        const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
         const existingFeeTotal = Number(matchedRecord?.totalFee ?? finalRecords[0]?.totalFee ?? 0);
         const persistedPaidAmount = Number(matchedRecord?.paidFee ?? finalRecords[0]?.paidFee ?? paidAmount ?? 0);
-        const persistedFeeTotal = Math.max(existingFeeTotal > 0 ? existingFeeTotal : totalAmount, persistedPaidAmount);
+        let persistedFeeTotal = existingFeeTotal;
+        if (!persistedFeeTotal || persistedFeeTotal === 34850 || persistedFeeTotal === 34050 || persistedFeeTotal === 35000 || persistedFeeTotal === 25000 || (fixedAnnualFee > 0 && persistedFeeTotal > fixedAnnualFee && persistedPaidAmount <= fixedAnnualFee)) {
+          persistedFeeTotal = fixedAnnualFee;
+        }
+        if (persistedFeeTotal < persistedPaidAmount) persistedFeeTotal = persistedPaidAmount;
         const persistedPendingAmount = Math.max(0, persistedFeeTotal - persistedPaidAmount);
 
         await fetch(`${API_BASE}/students/${studentLookupId}`, {
@@ -1045,7 +1160,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       date: payDate,
       referenceNo: txnRef,
       receiptNo: finalReceiptNo,
-      paymentMode: entryFormData.paymentMode || 'Online'
+      paymentMode: entryFormData.paymentMode || 'Online',
+      _feeKey: feeKey,
+      _activeTab: feeTypeName
     });
 
     // Reset form for next entry (preserve feeType/tab)
@@ -1262,7 +1379,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     const dept = studentRec.department || studentRec.course || '—';
     const batch = studentRec.batch || studentRec.academicYear || '';
     const feeCategory = studentRec.feeType || 'Fee Collection';
-    const totalFee = Number(studentRec.totalFee ?? (studentRec.amount ? parseFloat(String(studentRec.amount).replace(/[^0-9.]/g, '')) : 0)) || 0;
+    const deptFeeInfo = getDepartmentFixedFee(dept);
+    const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
+    let totalFee = Number(studentRec.totalFee ?? (studentRec.amount ? parseFloat(String(studentRec.amount).replace(/[^0-9.]/g, '')) : 0)) || 0;
     const rawPaid = studentRec.paidFee ?? (studentRec.amount ? parseFloat(String(studentRec.amount).replace(/[^0-9.]/g, '')) : 0);
     const paidFee = Number(rawPaid) || 0;
     let pendingFee = Math.max(0, (totalFee > 0 ? totalFee : paidFee) - paidFee);
@@ -1282,13 +1401,34 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     const breakdownRows = [
       ['Tuition Fees', tuiPaid],
       ['Exam Fees', examPaid],
-      ['Transport Fees', transPaid],
-      [miscLabel, miscPaid]
+      ['Transport Fees', transPaid]
     ];
 
+    const miscItems = (studentRec.allMiscItems && studentRec.allMiscItems.length > 0)
+      ? studentRec.allMiscItems
+      : (breakdown.misc?.items && breakdown.misc.items.length > 0 ? breakdown.misc.items : null);
+
+    if (miscItems && miscItems.length > 0) {
+      miscItems.forEach(it => {
+        breakdownRows.push([it.feeType || it.name || 'Miscellaneous Fees', Number(it.paid ?? it.amount ?? 0)]);
+      });
+    } else if (miscLabel.toLowerCase().includes('id card') || miscLabel.toLowerCase().includes('badge')) {
+      const idCardPaid = Math.min(300, miscPaid);
+      breakdownRows.push(['ID Card / Badge Fees', idCardPaid]);
+      if (miscPaid > idCardPaid) {
+        breakdownRows.push(['Other Miscellaneous Fees', miscPaid - idCardPaid]);
+      }
+    } else {
+      breakdownRows.push([miscLabel, miscPaid]);
+    }
+
     const totalSectionPaid = tuiPaid + examPaid + transPaid + miscPaid;
-    const displayTotalFee = totalFee > 0 ? totalFee : (totalSectionPaid || paidFee);
     const effectivePaidFee = paidFee > 0 ? paidFee : totalSectionPaid;
+
+    if (!totalFee || totalFee === 34850 || totalFee === 34050 || totalFee === 35000 || totalFee === 25000 || (fixedAnnualFee > 0 && totalFee > fixedAnnualFee && effectivePaidFee <= fixedAnnualFee)) {
+      totalFee = fixedAnnualFee;
+    }
+    const displayTotalFee = totalFee > 0 ? totalFee : (fixedAnnualFee || effectivePaidFee);
     pendingFee = Math.max(0, displayTotalFee - effectivePaidFee);
 
     const metaItems = [
@@ -1406,25 +1546,63 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
   const getFeeBreakdownEntries = (record) => {
     const breakdown = record?.feeBreakdown || {};
-    const categories = [
-      { key: 'tuition', label: 'Tuition Fees' },
-      { key: 'exam', label: 'Exam Fees' },
-      { key: 'transport', label: 'Transport Fees' },
-      { key: 'misc', label: breakdown.misc?.name || 'Miscellaneous Fees' }
+    const entries = [
+      { key: 'tuition', label: 'Tuition Fees', total: Number(breakdown.tuition?.total || 0), paid: Number(breakdown.tuition?.paid || 0), pending: Number(breakdown.tuition?.pending || 0) },
+      { key: 'exam', label: 'Exam Fees', total: Number(breakdown.exam?.total || 0), paid: Number(breakdown.exam?.paid || 0), pending: Number(breakdown.exam?.pending || 0) },
+      { key: 'transport', label: 'Transport Fees', total: Number(breakdown.transport?.total || 0), paid: Number(breakdown.transport?.paid || 0), pending: Number(breakdown.transport?.pending || 0) }
     ];
 
-    return categories.map(item => {
-      const data = breakdown[item.key] || { total: 0, paid: 0, pending: 0 };
-      const total = Number(data.total || 0);
-      const paid = Number(data.paid || 0);
-      const pending = Number(data.pending || 0);
-      return {
-        ...item,
-        total,
-        paid,
-        pending
-      };
-    });
+    const miscData = breakdown.misc || {};
+    const miscPaid = Number(miscData.paid || 0);
+    const miscTotal = Number(miscData.total || 0);
+    const miscLabel = miscData.name || record?.miscFeeName || 'Miscellaneous Fees';
+    const miscItems = (record?.allMiscItems && record.allMiscItems.length > 0)
+      ? record.allMiscItems
+      : (miscData.items && miscData.items.length > 0 ? miscData.items : null);
+
+    if (miscItems && miscItems.length > 0) {
+      miscItems.forEach((it, idx) => {
+        const iPaid = Number(it.paid ?? it.amount ?? 0);
+        const iTotal = Number(it.amount ?? it.total ?? iPaid);
+        entries.push({
+          key: `misc_${idx}`,
+          label: it.feeType || it.name || 'Miscellaneous Fees',
+          total: iTotal,
+          paid: iPaid,
+          pending: Math.max(0, iTotal - iPaid)
+        });
+      });
+    } else if (miscLabel.toLowerCase().includes('id card') || miscLabel.toLowerCase().includes('badge')) {
+      const idPaid = Math.min(300, miscPaid);
+      entries.push({
+        key: 'misc_id',
+        label: 'ID Card / Badge Fees',
+        total: 300,
+        paid: idPaid,
+        pending: Math.max(0, 300 - idPaid)
+      });
+      if (miscPaid > idPaid) {
+        const remPaid = miscPaid - idPaid;
+        const remTot = Math.max(remPaid, miscTotal - 300);
+        entries.push({
+          key: 'misc_other',
+          label: 'Other Miscellaneous Fees',
+          total: remTot,
+          paid: remPaid,
+          pending: Math.max(0, remTot - remPaid)
+        });
+      }
+    } else {
+      entries.push({
+        key: 'misc',
+        label: miscLabel,
+        total: miscTotal,
+        paid: miscPaid,
+        pending: Math.max(0, miscTotal - miscPaid)
+      });
+    }
+
+    return entries;
   };
 
   const availableBatches = useMemo(() => {
@@ -2525,9 +2703,19 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               <button
                 type="button"
                 onClick={() => {
+                  const isMisc = savedSuccessData?._feeKey === 'misc';
                   setSavedSuccessData(null);
-                  setEntryFormData(emptyEntryForm);
-                  setViewMode('list');
+                  setEntryFormData({
+                    ...emptyEntryForm,
+                    feeType: isMisc ? 'Miscellaneous Fees' : emptyEntryForm.feeType,
+                    paymentDate: new Date().toISOString().split('T')[0]
+                  });
+                  if (isMisc) {
+                    setActiveTab('Miscellaneous Fees');
+                    setViewMode('form');
+                  } else {
+                    setViewMode('list');
+                  }
                 }}
                 className="py-3 px-5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs sm:text-sm transition-all shadow-lg shadow-blue-500/25 cursor-pointer"
               >
@@ -2704,12 +2892,15 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
             {(() => {
               const breakdownEntries = getFeeBreakdownEntries(selectedStudentForView);
-              const totalSectionFee = breakdownEntries.reduce((sum, section) => sum + (Number(section.total) || 0), 0);
+              const deptFeeInfo = getDepartmentFixedFee(selectedStudentForView.department || selectedStudentForView.course);
+              const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
               const totalSectionPaid = breakdownEntries.reduce((sum, section) => sum + (Number(section.paid) || 0), 0);
-              const totalSectionPending = breakdownEntries.reduce((sum, section) => sum + (Number(section.pending) || 0), 0);
-              const effectiveTotalFee = totalSectionFee || Number(selectedStudentForView.totalFee || 0);
-              const effectivePaidFee = totalSectionPaid || Number(selectedStudentForView.paidFee || 0);
-              const effectivePendingFee = totalSectionPending || Number(selectedStudentForView.pendingFee || 0);
+              const effectivePaidFee = totalSectionPaid > 0 ? totalSectionPaid : Number(selectedStudentForView.paidFee || 0);
+              let effectiveTotalFee = Number(selectedStudentForView.totalFee || 0);
+              if (!effectiveTotalFee || effectiveTotalFee === 34850 || effectiveTotalFee === 34050 || effectiveTotalFee === 35000 || effectiveTotalFee === 25000 || (fixedAnnualFee > 0 && effectiveTotalFee > fixedAnnualFee && effectivePaidFee <= fixedAnnualFee)) {
+                effectiveTotalFee = fixedAnnualFee;
+              }
+              const effectivePendingFee = Math.max(0, effectiveTotalFee - effectivePaidFee);
 
               return (
                 <div className="space-y-3 text-xs">
@@ -2833,17 +3024,41 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
               </div>
 
               <div className="border-t border-b border-slate-200 py-3 space-y-1">
-                {[
-                  ['Tuition Fees', Number(selectedReceiptStudent.feeBreakdown?.tuition?.paid || 0)],
-                  ['Exam Fees', Number(selectedReceiptStudent.feeBreakdown?.exam?.paid || 0)],
-                  ['Transport Fees', Number(selectedReceiptStudent.feeBreakdown?.transport?.paid || 0)],
-                  [selectedReceiptStudent.feeBreakdown?.misc?.name || 'Miscellaneous Fees', Number(selectedReceiptStudent.feeBreakdown?.misc?.paid || 0)]
-                ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between text-slate-700">
-                    <span>{label}:</span>
-                    <span className="font-bold">₹{Number(value || 0).toLocaleString('en-IN')}</span>
-                  </div>
-                ))}
+                {(() => {
+                  const rMisc = selectedReceiptStudent.feeBreakdown?.misc || {};
+                  const rMiscPaid = Number(rMisc.paid || 0);
+                  const rMiscName = rMisc.name || selectedReceiptStudent.miscFeeName || 'Miscellaneous Fees';
+                  const rMiscItems = (selectedReceiptStudent.allMiscItems && selectedReceiptStudent.allMiscItems.length > 0)
+                    ? selectedReceiptStudent.allMiscItems
+                    : (rMisc.items && rMisc.items.length > 0 ? rMisc.items : null);
+
+                  const sectionRows = [
+                    ['Tuition Fees', Number(selectedReceiptStudent.feeBreakdown?.tuition?.paid || 0)],
+                    ['Exam Fees', Number(selectedReceiptStudent.feeBreakdown?.exam?.paid || 0)],
+                    ['Transport Fees', Number(selectedReceiptStudent.feeBreakdown?.transport?.paid || 0)],
+                  ];
+
+                  if (rMiscItems && rMiscItems.length > 0) {
+                    rMiscItems.forEach(it => {
+                      sectionRows.push([it.feeType || it.name || 'Miscellaneous Fees', Number(it.paid ?? it.amount ?? 0)]);
+                    });
+                  } else if (rMiscName.toLowerCase().includes('id card') || rMiscName.toLowerCase().includes('badge')) {
+                    const idPaid = Math.min(300, rMiscPaid);
+                    sectionRows.push(['ID Card / Badge Fees', idPaid]);
+                    if (rMiscPaid > idPaid) {
+                      sectionRows.push(['Other Miscellaneous Fees', rMiscPaid - idPaid]);
+                    }
+                  } else {
+                    sectionRows.push([rMiscName, rMiscPaid]);
+                  }
+
+                  return sectionRows.map(([label, value]) => (
+                    <div key={label} className="flex justify-between text-slate-700">
+                      <span>{label}:</span>
+                      <span className="font-bold">₹{Number(value || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  ));
+                })()}
                 <div className="flex justify-between">
                   <span>Total Course Fee:</span>
                   <span className="font-bold">₹{selectedReceiptStudent.totalFee.toLocaleString()}</span>

@@ -21,9 +21,6 @@ const DEFAULT_INSTRUCTIONS = [
 const ALL_SEMESTERS = [1, 2, 3, 4, 5, 6];
 const DEFAULT_DEPTS = getKnownDepartments();
 
-// Oldly deleted / dummy test subject codes that should never appear in schedules or dropdowns
-const OLD_DELETED_CODES = new Set(['CS2003', 'CS2006', 'SF76', '123', 'CS2005', 'TESTA1', 'TESTA2']);
-
 // Local storage helpers for persisting custom subject timing and dates across reloads
 const getSavedCustomTimings = () => {
   try {
@@ -49,6 +46,17 @@ const saveCustomTiming = (code, timingObj) => {
   }
 };
 
+const getDeletedSubjectCodes = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('vcas_deleted_subject_codes') || '[]');
+    return new Set((Array.isArray(saved) ? saved : [])
+      .map(code => String(code).trim().toUpperCase())
+      .filter(Boolean));
+  } catch {
+    return new Set();
+  }
+};
+
 const scheduleRemovedStorageKey = 'vcas_removed_schedule_codes_by_allocation';
 
 const getRemovedScheduleCodes = (allocationId) => {
@@ -70,7 +78,7 @@ const markScheduleSubjectRemoved = (allocationId, code) => {
     codes.add(String(code).trim().toUpperCase());
     saved[key] = Array.from(codes);
     localStorage.setItem(scheduleRemovedStorageKey, JSON.stringify(saved));
-  } catch { }
+  } catch {}
 };
 
 const unmarkScheduleSubjectRemoved = (allocationId, code) => {
@@ -82,7 +90,7 @@ const unmarkScheduleSubjectRemoved = (allocationId, code) => {
     codes.delete(String(code).trim().toUpperCase());
     saved[key] = Array.from(codes);
     localStorage.setItem(scheduleRemovedStorageKey, JSON.stringify(saved));
-  } catch { }
+  } catch {}
 };
 
 export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
@@ -96,17 +104,6 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hallFilter, setHallFilter] = useState('All');
   const [subjectFilter, setSubjectFilter] = useState('All');
-
-  // Set of subject codes explicitly removed by staff so they never re-appear (placed early to prevent TDZ)
-  const [deletedSubjectCodes, setDeletedSubjectCodes] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('vcas_deleted_subject_codes') || '[]');
-      return new Set(Array.isArray(saved) ? saved.map(code => String(code).trim().toUpperCase()).filter(Boolean) : []);
-    } catch (_) {
-      return new Set();
-    }
-  });
-
   const [allocationToDelete, setAllocationToDelete] = useState(null);
   const [isDeletingAllocation, setIsDeletingAllocation] = useState(false);
   const [showResetInstructionsModal, setShowResetInstructionsModal] = useState(false);
@@ -132,11 +129,10 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
 
   const currentAllocationSubjects = useMemo(() => {
     const subjectMap = new Map();
-    const removedCodes = getRemovedScheduleCodes(currentAllocation?._id);
 
     (currentAllocation?.commonSubjects || []).forEach(subject => {
       const code = String(subject?.code || '').trim().toUpperCase();
-      if (!code || deletedSubjectCodes.has(code) || removedCodes.has(code) || OLD_DELETED_CODES.has(code)) return;
+      if (!code) return;
       subjectMap.set(code, {
         code,
         name: String(subject?.name || '').trim()
@@ -146,7 +142,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     (currentAllocation?.students || []).forEach(student => {
       (student?.subjects || []).forEach(subject => {
         const code = String(subject?.code || '').trim().toUpperCase();
-        if (!code || deletedSubjectCodes.has(code) || removedCodes.has(code) || OLD_DELETED_CODES.has(code)) return;
+        if (!code) return;
         subjectMap.set(code, {
           code,
           name: String(subject?.name || '').trim()
@@ -157,7 +153,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     return Array.from(subjectMap.values()).sort((a, b) =>
       `${a.code} ${a.name}`.localeCompare(`${b.code} ${b.name}`)
     );
-  }, [currentAllocation, deletedSubjectCodes]);
+  }, [currentAllocation]);
 
   // Actual count of students who have an assigned hall
   const allocatedStudentsCount = useMemo(() => {
@@ -262,18 +258,19 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const [newHallName, setNewHallName] = useState('');
   const [newHallCap, setNewHallCap] = useState(30);
 
-  // Subjects schedule for this exam (restores cached subjects across reloads, excluding deleted ones)
+  // Subjects schedule for this exam (restores cached subjects across reloads)
   const [subjectsSchedule, setSubjectsSchedule] = useState(() => {
     try {
-      const deleted = new Set(
-        (JSON.parse(localStorage.getItem('vcas_deleted_subject_codes') || '[]') || [])
-          .map(c => String(c).trim().toUpperCase()).filter(Boolean)
-      );
       const raw = localStorage.getItem('vcas_staff_subjects_schedule');
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed)
-        ? parsed.filter(s => s && s.code && !deleted.has(String(s.code).trim().toUpperCase()))
+      const deletedCodes = getDeletedSubjectCodes();
+      const cached = raw ? JSON.parse(raw) : [];
+      const filtered = Array.isArray(cached)
+        ? cached.filter(subject => !deletedCodes.has(String(subject?.code || '').trim().toUpperCase()))
         : [];
+      if (filtered.length !== cached.length) {
+        localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(filtered));
+      }
+      return filtered;
     } catch {
       return [];
     }
@@ -408,6 +405,9 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const [newSubSession, setNewSubSession] = useState('Forenoon (FN)');
   const [newSubTime, setNewSubTime] = useState('');
 
+  // Set of subject codes explicitly removed by staff so they never re-appear
+  const [deletedSubjectCodes, setDeletedSubjectCodes] = useState(() => getDeletedSubjectCodes());
+
   // Listen for subject removals across the entire system
   useEffect(() => {
     const handleSubjectRemoved = (e) => {
@@ -417,11 +417,15 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         setDeletedSubjectCodes(prev => {
           const next = new Set(prev);
           next.add(clean);
-          try { localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next))); } catch { }
+          try { localStorage.setItem('vcas_deleted_subject_codes', JSON.stringify(Array.from(next))); } catch {}
           return next;
         });
         setCatalogSubjects(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
-        setSubjectsSchedule(prev => prev.filter(s => (s.code || '').toUpperCase() !== clean));
+        setSubjectsSchedule(prev => {
+          const next = prev.filter(s => (s.code || '').toUpperCase() !== clean);
+          try { localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next)); } catch {}
+          return next;
+        });
       }
     };
     window.addEventListener('vcas_subject_removed', handleSubjectRemoved);
@@ -482,10 +486,10 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         const staffDept = String(staffUser?.department || '').trim();
         const matchingOwnDept = staffDept
           ? finalDepts.find(d =>
-            d.toLowerCase() === staffDept.toLowerCase() ||
-            d.toLowerCase().includes(staffDept.toLowerCase()) ||
-            staffDept.toLowerCase().includes(d.toLowerCase())
-          )
+              d.toLowerCase() === staffDept.toLowerCase() ||
+              d.toLowerCase().includes(staffDept.toLowerCase()) ||
+              staffDept.toLowerCase().includes(d.toLowerCase())
+            )
           : null;
 
         // Staff and HOD users must see only their assigned department.
@@ -498,7 +502,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
 
         setAvailableSemesters(ALL_SEMESTERS);
 
-        // Pick matching department or the staff/HOD department
+        // Pick matching department or the staff
         const allowedDepts = !isSuperAdminOrAdmin && staffDept
           ? (matchingOwnDept ? [matchingOwnDept] : [staffDept])
           : finalDepts;
@@ -532,8 +536,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         const removedCodes = getRemovedScheduleCodes(currentAllocation._id);
         const enriched = currentAllocation.commonSubjects
           .filter(s => !removedCodes.has(String(s.code || '').trim().toUpperCase()))
-          .filter(s => !deletedSubjectCodes.has(String(s.code || '').trim().toUpperCase()))
-          .filter(s => !OLD_DELETED_CODES.has(String(s.code || '').trim().toUpperCase()))
+          .filter(s => !deletedSubjectCodes.has(s.code.toUpperCase()))
           .map(s => {
             const custom = cachedTimings[s.code.toUpperCase()];
             return {
@@ -547,10 +550,10 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         setSubjectsSchedule(enriched);
         try {
           localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(enriched));
-        } catch { }
+        } catch {}
       }
     }
-  }, [currentAllocation?._id]);
+  }, [currentAllocation?._id, deletedSubjectCodes]);
 
   // Fetch all saved allocations on load
   const loadAllocations = async () => {
@@ -599,54 +602,15 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     }
   }, [currentAllocation]);
 
-  // Fetch available subjects for the chosen department & semester (matches StaffInternalMarks logic)
+  // Fetch available subjects for the chosen department & semester
   const loadAvailableSubjects = async (dept, sem, sec) => {
     try {
-      const activeDept = dept || formDept || staffUser?.department || '';
+      const activeDept = dept || formDept;
       const params = new URLSearchParams();
       if (activeDept && activeDept !== 'All') params.append('department', activeDept);
 
-      const staffId = String(staffUser?.staffId || staffUser?.employeeId || '').trim();
-      const effectiveStaffId = staffId || 'EMP001';
-
-      const roleKey = String(staffUser?.role || '').toUpperCase().replace(/[^A-Z]/g, '');
-      const desigKey = String(staffUser?.designation || '').toUpperCase().replace(/[^A-Z]/g, '');
-      const isSuperAdminUser = roleKey.includes('SUPERADMIN') || roleKey.includes('MANAGINGDIRECTOR') || roleKey.includes('MD') || desigKey.includes('MANAGINGDIRECTOR') || desigKey.includes('MD');
-      const isAdminUser = !isSuperAdminUser && (roleKey.includes('ADMIN') || roleKey.includes('PRINCIPAL') || desigKey.includes('PRINCIPAL'));
-
-      const looksLikeHodUser = (value) => {
-        const normalized = String(value || '').toUpperCase();
-        return normalized.includes('HOD') ||
-          normalized.includes('HEAD OF DEPARTMENT') ||
-          normalized.includes('HEADOFDEPARTMENT') ||
-          (normalized.includes('HEAD') && normalized.includes('DEPARTMENT')) ||
-          normalized.includes('DEPARTMENT HEAD');
-      };
-      const normalizeIdentity = (value) => String(value || '').trim().toLowerCase().replace(/^(dr|prof|mr|mrs|ms|miss)\.?\s+/i, '').replace(/[^a-z0-9]/g, '');
-
-      const marksRoleParam = (looksLikeHodUser(staffUser?.role) || looksLikeHodUser(staffUser?.designation) || staffUser?.isHod || isAdminUser || isSuperAdminUser)
-        ? `?role=${encodeURIComponent(staffUser?.role || (staffUser?.isHod ? 'HOD' : isAdminUser ? 'Admin' : 'SuperAdmin'))}&dept=${encodeURIComponent(staffUser?.department || activeDept || '')}`
-        : '';
-
-      const [resEligible, resStaffClasses, resAllClasses, resSubjects, resDepts, resDeptClasses, resMarks, resAsgts] = await Promise.allSettled([
-        fetch(`${API_BASE}/hall-tickets/eligible-students?${params.toString()}`).then(r => r.json()),
-        staffId ? fetch(`${API_BASE}/classes/staff/${encodeURIComponent(staffId)}`).then(r => r.json()) : Promise.resolve(null),
-        fetch(`${API_BASE}/classes`).then(r => r.json()),
-        fetch(`${API_BASE}/subjects`).then(r => r.json()),
-        fetch(`${API_BASE}/departments`).then(r => r.json()),
-        fetch(`${API_BASE}/classes?dept=${encodeURIComponent(activeDept || staffUser?.department || '')}`).then(r => r.json()),
-        fetch(`${API_BASE}/internal-marks/${effectiveStaffId}${marksRoleParam}`).then(r => r.json()),
-        staffId ? fetch(`${API_BASE}/assignments/${effectiveStaffId}`).then(r => r.json()) : Promise.resolve(null)
-      ]);
-
-      const data = (resEligible.status === 'fulfilled' && resEligible.value) ? resEligible.value : { success: false, students: [], subjects: [] };
-      const staffClsData = (resStaffClasses.status === 'fulfilled' && resStaffClasses.value) ? resStaffClasses.value : null;
-      const allClassesData = (resAllClasses.status === 'fulfilled' && resAllClasses.value) ? resAllClasses.value : null;
-      const subjectsData = (resSubjects.status === 'fulfilled' && resSubjects.value) ? resSubjects.value : null;
-      const departmentsData = (resDepts.status === 'fulfilled' && resDepts.value) ? resDepts.value : null;
-      const departmentClassesData = (resDeptClasses.status === 'fulfilled' && resDeptClasses.value) ? resDeptClasses.value : null;
-      const marksData = (resMarks.status === 'fulfilled' && resMarks.value) ? resMarks.value : null;
-      const asgtsData = (resAsgts.status === 'fulfilled' && resAsgts.value) ? resAsgts.value : null;
+      const res = await fetch(`${API_BASE}/hall-tickets/eligible-students?${params.toString()}`);
+      const data = await res.json();
 
       let fetchedStudents = (data.success && Array.isArray(data.students)) ? data.students : [];
 
@@ -700,202 +664,193 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         });
       }
 
-      // Collect subjects exactly like StaffInternalMarks fetchStaffSubjects
-      const subs = [];
-      const seen = new Set();
-      const departmentList = departmentsData?.data || (Array.isArray(departmentsData) ? departmentsData : []);
-      const targetDept = String(dept || formDept || staffUser?.department || '').trim().toLowerCase();
+      // Load subjects from /subjects API, cache, and eligible-students data
+      let officialSubjects = [];
+      try {
+        // Pass department param so the backend only returns subjects for the relevant dept
+        const subParams = new URLSearchParams();
+        const deptForSubFetch = staffUser?.department || activeDept || '';
+        if (deptForSubFetch && deptForSubFetch !== 'All') subParams.append('department', deptForSubFetch);
+        const subRes = await fetch(`${API_BASE}/subjects?${subParams.toString()}`);
+        const subData = await subRes.json();
+        if (subData.success && Array.isArray(subData.data)) {
+          officialSubjects = subData.data;
+        } else if (Array.isArray(subData)) {
+          officialSubjects = subData;
+        }
+      } catch (err) {
+        console.warn('Error fetching /subjects:', err);
+      }
 
-      const isGenericSubjectEntry = (value) => {
-        const normalized = String(value || '').trim();
-        if (!normalized) return true;
-        const candidate = normalized.toUpperCase();
-        return ['GENERAL', 'COURSE', 'ALL SUBJECTS', 'UNASSIGNED', 'N/A', 'NA', 'DEFAULT', '-- SELECT --'].includes(candidate);
-      };
+      let staffClassSubjects = [];
+      try {
+        const staffId = String(staffUser?.staffId || '').trim();
+        if (staffId) {
+          const classRes = await fetch(`${API_BASE}/classes/staff/${encodeURIComponent(staffId)}`);
+          const classData = await classRes.json();
+          if (classData.success && Array.isArray(classData.classes)) {
+            staffClassSubjects = classData.classes.map(cls => ({
+              code: cls.code,
+              name: cls.name || cls.className || cls.code,
+              department: cls.dept || cls.department || staffUser?.department || activeDept || '',
+              sem: cls.semester ? `Sem ${cls.semester}` : (cls.sem || 'Sem 1'),
+              semester: cls.semester || cls.sem || 1,
+              faculty: cls.staffName || cls.staffId || '',
+              date: cls.date || 'TBA',
+              session: cls.session || 'Forenoon (FN)',
+              time: cls.time || '09:30 AM - 12:30 PM'
+            }));
+          }
+        }
+      } catch (staffErr) {
+        console.warn('Error fetching staff/HOD class subjects:', staffErr);
+      }
 
-      const addSub = (code, name, meta = {}) => {
-        const c = (code || '').trim().toUpperCase();
-        const n = String(name || '').trim();
-        if (!c || c.length < 2 || seen.has(c)) return;
-        if (isGenericSubjectEntry(c) || isGenericSubjectEntry(n)) return;
-        if (OLD_DELETED_CODES.has(c) || deletedSubjectCodes.has(c)) return;
-
-        seen.add(c);
-        subs.push({
-          code: c,
-          name: (n && !isGenericSubjectEntry(n) && n !== c) ? n : c,
-          department: meta.dept || meta.department || activeDept || '',
-          dept: meta.dept || meta.department || activeDept || '',
-          year: meta.year || null,
-          semester: meta.semester || meta.sem || 1,
-          sem: meta.semester ? `Sem ${meta.semester}` : (meta.sem || 'Sem 1'),
-          staffId: meta.staffId || '',
-          staffName: meta.staffName || '',
-          date: meta.date || 'TBA',
-          session: meta.session || 'Forenoon (FN)',
-          time: meta.time || '09:30 AM - 12:30 PM'
-        });
-      };
-
-      // 1. Official subjects from /subjects and cache
-      let cachedAdminSubjects = [];
+      let cachedSubjects = [];
       try {
         const cached = JSON.parse(localStorage.getItem('vcas_subjects_cache') || '[]');
-        if (Array.isArray(cached)) cachedAdminSubjects = cached;
-      } catch (_) { }
+        if (Array.isArray(cached)) {
+          // Filter cache by staff dept so stale cross-dept subjects don't sneak in
+          const staffDeptForCache = String(staffUser?.department || '').trim().toLowerCase();
+          const isAdminCache = (() => {
+            const rk = String(staffUser?.role || '').toUpperCase().replace(/[^A-Z]/g, '');
+            const dk = String(staffUser?.designation || '').toUpperCase().replace(/[^A-Z]/g, '');
+            return rk.includes('SUPERADMIN') || rk.includes('MANAGINGDIRECTOR') || rk.includes('MD') || rk.includes('ADMIN') || rk.includes('PRINCIPAL') || dk.includes('PRINCIPAL');
+          })();
+          cachedSubjects = isAdminCache || !staffDeptForCache
+            ? cached
+            : cached.filter(s => {
+                const sd = String(s.department || s.dept || '').trim().toLowerCase();
+                if (!sd) return false;
+                const isCsT = staffDeptForCache.includes('cs') || staffDeptForCache.includes('computer');
+                const isCsS = sd.includes('cs') || sd.includes('computer');
+                return sd === staffDeptForCache || sd.includes(staffDeptForCache) || staffDeptForCache.includes(sd) || (isCsT && isCsS);
+              });
+        }
+      } catch (_) {}
 
-      let scheduledSubjects = [];
-      try {
-        const sched = JSON.parse(localStorage.getItem('vcas_admin_ht_subjects_schedule') || '[]');
-        if (Array.isArray(sched)) scheduledSubjects = sched;
-      } catch (_) { }
+      const rawEligibleSubs = (data.success && Array.isArray(data.subjects)) ? data.subjects : [];
+      const combinedSubjects = [...rawEligibleSubs, ...officialSubjects, ...cachedSubjects, ...staffClassSubjects];
 
-      const rawBackendSubjects = Array.isArray(subjectsData?.data)
-        ? subjectsData.data
-        : Array.isArray(subjectsData?.subjects)
-          ? subjectsData.subjects
-          : Array.isArray(subjectsData)
-            ? subjectsData
-            : [];
-      const allSubjects = [...rawBackendSubjects, ...cachedAdminSubjects, ...scheduledSubjects];
-
-      allSubjects.forEach(s => addSub(s.code, s.name || s.title, {
-        ...s,
-        dept: s.department || s.dept,
-        isOfficial: true
-      }));
-
-      // 2. Official department courses configured by Admin in Department Management
-      departmentList.forEach(deptItem => {
-        const deptName = deptItem?.name || '';
-        (deptItem?.coursesList || []).forEach(c => {
-          addSub(c.code, c.name || c.title, {
-            ...c,
-            dept: deptName,
-            isOfficial: true
+      const subMap = new Map();
+      combinedSubjects.forEach(s => {
+        if (!s || !s.code) return;
+        const codeKey = String(s.code).trim().toUpperCase();
+        if (!codeKey || deletedSubjectCodes.has(codeKey)) return;
+        if (!subMap.has(codeKey)) {
+          subMap.set(codeKey, {
+            ...s,
+            code: codeKey,
+            name: s.name || s.subjectName || codeKey,
+            department: s.department || s.dept || activeDept || '',
+            semester: s.semester || s.sem || 1
           });
-        });
+        }
       });
 
-      // 3. Staff's directly assigned classes
-      const staffClasses = staffClsData?.classes || (Array.isArray(staffClsData?.data) ? staffClsData.data : []);
-      staffClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
+      const allAvailableSubjects = Array.from(subMap.values());
 
-      // 4. Department classes for this staff member (both Staff and HOD)
-      const departmentClasses = departmentClassesData?.classes || (Array.isArray(departmentClassesData?.data) ? departmentClassesData.data : []);
-      departmentClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
+      // Determine staff department restriction:
+      // For regular staff & HOD → always restrict to their own department
+      // For SuperAdmin / MD / Principal / Admin → no restriction (see all departments)
+      const staffRoleKey = String(staffUser?.role || '').toUpperCase().replace(/[^A-Z]/g, '');
+      const staffDesigKey = String(staffUser?.designation || '').toUpperCase().replace(/[^A-Z]/g, '');
+      const isStaffSuperAdmin = staffRoleKey.includes('SUPERADMIN') || staffRoleKey.includes('MANAGINGDIRECTOR') || staffRoleKey.includes('MD') || staffDesigKey.includes('MANAGINGDIRECTOR') || staffDesigKey.includes('MD');
+      const isStaffAdmin = !isStaffSuperAdmin && (staffRoleKey.includes('ADMIN') || staffRoleKey.includes('PRINCIPAL') || staffDesigKey.includes('PRINCIPAL'));
+      const staffOwnDept = String(staffUser?.department || '').trim().toLowerCase();
 
-      // 5. Classes from allClasses
-      const allClasses = allClassesData?.classes || (Array.isArray(allClassesData?.data) ? allClassesData.data : (Array.isArray(allClassesData) ? allClassesData : []));
-      allClasses.forEach(c => addSub(c.code || c.classCode, c.name || c.className, c));
+      // Restrict subject catalog to staff's own department for non-admin staff
+      let cleanCatalog = allAvailableSubjects;
+      const restrictByStaffDept = !isStaffSuperAdmin && !isStaffAdmin && staffOwnDept;
+      const effectiveDeptFilter = restrictByStaffDept
+        ? staffOwnDept   // always use staff's own dept
+        : String(activeDept || '').trim().toLowerCase();  // admins: use selected form dept
 
-      // 6. Existing marks and assignments
-      if (marksData?.success && Array.isArray(marksData.data)) {
-        marksData.data.forEach(m => {
-          addSub(m.subjectCode, m.subjectName || m.subjectCode, m);
-        });
-      }
+      const targetDeptLower = effectiveDeptFilter;
 
-      if (asgtsData?.success && Array.isArray(asgtsData.data)) {
-        asgtsData.data.forEach(a => {
-          addSub(a.subjectCode, a.subjectName || a.title || a.subjectCode, a);
-        });
-      }
-
-      // 7. Also include eligible subjects from hall-tickets/eligible-students endpoint
-      const rawEligibleSubs = (data.success && Array.isArray(data.subjects)) ? data.subjects : [];
-      rawEligibleSubs.forEach(s => addSub(s.code, s.name, s));
-
-      // Department filter matching StaffInternalMarks:
-      // If department filter matches, use filtered list; otherwise fall back to all subjects so dropdown is never empty
-      let cleanCatalog = subs;
-      if (targetDept && targetDept !== 'all' && targetDept !== 'all departments') {
-        const isCsTarget = targetDept.includes('cs') || targetDept.includes('computer');
-        const deptFiltered = subs.filter(s => {
+      if (targetDeptLower && targetDeptLower !== 'all' && targetDeptLower !== 'all departments') {
+        const isCsTarget = targetDeptLower.includes('cs') || targetDeptLower.includes('computer');
+        const deptFiltered = allAvailableSubjects.filter(s => {
           const sDept = String(s.department || s.dept || '').trim().toLowerCase();
-          if (!sDept) return true;
+          if (!sDept) return restrictByStaffDept ? false : true; // for staff: exclude untagged; for admin: allow untagged
           const isCsSubject = sDept.includes('cs') || sDept.includes('computer');
-          return sDept === targetDept || sDept.includes(targetDept) || targetDept.includes(sDept) || (isCsTarget && isCsSubject);
+          return sDept === targetDeptLower || sDept.includes(targetDeptLower) || targetDeptLower.includes(sDept) || (isCsTarget && isCsSubject);
         });
         if (deptFiltered.length > 0) {
           cleanCatalog = deptFiltered;
+        } else {
+          // Last resort: subjects with no department tag (untagged)
+          cleanCatalog = allAvailableSubjects.filter(s => !String(s.department || s.dept || '').trim());
         }
       }
 
-      // Sort: Target department and assigned subjects appear at the top, then alphabetically
-      cleanCatalog.sort((a, b) => {
-        const aDeptMatch = targetDept && String(a.dept || a.department || '').trim().toLowerCase() === targetDept;
-        const bDeptMatch = targetDept && String(b.dept || b.department || '').trim().toLowerCase() === targetDept;
-        if (aDeptMatch && !bDeptMatch) return -1;
-        if (!aDeptMatch && bDeptMatch) return 1;
-        return (a.code || '').localeCompare(b.code || '');
-      });
+      setCatalogSubjects(cleanCatalog.filter(s => {
+        const code = String(s?.code || '').trim().toUpperCase();
+        return code && !deletedSubjectCodes.has(code);
+      }));
+        const cachedTimings = getSavedCustomTimings();
 
-      setCatalogSubjects(cleanCatalog);
-      const cachedTimings = getSavedCustomTimings();
+        setSubjectsSchedule(prev => {
+          const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
+          const merged = [];
 
-      setSubjectsSchedule(prev => {
-        const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
-        const merged = [];
+          // Filter out subjects that staff explicitly removed
+          const validSubs = cleanCatalog;
 
-        // Filter out subjects that staff explicitly removed from this allocation's schedule
-        const removedScheduleCodes = getRemovedScheduleCodes(currentAllocation?._id);
-        const validSubs = cleanCatalog.filter(s => !removedScheduleCodes.has(String(s.code || '').trim().toUpperCase()));
+          validSubs.forEach((dbSub, idx) => {
+            const code = dbSub.code.toUpperCase();
+            const baseDay = 15 + (idx * 3);
+            const defaultDate = `2026-04-${baseDay < 10 ? '0' + baseDay : baseDay}`;
+            const custom = cachedTimings[code];
 
-        validSubs.forEach((dbSub, idx) => {
-          const code = dbSub.code.toUpperCase();
-          const baseDay = 15 + (idx * 3);
-          const defaultDate = `2026-04-${baseDay < 10 ? '0' + baseDay : baseDay}`;
-          const custom = cachedTimings[code];
+            const resolvedDate = custom?.date || (dbSub.date && dbSub.date !== 'TBA' ? dbSub.date : defaultDate);
+            const resolvedSession = custom?.session || dbSub.session || 'Forenoon (FN)';
+            const resolvedTime = (custom?.time !== undefined && custom?.time !== null)
+              ? custom.time
+              : (dbSub.time !== undefined && dbSub.time !== null ? dbSub.time : '09:30 AM - 12:30 PM');
+            const resolvedName = custom?.name || dbSub.name;
 
-          const resolvedDate = custom?.date || (dbSub.date && dbSub.date !== 'TBA' ? dbSub.date : defaultDate);
-          const resolvedSession = custom?.session || dbSub.session || 'Forenoon (FN)';
-          const resolvedTime = (custom?.time !== undefined && custom?.time !== null)
-            ? custom.time
-            : (dbSub.time !== undefined && dbSub.time !== null ? dbSub.time : '09:30 AM - 12:30 PM');
-          const resolvedName = custom?.name || dbSub.name;
+            if (prevMap.has(code)) {
+              const existing = prevMap.get(code);
+              merged.push({
+                ...existing,
+                name: resolvedName || existing.name,
+                date: (existing.date && existing.date !== 'TBA') ? existing.date : resolvedDate,
+                session: existing.session || resolvedSession,
+                time: (existing.time !== undefined && existing.time !== null && existing.time !== '')
+                  ? existing.time
+                  : resolvedTime
+              });
+              prevMap.delete(code);
+            } else {
+              merged.push({
+                code: dbSub.code,
+                name: resolvedName,
+                date: resolvedDate,
+                session: resolvedSession,
+                time: resolvedTime
+              });
+            }
+          });
 
-          if (prevMap.has(code)) {
-            const existing = prevMap.get(code);
-            merged.push({
-              ...existing,
-              name: resolvedName || existing.name,
-              date: (existing.date && existing.date !== 'TBA') ? existing.date : resolvedDate,
-              session: existing.session || resolvedSession,
-              time: (existing.time !== undefined && existing.time !== null && existing.time !== '')
-                ? existing.time
-                : resolvedTime
-            });
-            prevMap.delete(code);
-          } else {
-            merged.push({
-              code: dbSub.code,
-              name: resolvedName,
-              date: resolvedDate,
-              session: resolvedSession,
-              time: resolvedTime
-            });
-          }
+          // Keep user-added custom subjects that are not in DB (as long as not deleted)
+          prevMap.forEach(customSub => {
+            if (!deletedSubjectCodes.has(customSub.code.toUpperCase())) {
+              const custom = cachedTimings[customSub.code.toUpperCase()];
+              merged.push({
+                ...customSub,
+                name: custom?.name || customSub.name,
+                date: custom?.date || customSub.date,
+                session: custom?.session || customSub.session,
+                time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : customSub.time
+              });
+            }
+          });
+          try {
+            localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(merged));
+          } catch {}
+          return merged;
         });
-
-        // Keep user-added custom subjects that are not in DB (as long as not removed from schedule)
-        prevMap.forEach(customSub => {
-          if (!removedScheduleCodes.has(customSub.code.toUpperCase())) {
-            const custom = cachedTimings[customSub.code.toUpperCase()];
-            merged.push({
-              ...customSub,
-              name: custom?.name || customSub.name,
-              date: custom?.date || customSub.date,
-              session: custom?.session || customSub.session,
-              time: (custom?.time !== undefined && custom?.time !== null) ? custom.time : customSub.time
-            });
-          }
-        });
-        try {
-          localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(merged));
-        } catch { }
-        return merged;
-      });
     } catch (err) {
       console.error('Error loading subjects:', err);
     }
@@ -933,9 +888,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             const prevMap = new Map(prev.map(s => [s.code.toUpperCase(), s]));
             const merged = [];
 
-            const validSubs = data.subjects
-              .filter(s => !deletedSubjectCodes.has(String(s.code || '').trim().toUpperCase()))
-              .filter(s => !OLD_DELETED_CODES.has(String(s.code || '').trim().toUpperCase()));
+            const validSubs = data.subjects.filter(s => !deletedSubjectCodes.has(s.code.toUpperCase()));
 
             validSubs.forEach((dbSub, idx) => {
               const code = dbSub.code.toUpperCase();
@@ -987,7 +940,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             });
             try {
               localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(merged));
-            } catch { }
+            } catch {}
             return merged;
           });
         }
@@ -1132,7 +1085,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
           invigilator: staffUser?.name || 'Staff In-Charge'
         })
       });
-    } catch (_) { }
+    } catch (_) {}
 
     setNewHallName('');
     setNewHallCap(30);
@@ -1339,7 +1292,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       }
       try {
         localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
-      } catch { }
+      } catch {}
       return next;
     });
 
@@ -1402,15 +1355,15 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
   const handleRemoveSubject = (code) => {
     const cleanCode = code.toUpperCase();
 
+    // Remove only from this exam timetable. Do not add it to the global deleted-subject list
+    // or remove it from catalogSubjects, because the subject can be used in another exam.
+
     // Remove from local schedule and persist to localStorage
     setSubjectsSchedule(prev => {
       const next = prev.filter(s => s.code.toUpperCase() !== cleanCode);
-      try { localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next)); } catch { }
+      try { localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next)); } catch {}
       return next;
     });
-
-    // NOTE: Do NOT remove from catalogSubjects or deletedSubjectCodes!
-    // The subject must remain in the dropdown catalog so staff can select or re-add it whenever needed.
 
     if (selectedAllocationSubject && selectedAllocationSubject.toUpperCase() === cleanCode) {
       setSelectedAllocationSubject('ALL');
@@ -1439,18 +1392,6 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         return a;
       }));
     }
-
-    // Remove from studentsToAllocate in memory so it disappears immediately from matrix
-    setStudentsToAllocate(prev => prev.map(st => ({
-      ...st,
-      subjects: (st.subjects || []).filter(s => (s.code || '').toUpperCase() !== cleanCode)
-    })));
-
-    try {
-      const cur = getSavedCustomTimings();
-      delete cur[cleanCode];
-      localStorage.setItem('vcas_staff_custom_subjects_timing', JSON.stringify(cur));
-    } catch { }
 
     // Persist removal to backend (removes from HallTicket & Exam collections)
     fetch(`${API_BASE}/hall-tickets/remove-subject-schedule`, {
@@ -1482,7 +1423,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       });
       try {
         localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
-      } catch { }
+      } catch {}
       return next;
     });
 
@@ -1606,7 +1547,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       });
       try {
         localStorage.setItem('vcas_staff_subjects_schedule', JSON.stringify(next));
-      } catch { }
+      } catch {}
       return next;
     });
 
@@ -1773,7 +1714,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         })
       });
       const data = await res.json();
-      if (data.success) {
+           if (data.success) {
         setStatusMessage({ type: 'success', text: `Examination Title updated to "${planTypingExamName.trim()}" successfully!` });
         await loadAllocations();
       }
@@ -1991,8 +1932,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      }).then(() => fetchAllocations()).catch(() => { });
-    } catch (_) { }
+      }).then(() => fetchAllocations()).catch(() => {});
+    } catch (_) {}
   };
 
   // Toggle a specific subject for an individual student
@@ -2020,8 +1961,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
     }));
   };
 
-  // Assign a specific subject to all currently displayed students
-  const handleAssignSubjectToAllDisplayed = (subCode) => {
+  // Assign a subject to all students in the matrix
+  const handleAssignSubjectToAll = (subCode) => {
     if (!subCode || subCode === 'All') return;
     const targetSub = subjectsSchedule.find(s => s.code.toUpperCase() === subCode.toUpperCase());
     if (!targetSub) return;
@@ -2120,8 +2061,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
-        }).catch(() => { });
-      } catch (_) { }
+        }).catch(() => {});
+      } catch (_) {}
     }
   };
 
@@ -2304,7 +2245,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
           const yr = String(d.getFullYear()).slice(-2);
           return `${day}.${month}.${yr}`;
         }
-      } catch (e) { }
+      } catch (e) {}
       return dateStr;
     };
     const formatSessionShort = (session) => {
@@ -2316,7 +2257,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
 
     const ticketsHtml = studentsList.map((st, index) => {
       const subjects = (st.subjects && st.subjects.length > 0) ? st.subjects : (examData?.commonSubjects || subjectsSchedule);
-      const studentDept = st.dept || st.department || examData?.department || '';
+      const studentDept = st.dept || examData?.department || 'CFS';
       const semNum = st.semester || examData?.semester || 1;
       const yearRoman = getYearRoman(semNum);
       const semRoman = toRoman(semNum);
@@ -2353,15 +2294,15 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             <div className="meta-row">
               <div><strong>DEPARTMENT:</strong> ${studentDept.toUpperCase()}</div>
               <div><strong>YEAR:</strong> ${(() => {
-          const s = Number(previewStudent.semester || previewExam?.semester) || 1;
-          const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
-          return map[Math.ceil(s / 2)] || 'I';
-        })()}</div>
+                const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+                const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
+                return map[Math.ceil(s / 2)] || 'I';
+              })()}</div>
               <div><strong>SEMESTER:</strong> ${(() => {
-          const s = Number(previewStudent.semester || previewExam?.semester) || 1;
-          const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
-          return map[s] || 'I';
-        })()}</div>
+                const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+                const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+                return map[s] || 'I';
+              })()}</div>
             </div>
 
             <!-- Student Particulars Table -->
@@ -2649,8 +2590,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             <button
               onClick={() => setActiveTab('allocate')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'allocate'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
               <Building2 className="w-4 h-4" />
@@ -2659,8 +2600,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             <button
               onClick={() => setActiveTab('tickets')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'tickets'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
               <Ticket className="w-4 h-4" />
@@ -2669,8 +2610,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             <button
               onClick={() => setActiveTab('arrear')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'arrear'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
               <Award className="w-4 h-4" />
@@ -2682,8 +2623,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
         {statusMessage && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none p-4 animate-in fade-in zoom-in-95">
             <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border pointer-events-auto ${statusMessage.type === 'error'
-              ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
-              : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
+                ? 'bg-rose-950/95 border-rose-700 text-rose-100 shadow-rose-900/40'
+                : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
               }`}>
               {statusMessage.type === 'error' ? (
                 <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
@@ -2990,7 +2931,8 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                           </td>
                         </tr>
                       ))
-                    ) : (
+                    )
+                    : (
                       <tr>
                         <td colSpan="8" className="px-6 py-12 text-center text-slate-400">
                           <Ticket className="w-10 h-10 mx-auto mb-2 text-slate-300" />
@@ -3000,7 +2942,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                           </p>
                           <button
                             onClick={() => setActiveTab('allocate')}
-                            className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs hover:bg-blue-700 transition-all inline-flex items-center gap-1.5"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all"
                           >
                             <Building2 className="w-4 h-4" />
                             Go to Hall Allocation Setup
@@ -3106,10 +3048,11 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                           key={parity}
                           type="button"
                           onClick={() => setFormSemesterParity(parity)}
-                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all ${formSemesterParity === parity
+                          className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                            formSemesterParity === parity
                               ? parity === 'Odd' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-emerald-600 text-white border-emerald-600'
                               : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                            }`}
+                          }`}
                         >
                           {parity === 'Odd' ? '☀️ Odd' : '🌙 Even'}
                         </button>
@@ -3246,10 +3189,10 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-[11px] font-bold text-slate-500">Rows:</label>
-                  <input type="number" min={1} max={20} value={hallGridRows} onChange={e => { const r = Math.max(1, Math.min(20, Number(e.target.value))); setHallGridRows(r); setHallGrid(Array.from({ length: r }, (_, ri) => Array.from({ length: hallGridCols }, __ => ''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
+                  <input type="number" min={1} max={20} value={hallGridRows} onChange={e => { const r=Math.max(1,Math.min(20,Number(e.target.value))); setHallGridRows(r); setHallGrid(Array.from({length:r},(_,ri)=>Array.from({length:hallGridCols},__=>''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
                   <label className="text-[11px] font-bold text-slate-500">Cols:</label>
-                  <input type="number" min={1} max={10} value={hallGridCols} onChange={e => { const c = Math.max(1, Math.min(10, Number(e.target.value))); setHallGridCols(c); setHallGrid(Array.from({ length: hallGridRows }, (_, ri) => Array.from({ length: c }, __ => ''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
-                  <button type="button" onClick={() => setHallGrid(Array.from({ length: hallGridRows }, () => Array(hallGridCols).fill('')))} className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200 hover:bg-rose-100">Clear</button>
+                  <input type="number" min={1} max={10} value={hallGridCols} onChange={e => { const c=Math.max(1,Math.min(10,Number(e.target.value))); setHallGridCols(c); setHallGrid(Array.from({length:hallGridRows},(_,ri)=>Array.from({length:c},__=>''))); }} className="w-12 border border-slate-200 rounded-lg px-1 py-1 text-xs text-center font-bold focus:outline-none" />
+                  <button type="button" onClick={()=>setHallGrid(Array.from({length:hallGridRows},()=>Array(hallGridCols).fill('')))} className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200 hover:bg-rose-100">Clear</button>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -3257,22 +3200,22 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                   <thead>
                     <tr>
                       <th className="bg-slate-100 text-slate-500 font-black px-2 py-1.5 border border-slate-300 text-[10px]">Row</th>
-                      {Array.from({ length: hallGridCols }, (_, ci) => (
-                        <th key={ci} className="bg-blue-50 text-blue-700 font-black px-2 py-1.5 border border-slate-300 min-w-[100px] text-[10px]">Col {ci + 1}</th>
+                      {Array.from({length:hallGridCols},(_,ci)=>(
+                        <th key={ci} className="bg-blue-50 text-blue-700 font-black px-2 py-1.5 border border-slate-300 min-w-[100px] text-[10px]">Col {ci+1}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {Array.from({ length: hallGridRows }, (_, ri) => (
-                      <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
-                        <td className="text-center text-[10px] font-black text-slate-500 border border-slate-200 px-2 py-1">R{ri + 1}</td>
-                        {Array.from({ length: hallGridCols }, (_, ci) => (
+                    {Array.from({length:hallGridRows},(_,ri)=>(
+                      <tr key={ri} className={ri%2===0?'bg-white':'bg-slate-50/60'}>
+                        <td className="text-center text-[10px] font-black text-slate-500 border border-slate-200 px-2 py-1">R{ri+1}</td>
+                        {Array.from({length:hallGridCols},(_,ci)=>(
                           <td key={ci} className="border border-slate-200 p-0.5">
                             <input
                               type="text"
-                              value={hallGrid[ri]?.[ci] || ''}
-                              onChange={e => { const val = e.target.value.toUpperCase(); setHallGrid(prev => { const next = prev.map(r => [...r]); if (!next[ri]) next[ri] = Array(hallGridCols).fill(''); next[ri][ci] = val; return next; }); }}
-                              placeholder={`R${ri + 1}C${ci + 1}`}
+                              value={hallGrid[ri]?.[ci]||''}
+                              onChange={e=>{const val=e.target.value.toUpperCase();setHallGrid(prev=>{const next=prev.map(r=>[...r]);if(!next[ri])next[ri]=Array(hallGridCols).fill('');next[ri][ci]=val;return next;});}}
+                              placeholder={`R${ri+1}C${ci+1}`}
                               className="w-full text-[10px] font-mono font-bold text-slate-800 text-center bg-transparent px-1 py-1.5 focus:outline-none focus:bg-blue-50 rounded transition-colors placeholder-slate-300"
                             />
                           </td>
@@ -3286,7 +3229,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
             </div>
 
             {/* Step 3: Subjects & Timetable Schedule to Appear */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">3</div>
@@ -3298,8 +3241,9 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
               </div>
 
               {/* Add Subject Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Subject Code</label>
                   <select
                     value={newSubCode}
                     onChange={(e) => {
@@ -3320,7 +3264,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                     <option value="">-- Choose Subject from Catalog --</option>
                     {catalogSubjects.map(cs => (
                       <option key={cs.code} value={cs.code}>
-                        {cs.code} — {cs.name && cs.name !== 'Course' ? cs.name : cs.code}{(cs.dept || cs.department) ? ` (${cs.dept || cs.department})` : ''}
+                        {cs.code} - {cs.name}
                       </option>
                     ))}
                     <option value="CUSTOM">+ Type Custom Code</option>
@@ -3441,7 +3385,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                                   type="date"
                                   value={editSubForm.date}
                                   onChange={(e) => setEditSubForm(prev => ({ ...prev, date: e.target.value }))}
-                                  className="w-full bg-white border border-blue-300 rounded px-2 py-1 text-xs font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
+                                  className="w-full bg-white border border-blue-300 rounded px-2 py-1 text-xs font-medium text-slate-800"
                                 />
                               </td>
                               <td className="px-3 py-2">
@@ -3457,7 +3401,7 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
                                         : prev.time
                                     }));
                                   }}
-                                  className="w-full bg-white border border-blue-300 rounded px-1.5 py-1 text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                  className="w-full bg-white border border-blue-300 rounded px-1.5 py-1 text-xs font-bold text-slate-800 cursor-pointer"
                                 >
                                   <option value="Forenoon (FN)">Forenoon (FN)</option>
                                   <option value="Afternoon (AN)">Afternoon (AN)</option>
@@ -3676,144 +3620,144 @@ export default function StaffHallTicket({ staffUser, onNavigate, initialTab }) {
       </div>
 
       {/* ------------------- MODAL: SINGLE STUDENT HALL TICKET PREVIEW ------------------- */}
-      {previewStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-[#0f1e3c] text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-sm">Hall Ticket Preview — {previewStudent.name} ({previewStudent.rollNo})</h3>
+        {previewStudent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              {/* Modal Header */}
+              <div className="px-6 py-4 bg-[#0f1e3c] text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Ticket className="w-5 h-5 text-blue-400" />
+                  <h3 className="font-bold text-sm">Hall Ticket Preview — {previewStudent.name} ({previewStudent.rollNo})</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => printHallTickets([previewStudent], previewExam)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Print / Download
+                  </button>
+                  <button
+                    onClick={() => setPreviewStudent(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => printHallTickets([previewStudent], previewExam)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Print / Download
-                </button>
-                <button
-                  onClick={() => setPreviewStudent(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
 
-            {/* Modal Hall Ticket Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto bg-slate-100 flex justify-center">
-              <div className="bg-white p-5 sm:p-6 border-2 border-black max-w-xl w-full text-black shadow-lg font-serif">
-                {/* College Header */}
-                <div className="flex items-center gap-3 pb-2">
-                  <div className="w-14 h-14 shrink-0 flex items-center justify-center">
-                    <img src="/vcas-logo.png" alt="Crest Logo" className="w-14 h-14 object-contain" />
+              {/* Modal Hall Ticket Body */}
+              <div className="p-4 sm:p-6 overflow-y-auto bg-slate-100 flex justify-center">
+                <div className="bg-white p-5 sm:p-6 border-2 border-black max-w-xl w-full text-black shadow-lg font-serif">
+                  {/* College Header */}
+                  <div className="flex items-center gap-3 pb-2">
+                    <div className="w-14 h-14 shrink-0 flex items-center justify-center">
+                      <img src="/vcas-logo.png" alt="Crest Logo" className="w-14 h-14 object-contain" />
+                    </div>
+                    <div className="text-center flex-1 pr-14">
+                      <h3 className="font-black text-sm uppercase tracking-wide leading-tight text-black">
+                        VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
+                      </h3>
+                      <p className="text-[11px] font-semibold text-slate-900 mt-0.5">Vellalankulam, Tenkasi Dist</p>
+                      <p className="text-[9px] font-bold text-slate-800 mt-0.5">
+                        PHONE: 04636298128, 7094462393, 7094462394 &nbsp;&nbsp; EMAIL: vivekanandacas@gmail.com
+                      </p>
+                      <p className="font-extrabold text-[11px] uppercase tracking-wide mt-1.5 text-black">
+                        {(previewExam?.examName || 'MODEL SEMESTER EXAMINATION - NOVEMBER 2026').toUpperCase()}
+                      </p>
+                      <p className="font-black text-xs uppercase tracking-widest underline mt-1 text-black">
+                        HALL TICKET
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-center flex-1 pr-14">
-                    <h3 className="font-black text-sm uppercase tracking-wide leading-tight text-black">
-                      VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
-                    </h3>
-                    <p className="text-[11px] font-semibold text-slate-900 mt-0.5">Vellalankulam, Tenkasi Dist</p>
-                    <p className="text-[9px] font-bold text-slate-800 mt-0.5">
-                      PHONE: 04636298128, 7094462393, 7094462394 &nbsp;&nbsp; EMAIL: vivekanandacas@gmail.com
-                    </p>
-                    <p className="font-extrabold text-[11px] uppercase tracking-wide mt-1.5 text-black">
-                      {(previewExam?.examName || 'MODEL SEMESTER EXAMINATION - NOVEMBER 2026').toUpperCase()}
-                    </p>
-                    <p className="font-black text-xs uppercase tracking-widest underline mt-1 text-black">
-                      HALL TICKET
-                    </p>
-                  </div>
-                </div>
 
-                {/* Dept / Year / Sem Meta Row */}
-                <div className="flex items-center justify-between text-[11px] font-bold py-2 px-1 text-black">
-                  <div>
-                    <span>DEPARTMENT:</span>{' '}
-                    {(previewStudent.dept || previewStudent.department || previewExam?.department || '').toUpperCase()}
+                  {/* Dept / Year / Sem Meta Row */}
+                  <div className="flex items-center justify-between text-[11px] font-bold py-2 px-1 text-black">
+                    <div>
+                      <span>DEPARTMENT:</span>{' '}
+                      {(previewStudent.dept || previewExam?.department || 'CFS').toUpperCase()}
+                    </div>
+                    <div>
+                      <span>YEAR:</span>{' '}
+                      {(() => {
+                        const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+                        const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
+                        return map[Math.ceil(s / 2)] || 'I';
+                      })()}
+                    </div>
+                    <div>
+                      <span>SEMESTER:</span>{' '}
+                      {(() => {
+                        const s = Number(previewStudent.semester || previewExam?.semester) || 1;
+                        const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+                        return map[s] || 'I';
+                      })()}
+                    </div>
                   </div>
-                  <div>
-                    <span>YEAR:</span>{' '}
-                    {(() => {
-                      const s = Number(previewStudent.semester || previewExam?.semester) || 1;
-                      const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
-                      return map[Math.ceil(s / 2)] || 'I';
-                    })()}
-                  </div>
-                  <div>
-                    <span>SEMESTER:</span>{' '}
-                    {(() => {
-                      const s = Number(previewStudent.semester || previewExam?.semester) || 1;
-                      const map = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
-                      return map[s] || 'I';
-                    })()}
-                  </div>
-                </div>
 
-                {/* Candidate Info 2-Row Box */}
-                <table className="w-full border-collapse border border-black text-xs mb-2">
-                  <tbody>
-                    <tr className="border-b border-black">
-                      <td className="w-28 font-bold p-1.5 border-r border-black bg-slate-50">Student Name:</td>
-                      <td className="font-bold p-1.5 uppercase text-black">{previewStudent.name}</td>
-                    </tr>
-                    <tr>
-                      <td className="w-28 font-bold p-1.5 border-r border-black bg-slate-50">Register No :</td>
-                      <td className="font-bold p-1.5 font-mono text-black">{previewStudent.rollNo || previewStudent.regNo}</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                {/* Time Table Heading */}
-                <div className="text-center font-black text-xs uppercase tracking-wider underline my-1.5 text-black">
-                  TIME TABLE
-                </div>
-
-                {/* Schedule Table */}
-                <table className="w-full border-collapse border border-black text-[10.5px] text-left">
-                  <thead>
-                    <tr className="border-b border-black bg-slate-50 text-center font-bold">
-                      <th className="border border-black px-1.5 py-1 w-8">NO</th>
-                      <th className="border border-black px-1.5 py-1 w-24">DATE</th>
-                      <th className="border border-black px-1 py-1 w-12">FN<br />AN</th>
-                      <th className="border border-black px-2 py-1">SUBJECT</th>
-                      <th className="border border-black px-1.5 py-1 w-20">Sub. Code</th>
-                      <th className="border border-black px-1 py-1 w-12">Sign</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {((previewStudent.subjects?.length > 0 ? previewStudent.subjects : previewExam?.commonSubjects) || subjectsSchedule).map((sub, idx) => (
-                      <tr key={sub.code || idx} className="border-b border-black">
-                        <td className="border border-black px-1.5 py-1.5 text-center font-bold">{idx + 1}</td>
-                        <td className="border border-black px-1.5 py-1.5 text-center font-bold">{sub.date || '21.10.26'}</td>
-                        <td className="border border-black px-1 py-1.5 text-center font-bold">
-                          {String(sub.session || 'FN').toUpperCase().includes('AN') ? 'AN' : 'FN'}
-                        </td>
-                        <td className="border border-black px-2 py-1.5 font-bold uppercase">{sub.name}</td>
-                        <td className="border border-black px-1.5 py-1.5 text-center font-bold">{sub.code || ''}</td>
-                        <td className="border border-black px-1 py-1.5 text-center h-7"></td>
+                  {/* Candidate Info 2-Row Box */}
+                  <table className="w-full border-collapse border border-black text-xs mb-2">
+                    <tbody>
+                      <tr className="border-b border-black">
+                        <td className="w-28 font-bold p-1.5 border-r border-black bg-slate-50">Student Name:</td>
+                        <td className="font-bold p-1.5 uppercase text-black">{previewStudent.name}</td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      <tr>
+                        <td className="w-28 font-bold p-1.5 border-r border-black bg-slate-50">Register No :</td>
+                        <td className="font-bold p-1.5 font-mono text-black">{previewStudent.rollNo || previewStudent.regNo}</td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-                {/* Signatures */}
-                <div className="pt-8 pb-2 flex items-center justify-between text-center text-xs font-bold px-2">
-                  <div>Office</div>
-                  <div>HOD</div>
-                  <div>Principal</div>
-                  <div>MD</div>
+                  {/* Time Table Heading */}
+                  <div className="text-center font-black text-xs uppercase tracking-wider underline my-1.5 text-black">
+                    TIME TABLE
+                  </div>
+
+                  {/* Schedule Table */}
+                  <table className="w-full border-collapse border border-black text-[10.5px] text-left">
+                    <thead>
+                      <tr className="border-b border-black bg-slate-50 text-center font-bold">
+                        <th className="border border-black px-1.5 py-1 w-8">NO</th>
+                        <th className="border border-black px-1.5 py-1 w-24">DATE</th>
+                        <th className="border border-black px-1 py-1 w-12">FN<br/>AN</th>
+                        <th className="border border-black px-2 py-1">SUBJECT</th>
+                        <th className="border border-black px-1.5 py-1 w-20">Sub. Code</th>
+                        <th className="border border-black px-1 py-1 w-12">Sign</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {((previewStudent.subjects?.length > 0 ? previewStudent.subjects : previewExam?.commonSubjects) || subjectsSchedule).map((sub, idx) => (
+                        <tr key={sub.code || idx} className="border-b border-black">
+                          <td className="border border-black px-1.5 py-1.5 text-center font-bold">{idx + 1}</td>
+                          <td className="border border-black px-1.5 py-1.5 text-center font-bold">{sub.date || '21.10.26'}</td>
+                          <td className="border border-black px-1 py-1.5 text-center font-bold">
+                            {String(sub.session || 'FN').toUpperCase().includes('AN') ? 'AN' : 'FN'}
+                          </td>
+                          <td className="border border-black px-2 py-1.5 font-bold uppercase">{sub.name}</td>
+                          <td className="border border-black px-1.5 py-1.5 text-center font-bold">{sub.code || ''}</td>
+                          <td className="border border-black px-1 py-1.5 text-center h-7"></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Signatures */}
+                  <div className="pt-8 pb-2 flex items-center justify-between text-center text-xs font-bold px-2">
+                    <div>Office</div>
+                    <div>HOD</div>
+                    <div>Principal</div>
+                    <div>MD</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Delete Allocation Centered Modal */}
-      {allocationToDelete && (
-        <ModalPortal isOpen={Boolean(allocationToDelete)} onClose={() => !isDeletingAllocation && setAllocationToDelete(null)}>
+        {/* Delete Allocation Centered Modal */}
+        {allocationToDelete && (
+          <ModalPortal isOpen={Boolean(allocationToDelete)} onClose={() => !isDeletingAllocation && setAllocationToDelete(null)}>
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-7 max-w-md w-full animate-in fade-in zoom-in-95 text-left my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">

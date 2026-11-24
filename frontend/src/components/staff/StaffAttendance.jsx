@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE, BACKEND_URL, getKnownDepartments } from '../../apiConfig';
+import { useStudentBatches, mergeBatches } from '../../utils/useStudentBatches';
 import {
   CheckSquare, Calendar as CalendarIcon, Clock, Users,
   CheckCircle2, XCircle, History, Save, AlertCircle,
@@ -80,14 +81,11 @@ export default function StaffAttendance({ staffUser }) {
   const [downloadBatch, setDownloadBatch] = useState('');
 
   // Unique batches dynamically fetched from student details section
+  const studentBatches = useStudentBatches();
   const availableBatches = useMemo(() => {
-    const set = new Set();
-    (allRegisteredStudents || []).forEach(s => {
-      const b = String(s.batch || s.academicYear || '').trim().replace('–', '-');
-      if (b && !b.toLowerCase().includes('batch')) set.add(b);
-    });
-    return Array.from(set).sort().reverse();
-  }, [allRegisteredStudents]);
+    const fromRoster = (allRegisteredStudents || []).map(s => s.batch || s.academicYear);
+    return mergeBatches(studentBatches, fromRoster);
+  }, [allRegisteredStudents, studentBatches]);
   const [downloadSemester, setDownloadSemester] = useState('1');
 
   // Quick date range state — visible directly in the header for fast download

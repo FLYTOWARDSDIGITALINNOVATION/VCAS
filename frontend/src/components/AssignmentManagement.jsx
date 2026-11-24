@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
+import { useStudentBatches, mergeBatches } from '../utils/useStudentBatches';
 import { createPortal } from 'react-dom';
 import {
   FileText,
@@ -77,6 +78,13 @@ export default function AssignmentManagement({ user }) {
   const [availableDepartments, setAvailableDepartments] = useState(() => getKnownDepartments());
   const [subjectCatalog, setSubjectCatalog] = useState([]);
   const [batchCatalog, setBatchCatalog] = useState(['2026-2027', '2025-2026', '2024-2025']);
+  const studentBatches = useStudentBatches();
+
+  // Always include the batches that exist in the Students section.
+  useEffect(() => {
+    if (!studentBatches.length) return;
+    setBatchCatalog(prev => mergeBatches(prev, studentBatches));
+  }, [studentBatches]);
   const [yearCatalog, setYearCatalog] = useState(['1st Year', '2nd Year', '3rd Year', '4th Year']);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = React.useRef(null);

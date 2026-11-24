@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { API_BASE, BACKEND_URL } from '../../apiConfig';
+import { useStudentBatches, mergeBatches } from '../../utils/useStudentBatches';
 import {
   BookMarked,
   Plus,
@@ -342,14 +343,16 @@ export default function StaffAssignments({ staffUser }) {
     return [...new Set(values)].sort();
   }, [assignments, departmentCatalog, staffUser?.department]);
 
+  const studentBatches = useStudentBatches();
   const batchesList = useMemo(() => {
     const values = [
       ...(batchCatalog || []),
       ...(assignments.map((a) => a.batch).filter(Boolean)),
-      ...(staffUser?.batch ? [staffUser.batch] : [])
+      ...(staffUser?.batch ? [staffUser.batch] : []),
+      ...studentBatches
     ];
-    return [...new Set(values)].sort();
-  }, [assignments, batchCatalog, staffUser?.batch]);
+    return mergeBatches(values);
+  }, [assignments, batchCatalog, staffUser?.batch, studentBatches]);
 
   const yearsList = useMemo(() => {
     const values = [

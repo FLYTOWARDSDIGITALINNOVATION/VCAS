@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE, BACKEND_URL, getKnownDepartments } from '../apiConfig';
+import { useStudentBatches, mergeBatches } from '../utils/useStudentBatches';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -28,6 +29,18 @@ export default function ReportsManagement({ user }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
   const [activeCategory, setActiveCategory] = useState('academic');
   const [selectedYear, setSelectedYear] = useState('2024-2025');
+  const studentBatches = useStudentBatches();
+  const yearOptions = useMemo(
+    () => mergeBatches(studentBatches, [selectedYear]),
+    [studentBatches, selectedYear]
+  );
+
+  useEffect(() => {
+    if (yearOptions.length > 0 && !yearOptions.includes(selectedYear)) {
+      setSelectedYear(yearOptions[0]);
+    }
+  }, [yearOptions, selectedYear]);
+
   const [selectedSemester, setSelectedSemester] = useState('All Semesters');
   const [selectedDept, setSelectedDept] = useState('All Departments');
   const [searchTerm, setSearchTerm] = useState('');
@@ -460,9 +473,9 @@ export default function ReportsManagement({ user }) {
             onChange={(e) => setSelectedYear(e.target.value)}
             className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
           >
-            <option value="2024-2025">Academic Year: 2024-2025</option>
-            <option value="2023-2024">Academic Year: 2023-2024</option>
-            <option value="2022-2023">Academic Year: 2022-2023</option>
+            {yearOptions.map(year => (
+              <option key={year} value={year}>Academic Year: {year}</option>
+            ))}
           </select>
 
           {/* Semester */}
