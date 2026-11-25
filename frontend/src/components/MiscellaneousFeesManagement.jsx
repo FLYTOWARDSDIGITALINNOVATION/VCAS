@@ -24,6 +24,7 @@ import {
   X
 } from 'lucide-react';
 import { getStudentBatch } from '../utils/studentFeeUtils';
+import { normalizeMiscFeeItems, sumMiscFeeItems } from '../utils/miscFeeUtils';
 
 const DEFAULT_MISC_FEES = [
   { feeType: 'Lab Fees', amount: 2500 },
@@ -96,11 +97,14 @@ export const getAllFeeItems = (record, feeStructure = DEFAULT_MISC_FEES) => {
     ? Number(mData.total)
     : (String(record.feeType || '').toLowerCase().includes('misc') ? Number(record.totalFee || rawPaid) : rawPaid);
 
-  const storedMisc = (record.allMiscItems && record.allMiscItems.length > 0)
-    ? record.allMiscItems
-    : (mData.items && mData.items.length > 0 ? mData.items : null);
+  const storedMisc = normalizeMiscFeeItems(
+    (record.allMiscItems && record.allMiscItems.length > 0)
+      ? record.allMiscItems
+      : (mData.items && mData.items.length > 0 ? mData.items : []),
+    feeStructure
+  );
 
-  if (storedMisc && storedMisc.length > 0) {
+  if (storedMisc.length > 0) {
     storedMisc.forEach(item => {
       const iPaid = Number(item.paid ?? item.amount ?? 0);
       const iTotal = Number(item.amount ?? item.total ?? iPaid);
@@ -250,27 +254,44 @@ export default function MiscellaneousFeesManagement({
     };
   }, []);
 
-  // Auto-fill initial fee amount when structure loads if empty
+  // Keep the amount aligned with the approved price of the selected fee type.
+  // The collection form shares its state with the Tuition/Exam/Transport tabs,
+  // so a leftover amount (e.g. a ₹10,000 semester fee) must never be booked
+  // against the currently selected miscellaneous fee (e.g. ₹2,500 Lab Fees).
   useEffect(() => {
-    if (miscFeeStructure.length > 0) {
-      const activeFeeName = entryFormData.miscFeeName || miscFeeStructure[0].feeType;
-      const matched = miscFeeStructure.find(f => f.feeType?.toLowerCase() === activeFeeName?.toLowerCase());
-      if (matched && (!entryFormData.amount || entryFormData.amount === '1000' || entryFormData.amount === '0')) {
-        const amtStr = String(matched.amount);
-        const fineAmt = parseFloat(entryFormData.fine) || 0;
-        const total = matched.amount + fineAmt;
-        setEntryFormData(prev => ({
-          ...prev,
-          feeType: 'Miscellaneous Fees',
-          miscFeeName: activeFeeName,
-          amount: amtStr,
-          totalAmount: String(total),
-          paidAmount: prev.paidAmount && prev.paidAmount !== '0' && prev.paidAmount !== '1000' ? prev.paidAmount : amtStr,
-          balance: String(Math.max(0, total - (prev.paidAmount && prev.paidAmount !== '0' && prev.paidAmount !== '1000' ? parseFloat(prev.paidAmount) : matched.amount)))
-        }));
-      }
-    }
-  }, [miscFeeStructure]);
+    if (miscFeeStructure.length === 0) return;
+
+    const activeFeeName = entryFormData.miscFeeName || miscFeeStructure[0].feeType;
+    const matched = miscFeeStructure.find(
+      f => f.feeType?.trim().toLowerCase() === activeFeeName?.trim().toLowerCase()
+    );
+    if (!matched) return;
+
+    const price = Number(matched.amount) || 0;
+    const currentAmount = entryFormData.amount === '' || entryFormData.amount === undefined || entryFormData.amount === null
+      ? null
+      : Number(entryFormData.amount);
+
+    // Amount already matches this fee type - keep whatever paid/partial value
+    // the accountant has entered.
+    if (currentAmount === price) return;
+
+    setEntryFormData(prev => ({
+      ...prev,
+      feeType: 'Miscellaneous Fees',
+      miscFeeName: activeFeeName,
+      amount: String(price),
+      // A mismatched amount means the shared form still holds data from another
+      // tab, so clear its fine/uniform/book fields too instead of adding them
+      // to this miscellaneous fee (previously ₹2,500 lab + ₹10,000 stale fine).
+      fine: '0',
+      uniformFee: '0',
+      bookFee: '0',
+      totalAmount: String(price),
+      paidAmount: String(price),
+      balance: '0'
+    }));
+  }, [miscFeeStructure, entryFormData.miscFeeName]);
 
   // Handle Super Admin rows & columns modification
   const handleAddFeeRow = () => {
@@ -566,7 +587,13 @@ export default function MiscellaneousFeesManagement({
     if (!record) return false;
     const feeType = String(record.feeType || record.feeCategory || '').toLowerCase();
     const breakdown = record.feeBreakdown || {};
-    return feeType.includes('misc') || !!breakdown.misc || Number(breakdown.misc?.paid || 0) > 0;
+    const miscItems = record.allMiscItems || breakdown.misc?.items || [];
+    // Only students who actually have miscellaneous fee data belong here; an
+    // empty misc object (created by the fee mapping) must not add a row back.
+    return feeType.includes('misc') ||
+      Number(breakdown.misc?.paid || 0) > 0 ||
+      Number(breakdown.misc?.total || 0) > 0 ||
+      (Array.isArray(miscItems) && miscItems.length > 0);
   };
 
   const miscRecords = (recordsList || []).filter(r => matchesFeeSection(r));
@@ -1340,18 +1367,29 @@ export default function MiscellaneousFeesManagement({
                 searchedMiscRecords.map((r, idx) => {
                   const mData = r.feeBreakdown?.misc || {};
                   const mBase = Number(r.baseAmount || 0);
-                  let total = Number(
-                    (mData.total !== undefined && mData.total !== null && mData.total !== '')
-                      ? mData.total
-                      : (mBase > 0 ? mBase : (r.totalFee || 0))
+                  const normalizedItems = normalizeMiscFeeItems(
+                    (r.allMiscItems && r.allMiscItems.length > 0)
+                      ? r.allMiscItems
+                      : (mData.items && mData.items.length > 0 ? mData.items : []),
+                    miscFeeStructure
                   );
-                  let paid = Number(
-                    (mData.paid !== undefined && mData.paid !== null && mData.paid !== '')
-                      ? mData.paid
-                      : (r.feeType?.toLowerCase().includes('misc')
-                          ? (r.paidAmount !== undefined && r.paidAmount !== '' ? r.paidAmount : (r.baseAmount || r.paidFee || 0))
-                          : (r.paidAmount || 0))
-                  );
+                  const itemTotals = normalizedItems.length > 0 ? sumMiscFeeItems(normalizedItems) : null;
+                  let total = itemTotals
+                    ? itemTotals.total
+                    : Number(
+                      (mData.total !== undefined && mData.total !== null && mData.total !== '')
+                        ? mData.total
+                        : (mBase > 0 ? mBase : (r.totalFee || 0))
+                    );
+                  let paid = itemTotals
+                    ? Math.max(itemTotals.paid, Number(mData.paid || 0))
+                    : Number(
+                      (mData.paid !== undefined && mData.paid !== null && mData.paid !== '')
+                        ? mData.paid
+                        : (r.feeType?.toLowerCase().includes('misc')
+                            ? (r.paidAmount !== undefined && r.paidAmount !== '' ? r.paidAmount : (r.baseAmount || r.paidFee || 0))
+                            : (r.paidAmount || 0))
+                    );
                   if (paid > total) {
                     total = paid;
                   }

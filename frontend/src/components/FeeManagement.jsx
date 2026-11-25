@@ -34,6 +34,7 @@ import FeeStructureView, { getDepartmentFixedFee } from './FeeStructureView';
 import { Building2 } from 'lucide-react';
 import CollegeLogo, { getCollegeLogoHtml } from './CollegeLogo';
 import { getStudentBatch } from '../utils/studentFeeUtils';
+import { normalizeMiscFeeItems, sumMiscFeeItems } from '../utils/miscFeeUtils';
 
 export default function FeeManagement({ defaultFeeType = 'All', user }) {
   // Mode state: 'list' or 'form'
@@ -62,6 +63,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
   const [selectedStudentForView, setSelectedStudentForView] = useState(null);
   const [selectedReceiptStudent, setSelectedReceiptStudent] = useState(null);
   const [recordToDelete, setRecordToDelete] = useState(null);
+  const [deleteTargetSection, setDeleteTargetSection] = useState('');
 
   // Blank initial form state for own typing
   const emptyEntryForm = {
@@ -98,6 +100,7 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
   const [entryFormData, setEntryFormData] = useState(emptyEntryForm);
   const [adminDepartments, setAdminDepartments] = useState([]);
+  const [miscFeeStructure, setMiscFeeStructure] = useState([]);
   const [editingFeeRecord, setEditingFeeRecord] = useState(null);
   const [editingRowId, setEditingRowId] = useState(null);
   const [inlineEditState, setInlineEditState] = useState({});
@@ -191,6 +194,76 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
   // Fetch real students from database on mount and merge any locally saved fee records
   const [isRefreshingStudents, setIsRefreshingStudents] = useState(false);
+
+  // Approved miscellaneous fee prices are needed to repair inflated item
+  // amounts (e.g. Lab Fees stored as ₹12,500 instead of ₹2,500) before any
+  // view, table or printed receipt renders them.
+  useEffect(() => {
+    const loadMiscFeeStructure = () => {
+      fetch(`${API_BASE}/fee-structure/miscellaneous-fees`)
+        .then(r => r.json())
+        .then(json => {
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            setMiscFeeStructure(json.data);
+          }
+        })
+        .catch(e => console.warn('Notice fetching miscellaneous fee structure in FeeManagement:', e));
+    };
+
+    loadMiscFeeStructure();
+    window.addEventListener('vcas_feestructure_updated', loadMiscFeeStructure);
+    return () => window.removeEventListener('vcas_feestructure_updated', loadMiscFeeStructure);
+  }, []);
+
+  // Repair previously stored misc items whose assessed amount was inflated by a
+  // value carried over from another fee tab. Returns the same array reference
+  // when nothing changes, so this effect cannot loop.
+  useEffect(() => {
+    if (!miscFeeStructure.length || !feeRecords.length) return;
+
+    setFeeRecords(prev => {
+      let changed = false;
+      const next = prev.map(rec => {
+        const rawItems = (rec.allMiscItems && rec.allMiscItems.length > 0)
+          ? rec.allMiscItems
+          : (rec.feeBreakdown?.misc?.items || []);
+        if (!Array.isArray(rawItems) || rawItems.length === 0) return rec;
+
+        const items = normalizeMiscFeeItems(rawItems, miscFeeStructure);
+        const itemsChanged = items.some(
+          (item, idx) => Number(item?.amount ?? 0) !== Number(rawItems[idx]?.amount ?? 0)
+        );
+        if (!itemsChanged) return rec;
+
+        const totals = sumMiscFeeItems(items);
+        const prevMiscPaid = Number(rec.feeBreakdown?.misc?.paid || 0);
+        const nextMiscPaid = Math.max(totals.paid, prevMiscPaid);
+        const nextMiscTotal = Math.max(totals.total, nextMiscPaid);
+        changed = true;
+        return {
+          ...rec,
+          allMiscItems: items,
+          feeBreakdown: {
+            ...(rec.feeBreakdown || {}),
+            misc: {
+              ...(rec.feeBreakdown?.misc || {}),
+              name: rec.feeBreakdown?.misc?.name || 'Miscellaneous Fees',
+              items,
+              total: nextMiscTotal,
+              paid: nextMiscPaid,
+              pending: Math.max(0, nextMiscTotal - nextMiscPaid)
+            }
+          }
+        };
+      });
+
+      if (!changed) return prev;
+      try {
+        localStorage.setItem('vcas_real_fee_records', JSON.stringify(next));
+      } catch (e) { }
+      return next;
+    });
+  }, [miscFeeStructure, feeRecords]);
 
   const fetchStudentsForFees = useCallback(async () => {
     setIsRefreshingStudents(true);
@@ -506,9 +579,24 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
   const handleTabSwitch = (tabName) => {
     setActiveTab(tabName);
+    // Every fee head has its own payment amount. Clearing the monetary fields
+    // prevents a tuition/exam amount from being carried into another tab and
+    // booked against the wrong fee (e.g. ₹10,000 tuition + ₹2,500 lab = ₹12,500).
     setEntryFormData(prev => ({
       ...prev,
-      feeType: tabName
+      feeType: tabName,
+      amount: '',
+      uniformFee: '0',
+      bookFee: '0',
+      fine: '0',
+      totalAmount: '',
+      paidAmount: '',
+      balance: '0',
+      receiptNo: '',
+      referenceNo: '',
+      miscFeeName: tabName === 'Miscellaneous Fees'
+        ? (prev.miscFeeName || 'Lab Fees')
+        : prev.miscFeeName
     }));
   };
 
@@ -620,6 +708,9 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
 
   // Delete fee collection record
   const handleDeleteFeeRecord = (row) => {
+    // Fee-module tabs delete only their own section; the master list clears the
+    // whole fee record for that student.
+    setDeleteTargetSection(viewMode === 'form' ? activeTab : 'ALL');
     setRecordToDelete(row);
   };
 
@@ -628,30 +719,129 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     const targetId = recordToDelete._id || recordToDelete.id || recordToDelete.rollNo;
     const targetName = recordToDelete.name || recordToDelete.studentName || 'Student';
 
-    // 1. Remove from feeRecords
-    const updatedRecords = feeRecords.filter(r => {
+    const isSameRecord = (r) => {
+      if (!r) return false;
       const matchId = (r._id && r._id === targetId) || (r.id && r.id === targetId) || (r.rollNo && r.rollNo === targetId);
       const matchMongo = (r.mongoId && recordToDelete.mongoId && r.mongoId === recordToDelete.mongoId);
-      return !matchId && !matchMongo;
+      return matchId || matchMongo;
+    };
+
+    // Resolve which fee section is being deleted (or ALL from the master list)
+    const sectionLabel = String(deleteTargetSection || recordToDelete.feeType || 'Tuition Fees');
+    const deleteAll = sectionLabel === 'ALL';
+    const feeKey = deleteAll ? 'all'
+      : sectionLabel.toLowerCase().includes('exam') ? 'exam'
+        : sectionLabel.toLowerCase().includes('transport') ? 'transport'
+          : sectionLabel.toLowerCase().includes('misc') ? 'misc'
+            : 'tuition';
+
+    const sourceRecord = feeRecords.find(isSameRecord) || recordToDelete;
+    const sourceBreakdown = sourceRecord.feeBreakdown || {};
+
+    // Clear the deleted section(s) in the stored breakdown. Other fee sections
+    // must survive so their records do not disappear along with this one.
+    const nextBreakdown = {
+      tuition: { total: 0, paid: 0, pending: 0, ...(sourceBreakdown.tuition || {}) },
+      exam: { total: 0, paid: 0, pending: 0, ...(sourceBreakdown.exam || {}) },
+      transport: { total: 0, paid: 0, pending: 0, ...(sourceBreakdown.transport || {}) },
+      misc: { total: 0, paid: 0, pending: 0, name: 'Miscellaneous Fees', ...(sourceBreakdown.misc || {}) }
+    };
+    if (deleteAll) {
+      nextBreakdown.tuition = { total: 0, paid: 0, pending: 0 };
+      nextBreakdown.exam = { total: 0, paid: 0, pending: 0 };
+      nextBreakdown.transport = { total: 0, paid: 0, pending: 0 };
+      nextBreakdown.misc = { total: 0, paid: 0, pending: 0, name: 'Miscellaneous Fees', items: [] };
+    } else if (feeKey === 'misc') {
+      nextBreakdown.misc = { total: 0, paid: 0, pending: 0, name: 'Miscellaneous Fees', items: [] };
+    } else {
+      nextBreakdown[feeKey] = { total: 0, paid: 0, pending: 0 };
+    }
+
+    const remainingPaid = ['tuition', 'exam', 'transport', 'misc']
+      .reduce((sum, key) => sum + Number(nextBreakdown[key]?.paid || 0), 0);
+
+    const deptFeeInfo = getDepartmentFixedFee(sourceRecord.department || sourceRecord.course);
+    const fixedAnnualFee = deptFeeInfo.totalAnnualFee;
+    let nextTotal = Number(sourceRecord.totalFee);
+    if (!nextTotal || isNaN(nextTotal) || nextTotal === 25000 || nextTotal === 35000 || nextTotal === 34050 || nextTotal === 34850) {
+      nextTotal = fixedAnnualFee;
+    }
+    if (nextTotal < remainingPaid) nextTotal = remainingPaid;
+    const nextPending = Math.max(0, nextTotal - remainingPaid);
+    const nextStatus = nextTotal > 0 && nextPending === 0 ? 'Paid' : (remainingPaid > 0 ? 'Partial' : 'Pending');
+
+    // 1. Update (not remove) the student's record so the deleted section stays deleted
+    const updatedRecords = feeRecords.map(rec => {
+      if (!isSameRecord(rec)) return rec;
+      return {
+        ...rec,
+        feeType: feeKey === 'all' || feeKey === 'misc' ? 'Tuition Fees' : (rec.feeType || 'Tuition Fees'),
+        allMiscItems: feeKey === 'all' || feeKey === 'misc' ? [] : (rec.allMiscItems || []),
+        paidFee: remainingPaid,
+        paidFeeDisplay: `₹${remainingPaid.toLocaleString('en-IN')}`,
+        totalFee: nextTotal,
+        totalFeeDisplay: `₹${nextTotal.toLocaleString('en-IN')}`,
+        pendingFee: nextPending,
+        pendingFeeDisplay: nextPending > 0 ? `₹${nextPending.toLocaleString('en-IN')}` : '₹0',
+        status: nextStatus,
+        receiptNo: '',
+        referenceNo: '',
+        paymentRef: '',
+        lastPaymentDate: '',
+        feeBreakdown: nextBreakdown
+      };
     });
 
     setFeeRecords(updatedRecords);
     localStorage.setItem('vcas_real_fee_records', JSON.stringify(updatedRecords));
 
-    // 2. Reset student fee in database
+    // 2. Keep the local payment cache in sync, otherwise it re-hydrates the deleted record on refresh
     try {
-      const studentLookupId = recordToDelete.mongoId || recordToDelete.id || recordToDelete.rollNo;
+      const savedPayments = JSON.parse(localStorage.getItem('vcas_saved_fee_payments') || '{}');
+      const lookupKeys = [
+        recordToDelete.rollNo,
+        recordToDelete.id,
+        sourceRecord.rollNo,
+        sourceRecord.id,
+        sourceRecord.studentId,
+        sourceRecord.regNo
+      ].filter(Boolean).map(k => String(k).trim().toLowerCase());
+
+      Object.keys(savedPayments).forEach(key => {
+        if (!lookupKeys.includes(key.trim().toLowerCase())) return;
+        if (deleteAll || remainingPaid <= 0) {
+          delete savedPayments[key];
+          return;
+        }
+        savedPayments[key] = {
+          ...savedPayments[key],
+          total: nextTotal,
+          paid: remainingPaid,
+          pending: nextPending,
+          status: nextStatus,
+          feeBreakdown: nextBreakdown
+        };
+      });
+      localStorage.setItem('vcas_saved_fee_payments', JSON.stringify(savedPayments));
+    } catch (err) {
+      console.warn('Notice syncing local payment cache on record deletion:', err);
+    }
+
+    // 3. Persist the cleared section to the database so a refresh cannot bring it back
+    try {
+      const studentLookupId = sourceRecord.mongoId || recordToDelete.mongoId || recordToDelete.id || recordToDelete.rollNo;
       if (studentLookupId) {
         await fetch(`${API_BASE}/students/${studentLookupId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            feeStatus: 'Pending',
-            paidFee: 0,
-            pendingFee: 0,
-            receiptNo: '',
+            feeStatus: nextStatus,
+            totalFee: nextTotal,
+            paidFee: remainingPaid,
+            pendingFee: nextPending,
+            feeBreakdown: nextBreakdown,
             referenceNo: '',
-            paymentDate: ''
+            lastPaymentDate: ''
           })
         });
       }
@@ -659,7 +849,12 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       console.warn('Notice resetting student fee in DB on record deletion:', err);
     }
 
+    try {
+      window.dispatchEvent(new Event('vcas_students_updated'));
+    } catch (err) { }
+
     setRecordToDelete(null);
+    setDeleteTargetSection('');
     showToast(`Fee collection record for ${targetName} deleted successfully.`);
   };
 
@@ -703,7 +898,14 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           if (existingItemIdx >= 0) {
             const prevIt = updatedMiscItems[existingItemIdx];
             const nextPaid = Number(prevIt.paid || 0) + Number(paidAmount || 0);
-            const nextTot = Math.max(Number(prevIt.amount || prevIt.total || 0), Number(totalAmount || 0), nextPaid);
+            // Keep the approved assessed price. If a previously stored amount was
+            // inflated (e.g. ₹12,500 lab instead of ₹2,500) but the excess was
+            // never paid, the incoming form total repairs it.
+            const prevPaid = Number(prevIt.paid || 0);
+            const incomingTotal = Number(totalAmount || 0);
+            const nextTot = prevPaid <= incomingTotal
+              ? incomingTotal
+              : Math.max(Number(prevIt.amount || prevIt.total || 0), nextPaid);
             updatedMiscItems[existingItemIdx] = {
               ...prevIt,
               feeType: mItemName,
@@ -870,7 +1072,14 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           if (existingItemIdx >= 0) {
             const prevIt = updatedMiscItems[existingItemIdx];
             const nextPaid = Number(prevIt.paid || 0) + Number(paidAmount || 0);
-            const nextTot = Math.max(Number(prevIt.amount || prevIt.total || 0), Number(totalAmount || 0), nextPaid);
+            // Keep the approved assessed price. If a previously stored amount was
+            // inflated (e.g. ₹12,500 lab instead of ₹2,500) but the excess was
+            // never paid, the incoming form total repairs it.
+            const prevPaid = Number(prevIt.paid || 0);
+            const incomingTotal = Number(totalAmount || 0);
+            const nextTot = prevPaid <= incomingTotal
+              ? incomingTotal
+              : Math.max(Number(prevIt.amount || prevIt.total || 0), nextPaid);
             updatedMiscItems[existingItemIdx] = {
               ...prevIt,
               feeType: mItemName,
@@ -1082,15 +1291,22 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
         studentBreakdown.transport = { ...(studentBreakdown.transport), ...(currentBreakdown.transport || {}) };
         studentBreakdown.misc = { ...(studentBreakdown.misc), ...(currentBreakdown.misc || {}) };
 
+        // currentBreakdown already contains this payment (the in-memory record
+        // was updated above), so do not add paidAmount a second time here.
         const currentType = studentBreakdown[feeKey] || { total: 0, paid: 0, pending: 0 };
-        const newTypeTotal = Math.max(Number(currentType.total || 0), Number(totalAmount || 0));
-        const newTypePaid = Number(currentType.paid || 0) + Number(paidAmount || 0);
-        const resolvedStudentTypeTotal = Math.max(newTypeTotal, newTypePaid);
+        const resolvedStudentTypeTotal = Math.max(
+          Number(currentType.total || 0),
+          Number(totalAmount || 0),
+          Number(currentType.paid || 0)
+        );
+        const resolvedStudentTypePaid = Number(currentType.paid || 0);
         studentBreakdown[feeKey] = {
+          ...currentType,
           total: resolvedStudentTypeTotal,
-          paid: newTypePaid,
-          pending: Math.max(0, resolvedStudentTypeTotal - newTypePaid),
-          name: feeKey === 'misc' ? (entryFormData.miscFeeName || currentType.name || 'Miscellaneous Fees') : currentType.name
+          paid: resolvedStudentTypePaid,
+          pending: Math.max(0, resolvedStudentTypeTotal - resolvedStudentTypePaid),
+          name: feeKey === 'misc' ? (entryFormData.miscFeeName || currentType.name || 'Miscellaneous Fees') : currentType.name,
+          ...(feeKey === 'misc' && Array.isArray(updatedMiscItems) ? { items: updatedMiscItems } : {})
         };
 
         const deptFeeInfo = getDepartmentFixedFee(department || course);
@@ -1229,6 +1445,57 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           pending: Math.max(0, targetTypeTotal - newTypePaid)
         };
 
+        // Keep the itemised miscellaneous breakdown in sync when a generic
+        // "Miscellaneous Fees" payment is recorded from this modal. Otherwise
+        // the receipt shows stale item amounts while the total keeps growing.
+        let nextMiscItems = null;
+        if (feeKey === 'misc') {
+          nextMiscItems = Array.isArray(rec.allMiscItems) && rec.allMiscItems.length > 0
+            ? [...rec.allMiscItems]
+            : (Array.isArray(rec.feeBreakdown?.misc?.items) ? [...rec.feeBreakdown.misc.items] : []);
+
+          const otherName = 'Other Miscellaneous Fees';
+          const otherIdx = nextMiscItems.findIndex(
+            it => String(it.feeType || it.name || '').trim().toLowerCase() === otherName.toLowerCase()
+          );
+          if (otherIdx >= 0) {
+            const prevIt = nextMiscItems[otherIdx];
+            const nextPaid = Number(prevIt.paid || 0) + amountNum;
+            const nextTot = Math.max(Number(prevIt.amount || prevIt.total || 0), nextPaid);
+            nextMiscItems[otherIdx] = {
+              ...prevIt,
+              feeType: prevIt.feeType || otherName,
+              amount: nextTot,
+              paid: nextPaid,
+              balance: Math.max(0, nextTot - nextPaid),
+              status: nextPaid >= nextTot ? 'Paid' : 'Partial',
+              date: today,
+              receiptNo: finalReceiptNo || prevIt.receiptNo
+            };
+          } else {
+            nextMiscItems.push({
+              feeType: otherName,
+              amount: amountNum,
+              paid: amountNum,
+              balance: 0,
+              status: 'Paid',
+              date: today,
+              receiptNo: finalReceiptNo
+            });
+          }
+
+          const miscItemTotal = nextMiscItems.reduce((s, it) => s + Number(it.amount ?? it.total ?? it.paid ?? 0), 0);
+          const miscItemPaid = nextMiscItems.reduce((s, it) => s + Number(it.paid ?? it.amount ?? 0), 0);
+          const resolvedMiscTotal = Math.max(miscItemTotal, miscItemPaid);
+          nextBreakdown.misc = {
+            ...nextBreakdown.misc,
+            total: resolvedMiscTotal,
+            paid: miscItemPaid,
+            pending: Math.max(0, resolvedMiscTotal - miscItemPaid),
+            items: nextMiscItems
+          };
+        }
+
         const secTuitionPaid = Number(nextBreakdown.tuition?.paid || 0);
         const secExamPaid = Number(nextBreakdown.exam?.paid || 0);
         const secTransportPaid = Number(nextBreakdown.transport?.paid || 0);
@@ -1298,7 +1565,8 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
           pendingFee: newPending,
           pendingFeeDisplay: newPending === 0 ? '₹0' : `₹${newPending.toLocaleString('en-IN')}`,
           status: newStatus,
-          feeBreakdown: nextBreakdown
+          feeBreakdown: nextBreakdown,
+          ...(nextMiscItems ? { allMiscItems: nextMiscItems } : {})
         };
       }
       return rec;
@@ -1404,11 +1672,14 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
       ['Transport Fees', transPaid]
     ];
 
-    const miscItems = (studentRec.allMiscItems && studentRec.allMiscItems.length > 0)
-      ? studentRec.allMiscItems
-      : (breakdown.misc?.items && breakdown.misc.items.length > 0 ? breakdown.misc.items : null);
+    const miscItems = normalizeMiscFeeItems(
+      (studentRec.allMiscItems && studentRec.allMiscItems.length > 0)
+        ? studentRec.allMiscItems
+        : (breakdown.misc?.items && breakdown.misc.items.length > 0 ? breakdown.misc.items : []),
+      miscFeeStructure
+    );
 
-    if (miscItems && miscItems.length > 0) {
+    if (miscItems.length > 0) {
       miscItems.forEach(it => {
         breakdownRows.push([it.feeType || it.name || 'Miscellaneous Fees', Number(it.paid ?? it.amount ?? 0)]);
       });
@@ -1556,11 +1827,14 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
     const miscPaid = Number(miscData.paid || 0);
     const miscTotal = Number(miscData.total || 0);
     const miscLabel = miscData.name || record?.miscFeeName || 'Miscellaneous Fees';
-    const miscItems = (record?.allMiscItems && record.allMiscItems.length > 0)
-      ? record.allMiscItems
-      : (miscData.items && miscData.items.length > 0 ? miscData.items : null);
+    const miscItems = normalizeMiscFeeItems(
+      (record?.allMiscItems && record.allMiscItems.length > 0)
+        ? record.allMiscItems
+        : (miscData.items && miscData.items.length > 0 ? miscData.items : []),
+      miscFeeStructure
+    );
 
-    if (miscItems && miscItems.length > 0) {
+    if (miscItems.length > 0) {
       miscItems.forEach((it, idx) => {
         const iPaid = Number(it.paid ?? it.amount ?? 0);
         const iTotal = Number(it.amount ?? it.total ?? iPaid);
@@ -3028,9 +3302,12 @@ export default function FeeManagement({ defaultFeeType = 'All', user }) {
                   const rMisc = selectedReceiptStudent.feeBreakdown?.misc || {};
                   const rMiscPaid = Number(rMisc.paid || 0);
                   const rMiscName = rMisc.name || selectedReceiptStudent.miscFeeName || 'Miscellaneous Fees';
-                  const rMiscItems = (selectedReceiptStudent.allMiscItems && selectedReceiptStudent.allMiscItems.length > 0)
-                    ? selectedReceiptStudent.allMiscItems
-                    : (rMisc.items && rMisc.items.length > 0 ? rMisc.items : null);
+                  const rMiscItems = normalizeMiscFeeItems(
+                    (selectedReceiptStudent.allMiscItems && selectedReceiptStudent.allMiscItems.length > 0)
+                      ? selectedReceiptStudent.allMiscItems
+                      : (rMisc.items && rMisc.items.length > 0 ? rMisc.items : []),
+                    miscFeeStructure
+                  );
 
                   const sectionRows = [
                     ['Tuition Fees', Number(selectedReceiptStudent.feeBreakdown?.tuition?.paid || 0)],
