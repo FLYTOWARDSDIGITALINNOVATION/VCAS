@@ -32,6 +32,19 @@ import ModalPortal from './ModalPortal';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+const normalizeDepartment = (department) => {
+  const normalized = String(department || '').trim().toLowerCase();
+  return normalized === 'ai' || normalized === 'artificial intelligence'
+    ? 'artificial intelligence'
+    : normalized;
+};
+
+const departmentsMatch = (first, second) => {
+  const a = normalizeDepartment(first);
+  const b = normalizeDepartment(second);
+  return Boolean(a && b && (a === b || a.includes(b) || b.includes(a)));
+};
+
 const DEFAULT_FACULTY_PERIODS = [
   { slot: 1, time: '09:30 AM - 10:30 AM' },
   { slot: 2, time: '10:30 AM - 11:20 AM' },
@@ -81,15 +94,6 @@ const COLOR_MAP = {
   'part-time': 'orange',
   combined: 'violet'
 };
-
-const STAFF_CATEGORIES = [
-  { id: 'All', label: 'All Staff' },
-  { id: 'Artificial Intelligence', label: '1. Artificial Intelligence' },
-  { id: 'Commerce', label: '2. Commerce' },
-  { id: 'Computer Science', label: '3. Computer Science' },
-  { id: 'Criminology and Forensic Science', label: '4. Criminology and Forensic Science' },
-  { id: 'Management', label: '5. Management' }
-];
 
 export default function TimetableManagement({ user }) {
   const isSuperAdmin = user?.role === 'Super Admin' || user?.isSuperAdmin || JSON.parse(sessionStorage.getItem('vcas_user') || '{}')?.role === 'Super Admin';
@@ -231,7 +235,8 @@ export default function TimetableManagement({ user }) {
   const [availableDepartments, setAvailableDepartments] = useState(() => getKnownDepartments());
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
-  const [selectedStaffCategory, setSelectedStaffCategory] = useState('All');
+  const [selectedFacultyDepartment, setSelectedFacultyDepartment] = useState('All');
+  const [selectedFacultyYear, setSelectedFacultyYear] = useState('All');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedYear, setSelectedYear] = useState(3);
   const [selectedSem, setSelectedSem] = useState('Sem 5');
@@ -260,6 +265,7 @@ export default function TimetableManagement({ user }) {
   const [slotForm, setSlotForm] = useState({
     day: 'Monday',
     period: 1,
+    year: 1,
     code: '',
     name: '',
     faculty: '',
@@ -321,13 +327,13 @@ export default function TimetableManagement({ user }) {
         const deptList = rawDepts
           .map(d => (typeof d === 'string' ? d : d.name || d.departmentName))
           .filter(Boolean);
-        const finalDepts = deptList.length > 0 ? Array.from(new Set(deptList)) : getKnownDepartments();
+        const finalDepts = Array.from(new Set([...deptList, ...staffDepts, ...getKnownDepartments()]));
         setAvailableDepartments(finalDepts);
         if (finalDepts.length > 0) {
           setSelectedDept(prev => (prev && finalDepts.includes(prev) ? prev : finalDepts[0]));
         }
       } else {
-        const fallbackDepts = getKnownDepartments();
+        const fallbackDepts = Array.from(new Set([...staffDepts, ...getKnownDepartments()]));
         setAvailableDepartments(fallbackDepts);
         setSelectedDept(prev => (prev && fallbackDepts.includes(prev) ? prev : fallbackDepts[0]));
       }
@@ -379,12 +385,16 @@ export default function TimetableManagement({ user }) {
     fetchStaffAndTimetables();
   }, []);
 
-  // Fetch single staff timetable when selectedStaffId changes
+  // Fetch the selected staff member's timetable for the active department/year filters.
   const fetchSelectedStaffTimetable = async (staffId) => {
     if (!staffId) return;
     try {
       setLoadingSchedule(true);
-      const res = await fetch(`${API_BASE}/timetable/staff/${staffId}`);
+      const params = new URLSearchParams();
+      if (selectedFacultyDepartment !== 'All') params.set('department', selectedFacultyDepartment);
+      if (selectedFacultyYear !== 'All') params.set('year', selectedFacultyYear);
+      const query = params.toString();
+      const res = await fetch(`${API_BASE}/timetable/staff/${encodeURIComponent(staffId)}${query ? `?${query}` : ''}`);
       const data = await res.json();
       if (data?.success && data?.schedule) {
         const sched = data.schedule instanceof Map ? Object.fromEntries(data.schedule) : data.schedule;
@@ -403,36 +413,56 @@ export default function TimetableManagement({ user }) {
   useEffect(() => {
     if (selectedStaffId) {
       fetchSelectedStaffTimetable(selectedStaffId);
+    } else {
+      setFacultySchedule({});
     }
-  }, [selectedStaffId]);
+  }, [selectedStaffId, selectedFacultyDepartment, selectedFacultyYear]);
 
   // Current selected staff object
   const currentStaff = useMemo(() => {
     return staffList.find(s => s.staffId === selectedStaffId) || null;
   }, [staffList, selectedStaffId]);
 
-  // Filtered staff list by selected category
+  // Filter staff by department and by study year assignments.
   const filteredStaffList = useMemo(() => {
-    if (selectedStaffCategory === 'All') return staffList;
-    const catLow = selectedStaffCategory.toLowerCase();
     return staffList.filter(s => {
       const dept = String(s.department || s.dept || s.departmentName || '').toLowerCase();
-      return dept === catLow || dept.includes(catLow) || catLow.includes(dept);
+      const matchesDepartment = selectedFacultyDepartment === 'All'
+        || departmentsMatch(dept, selectedFacultyDepartment);
+      if (!matchesDepartment) return false;
+      if (selectedFacultyYear === 'All') return true;
+      return allTimetables.some(t => (
+        t.staffId === s.staffId
+        && Number(t.year) === Number(selectedFacultyYear)
+        && (selectedFacultyDepartment === 'All'
+          || departmentsMatch(t.department, selectedFacultyDepartment))
+      ));
     });
-  }, [staffList, selectedStaffCategory]);
+  }, [staffList, allTimetables, selectedFacultyDepartment, selectedFacultyYear]);
+
+  useEffect(() => {
+    if (filteredStaffList.length === 0) {
+      if (selectedStaffId) setSelectedStaffId('');
+      return;
+    }
+    if (!filteredStaffList.some(staff => staff.staffId === selectedStaffId)) {
+      setSelectedStaffId(filteredStaffList[0].staffId);
+    }
+  }, [filteredStaffList, selectedStaffId]);
 
   // Helper to count assigned slots for any staff member
   const getStaffAssignedCount = (staffId) => {
-    const t = allTimetables.find(item => item.staffId === staffId);
-    if (!t || !t.schedule) return 0;
-    const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : t.schedule;
-    let count = 0;
-    Object.values(sched).forEach(day => {
-      if (day && typeof day === 'object') {
-        count += Object.keys(day).length;
-      }
-    });
-    return count;
+    return allTimetables
+      .filter(item => item.staffId === staffId
+        && (selectedFacultyYear === 'All' || Number(item.year) === Number(selectedFacultyYear))
+        && (selectedFacultyDepartment === 'All'
+          || departmentsMatch(item.department, selectedFacultyDepartment)))
+      .reduce((total, item) => {
+        const sched = item.schedule instanceof Map ? Object.fromEntries(item.schedule) : item.schedule;
+        return total + Object.values(sched || {}).reduce((dayTotal, day) => (
+          dayTotal + (day && typeof day === 'object' ? Object.keys(day).length : 0)
+        ), 0);
+      }, 0);
   };
 
   // Derive list of all known subjects from database and existing timetable records
@@ -522,7 +552,15 @@ export default function TimetableManagement({ user }) {
       aggregated[day] = {};
     });
 
-    allTimetables.forEach(t => {
+    const assignedForSelectedYear = allTimetables.filter(t => (
+      Number(t.year) === Number(selectedYear)
+      && departmentsMatch(t.department, selectedDept)
+    ));
+    const schedulesToAggregate = assignedForSelectedYear.length > 0
+      ? assignedForSelectedYear
+      : allTimetables.filter(t => t.isLegacy);
+
+    schedulesToAggregate.forEach(t => {
       const staffMember = staffList.find(s => s.staffId === t.staffId);
       const staffLabel = staffMember?.name ? `${staffMember.name} (${t.staffId})` : (t.staffId || 'Faculty');
       const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
@@ -563,10 +601,13 @@ export default function TimetableManagement({ user }) {
 
     setEditingInitialSlot(currentSlot || null);
 
+    const initialYear = Number(currentSlot?.year || (selectedFacultyYear !== 'All' ? selectedFacultyYear : (selectedYear || 1)));
+
     const isLab = Boolean(currentSlot?.type === 'lab' || currentSlot?.name?.toLowerCase().includes('lab'));
     setSlotForm({
       day,
       period: periodNum,
+      year: initialYear,
       code: currentSlot?.code || '',
       name: currentSlot?.name || '',
       faculty: currentSlot?.faculty || defaultFaculty || '',
@@ -726,6 +767,8 @@ export default function TimetableManagement({ user }) {
       }
     }
 
+    const targetYear = Number(slotForm.year || (selectedFacultyYear !== 'All' ? selectedFacultyYear : (selectedYear || 1)));
+
     const updatedSlot = {
       code: slotForm.code.trim().toUpperCase(),
       name: slotForm.name.trim(),
@@ -737,7 +780,8 @@ export default function TimetableManagement({ user }) {
       labHours: isContinuous ? continuousHoursCount : 0,
       partTimeSchedule: slotForm.type === 'part-time' ? (slotForm.partTimeSchedule || 'before-break') : undefined,
       combinedDept: slotForm.type === 'combined' ? (slotForm.combinedDept || '') : undefined,
-      combinedYear: slotForm.type === 'combined' ? (slotForm.combinedYear || '') : undefined
+      combinedYear: slotForm.type === 'combined' ? (slotForm.combinedYear || '') : undefined,
+      year: targetYear
     };
 
     if (viewMode === 'faculty') {
@@ -746,16 +790,22 @@ export default function TimetableManagement({ user }) {
         return;
       }
 
+      const selectedDepartment = currentStaff?.department || currentStaff?.dept
+        || currentStaff?.departmentName || selectedFacultyDepartment;
+
       try {
         setIsSavingSlot(true);
-        const res = await fetch(`${API_BASE}/timetable/staff/${selectedStaffId}/slot`, {
+        const res = await fetch(`${API_BASE}/timetable/staff/${encodeURIComponent(selectedStaffId)}/slot`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             day: slotForm.day,
             slot: slotForm.period,
+            department: selectedDepartment,
+            year: targetYear,
             slotData: {
               ...updatedSlot,
+              year: targetYear,
               continuousSlots: continuousSlots.length > 0 ? continuousSlots : undefined
             }
           })
@@ -768,8 +818,8 @@ export default function TimetableManagement({ user }) {
           fetchStaffAndTimetables(); // Sync counts
           setIsEditSlotOpen(false);
           const feedback = continuousSlots.length > 1
-            ? `✓ Assigned Continuous Lab Periods ${continuousSlots.join(', ')} (${continuousSlots.length} Hrs) on ${slotForm.day} for ${currentStaff?.name || selectedStaffId}`
-            : `✓ Assigned Period ${slotForm.period} on ${slotForm.day} for ${currentStaff?.name || selectedStaffId}`;
+            ? `✓ Assigned Year ${targetYear} Continuous Lab Periods ${continuousSlots.join(', ')} (${continuousSlots.length} Hrs) on ${slotForm.day} for ${currentStaff?.name || selectedStaffId}`
+            : `✓ Assigned Year ${targetYear} Period ${slotForm.period} on ${slotForm.day} for ${currentStaff?.name || selectedStaffId}`;
           showToast(feedback);
         } else {
           showToast(`Error: ${data.message || 'Could not save slot'}`);
@@ -781,9 +831,10 @@ export default function TimetableManagement({ user }) {
       }
     } else {
       // Class View: Save into React state
+      const targetClassYear = targetYear;
       setSchedules(prev => {
         const deptData = prev[selectedDept] || {};
-        const baseYearData = deptData[selectedYear] || prev['Computer Science']?.[3] || {};
+        const baseYearData = deptData[targetClassYear] || prev['Computer Science']?.[3] || {};
         const yearData = JSON.parse(JSON.stringify(baseYearData));
         const dayData = yearData[slotForm.day] || {};
 
@@ -800,15 +851,15 @@ export default function TimetableManagement({ user }) {
           ...prev,
           [selectedDept]: {
             ...deptData,
-            [selectedYear]: yearData
+            [targetClassYear]: yearData
           }
         };
       });
 
       setIsEditSlotOpen(false);
       const feedback = continuousSlots.length > 1
-        ? `✓ Saved! Continuous Lab Periods ${continuousSlots.join(', ')} (${continuousSlots.length} Continuous Hrs) updated with ${updatedSlot.code}`
-        : `✓ Saved! ${slotForm.day} Period ${slotForm.period} updated with ${updatedSlot.code} (${updatedSlot.name})`;
+        ? `✓ Saved! Year ${targetClassYear} Continuous Lab Periods ${continuousSlots.join(', ')} (${continuousSlots.length} Continuous Hrs) updated with ${updatedSlot.code}`
+        : `✓ Saved! Year ${targetClassYear} ${slotForm.day} Period ${slotForm.period} updated with ${updatedSlot.code} (${updatedSlot.name})`;
       showToast(feedback);
     }
   };
@@ -818,9 +869,17 @@ export default function TimetableManagement({ user }) {
     if (viewMode === 'faculty') {
       if (!selectedStaffId) return;
 
+      const selectedDepartment = currentStaff?.department || currentStaff?.dept
+        || currentStaff?.departmentName || selectedFacultyDepartment;
+      const targetYear = Number(slotForm.year || (selectedFacultyYear !== 'All' ? selectedFacultyYear : 1));
+
       try {
         setIsSavingSlot(true);
-        const res = await fetch(`${API_BASE}/timetable/staff/${selectedStaffId}/slot/${slotForm.day}/${slotForm.period}`, {
+        const params = new URLSearchParams({
+          department: selectedDepartment,
+          year: targetYear
+        });
+        const res = await fetch(`${API_BASE}/timetable/staff/${encodeURIComponent(selectedStaffId)}/slot/${slotForm.day}/${slotForm.period}?${params.toString()}`, {
           method: 'DELETE'
         });
 
@@ -1048,76 +1107,60 @@ export default function TimetableManagement({ user }) {
         <>
           {/* FACULTY SELECTOR CARD */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4">
-            {/* Staff Category Filter Pills */}
-            <div className="space-y-1.5">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Department</span>
+                </label>
+                <select
+                  value={selectedFacultyDepartment}
+                  onChange={e => setSelectedFacultyDepartment(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="All">All Departments</option>
+                  {availableDepartments.map(department => (
+                    <option key={department} value={department}>{department}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Study Year</span>
+                </label>
+                <select
+                  value={selectedFacultyYear}
+                  onChange={e => setSelectedFacultyYear(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="All">All Years</option>
+                  <option value="1">1st Year</option>
+                  <option value="2">2nd Year</option>
+                  <option value="3">3rd Year</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Select Staff Category</span>
-              </label>
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                {STAFF_CATEGORIES.map(cat => {
-                  const isSelected = selectedStaffCategory === cat.id;
-                  const catLow = cat.id.toLowerCase();
-                  const count = cat.id === 'All'
-                    ? staffList.length
-                    : staffList.filter(s => {
-                        const dept = String(s.department || s.dept || s.departmentName || '').toLowerCase();
-                        return dept === catLow || dept.includes(catLow) || catLow.includes(dept);
-                      }).length;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedStaffCategory(cat.id);
-                        const match = staffList.filter(s => {
-                          if (cat.id === 'All') return true;
-                          const dept = String(s.department || s.dept || s.departmentName || '').toLowerCase();
-                          return dept === catLow || dept.includes(catLow) || catLow.includes(dept);
-                        });
-                        if (match.length > 0 && !match.some(m => m.staffId === selectedStaffId)) {
-                          setSelectedStaffId(match[0].staffId);
-                        }
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                        isSelected 
-                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' 
-                          : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <span>{cat.label}</span>
-                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${isSelected ? 'bg-white/25 text-white' : 'bg-slate-200/80 text-slate-700'}`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
+                  <span>Select Staff ({filteredStaffList.length} Available)</span>
+                </label>
+                <select
+                  value={selectedStaffId}
+                  onChange={e => setSelectedStaffId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="">-- Choose Faculty Member --</option>
+                  {filteredStaffList.map(staff => (
+                    <option key={staff.staffId} value={staff.staffId}>
+                      {staff.name} ({staff.staffId})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
-              <div className="flex-1 max-w-xl">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Select Faculty Member ({filteredStaffList.length} Available)
-                </label>
-                <select
-                  value={selectedStaffId}
-                  onChange={(e) => setSelectedStaffId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none cursor-pointer"
-                >
-                  <option value="">-- Choose Faculty Member --</option>
-                  {filteredStaffList.map(s => {
-                    const count = getStaffAssignedCount(s.staffId);
-                    const deptName = s.department || s.dept || s.departmentName || (s.role === 'Office Staff' ? 'Office' : 'General');
-                    return (
-                      <option key={s.staffId} value={s.staffId}>
-                        [{deptName}] {s.name} ({s.staffId}) {count > 0 ? `• [${count} Periods Assigned]` : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
               {/* ACTIVE FACULTY PROFILE SUMMARY */}
               {currentStaff && (
                 <div className="flex items-center gap-3 bg-indigo-50/70 border border-indigo-100 px-4 py-2.5 rounded-2xl">
@@ -1145,20 +1188,20 @@ export default function TimetableManagement({ user }) {
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Quick Select Active Timetables:
                 </span>
-                {allTimetables.map(t => {
-                  const isSelected = t.staffId === selectedStaffId;
-                  const count = getStaffAssignedCount(t.staffId);
+                {filteredStaffList.filter(staff => getStaffAssignedCount(staff.staffId) > 0).map(staff => {
+                  const isSelected = staff.staffId === selectedStaffId;
+                  const count = getStaffAssignedCount(staff.staffId);
                   return (
                     <button
-                      key={t.staffId}
-                      onClick={() => setSelectedStaffId(t.staffId)}
+                      key={staff.staffId}
+                      onClick={() => setSelectedStaffId(staff.staffId)}
                       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all ${
                         isSelected
                           ? 'bg-indigo-600 text-white shadow-xs'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
-                      <span>{t.staffName || t.staffId}</span>
+                      <span>{staff.name || staff.staffId}</span>
                       <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
                         isSelected ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-600'
                       }`}>
@@ -1690,7 +1733,19 @@ export default function TimetableManagement({ user }) {
             </div>
 
             <form onSubmit={handleSaveSlot} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Study Year *</label>
+                  <select
+                    value={slotForm.year || 1}
+                    onChange={(e) => setSlotForm({ ...slotForm, year: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 focus:bg-white focus:border-purple-500 cursor-pointer"
+                  >
+                    <option value={1}>1st Year</option>
+                    <option value={2}>2nd Year</option>
+                    <option value={3}>3rd Year</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Day of Week *</label>
                   <select
@@ -2664,9 +2719,16 @@ function SlotCell({ slot, onEdit }) {
           <span className="font-mono font-black text-[9px] bg-white/90 px-1 py-0.2 rounded shadow-xs">
             {slot.code}
           </span>
-          <span className="text-[8px] uppercase font-bold opacity-75">
-            {slot.type === 'part-time' ? 'Part-Time' : slot.type === 'combined' ? 'Combined' : slot.type}
-          </span>
+          <div className="flex items-center gap-1">
+            {slot.year && (
+              <span className="font-bold text-[8px] bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded">
+                Yr {slot.year}
+              </span>
+            )}
+            <span className="text-[8px] uppercase font-bold opacity-75">
+              {slot.type === 'part-time' ? 'Part-Time' : slot.type === 'combined' ? 'Combined' : slot.type}
+            </span>
+          </div>
         </div>
         <p className="font-extrabold text-[10px] leading-tight line-clamp-1 mt-0.5" title={slot.name}>
           {slot.name}

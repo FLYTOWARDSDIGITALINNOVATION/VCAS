@@ -328,6 +328,7 @@ exports.addClass = async (req, res) => {
       newClass.staffId = resolvedStaffId;
       newClass.staffName = finalStaffName;
       newClass.room = (room || '').trim() || newClass.room;
+      newClass.academicYear = (academicYear || newClass.academicYear || '2025-2026').trim();
       newClass.classCategory = classCategory;
       newClass.partTimeSchedule = partTimeSchedule;
       newClass.combinedDept = combinedDept;
@@ -376,7 +377,8 @@ exports.addClass = async (req, res) => {
         classCategory,
         partTimeSchedule,
         combinedDept,
-        combinedYear
+        combinedYear,
+        academicYear: newClass.academicYear
       });
     } catch (ttErr) {
       console.error('Auto timetable generation failed for class:', ttErr.message);

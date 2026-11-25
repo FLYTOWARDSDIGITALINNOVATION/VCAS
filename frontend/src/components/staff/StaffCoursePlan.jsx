@@ -346,7 +346,137 @@ export default function StaffCoursePlan({ staffUser }) {
   const completionPercentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 print:max-w-none print:p-0 print:space-y-0">
+      <style>{`
+        @media print {
+          aside, header, nav, #staff-sidebar, .sidebar {
+            display: none !important;
+          }
+          body, #root, #staff-content-scroll-container, .h-screen {
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          #staff-content-scroll-container > main {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            padding: 0 !important;
+          }
+          .action-plan-print-area {
+            width: 100% !important;
+            max-width: none !important;
+            break-inside: auto;
+          }
+          .action-plan-heading {
+            padding-bottom: 0.35rem !important;
+            margin-bottom: 0.45rem !important;
+          }
+          .action-plan-heading h2 {
+            font-size: 11pt !important;
+            line-height: 1.2 !important;
+          }
+          .action-plan-heading p {
+            font-size: 8pt !important;
+            line-height: 1.15 !important;
+          }
+          .action-plan-metadata {
+            gap: 0.2rem 0.5rem !important;
+            padding: 0.35rem !important;
+            margin-bottom: 0.45rem !important;
+            border-radius: 0.25rem !important;
+          }
+          .action-plan-metadata > div,
+          .action-plan-metadata > div > span,
+          .action-plan-metadata input,
+          .action-plan-metadata select {
+            min-height: 0 !important;
+            font-size: 8pt !important;
+            line-height: 1.15 !important;
+          }
+          .action-plan-table-scroll {
+            overflow: visible !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            margin-bottom: 0 !important;
+          }
+          .action-plan-table {
+            width: 100% !important;
+            table-layout: fixed;
+            border-collapse: collapse !important;
+          }
+          .action-plan-table th,
+          .action-plan-table td {
+            border: 1px solid #0f172a !important;
+            padding: 0.15rem 0.25rem !important;
+            font-size: 8pt !important;
+            line-height: 1.15 !important;
+          }
+          .action-plan-table .action-plan-actions-column {
+            width: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            border: 0 !important;
+            overflow: hidden;
+          }
+          .action-plan-table textarea {
+            height: 2rem !important;
+            min-height: 2rem !important;
+            resize: none !important;
+            overflow: hidden !important;
+            font-size: 8pt !important;
+            line-height: 1.15 !important;
+          }
+          .action-plan-table tbody tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .action-plan-signatures {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            position: static !important;
+            visibility: visible !important;
+            color: #0f172a !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+            gap: 0.5rem !important;
+            margin-top: 0.4rem !important;
+            padding-top: 0 !important;
+            min-height: 0 !important;
+          }
+          .action-plan-signatures > div {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            visibility: visible !important;
+            color: #0f172a !important;
+            border: 0 !important;
+            min-height: 3.25rem !important;
+            padding: 0 !important;
+          }
+          .action-plan-signature-line {
+            display: block !important;
+            width: 3rem !important;
+            border-top: 1px solid #0f172a !important;
+            margin-bottom: 0.2rem !important;
+          }
+          .action-plan-status-select {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            padding-left: 0.2rem !important;
+            padding-right: 0.2rem !important;
+            font-size: 8pt !important;
+          }
+          @page {
+            size: landscape;
+            margin: 6mm;
+          }
+        }
+      `}</style>
       {/* Top Banner & Control Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm print:hidden">
         <div>
@@ -468,10 +598,10 @@ export default function StaffCoursePlan({ staffUser }) {
       {/* VIEW 1: OFFICIAL ACTION PLAN / COURSE PLAN (DATE, TOPIC, HRS)   */}
       {/* ─────────────────────────────────────────────────────────────── */}
       {activeTab === 'course_plan' && (
-        <div className="bg-white rounded-3xl border border-slate-300 p-6 sm:p-10 shadow-lg text-slate-900 print:border-none print:shadow-none print:p-0">
+        <div className="action-plan-print-area bg-white rounded-3xl border border-slate-300 p-6 sm:p-10 shadow-lg text-slate-900 print:border-none print:shadow-none print:p-0">
           
           {/* Header Block matching the Physical Register */}
-          <div className="text-center border-b-2 border-slate-900 pb-5 mb-5 space-y-1">
+          <div className="action-plan-heading text-center border-b-2 border-slate-900 pb-5 mb-5 space-y-1">
             <h2 className="text-base sm:text-xl font-black uppercase tracking-wider text-slate-900">
               VIVEKANANDA COLLEGE OF ARTS AND SCIENCE
             </h2>
@@ -489,7 +619,7 @@ export default function StaffCoursePlan({ staffUser }) {
           </div>
 
           {/* Metadata Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3.5 gap-x-6 text-sm font-semibold border-2 border-slate-900 rounded-xl p-4 sm:p-5 mb-6 bg-slate-50/50">
+          <div className="action-plan-metadata grid grid-cols-1 md:grid-cols-2 gap-y-3.5 gap-x-6 text-sm font-semibold border-2 border-slate-900 rounded-xl p-4 sm:p-5 mb-6 bg-slate-50/50">
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-slate-900 min-w-[150px] text-sm sm:text-base">Name of the Faculty:</span>
               <span className="font-black text-blue-950 uppercase text-sm sm:text-base">{staffName}</span>
@@ -562,8 +692,8 @@ export default function StaffCoursePlan({ staffUser }) {
           </div>
 
           {/* ── COURSE PLAN TABLE (DATE, TOPIC, HRS) ───────────────── */}
-          <div className="overflow-x-auto rounded-xl border-2 border-slate-900 mb-6">
-            <table className="w-full border-collapse text-left text-sm">
+          <div className="action-plan-table-scroll overflow-x-auto rounded-xl border-2 border-slate-900 mb-6">
+            <table className="action-plan-table w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-slate-100 text-slate-900 font-extrabold border-b-2 border-slate-900 uppercase tracking-tight text-sm text-center">
                   <th className="py-2.5 px-2 border-r border-slate-400 w-12">S.No</th>
@@ -574,7 +704,7 @@ export default function StaffCoursePlan({ staffUser }) {
                   <th className="py-2.5 px-2 border-r border-slate-400 w-20">No. Of Hours</th>
                   <th className="py-2.5 px-3 border-r border-slate-400 w-36">DEVIATION</th>
                   <th className="py-2.5 px-3 border-r border-slate-400 w-28">Sign / Status</th>
-                  <th className="py-2.5 px-2 w-12 print:hidden">Action</th>
+                  <th className="action-plan-actions-column py-2.5 px-2 w-12"><span className="print:hidden">Action</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-300 font-medium">
@@ -622,13 +752,16 @@ export default function StaffCoursePlan({ staffUser }) {
 
                     {/* Execution Date */}
                     <td className="py-1 px-2 border-r border-slate-300">
-                      <input
-                        type="text"
-                        value={t.executionDate}
-                        onChange={(e) => handleTopicChange(idx, 'executionDate', e.target.value)}
-                        placeholder=""
-                        className="w-full p-1 bg-transparent border-0 font-semibold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded"
-                      />
+                      <div className="relative flex items-center justify-center">
+                        <span className="hidden print:inline-block font-semibold text-center text-sm">{t.executionDate || '--'}</span>
+                        <input
+                          type="date"
+                          value={t.executionDate || ''}
+                          onChange={(e) => handleTopicChange(idx, 'executionDate', e.target.value)}
+                          className="w-full p-1 bg-transparent border-0 font-semibold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded cursor-pointer print:hidden"
+                          title="Select execution date from calendar"
+                        />
+                      </div>
                     </td>
 
                     {/* Execution Hours */}
@@ -660,7 +793,7 @@ export default function StaffCoursePlan({ staffUser }) {
                       <select
                         value={t.sign || t.status || 'Pending'}
                         onChange={(e) => handleTopicChange(idx, 'sign', e.target.value)}
-                        className={`text-xs font-bold rounded-lg px-2 py-1 border transition-colors focus:outline-none cursor-pointer ${
+                        className={`action-plan-status-select w-full min-w-0 max-w-full text-[10px] sm:text-xs font-bold rounded-lg px-1 py-1 border transition-colors focus:outline-none cursor-pointer ${
                           t.sign === 'Completed' || t.sign === 'Signed'
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold'
                             : t.sign === 'In Progress'
@@ -677,11 +810,11 @@ export default function StaffCoursePlan({ staffUser }) {
                     </td>
 
                     {/* Delete Row Button */}
-                    <td className="py-1 px-2 text-center print:hidden">
+                    <td className="action-plan-actions-column py-1 px-2 text-center">
                       <button
                         type="button"
                         onClick={() => handleRemoveRow(idx)}
-                        className="text-slate-400 hover:text-red-600 p-1 rounded-lg transition-colors cursor-pointer"
+                        className="text-slate-400 hover:text-red-600 p-1 rounded-lg transition-colors cursor-pointer print:hidden"
                         title="Remove row"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -749,14 +882,17 @@ export default function StaffCoursePlan({ staffUser }) {
           </div>
 
           {/* Signature Footer matching Register */}
-          <div className="grid grid-cols-3 gap-6 pt-12 text-center text-xs sm:text-sm font-extrabold text-slate-900 uppercase">
-            <div className="border-t border-slate-900 pt-2">
+          <div className="action-plan-signatures grid grid-cols-3 gap-6 pt-12 text-center text-xs sm:text-sm font-extrabold text-slate-900 uppercase">
+            <div>
+              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2" aria-hidden="true" />
               Signature of Faculty
             </div>
-            <div className="border-t border-slate-900 pt-2">
+            <div>
+              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2" aria-hidden="true" />
               Head of Department (HOD)
             </div>
-            <div className="border-t border-slate-900 pt-2">
+            <div>
+              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2" aria-hidden="true" />
               Principal
             </div>
           </div>
@@ -867,11 +1003,11 @@ export default function StaffCoursePlan({ staffUser }) {
                         <td className="py-3 px-3 text-center font-semibold text-slate-700 text-sm">{t.plannedDate || '--'}</td>
                         <td className="py-3 px-3 text-center font-semibold text-slate-700">
                           <input
-                            type="text"
-                            value={t.executionDate}
+                            type="date"
+                            value={t.executionDate || ''}
                             onChange={(e) => handleTopicChange(idx, 'executionDate', e.target.value)}
-                            placeholder="DD.MM.YY"
-                            className="w-24 text-center p-1.5 bg-slate-50 border border-slate-200 rounded text-sm font-semibold focus:bg-white focus:outline-none"
+                            className="w-32 text-center p-1.5 bg-slate-50 border border-slate-200 rounded text-sm font-semibold focus:bg-white focus:outline-none cursor-pointer"
+                            title="Select execution date from calendar"
                           />
                         </td>
                         <td className="py-3 px-3 text-center">

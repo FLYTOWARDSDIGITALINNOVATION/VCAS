@@ -457,26 +457,26 @@ export default function StaffDashboard({ staffUser, onLogout }) {
   );
 
   return (
-    <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans">
+    <div className="h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 flex font-sans print:h-auto print:overflow-visible">
       {/* Desktop Sidebar (White & Crisp) */}
-      <aside className={`hidden lg:flex flex-col ${sidebarCollapsed ? 'w-20' : 'w-72'} shrink-0 bg-white border-r border-slate-200 shadow-xs overflow-hidden transition-[width] duration-300 ease-in-out`}>
+      <aside className={`hidden lg:flex flex-col ${sidebarCollapsed ? 'w-20' : 'w-72'} shrink-0 bg-white border-r border-slate-200 shadow-xs overflow-hidden transition-[width] duration-300 ease-in-out print:hidden`}>
         <SidebarContent isCollapsed={sidebarCollapsed} />
       </aside>
 
       {/* Mobile Sidebar Overlay */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
+        <div className="lg:hidden fixed inset-0 z-50 flex print:hidden">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-72 bg-white h-full overflow-hidden flex flex-col z-10 border-r border-slate-200 shadow-2xl">
+          <aside className="relative w-72 bg-white h-full overflow-hidden flex flex-col z-10 border-r border-slate-200 shadow-2xl print:hidden">
             <SidebarContent isCollapsed={false} />
           </aside>
         </div>
       )}
 
       {/* Main Content Area */}
-      <div id="staff-content-scroll-container" className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
+      <div id="staff-content-scroll-container" className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto print:h-auto print:overflow-visible">
         {/* Top Header Bar Matching Admin */}
-        <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs print:hidden">
           <div className="flex items-center gap-3 flex-1 max-w-md mr-4">
             <button
               onClick={() => setMobileOpen(true)}

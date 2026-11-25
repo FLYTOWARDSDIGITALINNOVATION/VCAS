@@ -33,6 +33,10 @@ const timetableSchema = new mongoose.Schema({
       Friday: {},
       Saturday: {}
     })
+  },
+  yearSchedules: {
+    type: mongoose.Schema.Types.Mixed,
+    default: () => ({})
   }
 }, {
   timestamps: true,

@@ -13,11 +13,103 @@ function getDefaultSchedule() {
   };
 }
 
+function toPlainSchedule(schedule) {
+  return schedule instanceof Map
+    ? Object.fromEntries(schedule)
+    : (schedule ? JSON.parse(JSON.stringify(schedule)) : getDefaultSchedule());
+}
+
+function getScopedSchedule(timetable, academicYear, department, year) {
+  return timetable.yearSchedules?.[academicYear]?.[department]?.[String(year)] || getDefaultSchedule();
+}
+
+function setScopedSchedule(timetable, academicYear, department, year, schedule) {
+  const yearSchedules = timetable.yearSchedules
+    ? JSON.parse(JSON.stringify(timetable.yearSchedules))
+    : {};
+  yearSchedules[academicYear] = yearSchedules[academicYear] || {};
+  yearSchedules[academicYear][department] = yearSchedules[academicYear][department] || {};
+  yearSchedules[academicYear][department][String(year)] = schedule;
+  timetable.yearSchedules = yearSchedules;
+  timetable.markModified('yearSchedules');
+}
+
+function hasScheduleSlots(schedule) {
+  return Object.values(schedule || {}).some(day => day && Object.keys(day).length > 0);
+}
+
+function departmentsMatch(first, second) {
+  const normalize = value => {
+    const department = String(value || '').trim().toLowerCase();
+    return department === 'ai' || department === 'artificial intelligence'
+      ? 'artificial intelligence'
+      : department;
+  };
+  const a = normalize(first);
+  const b = normalize(second);
+  return Boolean(a && b && (a === b || a.includes(b) || b.includes(a)));
+}
+
+function getTimetableEntries(timetable) {
+  const entries = [];
+  const legacySchedule = toPlainSchedule(timetable.schedule);
+  if (hasScheduleSlots(legacySchedule)) {
+    entries.push({
+      ...timetable.toObject(),
+      schedule: legacySchedule,
+      year: null,
+      isLegacy: true
+    });
+  }
+
+  Object.entries(timetable.yearSchedules || {}).forEach(([academicYear, departments]) => {
+    Object.entries(departments || {}).forEach(([department, years]) => {
+      Object.entries(years || {}).forEach(([year, schedule]) => {
+        entries.push({
+          ...timetable.toObject(),
+          academicYear,
+          department,
+          year: Number(year),
+          isLegacy: false,
+          schedule: toPlainSchedule(schedule)
+        });
+      });
+    });
+  });
+
+  if (entries.length === 0) {
+    entries.push({ ...timetable.toObject(), schedule: legacySchedule, year: null, isLegacy: true });
+  }
+  return entries;
+}
+
+function getMergedScopedSchedule(timetable, { department, year, academicYear } = {}) {
+  const result = getDefaultSchedule();
+  const yearSchedules = timetable.yearSchedules || {};
+
+  Object.entries(yearSchedules).forEach(([session, departments]) => {
+    if (academicYear && session !== academicYear) return;
+    Object.entries(departments || {}).forEach(([dept, years]) => {
+      if (department && !departmentsMatch(dept, department)) return;
+      Object.entries(years || {}).forEach(([studyYear, schedule]) => {
+        if (year && String(studyYear) !== String(year)) return;
+        const plainSchedule = toPlainSchedule(schedule);
+        Object.keys(result).forEach(day => {
+          result[day] = { ...result[day], ...(plainSchedule[day] || {}) };
+        });
+      });
+    });
+  });
+
+  return result;
+}
+
 // @desc    Get all staff timetables for Admin portal
 // @route   GET /api/timetable
 exports.getAllTimetables = async (req, res) => {
   try {
-    const timetables = await Timetable.find({}).sort({ staffName: 1, staffId: 1 });
+    const records = await Timetable.find({}).sort({ staffName: 1, staffId: 1 });
+    const timetables = records.flatMap(getTimetableEntries);
     res.status(200).json({
       success: true,
       count: timetables.length,
@@ -39,17 +131,35 @@ exports.getStaffTimetable = async (req, res) => {
       return res.status(200).json({
         success: true,
         staffId,
+        department: req.query.department || '',
+        academicYear: req.query.academicYear || '2025-2026',
+        year: req.query.year ? Number(req.query.year) : null,
         schedule: getDefaultSchedule()
       });
+    }
+
+    const { department, year, academicYear } = req.query;
+    const scopedRequest = Boolean(department || year || academicYear);
+    const schedule = scopedRequest
+      ? getMergedScopedSchedule(timetable, { department, year, academicYear })
+      : getMergedScopedSchedule(timetable);
+    if (!scopedRequest || !hasScheduleSlots(schedule)) {
+      const legacySchedule = toPlainSchedule(timetable.schedule);
+      if (!scopedRequest || Object.keys(timetable.yearSchedules || {}).length === 0) {
+        Object.keys(schedule).forEach(day => {
+          schedule[day] = { ...schedule[day], ...(legacySchedule[day] || {}) };
+        });
+      }
     }
 
     res.status(200).json({
       success: true,
       staffId: timetable.staffId,
       staffName: timetable.staffName,
-      department: timetable.department,
-      academicYear: timetable.academicYear,
-      schedule: timetable.schedule || getDefaultSchedule()
+      department: department || timetable.department,
+      academicYear: academicYear || timetable.academicYear,
+      year: year ? Number(year) : null,
+      schedule
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -91,13 +201,14 @@ exports.saveStaffTimetable = async (req, res) => {
 exports.updateSlot = async (req, res) => {
   try {
     const { staffId } = req.params;
-    const { day, slot, slotData } = req.body;
+    const { day, slot, slotData, academicYear } = req.body;
 
     if (!day || !slot) {
       return res.status(400).json({ success: false, message: 'day and slot are required.' });
     }
 
     let timetable = await Timetable.findOne({ staffId: staffId.trim() });
+    const session = academicYear || '2025-2026';
 
     if (!timetable) {
       const staff = await Staff.findOne({ staffId: staffId.trim() });
@@ -105,14 +216,20 @@ exports.updateSlot = async (req, res) => {
         staffId: staffId.trim(),
         staffName: staff ? staff.name : '',
         department: staff ? staff.department : '',
-        schedule: getDefaultSchedule()
+        academicYear: session,
+        schedule: getDefaultSchedule(),
+        yearSchedules: {}
       });
     }
 
+    const targetYear = Number(req.body.year || slotData?.year || 1);
+    const targetDept = (req.body.department || slotData?.department || timetable.department || 'General').trim();
+    const scopedAssignment = Boolean(targetDept && targetYear);
+
     // Convert Mongoose Map or object to plain object for editing
-    const currentSchedule = timetable.schedule instanceof Map 
-      ? Object.fromEntries(timetable.schedule)
-      : (timetable.schedule ? JSON.parse(JSON.stringify(timetable.schedule)) : getDefaultSchedule());
+    const currentSchedule = scopedAssignment
+      ? toPlainSchedule(getScopedSchedule(timetable, session, targetDept, targetYear))
+      : toPlainSchedule(timetable.schedule);
 
     if (!currentSchedule[day]) {
       currentSchedule[day] = {};
@@ -131,7 +248,9 @@ exports.updateSlot = async (req, res) => {
         labHours: Number(slotData.labHours) || 0,
         partTimeSchedule: slotData.partTimeSchedule || undefined,
         combinedDept: slotData.combinedDept || undefined,
-        combinedYear: slotData.combinedYear || undefined
+        combinedYear: slotData.combinedYear || undefined,
+        year: targetYear,
+        department: targetDept
       };
 
       currentSchedule[day][String(slot)] = slotObj;
@@ -178,14 +297,16 @@ exports.updateSlot = async (req, res) => {
         try {
           const others = await Timetable.find({ staffId: { $ne: staffId.trim() } });
           for (const other of others) {
-            const oSched = other.schedule instanceof Map ? Object.fromEntries(other.schedule) : (other.schedule || {});
-            const daySlots = oSched[day] || {};
-            for (const sNum of targetSlots) {
-              const occupied = daySlots[String(sNum)];
-              if (occupied && occupied.room && occupied.room.trim().toLowerCase() === slotObj.room.toLowerCase()) {
-                roomConflictWarning = `⚠️ Warning: Room/Hall "${slotObj.room}" is already allocated to ${other.staffName || other.staffId} on ${day} Period ${sNum}.`;
-                break;
+            for (const otherEntry of getTimetableEntries(other)) {
+              const daySlots = otherEntry.schedule?.[day] || {};
+              for (const sNum of targetSlots) {
+                const occupied = daySlots[String(sNum)];
+                if (occupied && occupied.room && occupied.room.trim().toLowerCase() === slotObj.room.toLowerCase()) {
+                  roomConflictWarning = `⚠️ Warning: Room/Hall "${slotObj.room}" is already allocated to ${other.staffName || other.staffId} on ${day} Period ${sNum}.`;
+                  break;
+                }
               }
+              if (roomConflictWarning) break;
             }
             if (roomConflictWarning) break;
           }
@@ -196,15 +317,47 @@ exports.updateSlot = async (req, res) => {
       delete currentSchedule[day][String(slot)];
     }
 
-    timetable.schedule = currentSchedule;
-    timetable.markModified('schedule');
+    if (scopedAssignment) {
+      setScopedSchedule(timetable, session, targetDept, targetYear, currentSchedule);
+      // Synchronize top-level schedule
+      const legacySchedule = toPlainSchedule(timetable.schedule);
+      if (!legacySchedule[day]) legacySchedule[day] = {};
+      if (slotData && slotData.code) {
+        const targetSlots = Array.isArray(slotData.continuousSlots) && slotData.continuousSlots.length > 0
+          ? slotData.continuousSlots
+          : [slot];
+        targetSlots.forEach(s => {
+          legacySchedule[day][String(s)] = {
+            code: (slotData.code || '').trim().toUpperCase(),
+            name: (slotData.name || '').trim(),
+            room: (slotData.room || '').trim(),
+            type: (slotData.type || 'theory').toLowerCase(),
+            color: (slotData.color || 'blue').toLowerCase(),
+            isContinuousLab: Boolean(slotData.isContinuousLab || slotData.type === 'lab'),
+            labHours: Number(slotData.labHours) || 0,
+            partTimeSchedule: slotData.partTimeSchedule || undefined,
+            combinedDept: slotData.combinedDept || undefined,
+            combinedYear: slotData.combinedYear || undefined,
+            year: targetYear,
+            department: targetDept
+          };
+        });
+      } else {
+        delete legacySchedule[day][String(slot)];
+      }
+      timetable.schedule = legacySchedule;
+      timetable.markModified('schedule');
+    } else {
+      timetable.schedule = currentSchedule;
+      timetable.markModified('schedule');
+    }
     await timetable.save();
 
     res.status(200).json({
       success: true,
-      message: roomConflictWarning ? `Slot updated with warning: ${roomConflictWarning}` : `Slot ${slot} on ${day} updated successfully.`,
+      message: roomConflictWarning ? `Slot updated with warning: ${roomConflictWarning}` : `Slot ${slot} on ${day} updated successfully for Year ${targetYear}.`,
       warning: roomConflictWarning,
-      schedule: timetable.schedule
+      schedule: currentSchedule
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -216,27 +369,44 @@ exports.updateSlot = async (req, res) => {
 exports.clearSlot = async (req, res) => {
   try {
     const { staffId, day, slot } = req.params;
+    const { department, year, academicYear } = req.query;
 
     let timetable = await Timetable.findOne({ staffId: staffId.trim() });
     if (!timetable) {
       return res.status(200).json({ success: true, message: 'Slot is already empty.' });
     }
 
-    const currentSchedule = timetable.schedule instanceof Map 
-      ? Object.fromEntries(timetable.schedule)
-      : (timetable.schedule ? JSON.parse(JSON.stringify(timetable.schedule)) : getDefaultSchedule());
+    const targetYear = year ? Number(year) : null;
+    const targetDept = (department || timetable.department || '').trim();
+    const scopedAssignment = Boolean(targetDept && targetYear);
+    const session = academicYear || '2025-2026';
+    const currentSchedule = scopedAssignment
+      ? toPlainSchedule(getScopedSchedule(timetable, session, targetDept, targetYear))
+      : toPlainSchedule(timetable.schedule);
 
     if (currentSchedule[day] && currentSchedule[day][String(slot)]) {
       delete currentSchedule[day][String(slot)];
-      timetable.schedule = currentSchedule;
-      timetable.markModified('schedule');
+      if (scopedAssignment) {
+        setScopedSchedule(timetable, session, targetDept, targetYear, currentSchedule);
+        if (timetable.schedule && timetable.schedule[day]) {
+          const legacy = toPlainSchedule(timetable.schedule);
+          if (legacy[day]) {
+            delete legacy[day][String(slot)];
+            timetable.schedule = legacy;
+            timetable.markModified('schedule');
+          }
+        }
+      } else {
+        timetable.schedule = currentSchedule;
+        timetable.markModified('schedule');
+      }
       await timetable.save();
     }
 
     res.status(200).json({
       success: true,
       message: `Slot ${slot} on ${day} cleared.`,
-      schedule: timetable.schedule
+      schedule: currentSchedule
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -289,7 +459,9 @@ exports.getStudentTimetable = async (req, res) => {
     });
 
     // 2. Fetch all staff timetables
-    const allTimetables = await Timetable.find({});
+    const timetableEntries = (await Timetable.find({}))
+      .flatMap(getTimetableEntries)
+      .sort((a, b) => Number(a.isLegacy) - Number(b.isLegacy));
 
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const slotTimes = {
@@ -315,8 +487,8 @@ exports.getStudentTimetable = async (req, res) => {
         const slotKey = String(s);
         let foundSlot = null;
 
-        for (const tt of allTimetables) {
-          const sched = tt.schedule instanceof Map ? Object.fromEntries(tt.schedule) : (tt.schedule || {});
+        for (const tt of timetableEntries) {
+          const sched = toPlainSchedule(tt.schedule);
           const daySched = sched[day] || {};
           const slotItem = daySched[slotKey];
 
@@ -384,7 +556,8 @@ exports.autoGenerateTimetableSchedule = async ({
   classCategory,
   partTimeSchedule,
   combinedDept,
-  combinedYear
+  combinedYear,
+  academicYear
 }) => {
   try {
     const cleanCode = (code || '').trim().toUpperCase();
@@ -423,18 +596,22 @@ exports.autoGenerateTimetableSchedule = async ({
     if (!targetStaffId) return null;
 
     let timetable = await Timetable.findOne({ staffId: targetStaffId });
+    const session = academicYear || '2025-2026';
+    const targetDepartment = dept || staffDoc?.department || '';
+    const targetYear = Number(year) || 1;
     if (!timetable) {
       timetable = new Timetable({
         staffId: targetStaffId,
         staffName: staffDoc ? staffDoc.name : (staffName || ''),
-        department: staffDoc ? staffDoc.department : (dept || ''),
+        department: targetDepartment,
+        academicYear: session,
         schedule: getDefaultSchedule()
       });
     }
 
-    const currentSchedule = timetable.schedule instanceof Map 
-      ? Object.fromEntries(timetable.schedule)
-      : (timetable.schedule ? JSON.parse(JSON.stringify(timetable.schedule)) : getDefaultSchedule());
+    const currentSchedule = toPlainSchedule(
+      getScopedSchedule(timetable, session, targetDepartment, targetYear)
+    );
 
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     days.forEach(d => { if (!currentSchedule[d]) currentSchedule[d] = {}; });
@@ -511,8 +688,7 @@ exports.autoGenerateTimetableSchedule = async ({
       currentSchedule[targetDay] = daySlots;
     }
 
-    timetable.schedule = currentSchedule;
-    timetable.markModified('schedule');
+    setScopedSchedule(timetable, session, targetDepartment, targetYear, currentSchedule);
     await timetable.save();
 
     return timetable;

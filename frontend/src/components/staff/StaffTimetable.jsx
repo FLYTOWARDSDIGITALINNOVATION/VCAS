@@ -89,6 +89,7 @@ export default function StaffTimetable({ staffUser }) {
   const [slotForm, setSlotForm] = useState({
     day: 'Monday',
     slot: 1,
+    year: 1,
     typedPeriods: '1, 2, 3',
     code: '',
     name: '',
@@ -119,6 +120,7 @@ export default function StaffTimetable({ staffUser }) {
   const [departmentStaffList, setDepartmentStaffList] = useState([]);
   const [allStaffList, setAllStaffList] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState(staffUser?.department || '');
+  const [selectedStudyYear, setSelectedStudyYear] = useState('All');
   const departmentOptions = Array.from(new Set(allStaffList.map(staff => staff?.department?.trim()).filter(Boolean))).sort();
   const staffForSelectedDepartment = allStaffList.filter(staff =>
     (staff?.department || '').trim().toLowerCase() === selectedDepartment.trim().toLowerCase()
@@ -185,16 +187,22 @@ export default function StaffTimetable({ staffUser }) {
       }
     });
 
-    return list;
-  }, [classes, allClasses, selectedDepartment, staffUser?.department]);
+    return selectedStudyYear === 'All'
+      ? list
+      : list.filter(classItem => Number(classItem.year) === Number(selectedStudyYear));
+  }, [classes, allClasses, selectedDepartment, selectedStudyYear, staffUser?.department]);
 
   // Fetch timetable and classes from backend API for selected staff, plus all classes & venues
   const fetchData = async (targetId = selectedStaffId) => {
     const idToFetch = targetId || currentStaffId;
     try {
       setLoading(true);
+      const timetableParams = new URLSearchParams();
+      if (selectedDepartment) timetableParams.set('department', selectedDepartment);
+      if (selectedStudyYear !== 'All') timetableParams.set('year', selectedStudyYear);
+      const timetableQuery = timetableParams.toString();
       const [tRes, cRes, allCRes, allTRes] = await Promise.all([
-        idToFetch ? fetch(`${API_BASE}/timetable/staff/${idToFetch}`).catch(() => null) : Promise.resolve(null),
+        idToFetch ? fetch(`${API_BASE}/timetable/staff/${encodeURIComponent(idToFetch)}${timetableQuery ? `?${timetableQuery}` : ''}`).catch(() => null) : Promise.resolve(null),
         idToFetch ? fetch(`${API_BASE}/classes/staff/${idToFetch}`).catch(() => null) : Promise.resolve(null),
         fetch(`${API_BASE}/classes`).catch(() => null),
         fetch(`${API_BASE}/timetable`).catch(() => null)
@@ -204,7 +212,11 @@ export default function StaffTimetable({ staffUser }) {
         const tData = await tRes.json();
         if (tData.success && tData.schedule) {
           setSchedule(tData.schedule);
+        } else {
+          setSchedule({});
         }
+      } else {
+        setSchedule({});
       }
 
       if (cRes && cRes.ok) {
@@ -279,7 +291,7 @@ export default function StaffTimetable({ staffUser }) {
 
   useEffect(() => {
     fetchData(selectedStaffId);
-  }, [selectedStaffId]);
+  }, [selectedStaffId, selectedDepartment, selectedStudyYear]);
 
   useEffect(() => {
     const currentStaff = allStaffList.find(staff =>
@@ -303,9 +315,11 @@ export default function StaffTimetable({ staffUser }) {
 
       const periodStr = matching.length > 0 ? matching.join(', ') : String(slot);
 
+      const initialYear = Number(existing.year || (selectedStudyYear !== 'All' ? selectedStudyYear : 1));
       setSlotForm({
         day,
         slot: Number(slot),
+        year: initialYear,
         typedPeriods: periodStr,
         code: existing.code || '',
         name: existing.name || '',
@@ -323,9 +337,11 @@ export default function StaffTimetable({ staffUser }) {
       // Default to first class if available
       const firstClass = (availableClassesForStaff && availableClassesForStaff[0]) || classes[0] || null;
       const isLab = Boolean(firstClass && (firstClass.labHours > 0 || firstClass.type === 'lab' || firstClass.name?.toLowerCase().includes('lab')));
+      const initialYear = Number(firstClass?.year || (selectedStudyYear !== 'All' ? selectedStudyYear : 1));
       setSlotForm({
         day,
         slot: Number(slot),
+        year: initialYear,
         typedPeriods: String(slot),
         code: firstClass ? firstClass.code : '',
         name: firstClass ? firstClass.name : '',
@@ -343,26 +359,35 @@ export default function StaffTimetable({ staffUser }) {
     setIsSlotModalOpen(true);
   };
 
-  // When user picks a class from dropdown, auto-fill code, name, room, and continuous lab hours
+  // When user picks a class, preserve the selected period for theory classes and
+  // start continuous labs at the period that was opened.
   const handleSelectClass = (classCode) => {
     const selected = availableClassesForStaff.find(c => c.code === classCode) || classes.find(c => c.code === classCode);
     if (selected) {
       const isLab = Boolean(selected.labHours > 0 || selected.type === 'lab' || selected.name?.toLowerCase().includes('lab'));
-      const hrs = Number(selected.theoryHours || selected.labHours) || 3;
-      const defaultSlots = [];
-      for (let i = 1; i <= Math.min(8, hrs); i++) defaultSlots.push(i);
+      const selectedType = String(selected.type || '').toLowerCase();
+      const type = isLab ? 'lab' : ['part-time', 'combined'].includes(selectedType) ? selectedType : 'theory';
+      const labHours = Number(selected.labHours) || 3;
 
-      setSlotForm(prev => ({
-        ...prev,
-        code: selected.code,
-        name: selected.name,
-        room: selected.room || prev.room || (isLab ? 'Computer Lab 1' : (allVenues[0] || 'LH-101')),
-        type: isLab ? 'lab' : prev.type,
-        color: isLab ? 'emerald' : prev.color,
-        isContinuousLab: isLab ? true : prev.isContinuousLab,
-        continuousHours: hrs,
-        typedPeriods: defaultSlots.join(', ')
-      }));
+      setSlotForm(prev => {
+        const startPeriod = Math.min(6, Math.max(1, Number(prev.slot) || 1));
+        const labSlots = Array.from(
+          { length: Math.min(labHours, 7 - startPeriod) },
+          (_, index) => startPeriod + index
+        );
+
+        return {
+          ...prev,
+          code: selected.code,
+          name: selected.name,
+          room: selected.room || prev.room || (isLab ? 'Computer Lab 1' : (allVenues[0] || 'LH-101')),
+          type,
+          color: isLab ? 'emerald' : type === 'combined' ? 'violet' : type === 'part-time' ? 'orange' : 'blue',
+          isContinuousLab: isLab,
+          continuousHours: isLab ? labHours : 1,
+          typedPeriods: isLab ? labSlots.join(', ') : (prev.typedPeriods || String(prev.slot))
+        };
+      });
     } else {
       setSlotForm(prev => ({ ...prev, code: classCode }));
     }
@@ -480,8 +505,12 @@ export default function StaffTimetable({ staffUser }) {
       // Deduplicate and sort periods
       parsedPeriods = Array.from(new Set(parsedPeriods)).sort((a, b) => a - b);
 
+      const targetYear = Number(slotForm.year || (selectedStudyYear !== 'All' ? selectedStudyYear : 1));
+
       const payload = {
         day: slotForm.day,
+        department: selectedDepartment || staffUser?.department || '',
+        year: targetYear,
         slot: parsedPeriods[0] || Number(slotForm.slot) || 1,
         slotData: {
           code: slotForm.code.trim().toUpperCase(),
@@ -496,7 +525,8 @@ export default function StaffTimetable({ staffUser }) {
           clearOtherDays: false,
           partTimeSchedule: slotForm.type === 'part-time' ? (slotForm.partTimeSchedule || 'before-break') : undefined,
           combinedDept: slotForm.type === 'combined' ? (slotForm.combinedDept || '') : undefined,
-          combinedYear: slotForm.type === 'combined' ? (slotForm.combinedYear || '') : undefined
+          combinedYear: slotForm.type === 'combined' ? (slotForm.combinedYear || '') : undefined,
+          year: targetYear
         }
       };
 
@@ -547,7 +577,12 @@ export default function StaffTimetable({ staffUser }) {
     try {
       const targetStaffId = slotForm.staffId || selectedStaffId || staffUser.staffId;
       if (targetStaffId) setSelectedStaffId(targetStaffId);
-      const res = await fetch(`${API_BASE}/timetable/staff/${targetStaffId}/slot/${day}/${slot}`, {
+      const targetYear = Number(slotForm.year || (selectedStudyYear !== 'All' ? selectedStudyYear : 1));
+      const params = new URLSearchParams({
+        department: selectedDepartment || staffUser?.department || '',
+        year: targetYear
+      });
+      const res = await fetch(`${API_BASE}/timetable/staff/${encodeURIComponent(targetStaffId)}/slot/${day}/${slot}?${params.toString()}`, {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -613,7 +648,7 @@ export default function StaffTimetable({ staffUser }) {
       )}
 
       {/* Department Faculty Timetable Selector Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-2.5">
           <Building2 className="w-5 h-5 text-indigo-600 shrink-0" />
           <div>
@@ -631,7 +666,18 @@ export default function StaffTimetable({ staffUser }) {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <label className="text-xs font-bold text-slate-600 whitespace-nowrap">Study Year:</label>
+          <select
+            value={selectedStudyYear}
+            onChange={e => setSelectedStudyYear(e.target.value)}
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+          >
+            <option value="All">All Years</option>
+            <option value="1">1st Year</option>
+            <option value="2">2nd Year</option>
+            <option value="3">3rd Year</option>
+          </select>
           <label className="text-xs font-bold text-slate-600 whitespace-nowrap">View Faculty:</label>
           <select
             value={selectedStaffId}
@@ -880,7 +926,14 @@ export default function StaffTimetable({ staffUser }) {
                             title={`${cell.name || cell.code} - ${viewedStaffName}`}
                           >
                             <div className={`p-1.5 rounded-lg border text-[11px] font-bold transition-all ${isHod ? 'hover:scale-[1.02]' : ''} ${COLOR_MAP[cell.color] || 'bg-slate-50'}`}>
-                              <div className="font-extrabold text-slate-900 leading-tight">{cell.name || cell.code}</div>
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="font-extrabold text-slate-900 leading-tight truncate">{cell.name || cell.code}</div>
+                                {cell.year && (
+                                  <span className="shrink-0 text-[8px] font-black bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded">
+                                    Yr {cell.year}
+                                  </span>
+                                )}
+                              </div>
                               {cell.code && cell.name && cell.code !== cell.name && (
                                 <div className="text-[9px] font-mono text-slate-500 uppercase">{cell.code}</div>
                               )}
@@ -966,7 +1019,20 @@ export default function StaffTimetable({ staffUser }) {
             )}
 
             <form onSubmit={handleSaveSlot} className="space-y-4 overflow-y-auto pr-1 flex-1 mt-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Study Year *</label>
+                  <select
+                    value={slotForm.year || 1}
+                    onChange={(e) => setSlotForm({ ...slotForm, year: Number(e.target.value) })}
+                    className="w-full bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-indigo-950 focus:bg-white focus:outline-none focus:border-indigo-600 cursor-pointer"
+                  >
+                    <option value={1}>1st Year</option>
+                    <option value={2}>2nd Year</option>
+                    <option value={3}>3rd Year</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Day</label>
                   <select
