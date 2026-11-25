@@ -447,10 +447,8 @@ export default function StaffCoursePlan({ staffUser }) {
             min-height: 0 !important;
           }
           .action-plan-signatures > div {
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: flex-end !important;
+            display: block !important;
+            text-align: center !important;
             visibility: visible !important;
             color: #0f172a !important;
             border: 0 !important;
@@ -461,7 +459,7 @@ export default function StaffCoursePlan({ staffUser }) {
             display: block !important;
             width: 3rem !important;
             border-top: 1px solid #0f172a !important;
-            margin-bottom: 0.2rem !important;
+            margin: 0 auto 0.2rem !important;
           }
           .action-plan-status-select {
             width: 100% !important;
@@ -884,16 +882,16 @@ export default function StaffCoursePlan({ staffUser }) {
           {/* Signature Footer matching Register */}
           <div className="action-plan-signatures grid grid-cols-3 gap-6 pt-12 text-center text-xs sm:text-sm font-extrabold text-slate-900 uppercase">
             <div>
-              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2" aria-hidden="true" />
-              Signature of Faculty
+              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2 mx-auto" aria-hidden="true" />
+              <span className="block">Signature of Faculty</span>
             </div>
             <div>
-              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2" aria-hidden="true" />
-              Head of Department (HOD)
+              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2 mx-auto" aria-hidden="true" />
+              <span className="block">Head of Department (HOD)</span>
             </div>
             <div>
-              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2" aria-hidden="true" />
-              Principal
+              <span className="action-plan-signature-line block w-16 border-t border-slate-900 mb-2 mx-auto" aria-hidden="true" />
+              <span className="block">Principal</span>
             </div>
           </div>
 
