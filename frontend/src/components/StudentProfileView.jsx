@@ -57,7 +57,15 @@ export default function StudentProfileView({
     sem: val(student?.sem || student?.semester),
     status: student?.status || 'Active',
     attendance: student?.attendance !== null && student?.attendance !== undefined ? student.attendance : null,
-    feeStatus: student?.feeStatus || '—',
+    feeStatus: (() => {
+      const paid = Number(student?.paidFee) || 0;
+      const total = Number(student?.totalFee) || 0;
+      const pending = Number(student?.pendingFee) || (total > 0 ? Math.max(0, total - paid) : 0);
+      if (paid > 0 && pending <= 0 && total > 0) return 'Paid';
+      if (paid > 0) return 'Partial';
+      if (student?.feeStatus && student?.feeStatus !== 'Paid') return student.feeStatus;
+      return (paid === 0 && (total > 0 || pending > 0)) ? 'Pending' : (student?.feeStatus === 'Paid' && paid === 0 ? 'Pending' : (student?.feeStatus || 'Pending'));
+    })(),
     cgpa: (student?.cgpa && student?.cgpa !== '8.0' && student?.cgpa !== '8') ? val(student?.cgpa) : '—',
     rank: val(student?.rank),
 

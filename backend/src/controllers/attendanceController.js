@@ -353,7 +353,6 @@ exports.getStudentAttendance = async (req, res) => {
         { rollNo: idRegex },
         { regNo: idRegex },
         { studentId: idRegex },
-        { loginId: idRegex },
         { admNo: idRegex }
       ]
     });
@@ -364,14 +363,27 @@ exports.getStudentAttendance = async (req, res) => {
     const sRegLower = sReg.toLowerCase();
     const rawLower = rawId.toLowerCase();
 
+    const enrolledIdentifiers = [...new Set([sRoll, sReg, rawId]
+      .map(value => value.trim().toUpperCase())
+      .filter(Boolean))];
+    const enrolledClasses = student
+      ? await Class.find({ 'students.rollNo': { $in: enrolledIdentifiers } }).select('code')
+      : [];
+    const enrolledClassCodes = new Set(
+      enrolledClasses.map(cls => (cls.code || '').trim().toUpperCase()).filter(Boolean)
+    );
+
     // Find all sessions containing this student roll number or reg number (case-insensitive)
-    const sessions = await Attendance.find({
+    const attendanceSessions = await Attendance.find({
       $or: [
         { 'records.rollNo': new RegExp('^' + sRoll + '$', 'i') },
         { 'records.rollNo': new RegExp('^' + sReg + '$', 'i') },
         { 'records.rollNo': idRegex }
       ]
     }).sort({ date: -1 });
+    const sessions = student
+      ? attendanceSessions.filter(sess => enrolledClassCodes.has((sess.classCode || '').trim().toUpperCase()))
+      : attendanceSessions;
 
     let total = 0;
     let present = 0;
@@ -469,7 +481,7 @@ exports.bulkSaveAttendance = async (req, res) => {
       rows.forEach(r => {
         const cCode = (r.classCode || defaultClassCode || '').trim().toUpperCase();
         const dDate = (r.date || defaultDate || new Date().toISOString().split('T')[0]).trim();
-        const sSlot = (r.slot || defaultSlot || '8:30 AM').trim();
+        const sSlot = (r.slot || defaultSlot || '9:30 AM').trim();
         const key = `${cCode}__${dDate}__${sSlot}`;
         if (!groupMap[key]) {
           groupMap[key] = {
@@ -502,7 +514,7 @@ exports.bulkSaveAttendance = async (req, res) => {
       try {
         const classCode = (sess.classCode || '').trim().toUpperCase();
         const date = (sess.date || '').trim();
-        const slot = (sess.slot || '8:30 AM').trim();
+        const slot = (sess.slot || '9:30 AM').trim();
         const staffId = (sess.staffId || defaultStaffId || 'EMP001').trim();
         const staffName = (sess.staffName || defaultStaffName || '').trim();
 

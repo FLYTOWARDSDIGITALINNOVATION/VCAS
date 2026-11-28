@@ -23,6 +23,93 @@ import {
 
 const API_BASE = BACKEND_URL;
 
+// ── Duration helpers (hours + minutes) ─────────────────────────────
+const hoursToMinutes = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.round(num * 60);
+};
+
+const minutesToHours = (minutes) =>
+  Math.round((Math.max(0, minutes) / 60) * 10000) / 10000;
+
+// Format a decimal-hours value as "1 hr 30 mins"
+const formatDuration = (value, { short = false } = {}) => {
+  const total = hoursToMinutes(value);
+  if (total <= 0) return '';
+  const hrs = Math.floor(total / 60);
+  const mins = total % 60;
+  const parts = [];
+  if (hrs > 0) parts.push(short ? `${hrs}h` : `${hrs} hr${hrs === 1 ? '' : 's'}`);
+  if (mins > 0) parts.push(short ? `${mins}m` : `${mins} min${mins === 1 ? '' : 's'}`);
+  return parts.join(' ');
+};
+
+// Convert legacy date formats to the YYYY-MM-DD expected by <input type="date">
+const normalizeDateValue = (value) => {
+  if (!value) return '';
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const match = raw.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2}|\d{4})$/);
+  if (match) {
+    let [, d, m, y] = match;
+    if (y.length === 2) y = `20${y}`;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return '';
+};
+
+const formatDateForPrint = (value) => {
+  const normalized = normalizeDateValue(value);
+  if (!normalized) return '--';
+  const [y, m, d] = normalized.split('-');
+  return `${d}.${m}.${y}`;
+};
+
+// Compact Hrs / Min input used inside the action plan table
+function DurationInput({ value, onChange, ariaLabel }) {
+  const totalMinutes = hoursToMinutes(value);
+  const hrs = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+
+  const emit = (nextHrs, nextMins) => {
+    const safeHrs = Math.max(0, Number(nextHrs) || 0);
+    const safeMins = Math.min(59, Math.max(0, Number(nextMins) || 0));
+    onChange(minutesToHours(safeHrs * 60 + safeMins));
+  };
+
+  return (
+    <div className="flex items-center justify-center gap-0.5 print:hidden">
+      <input
+        type="number"
+        min="0"
+        max="99"
+        inputMode="numeric"
+        value={hrs === 0 ? '' : hrs}
+        placeholder="0"
+        aria-label={`${ariaLabel} hours`}
+        title="Hours"
+        onChange={(e) => emit(e.target.value === '' ? 0 : parseInt(e.target.value, 10), mins)}
+        className="w-7 p-0.5 bg-transparent border-0 font-bold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <span className="text-[9px] font-bold text-slate-500">h</span>
+      <input
+        type="number"
+        min="0"
+        max="59"
+        inputMode="numeric"
+        value={mins === 0 ? '' : mins}
+        placeholder="0"
+        aria-label={`${ariaLabel} minutes`}
+        title="Minutes"
+        onChange={(e) => emit(hrs, e.target.value === '' ? 0 : parseInt(e.target.value, 10))}
+        className="w-7 p-0.5 bg-transparent border-0 font-semibold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <span className="text-[9px] font-bold text-slate-500">m</span>
+    </div>
+  );
+}
+
 export default function StaffCoursePlan({ staffUser }) {
   const staffId = staffUser?.staffId || staffUser?._id || staffUser?.id || staffUser?.username || 'STF001';
   const staffName = staffUser?.name || staffUser?.fullName || 'Faculty Member';
@@ -78,10 +165,10 @@ export default function StaffCoursePlan({ staffUser }) {
       topics: (plan.topics && plan.topics.length > 0)
         ? plan.topics.map(t => ({
             sNo: t.sNo,
-            plannedDate: t.plannedDate || '',
+            plannedDate: normalizeDateValue(t.plannedDate),
             noOfHours: t.noOfHours ?? '',
             topic: t.topic || '',
-            executionDate: t.executionDate || '',
+            executionDate: normalizeDateValue(t.executionDate),
             executionHours: t.executionHours ?? '',
             deviation: t.deviation || '',
             sign: t.sign || t.status || 'Pending',
@@ -185,8 +272,8 @@ export default function StaffCoursePlan({ staffUser }) {
     const today = new Date();
     const dd = String(today.getDate()).padStart(2, '0');
     const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const yy = String(today.getFullYear()).slice(-2);
-    const todayStr = `${dd}.${mm}.${yy}`;
+    const yyyy = today.getFullYear();
+    const todayStr = `${yyyy}-${mm}-${dd}`;
 
     const updatedTopics = planForm.topics.map((item, idx) => {
       if (idx !== index) return item;
@@ -195,7 +282,7 @@ export default function StaffCoursePlan({ staffUser }) {
         sign: newStatus,
         status: newStatus,
         executionDate: (newStatus === 'Completed' || newStatus === 'Signed') && !item.executionDate ? todayStr : item.executionDate,
-        executionHours: (newStatus === 'Completed' || newStatus === 'Signed') && (!item.executionHours || Number(item.executionHours) === 0) ? (Number(item.noOfHours) || 1) : item.executionHours
+        executionHours: (newStatus === 'Completed' || newStatus === 'Signed') && (!item.executionHours || Number(item.executionHours) === 0) ? (Number(item.noOfHours) || 0) : item.executionHours
       };
     });
 
@@ -208,7 +295,7 @@ export default function StaffCoursePlan({ staffUser }) {
           ...t,
           sNo: Number(t.sNo) || 1,
           plannedDate: String(t.plannedDate || ''),
-          noOfHours: t.noOfHours === '' ? 1 : (Number(t.noOfHours) || 1),
+          noOfHours: t.noOfHours === '' ? 0 : (Number(t.noOfHours) || 0),
           topic: String(t.topic || ''),
           executionDate: String(t.executionDate || ''),
           executionHours: t.executionHours === '' ? 0 : (Number(t.executionHours) || 0),
@@ -254,7 +341,7 @@ export default function StaffCoursePlan({ staffUser }) {
         ? planForm.topics.map((t, idx) => ({
             sNo: Number(t.sNo) || (idx + 1),
             plannedDate: String(t.plannedDate || ''),
-            noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 1 : Math.max(1, Number(t.noOfHours) || 1),
+            noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 0 : Math.max(0, Number(t.noOfHours) || 0),
             topic: String(t.topic || ''),
             executionDate: String(t.executionDate || ''),
             executionHours: (t.executionHours === '' || t.executionHours === null || t.executionHours === undefined) ? 0 : Math.max(0, Number(t.executionHours) || 0),
@@ -262,7 +349,7 @@ export default function StaffCoursePlan({ staffUser }) {
             sign: t.sign || t.status || 'Pending',
             status: t.status || t.sign || 'Pending'
           }))
-        : [{ sNo: 1, plannedDate: '', noOfHours: 1, topic: '', executionDate: '', executionHours: 0, deviation: '', sign: 'Pending', status: 'Pending' }];
+        : [{ sNo: 1, plannedDate: '', noOfHours: 0, topic: '', executionDate: '', executionHours: 0, deviation: '', sign: 'Pending', status: 'Pending' }];
 
       const payload = {
         staffId: staffId || 'STF001',
@@ -335,8 +422,8 @@ export default function StaffCoursePlan({ staffUser }) {
     window.print();
   };
 
-  const totalPlannedHrs = planForm.topics.reduce((sum, t) => sum + (Number(t.noOfHours) || 0), 0);
-  const totalExecutionHrs = planForm.topics.reduce((sum, t) => sum + (Number(t.executionHours) || 0), 0);
+  const totalPlannedMinutes = planForm.topics.reduce((sum, t) => sum + hoursToMinutes(t.noOfHours), 0);
+  const totalExecutionMinutes = planForm.topics.reduce((sum, t) => sum + hoursToMinutes(t.executionHours), 0);
   
   // Portion Completion Metrics
   const totalTopics = planForm.topics.filter(t => t.topic.trim()).length || planForm.topics.length;
@@ -441,10 +528,10 @@ export default function StaffCoursePlan({ staffUser }) {
             color: #0f172a !important;
             break-inside: avoid;
             page-break-inside: avoid;
-            gap: 0.5rem !important;
-            margin-top: 0.4rem !important;
-            padding-top: 0 !important;
-            min-height: 0 !important;
+            gap: 1rem !important;
+            margin-top: 2.75rem !important;
+            padding-top: 1rem !important;
+            min-height: 5rem !important;
           }
           .action-plan-signatures > div {
             display: block !important;
@@ -452,7 +539,7 @@ export default function StaffCoursePlan({ staffUser }) {
             visibility: visible !important;
             color: #0f172a !important;
             border: 0 !important;
-            min-height: 3.25rem !important;
+            min-height: 4.5rem !important;
             padding: 0 !important;
           }
           .action-plan-signature-line {
@@ -653,7 +740,7 @@ export default function StaffCoursePlan({ staffUser }) {
                 className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold w-32 focus:outline-none focus:border-blue-600 print:border-none print:p-0"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 print:hidden">
               <span className="font-extrabold text-slate-900 min-w-[150px] text-sm sm:text-base">Plan Status:</span>
               <select
                 value={planForm.status || 'In Progress'}
@@ -696,12 +783,17 @@ export default function StaffCoursePlan({ staffUser }) {
                 <tr className="bg-slate-100 text-slate-900 font-extrabold border-b-2 border-slate-900 uppercase tracking-tight text-sm text-center">
                   <th className="py-2.5 px-2 border-r border-slate-400 w-12">S.No</th>
                   <th className="py-2.5 px-3 border-r border-slate-400 w-28">Planned Date</th>
-                  <th className="py-2.5 px-2 border-r border-slate-400 w-20">No. Of Hours</th>
+                  <th className="py-2.5 px-2 border-r border-slate-400 w-24">
+                    No. Of Hours
+                    <span className="block text-[10px] font-bold normal-case text-slate-500">(Hrs / Min)</span>
+                  </th>
                   <th className="py-2.5 px-4 border-r border-slate-400 text-left">TOPIC</th>
                   <th className="py-2.5 px-3 border-r border-slate-400 w-28">Execution Date</th>
-                  <th className="py-2.5 px-2 border-r border-slate-400 w-20">No. Of Hours</th>
+                  <th className="py-2.5 px-2 border-r border-slate-400 w-24">
+                    No. Of Hours
+                    <span className="block text-[10px] font-bold normal-case text-slate-500">(Hrs / Min)</span>
+                  </th>
                   <th className="py-2.5 px-3 border-r border-slate-400 w-36">DEVIATION</th>
-                  <th className="py-2.5 px-3 border-r border-slate-400 w-28">Sign / Status</th>
                   <th className="action-plan-actions-column py-2.5 px-2 w-12"><span className="print:hidden">Action</span></th>
                 </tr>
               </thead>
@@ -715,25 +807,25 @@ export default function StaffCoursePlan({ staffUser }) {
 
                     {/* Planned Date */}
                     <td className="py-1 px-2 border-r border-slate-300">
-                      <input
-                        type="text"
-                        value={t.plannedDate}
-                        onChange={(e) => handleTopicChange(idx, 'plannedDate', e.target.value)}
-                        placeholder=""
-                        className="w-full p-1 bg-transparent border-0 font-bold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded"
-                      />
+                      <div className="relative flex items-center justify-center">
+                        <span className="hidden print:inline-block font-semibold text-center text-sm">{formatDateForPrint(t.plannedDate)}</span>
+                        <input
+                          type="date"
+                          value={t.plannedDate || ''}
+                          onChange={(e) => handleTopicChange(idx, 'plannedDate', e.target.value)}
+                          className="w-full p-1 bg-transparent border-0 font-bold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded cursor-pointer print:hidden"
+                          title="Select planned date from calendar"
+                        />
+                      </div>
                     </td>
 
                     {/* Planned No. Of Hours */}
-                    <td className="py-1 px-2 border-r border-slate-300 text-center">
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
+                    <td className="py-1 px-1 border-r border-slate-300 text-center">
+                      <span className="hidden print:inline-block font-bold text-sm">{formatDuration(t.noOfHours) || '--'}</span>
+                      <DurationInput
                         value={t.noOfHours}
-                        onChange={(e) => handleTopicChange(idx, 'noOfHours', e.target.value)}
-                        placeholder=""
-                        className="w-full p-1 bg-transparent border-0 font-bold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded"
+                        onChange={(val) => handleTopicChange(idx, 'noOfHours', val)}
+                        ariaLabel={`Planned duration for row ${idx + 1}`}
                       />
                     </td>
 
@@ -751,7 +843,7 @@ export default function StaffCoursePlan({ staffUser }) {
                     {/* Execution Date */}
                     <td className="py-1 px-2 border-r border-slate-300">
                       <div className="relative flex items-center justify-center">
-                        <span className="hidden print:inline-block font-semibold text-center text-sm">{t.executionDate || '--'}</span>
+                        <span className="hidden print:inline-block font-semibold text-center text-sm">{formatDateForPrint(t.executionDate)}</span>
                         <input
                           type="date"
                           value={t.executionDate || ''}
@@ -763,15 +855,12 @@ export default function StaffCoursePlan({ staffUser }) {
                     </td>
 
                     {/* Execution Hours */}
-                    <td className="py-1 px-2 border-r border-slate-300 text-center">
-                      <input
-                        type="number"
-                        min="0"
-                        max="20"
+                    <td className="py-1 px-1 border-r border-slate-300 text-center">
+                      <span className="hidden print:inline-block font-semibold text-sm">{formatDuration(t.executionHours) || '--'}</span>
+                      <DurationInput
                         value={t.executionHours}
-                        onChange={(e) => handleTopicChange(idx, 'executionHours', e.target.value)}
-                        placeholder=""
-                        className="w-full p-1 bg-transparent border-0 font-semibold text-center text-sm focus:ring-1 focus:ring-blue-500 rounded"
+                        onChange={(val) => handleTopicChange(idx, 'executionHours', val)}
+                        ariaLabel={`Execution duration for row ${idx + 1}`}
                       />
                     </td>
 
@@ -784,27 +873,6 @@ export default function StaffCoursePlan({ staffUser }) {
                         placeholder=""
                         className="w-full p-1 bg-transparent border-0 text-slate-700 text-sm focus:ring-1 focus:ring-blue-500 rounded"
                       />
-                    </td>
-
-                    {/* Sign / Status */}
-                    <td className="py-1 px-2 border-r border-slate-300 text-center">
-                      <select
-                        value={t.sign || t.status || 'Pending'}
-                        onChange={(e) => handleTopicChange(idx, 'sign', e.target.value)}
-                        className={`action-plan-status-select w-full min-w-0 max-w-full text-[10px] sm:text-xs font-bold rounded-lg px-1 py-1 border transition-colors focus:outline-none cursor-pointer ${
-                          t.sign === 'Completed' || t.sign === 'Signed'
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold'
-                            : t.sign === 'In Progress'
-                            ? 'bg-amber-100 text-amber-800 border-amber-300 font-extrabold'
-                            : 'bg-white text-slate-700 border-slate-300'
-                        }`}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Signed">✓ Signed</option>
-                        <option value="Rescheduled">Rescheduled</option>
-                      </select>
                     </td>
 
                     {/* Delete Row Button */}
@@ -827,17 +895,17 @@ export default function StaffCoursePlan({ staffUser }) {
                     Total Planned Hours:
                   </td>
                   <td className="py-2.5 px-2 text-center border-r border-slate-400 text-blue-900 font-black">
-                    {totalPlannedHrs > 0 ? `${totalPlannedHrs} Hrs` : '--'}
+                    {totalPlannedMinutes > 0 ? formatDuration(totalPlannedMinutes / 60) : '--'}
                   </td>
                   <td className="py-2.5 px-3 text-right uppercase tracking-wider border-r border-slate-400">
                     Total Executed Hours:
                   </td>
                   <td className="border-r border-slate-400"></td>
                   <td className="py-2.5 px-2 text-center border-r border-slate-400 text-emerald-900 font-black">
-                    {totalExecutionHrs > 0 ? `${totalExecutionHrs} Hrs` : '--'}
+                    {totalExecutionMinutes > 0 ? formatDuration(totalExecutionMinutes / 60) : '--'}
                   </td>
-                  <td colSpan={3} className="py-2.5 px-3 text-xs text-slate-500 italic">
-                    {totalExecutionHrs >= totalPlannedHrs && totalPlannedHrs > 0 ? '✓ Syllabus fully executed on schedule' : totalPlannedHrs > 0 ? `Pending execution: ${Math.max(0, totalPlannedHrs - totalExecutionHrs)} hrs` : ''}
+                  <td colSpan={2} className="py-2.5 px-3 text-xs text-slate-500 italic">
+                    {totalExecutionMinutes >= totalPlannedMinutes && totalPlannedMinutes > 0 ? '✓ Syllabus fully executed on schedule' : totalPlannedMinutes > 0 ? `Pending execution: ${formatDuration(Math.max(0, totalPlannedMinutes - totalExecutionMinutes) / 60)}` : ''}
                   </td>
                 </tr>
               </tbody>
@@ -997,8 +1065,8 @@ export default function StaffCoursePlan({ staffUser }) {
                             <p className="text-xs text-amber-600 font-semibold mt-0.5">Deviation: {t.deviation}</p>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-center font-bold text-slate-800 text-sm">{t.noOfHours ? `${t.noOfHours}h` : '--'}</td>
-                        <td className="py-3 px-3 text-center font-semibold text-slate-700 text-sm">{t.plannedDate || '--'}</td>
+                        <td className="py-3 px-3 text-center font-bold text-slate-800 text-sm">{formatDuration(t.noOfHours) || '--'}</td>
+                        <td className="py-3 px-3 text-center font-semibold text-slate-700 text-sm">{formatDateForPrint(t.plannedDate)}</td>
                         <td className="py-3 px-3 text-center font-semibold text-slate-700">
                           <input
                             type="date"

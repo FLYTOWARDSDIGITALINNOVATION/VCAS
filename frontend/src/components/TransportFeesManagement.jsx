@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
 import { Bus, Save, User, CreditCard, Clock, AlertCircle, Search, Gauge, Fuel, Download, Printer, Trash2 } from 'lucide-react';
-import { getStudentBatch } from '../utils/studentFeeUtils';
+import { getStudentBatch, getSectionFeeAmounts } from '../utils/studentFeeUtils';
 
 export default function TransportFeesManagement({
   entryFormData,
@@ -261,8 +261,8 @@ export default function TransportFeesManagement({
     };
     const feeSection = breakdown.transport || { total: safeNumber(r.totalFee, 0), paid: safeNumber(r.paidFee, 0), pending: safeNumber(r.pendingFee, 0) };
     const totalFee = safeNumber(feeSection.total ?? r.totalFee ?? 0, 0);
-    const paidFee = safeNumber(feeSection.paid ?? r.paidFee ?? 0, 0);
-    const pendingFee = safeNumber(feeSection.pending ?? r.pendingFee ?? Math.max(0, totalFee - paidFee), 0);
+    const paidFee = getSectionFeeAmounts(r, 'transport').paid;
+    const pendingFee = Math.max(0, totalFee - paidFee);
     const receiptDigits = String(rollNo).replace(/\D/g, '').slice(-6) || String(Date.now()).slice(-6);
     const hasRecordedPayment = paidFee > 0 || totalFee > 0;
     const receiptNo = safeText(r.receiptNo, '');
@@ -921,8 +921,8 @@ export default function TransportFeesManagement({
                   const sectionBreakdown = r.feeBreakdown?.[sectionKey] || {};
                   const fineVal = Number(r.fine) || 0;
                   const totalVal = Number(sectionBreakdown.total ?? r.totalFee ?? ((Number(r.paidFee) || 0) + (Number(r.pendingFee) || 0)) ?? 0);
-                  const paidVal = Number(sectionBreakdown.paid ?? r.paidFee ?? 0);
-                  const pendVal = Number(sectionBreakdown.pending ?? r.pendingFee ?? Math.max(0, totalVal - paidVal));
+                  const paidVal = getSectionFeeAmounts(r, sectionKey).paid;
+                  const pendVal = Math.max(0, totalVal - paidVal);
                   const baseVal = r.baseAmount !== undefined ? Number(r.baseAmount) : Math.max(0, totalVal - fineVal);
 
                   return (
@@ -966,14 +966,19 @@ export default function TransportFeesManagement({
                         {pendVal === 0 ? '₹0' : `₹${pendVal.toLocaleString('en-IN')}`}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'Paid'
-                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                            : r.status === 'Partial'
-                              ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                              : 'bg-amber-100 text-amber-700 border border-amber-200'
-                          }`}>
-                          {r.status || (pendVal === 0 ? 'Paid' : 'Pending')}
-                        </span>
+                        {(() => {
+                          const itemStatus = (paidVal > 0 && pendVal <= 0) ? 'Paid' : (paidVal > 0 ? 'Partial' : 'Pending');
+                          return (
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${itemStatus === 'Paid'
+                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                              : itemStatus === 'Partial'
+                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                : 'bg-amber-100 text-amber-700 border border-amber-200'
+                              }`}>
+                              {itemStatus}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-3 px-3 text-slate-500 text-[11px]">
                         {r.lastPaymentDate || r.dueDate || 'Recent'}

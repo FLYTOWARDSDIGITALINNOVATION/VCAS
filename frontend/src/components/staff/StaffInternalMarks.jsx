@@ -424,10 +424,8 @@ export default function StaffInternalMarks({ staffUser }) {
       if (key) metaMap.set(key, st);
     });
 
-    const enrolledRolls = new Set();
     const list = students.map(s => {
       const key = (s.rollNo || '').toUpperCase().trim();
-      if (key) enrolledRolls.add(key);
       const meta = metaMap.get(key) || {};
       const deptVal = s.department || meta.department || meta.course || meta.courseAdmitted || meta.dept || meta.programme || currentMarksheetMeta?.department || '';
       return {
@@ -437,26 +435,6 @@ export default function StaffInternalMarks({ staffUser }) {
         batch: s.batch || meta.batch || meta.academicYear || currentMarksheetMeta?.academicYear || '',
         sem: s.sem || (s.semester ? `Semester ${s.semester}` : '') || meta.sem || (meta.semester ? `Semester ${meta.semester}` : '') || (currentMarksheetMeta?.semester ? `Semester ${currentMarksheetMeta.semester}` : '') || ''
       };
-    });
-
-    // Include any registered students in system not yet saved into marksheet so full class is shown
-    allRegisteredStudents.forEach(st => {
-      const key = (st.rollNo || st.regNo || st.studentId || '').toUpperCase().trim();
-      if (!key || enrolledRolls.has(key)) return;
-      const deptVal = st.department || st.course || st.courseAdmitted || st.dept || st.programme || '';
-      list.push({
-        rollNo: st.rollNo || st.regNo,
-        name: st.name || st.fullName || key,
-        department: deptVal,
-        year: st.year || '',
-        batch: st.batch || st.academicYear || '',
-        sem: st.sem || (st.semester ? `Semester ${st.semester}` : '') || '',
-        st1: null, st2: null, st3: null, st4: null,
-        it1: null, it2: null, cia1: null, cia2: null,
-        model: null, project: null,
-        assignment1: null, assignment2: null, assignment3: null, assignment4: null,
-        assignment: null, attendance: null, consolidated: null
-      });
     });
 
     return list;

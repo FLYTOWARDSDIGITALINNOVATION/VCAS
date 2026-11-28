@@ -3,7 +3,7 @@ import { API_BASE } from '../apiConfig';
 import { getCollegeLogoHtml } from './CollegeLogo';
 import { getDepartmentFixedFee } from './FeeStructureView';
 import { FileText, Save, Info, Award, Building2, CheckCircle2, Sparkles, User, CreditCard, Clock, AlertCircle, Search, Download, Printer, Trash2 } from 'lucide-react';
-import { getStudentBatch } from '../utils/studentFeeUtils';
+import { getStudentBatch, getSectionFeeAmounts } from '../utils/studentFeeUtils';
 
 export default function TuitionFeesManagement({
   entryFormData,
@@ -265,8 +265,10 @@ export default function TuitionFeesManagement({
       const hasTuitionBreakdown = breakdown.tuition && (Number(breakdown.tuition.total) > 0 || Number(breakdown.tuition.paid) > 0);
       const hasTuitionFeeType = feeType.includes('tuition') || feeType.includes('semester') || feeType.includes('course fee');
       const hasBaseAmount = Number(record.baseAmount) > 0;
+      const hasPaid = Number(record.paidFee) > 0 || Number(breakdown.tuition?.paid) > 0;
       const hasReceiptOrRef = !!(record.receiptNo || record.referenceNo || record.paymentRef || record.lastPaymentDate);
       return hasTuitionBreakdown || hasTuitionFeeType || hasBaseAmount || hasReceiptOrRef;
+      return hasTuitionBreakdown || hasTuitionFeeType || hasBaseAmount || hasPaid || hasReceiptOrRef;
     }
 
     if (sectionKey === 'exam') {
@@ -380,10 +382,10 @@ export default function TuitionFeesManagement({
       exam: { total: 0, paid: 0, pending: 0 },
       transport: { total: 0, paid: 0, pending: 0 }
     };
-    // Prefer direct record fields (baseAmount/paidFee/totalFee) for tuition, fall back to breakdown
-    const feeSection = breakdown.tuition || {};
-    let totalFee = safeNumber(feeSection.total ?? (r.totalFee && r.totalFee !== 25000 && r.totalFee !== 35000 ? r.totalFee : 0), 0);
-    const paidFee = safeNumber(r.paidFee ?? feeSection.paid ?? 0, 0);
+    // Prefer section breakdown for tuition, falling back through getSectionFeeAmounts
+    const sectionAmounts = getSectionFeeAmounts(r, 'tuition');
+    let totalFee = sectionAmounts.total;
+    const paidFee = sectionAmounts.paid;
 
     // If totalFee inflated past 25000 (e.g., 35000 = 25000 + 10000), fix it to legitimate fee
     if (totalFee > 25000 && (totalFee === 35000 || totalFee === paidFee + 25000)) {
@@ -546,7 +548,7 @@ export default function TuitionFeesManagement({
                     <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 z-10 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder={entryFormData.studentName ? entryFormData.studentName : `Search by name or roll no… (${(studentOptions||[]).length} students)`}
+                      placeholder={entryFormData.studentName ? entryFormData.studentName : `Search by name or roll no… (${(studentOptions || []).length} students)`}
                       value={studentSearchTerm}
                       onChange={(e) => { setStudentSearchTerm(e.target.value); }}
                       className="w-full pl-8 pr-7 py-2 bg-white border border-blue-300 rounded-xl text-slate-800 text-[11px] placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
@@ -589,7 +591,7 @@ export default function TuitionFeesManagement({
                       </div>
                     )}
                     {!studentSearchTerm && !entryFormData.studentName && (
-                      <div className="mt-1 text-[10px] text-slate-400 pl-1">Type a name or roll number to search all {(studentOptions||[]).length} students</div>
+                      <div className="mt-1 text-[10px] text-slate-400 pl-1">Type a name or roll number to search all {(studentOptions || []).length} students</div>
                     )}
                   </div>
                 ) : (
@@ -1231,13 +1233,12 @@ export default function TuitionFeesManagement({
               <tbody className="divide-y divide-slate-100 font-medium">
                 {searchedTuitionRecords.map((r, i) => {
                   const sectionKey = 'tuition';
-                  const sectionBreakdown = r.feeBreakdown?.[sectionKey] || {};
                   const fineVal = Number(r.fine) || 0;
                   const uniVal = Number(r.uniformFee) || 0;
                   const bkVal = Number(r.bookFee) || 0;
-                  const paidVal = Number(sectionBreakdown.paid ?? r.paidFee ?? 0);
-                  const rawTotal = Number(sectionBreakdown.total ?? (r.totalFee && r.totalFee !== 25000 && r.totalFee !== 35000 ? r.totalFee : (paidVal > 0 ? paidVal : 0)));
-                  const totalVal = rawTotal > 0 ? rawTotal : paidVal;
+                  const sectionAmounts = getSectionFeeAmounts(r, sectionKey);
+                  const paidVal = sectionAmounts.paid;
+                  const totalVal = sectionAmounts.total > 0 ? sectionAmounts.total : paidVal;
                   const pendVal = Math.max(0, totalVal - paidVal);
                   const baseVal = r.baseAmount !== undefined ? Number(r.baseAmount) : Math.max(0, totalVal - uniVal - bkVal - fineVal);
 
@@ -1290,14 +1291,19 @@ export default function TuitionFeesManagement({
                         {pendVal === 0 ? '₹0' : `₹${pendVal.toLocaleString('en-IN')}`}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'Paid'
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                          : r.status === 'Partial'
-                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                            : 'bg-amber-100 text-amber-700 border border-amber-200'
-                          }`}>
-                          {r.status || (pendVal === 0 ? 'Paid' : 'Pending')}
-                        </span>
+                        {(() => {
+                          const itemStatus = (paidVal > 0 && pendVal <= 0) ? 'Paid' : (paidVal > 0 ? 'Partial' : 'Pending');
+                          return (
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${itemStatus === 'Paid'
+                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                              : itemStatus === 'Partial'
+                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                : 'bg-amber-100 text-amber-700 border border-amber-200'
+                              }`}>
+                              {itemStatus}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-3 px-3 text-slate-500 text-[11px]">
                         {r.lastPaymentDate || r.dueDate || 'Recent'}

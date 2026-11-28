@@ -81,7 +81,15 @@ function normalizeStudent(s) {
     mobile: s.phone || s.mobile || '',
     email: s.email || '',
     attendance: s.attendance !== undefined ? Number(s.attendance) : 85,
-    feeStatus: s.feeStatus || 'Paid',
+    feeStatus: (() => {
+      const paid = Number(s.paidFee) || 0;
+      const total = Number(s.totalFee) || 0;
+      const pending = Number(s.pendingFee) || (total > 0 ? Math.max(0, total - paid) : 0);
+      if (paid > 0 && pending <= 0 && total > 0) return 'Paid';
+      if (paid > 0) return 'Partial';
+      if (s.feeStatus && s.feeStatus !== 'Paid') return s.feeStatus;
+      return 'Pending';
+    })(),
     status: s.status || 'Active',
     gender: s.gender || 'Male',
     dob: s.dob || '',
@@ -316,7 +324,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
     course: 'B.Com',
     phone: '',
     attendance: 85,
-    feeStatus: 'Paid',
+    feeStatus: 'Pending',
     status: 'Active'
   });
 
@@ -531,7 +539,7 @@ export default function StudentsPage({ user, canViewFees = (user?.role === 'Acco
           course: 'B.Com',
           phone: '',
           attendance: 85,
-          feeStatus: 'Paid',
+          feeStatus: 'Pending',
           status: 'Active'
         });
       } else {

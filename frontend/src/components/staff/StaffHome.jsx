@@ -36,7 +36,10 @@ export default function StaffHome({ staffUser, onNavigate }) {
       if (resTt.status === 'fulfilled' && resTt.value?.success && resTt.value.schedule) setDbTimetable(resTt.value.schedule);
       if (resNotices.status === 'fulfilled' && resNotices.value?.success) {
         const rawNotices = resNotices.value.notices || [];
-        setDbNotices(rawNotices.filter(n => isNoticeVisible(n, staffUser)));
+        const currentStaff = (staffUser && (staffUser.staffId || staffUser.role))
+          ? staffUser
+          : (() => { try { return JSON.parse(sessionStorage.getItem('vcas_user') || '{}'); } catch { return staffUser || {}; } })();
+        setDbNotices(rawNotices.filter(n => isNoticeVisible(n, currentStaff)));
       }
       if (resAssign.status === 'fulfilled' && resAssign.value?.success) setDbAssignments(resAssign.value.assignments || []);
       if (resLeave.status === 'fulfilled' && resLeave.value?.success && resLeave.value.summary) {

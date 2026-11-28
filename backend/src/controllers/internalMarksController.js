@@ -172,20 +172,7 @@ const getMarksheet = async (req, res) => {
       const canonicalName = subjectDoc?.name || classDoc?.name || cleanSub;
       const targetDept = subjectDoc?.department || classDoc?.dept || "Computer Science";
 
-      let candidateStudents = uniqueEnrolledStudents;
-      if (candidateStudents.length === 0) {
-        const deptNorm = (targetDept || '').toLowerCase().trim();
-        const deptStudents = realStudents.filter(st => {
-          const sDept = (st.department || st.course || '').toLowerCase().trim();
-          return sDept && (sDept === deptNorm || sDept.includes(deptNorm) || deptNorm.includes(sDept));
-        });
-        candidateStudents = deptStudents.map(s => ({
-          rollNo: (s.rollNo || s.regNo || '').toUpperCase().trim(),
-          name: s.name || s.fullName || s.rollNo
-        })).filter(s => Boolean(s.rollNo));
-      }
-
-      const classStudents = candidateStudents.map(s => ({
+      const classStudents = uniqueEnrolledStudents.map(s => ({
         rollNo: s.rollNo.toUpperCase().trim(),
         name: realRollMap.get(s.rollNo.toUpperCase().trim())?.name || s.name || s.rollNo,
         st1: null, st2: null, st3: null, st4: null,
@@ -219,11 +206,15 @@ const getMarksheet = async (req, res) => {
       if (!record.maxMarks) record.maxMarks = DEFAULT_MAX_MARKS;
       if (!record.passMarks) record.passMarks = DEFAULT_PASS_MARKS;
 
-      // 1. Keep ALL existing marksheet students (enrich names from Student collection if available)
+      const enrolledRolls = new Set(
+        uniqueEnrolledStudents.map(s => (s.rollNo || '').toUpperCase().trim()).filter(Boolean)
+      );
+
+      // Use the class roster when available; otherwise preserve students explicitly assigned in the marksheet.
       const studentMap = new Map();
       (record.students || []).forEach(s => {
         const roll = (s.rollNo || '').toUpperCase().trim();
-        if (!roll) return;
+        if (!roll || (enrolledRolls.size > 0 && !enrolledRolls.has(roll))) return;
         const realInfo = realRollMap.get(roll);
         studentMap.set(roll, {
           ...(s.toObject ? s.toObject() : s),
@@ -247,42 +238,8 @@ const getMarksheet = async (req, res) => {
         }
       });
 
-      // 3. Also include all registered students belonging to this department/semester so no students are missing
-      const recDept = (record.department || subjectDoc?.department || classDoc?.dept || '').toLowerCase().trim();
-      const recSemNum = Number(String(record.semester || subjectDoc?.sem || subjectDoc?.semester || classDoc?.semester || '').replace(/\D/g, '')) || 0;
-      const isCsDept = recDept.includes('cs') || recDept.includes('computer');
-
-      realStudents.forEach(st => {
-        const roll = (st.rollNo || st.regNo || '').toUpperCase().trim();
-        if (!roll || studentMap.has(roll)) return;
-        const sDept = (st.department || st.course || st.courseAdmitted || st.dept || '').toLowerCase().trim();
-        const sIsCs = sDept.includes('cs') || sDept.includes('computer');
-        const deptMatch = sDept && (sDept === recDept || sDept.includes(recDept) || recDept.includes(sDept) || (isCsDept && sIsCs));
-        const sSemNum = Number(String(st.semester || st.sem || '').replace(/\D/g, '')) || 0;
-        const semMatch = !recSemNum || !sSemNum || sSemNum === recSemNum;
-
-        if (deptMatch && semMatch) {
-          studentMap.set(roll, {
-            rollNo: st.rollNo || st.regNo,
-            name: st.name || st.fullName || roll,
-            st1: null, st2: null, st3: null, st4: null,
-            it1: null, it2: null, cia1: null, cia2: null,
-            model: null, project: null,
-            assignment1: null, assignment2: null, assignment3: null, assignment4: null,
-            assignment: null, attendance: null, consolidated: null
-          });
-        }
-      });
-
       record.students = Array.from(studentMap.values());
-
-      // Save sanitized students back to the marksheet
-      if (record._id) {
-        await InternalMarks.findByIdAndUpdate(record._id, {
-          students: record.students,
-          subjectName: classDoc?.name || record.subjectName
-        });
-      }
+      if (classDoc?.name) record.subjectName = classDoc.name;
     }
     res.json({ success: true, data: record });
   } catch (err) {
@@ -637,7 +594,8 @@ const getStudentInternalMarks = async (req, res) => {
       return res.status(400).json({ success: false, message: "Student identifier required." });
     }
     const idClean = identifier.trim();
-    const idRegex = new RegExp('^' + idClean + '$', 'i');
+    const escapeRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const idRegex = new RegExp(`^${escapeRegex(idClean)}$`, 'i');
 
     const Student = require("../models/Student");
     const student = await Student.findOne({
@@ -645,133 +603,184 @@ const getStudentInternalMarks = async (req, res) => {
         { rollNo: idRegex },
         { regNo: idRegex },
         { studentId: idRegex },
-        { loginId: idRegex },
         { admNo: idRegex }
       ]
     });
 
     const rollNo = student ? (student.rollNo || idClean) : idClean;
     const regNo = student ? (student.regNo || idClean) : idClean;
-    const rLower = rollNo.toLowerCase();
-    const regLower = regNo.toLowerCase();
+    const studentIds = new Set(
+      [rollNo, regNo, student?.studentId, student?.admNo, idClean]
+        .map(value => String(value || '').toLowerCase().trim())
+        .filter(Boolean)
+    );
+    const normalizeCode = code => String(code || '').toUpperCase().replace(/\s+/g, '').trim();
+    const studentRegexes = Array.from(studentIds, id =>
+      new RegExp(`^${escapeRegex(id)}$`, 'i')
+    );
 
-    const Subject = require("../models/Subject");
-    const name = student ? (student.name || student.fullName || '') : '';
-    const nameLower = name.trim().toLowerCase();
+    const allClasses = await Class.find({}).select('code name staffId staffName dept semester academicYear students');
+    const classByCode = new Map();
+    const studentAssignedClasses = [];
 
-    const marksheets = await InternalMarks.find({}).sort({ subjectCode: 1 });
-    const studentMarksList = [];
-    const processedSubjectCodes = new Set();
-
-    marksheets.forEach(ms => {
-      const isApprovedForStudent = (ms.approvalStatus || '').toLowerCase() === 'approved' || (ms.currentApprovalStage || '').toLowerCase() === 'completed';
-      if (!isApprovedForStudent) return;
-
-      const stRec = (ms.students || []).find(s => {
-        const sr = (s.rollNo || '').toLowerCase();
-        const srg = (s.regNo || '').toLowerCase();
-        const sn = (s.name || s.studentName || '').trim().toLowerCase();
-        return sr === rLower || sr === regLower || srg === rLower || srg === regLower || sr === idClean.toLowerCase() || (nameLower && sn && sn === nameLower);
-      });
-
-      const isDeptMatch = student && ms.department && (
-        ms.department.toLowerCase().includes((student.department || '').toLowerCase()) ||
-        (student.department || '').toLowerCase().includes(ms.department.toLowerCase())
+    allClasses.forEach(cls => {
+      const normCode = normalizeCode(cls.code);
+      if (!normCode) return;
+      if (!classByCode.has(normCode)) {
+        classByCode.set(normCode, cls);
+      }
+      const isEnrolled = (cls.students || []).some(rosterStudent =>
+        [rosterStudent.rollNo, rosterStudent.studentId, rosterStudent.regNo]
+          .some(id => studentIds.has(String(id || '').toLowerCase().trim()))
       );
-
-      // Include if student record exists or if this subject belongs to student's department
-      if (stRec || isDeptMatch) {
-        const max = ms.maxMarks || DEFAULT_MAX_MARKS;
-        const pass = ms.passMarks || DEFAULT_PASS_MARKS;
-        const marks = stRec || {};
-
-        processedSubjectCodes.add((ms.subjectCode || '').toUpperCase().trim());
-        studentMarksList.push({
-          marksheetId: ms._id,
-          subjectCode: ms.subjectCode,
-          subjectName: ms.subjectName || ms.subjectCode,
-          staffId: ms.staffId,
-          staffName: ms.staffName,
-          department: ms.department || student?.department || 'Computer Science',
-          semester: ms.semester || 1,
-          academicYear: ms.academicYear,
-          isLocked: ms.isLocked,
-          maxMarks: max,
-          passMarks: pass,
-          marks: {
-            st1: marks.st1 ?? null,
-            st2: marks.st2 ?? null,
-            st3: marks.st3 ?? null,
-            st4: marks.st4 ?? null,
-            it1: marks.it1 ?? null,
-            it2: marks.it2 ?? null,
-            cia1: marks.cia1 ?? null,
-            cia2: marks.cia2 ?? null,
-            model: marks.model ?? null,
-            semester: marks.semester ?? null,
-            seminar: marks.seminar ?? null,
-            project: marks.project ?? null,
-            assignment1: marks.assignment1 ?? null,
-            assignment2: marks.assignment2 ?? null,
-            assignment3: marks.assignment3 ?? null,
-            assignment4: marks.assignment4 ?? null,
-            assignment: marks.assignment ?? null,
-            attendance: marks.attendance ?? null,
-            consolidated: marks.consolidated ?? null
-          }
-        });
+      if (isEnrolled) {
+        studentAssignedClasses.push(cls);
       }
     });
 
-    // Also include active subjects from the Subject catalog for the student's department/course
-    try {
-      const deptRegex = student?.department ? new RegExp(student.department.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
-      const query = deptRegex ? { $or: [{ department: deptRegex }, { department: { $exists: false } }] } : {};
-      const allSubjects = await Subject.find(query).sort({ code: 1 });
+    const marksheets = await InternalMarks.find({}).sort({ subjectCode: 1, updatedAt: -1 });
+    const markFields = [
+      'st1', 'st2', 'st3', 'st4',
+      'it1', 'it2', 'cia1', 'cia2',
+      'model', 'semester', 'seminar', 'project',
+      'assignment1', 'assignment2', 'assignment3', 'assignment4',
+      'assignment', 'attendance', 'grade', 'consolidated'
+    ];
+    const countEnteredMarks = (stRec) => {
+      if (!stRec) return 0;
+      return markFields.reduce((acc, field) => {
+        const val = stRec[field];
+        return (val !== null && val !== undefined && val !== '') ? acc + 1 : acc;
+      }, 0);
+    };
 
-      allSubjects.forEach(sub => {
-        const sCode = (sub.code || sub.subjectCode || '').toUpperCase().trim();
-        if (sCode && !processedSubjectCodes.has(sCode)) {
-          processedSubjectCodes.add(sCode);
-          studentMarksList.push({
-            marksheetId: sub._id,
-            subjectCode: sub.code || sub.subjectCode,
-            subjectName: sub.name || sub.subjectName || sub.code,
-            staffId: sub.facultyId || '',
-            staffName: sub.faculty || 'Department Faculty',
-            department: sub.department || student?.department || 'Computer Science',
-            semester: sub.sem ? (parseInt(String(sub.sem).replace(/\D/g, '')) || 1) : 1,
-            academicYear: student?.academicYear || '2025-2026',
-            isLocked: false,
-            maxMarks: DEFAULT_MAX_MARKS,
-            passMarks: DEFAULT_PASS_MARKS,
-            marks: {
-              st1: null,
-              st2: null,
-              st3: null,
-              st4: null,
-              it1: null,
-              it2: null,
-              cia1: null,
-              cia2: null,
-              model: null,
-              semester: null,
-              seminar: null,
-              project: null,
-              assignment1: null,
-              assignment2: null,
-              assignment3: null,
-              assignment4: null,
-              assignment: null,
-              attendance: null,
-              consolidated: null
-            }
-          });
+    // Deduplicate marksheets by normalized subjectCode, preferring the class's assigned staff
+    // and records that actually contain entered marks for this student.
+    const bestMarksheetByCode = new Map();
+
+    marksheets.forEach(ms => {
+      const subjectCode = normalizeCode(ms.subjectCode);
+      if (!subjectCode) return;
+
+      const cls = classByCode.get(subjectCode);
+      const classRoster = cls?.students || [];
+      const isOnClassRoster = !cls || classRoster.some(rosterStudent =>
+        [rosterStudent.rollNo, rosterStudent.studentId, rosterStudent.regNo]
+          .some(id => studentIds.has(String(id || '').toLowerCase().trim()))
+      );
+      if (!isOnClassRoster) return;
+
+      const stRec = (ms.students || []).find(s =>
+        [s.rollNo, s.regNo, s.studentId]
+          .some(id => studentIds.has(String(id || '').toLowerCase().trim()))
+      );
+      if (!stRec) return;
+
+      const enteredCount = countEnteredMarks(stRec);
+      const staffMatches = Boolean(
+        cls?.staffId && ms.staffId &&
+        String(cls.staffId).trim().toUpperCase() === String(ms.staffId).trim().toUpperCase()
+      );
+      const score = (enteredCount > 0 ? 100 : 0) + (staffMatches ? 50 : 0) + enteredCount;
+
+      const existing = bestMarksheetByCode.get(subjectCode);
+      if (!existing || score > existing.score) {
+        bestMarksheetByCode.set(subjectCode, { ms, stRec, score });
+      }
+    });
+
+    const studentMarksList = [];
+    bestMarksheetByCode.forEach(({ ms, stRec }) => {
+      const max = ms.maxMarks || DEFAULT_MAX_MARKS;
+      const pass = ms.passMarks || DEFAULT_PASS_MARKS;
+      const marks = stRec || {};
+
+      studentMarksList.push({
+        marksheetId: ms._id,
+        subjectCode: ms.subjectCode,
+        subjectName: ms.subjectName || ms.subjectCode,
+        staffId: ms.staffId,
+        staffName: ms.staffName,
+        department: ms.department || student?.department || 'Computer Science',
+        semester: ms.semester || 1,
+        academicYear: ms.academicYear,
+        approvalStatus: ms.approvalStatus,
+        currentApprovalStage: ms.currentApprovalStage,
+        isLocked: ms.isLocked,
+        maxMarks: max,
+        passMarks: pass,
+        marks: {
+          st1: marks.st1 ?? null,
+          st2: marks.st2 ?? null,
+          st3: marks.st3 ?? null,
+          st4: marks.st4 ?? null,
+          it1: marks.it1 ?? null,
+          it2: marks.it2 ?? null,
+          cia1: marks.cia1 ?? null,
+          cia2: marks.cia2 ?? null,
+          model: marks.model ?? null,
+          semester: marks.semester ?? null,
+          seminar: marks.seminar ?? null,
+          project: marks.project ?? null,
+          assignment1: marks.assignment1 ?? null,
+          assignment2: marks.assignment2 ?? null,
+          assignment3: marks.assignment3 ?? null,
+          assignment4: marks.assignment4 ?? null,
+          assignment: marks.assignment ?? null,
+          attendance: marks.attendance ?? null,
+          grade: marks.grade ?? null,
+          consolidated: marks.consolidated ?? null
         }
       });
-    } catch (subErr) {
-      console.warn("Could not fetch supplementary subjects:", subErr.message);
-    }
+    });
+
+    const visibleSubjectCodes = new Set(
+      studentMarksList.map(item => normalizeCode(item.subjectCode))
+    );
+    studentAssignedClasses.forEach(cls => {
+      const code = normalizeCode(cls.code);
+      if (!code || visibleSubjectCodes.has(code)) return;
+
+      const marksheet = marksheets.find(item => normalizeCode(item.subjectCode) === code);
+      studentMarksList.push({
+        marksheetId: marksheet?._id || cls._id,
+        subjectCode: cls.code,
+        subjectName: cls.name || marksheet?.subjectName || cls.code,
+        staffId: cls.staffId || marksheet?.staffId || '',
+        staffName: cls.staffName || marksheet?.staffName || '',
+        department: cls.dept || marksheet?.department || student?.department || '',
+        semester: cls.semester || marksheet?.semester || 1,
+        academicYear: cls.academicYear || marksheet?.academicYear || student?.academicYear || '',
+        approvalStatus: marksheet?.approvalStatus || 'Not Started',
+        currentApprovalStage: marksheet?.currentApprovalStage || 'Staff',
+        isLocked: false,
+        maxMarks: marksheet?.maxMarks || DEFAULT_MAX_MARKS,
+        passMarks: marksheet?.passMarks || DEFAULT_PASS_MARKS,
+        marks: {
+          st1: null,
+          st2: null,
+          st3: null,
+          st4: null,
+          it1: null,
+          it2: null,
+          cia1: null,
+          cia2: null,
+          model: null,
+          semester: null,
+          seminar: null,
+          project: null,
+          assignment1: null,
+          assignment2: null,
+          assignment3: null,
+          assignment4: null,
+          assignment: null,
+          attendance: null,
+          grade: null,
+          consolidated: null
+        }
+      });
+      visibleSubjectCodes.add(code);
+    });
 
     res.json({
       success: true,

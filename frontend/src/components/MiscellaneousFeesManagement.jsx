@@ -23,7 +23,7 @@ import {
   Eye,
   X
 } from 'lucide-react';
-import { getStudentBatch } from '../utils/studentFeeUtils';
+import { getStudentBatch, getSectionFeeAmounts } from '../utils/studentFeeUtils';
 import { normalizeMiscFeeItems, sumMiscFeeItems } from '../utils/miscFeeUtils';
 
 const DEFAULT_MISC_FEES = [
@@ -106,7 +106,10 @@ export const getAllFeeItems = (record, feeStructure = DEFAULT_MISC_FEES) => {
 
   if (storedMisc.length > 0) {
     storedMisc.forEach(item => {
-      const iPaid = Number(item.paid ?? item.amount ?? 0);
+      // Only use item.paid explicitly; never fall back to item.amount as "paid"
+      const iPaid = item.paid !== undefined && item.paid !== null && item.paid !== ''
+        ? Number(item.paid)
+        : 0;
       const iTotal = Number(item.amount ?? item.total ?? iPaid);
       items.push({
         section: 'Miscellaneous Fees',
@@ -114,7 +117,7 @@ export const getAllFeeItems = (record, feeStructure = DEFAULT_MISC_FEES) => {
         amount: iTotal,
         paid: iPaid,
         balance: Math.max(0, iTotal - iPaid),
-        status: iPaid >= iTotal && iTotal > 0 ? 'Paid' : (iPaid > 0 ? 'Partial' : 'Pending')
+        status: item.status || (iPaid >= iTotal && iTotal > 0 ? 'Paid' : (iPaid > 0 ? 'Partial' : 'Pending'))
       });
     });
   } else if (rawPaid > 0 || rawTotal > 0) {
@@ -588,12 +591,18 @@ export default function MiscellaneousFeesManagement({
     const feeType = String(record.feeType || record.feeCategory || '').toLowerCase();
     const breakdown = record.feeBreakdown || {};
     const miscItems = record.allMiscItems || breakdown.misc?.items || [];
-    // Only students who actually have miscellaneous fee data belong here; an
-    // empty misc object (created by the fee mapping) must not add a row back.
-    return feeType.includes('misc') ||
-      Number(breakdown.misc?.paid || 0) > 0 ||
-      Number(breakdown.misc?.total || 0) > 0 ||
-      (Array.isArray(miscItems) && miscItems.length > 0);
+
+    // Must have actual miscellaneous payment or at least one misc item with paid > 0
+    const hasMiscPaid = Number(breakdown.misc?.paid || 0) > 0;
+    const hasMiscItemsPaid = Array.isArray(miscItems) && miscItems.some(it =>
+      Number(it.paid !== undefined && it.paid !== null && it.paid !== '' ? it.paid : 0) > 0 || it.status === 'Paid'
+    );
+    const hasExplicitMiscType = feeType.includes('misc');
+
+    // Only show record if there's actual misc fee data with real payments recorded
+    return (hasExplicitMiscType && hasMiscPaid) ||
+      hasMiscItemsPaid ||
+      (Array.isArray(miscItems) && miscItems.length > 0 && hasMiscPaid);
   };
 
   const miscRecords = (recordsList || []).filter(r => matchesFeeSection(r));
@@ -650,8 +659,11 @@ export default function MiscellaneousFeesManagement({
     const dept = r.department || r.course || 'UG Program';
     const feeItems = getMiscFeeItems(r, miscFeeStructure);
     
-    let totalFee = feeItems.reduce((acc, it) => acc + Number(it.amount || it.paid || 0), 0);
-    let paidFee = feeItems.reduce((acc, it) => acc + Number(it.paid || 0), 0);
+    let totalFee = feeItems.reduce((acc, it) => acc + Number(it.amount || 0), 0);
+    let paidFee = feeItems.reduce((acc, it) => {
+      const p = it.paid !== undefined && it.paid !== null && it.paid !== '' ? Number(it.paid) : 0;
+      return acc + p;
+    }, 0);
     if (paidFee > totalFee) totalFee = paidFee;
     const pendingFee = Math.max(0, totalFee - paidFee);
     const receiptNo = r.receiptNo || '';
@@ -719,8 +731,8 @@ export default function MiscellaneousFeesManagement({
                       <strong>${item.feeType}</strong>
                       ${item.section && item.section !== item.feeType ? `<div style="font-size: 7.5px; color: #64748b;">${item.section}</div>` : ''}
                     </td>
-                    <td style="text-align: right;">₹${Number(item.amount || item.paid || 0).toLocaleString('en-IN')}</td>
-                    <td style="text-align: right; font-weight: bold; color: #047857;">₹${Number(item.paid || 0).toLocaleString('en-IN')}</td>
+                    <td style="text-align: right;">₹${Number(item.amount || 0).toLocaleString('en-IN')}</td>
+                    <td style="text-align: right; font-weight: bold; color: #047857;">₹${(item.paid !== undefined && item.paid !== null && item.paid !== '' ? Number(item.paid) : 0).toLocaleString('en-IN')}</td>
                     <td style="text-align: center; font-size: 7.5px; font-weight: bold;">${item.status}</td>
                   </tr>
                 `).join('')}
@@ -1374,22 +1386,22 @@ export default function MiscellaneousFeesManagement({
                     miscFeeStructure
                   );
                   const itemTotals = normalizedItems.length > 0 ? sumMiscFeeItems(normalizedItems) : null;
+                  const resolvedMiscAmounts = getSectionFeeAmounts(r, 'misc');
                   let total = itemTotals
                     ? itemTotals.total
                     : Number(
                       (mData.total !== undefined && mData.total !== null && mData.total !== '')
                         ? mData.total
-                        : (mBase > 0 ? mBase : (r.totalFee || 0))
+                        : (mBase > 0 ? mBase : 0)
                     );
+                  // paid: use item-level sum first, then explicit breakdown paid,
+                  // then resolvedMiscAmounts — never fall back to paidFee/baseAmount
+                  // which belong to other fee sections.
                   let paid = itemTotals
                     ? Math.max(itemTotals.paid, Number(mData.paid || 0))
-                    : Number(
-                      (mData.paid !== undefined && mData.paid !== null && mData.paid !== '')
-                        ? mData.paid
-                        : (r.feeType?.toLowerCase().includes('misc')
-                            ? (r.paidAmount !== undefined && r.paidAmount !== '' ? r.paidAmount : (r.baseAmount || r.paidFee || 0))
-                            : (r.paidAmount || 0))
-                    );
+                    : (mData.paid !== undefined && mData.paid !== null && mData.paid !== ''
+                        ? Number(mData.paid)
+                        : (resolvedMiscAmounts.paid > 0 ? resolvedMiscAmounts.paid : 0));
                   if (paid > total) {
                     total = paid;
                   }
@@ -1399,13 +1411,44 @@ export default function MiscellaneousFeesManagement({
                       <td className="p-3 font-bold text-slate-900">{r.name}</td>
                       <td className="p-3 text-slate-600">{r.rollNo || r.id}</td>
                       <td className="p-3 text-slate-600">{r.course}</td>
-                      <td className="p-3 font-bold text-cyan-700">{fName}</td>
+                      <td className="p-3 font-bold text-cyan-700">
+                        {normalizedItems.length > 0 ? (
+                          <div className="space-y-1">
+                            {normalizedItems.map((it, i) => {
+                              const itemPaid = Number(it.paid !== undefined && it.paid !== null && it.paid !== '' ? it.paid : 0);
+                              const itemAmt = Number(it.amount ?? it.total ?? itemPaid);
+                              return (
+                                <div key={i} className="flex items-center justify-between gap-2 text-[11px] bg-cyan-50/70 border border-cyan-100 rounded-md px-2 py-0.5">
+                                  <span className="font-semibold text-cyan-800">{it.feeType || it.name || 'Miscellaneous Fee'}</span>
+                                  <span className="font-bold text-slate-700">
+                                    ₹{itemPaid.toLocaleString('en-IN')}
+                                    {itemAmt > itemPaid ? <span className="text-[10px] text-slate-400 font-normal"> / ₹{itemAmt.toLocaleString('en-IN')}</span> : ''}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          fName
+                        )}
+                      </td>
                       <td className="p-3 font-bold text-emerald-600">₹{paid.toLocaleString('en-IN')}</td>
                       <td className="p-3 font-bold text-slate-800">₹{total.toLocaleString('en-IN')}</td>
                       <td className="p-3">
-                        <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">
-                          {r.status || 'Paid'}
-                        </span>
+                        {(() => {
+                          const miscStatus = (paid >= total && total > 0) ? 'Paid' : (paid > 0 ? 'Partial' : 'Pending');
+                          return (
+                            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
+                              miscStatus === 'Paid'
+                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                                : miscStatus === 'Partial'
+                                  ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                  : 'bg-amber-50 text-amber-600 border border-amber-200'
+                            }`}>
+                              {miscStatus}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
@@ -1505,7 +1548,10 @@ export default function MiscellaneousFeesManagement({
                       const allItems = getMiscFeeItems(viewRecord, miscFeeStructure);
 
                       return allItems.map((item, i) => {
-                        const itemPaid = Number(item.paid ?? item.amount ?? 0);
+                        // Never use item.amount as a fallback for paid — amount is the assessed price, paid is what was collected
+                        const itemPaid = item.paid !== undefined && item.paid !== null && item.paid !== ''
+                          ? Number(item.paid)
+                          : 0;
                         const itemTotal = Number(item.amount ?? item.total ?? 0);
                         const itemStatus = item.status || (itemPaid >= itemTotal && itemTotal > 0 ? 'Paid' : (itemPaid > 0 ? 'Partial' : 'Pending'));
                         return (
@@ -1538,8 +1584,13 @@ export default function MiscellaneousFeesManagement({
                   <tfoot>
                     {(() => {
                       const allItems = getMiscFeeItems(viewRecord, miscFeeStructure);
-                      const paidTotal = allItems.reduce((acc, it) => acc + Number(it.paid || 0), 0);
-                      let feeTotal = allItems.reduce((acc, it) => acc + Number(it.amount || it.paid || 0), 0);
+                      // paidTotal: sum only actual paid amounts, not assessed amounts
+                      const paidTotal = allItems.reduce((acc, it) => {
+                        const p = it.paid !== undefined && it.paid !== null && it.paid !== '' ? Number(it.paid) : 0;
+                        return acc + p;
+                      }, 0);
+                      // feeTotal: sum assessed amounts only (not paid as fallback)
+                      let feeTotal = allItems.reduce((acc, it) => acc + Number(it.amount || 0), 0);
                       if (paidTotal > feeTotal) feeTotal = paidTotal;
                       const balanceTotal = Math.max(0, feeTotal - paidTotal);
                       return (

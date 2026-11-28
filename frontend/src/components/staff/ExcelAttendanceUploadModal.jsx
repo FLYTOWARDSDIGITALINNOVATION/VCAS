@@ -90,7 +90,7 @@ export default function ExcelAttendanceUploadModal({
   // Configuration settings
   const [targetClassCode, setTargetClassCode] = useState(() => currentClassCode || (classes[0]?.code || ''));
   const [targetDate, setTargetDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [targetSlot, setTargetSlot] = useState('8:30 AM');
+  const [targetSlot, setTargetSlot] = useState('9:30 AM');
   const [targetTopic, setTargetTopic] = useState('');
 
   // Parsed rows & preview
@@ -120,15 +120,15 @@ export default function ExcelAttendanceUploadModal({
           'Student Name': st.name || '',
           'Date': todayStr,
           'Status': 'Present',
-          'Slot': targetSlot || '8:30 AM',
+          'Slot': targetSlot || '9:30 AM',
           'Remarks': ''
         }));
       } else {
         sampleData = [
-          { 'Roll No': '22CS001', 'Student Name': 'AARAV SHARMA', 'Date': todayStr, 'Status': 'Present', 'Slot': '8:30 AM', 'Remarks': 'Attended' },
-          { 'Roll No': '22CS002', 'Student Name': 'ANANYA IYER', 'Date': todayStr, 'Status': 'Present', 'Slot': '8:30 AM', 'Remarks': 'Attended' },
-          { 'Roll No': '22CS003', 'Student Name': 'BHAVESH PATEL', 'Date': todayStr, 'Status': 'Absent', 'Slot': '8:30 AM', 'Remarks': 'Medical Leave' },
-          { 'Roll No': '22CS004', 'Student Name': 'DIVYA NAIR', 'Date': todayStr, 'Status': 'Late', 'Slot': '8:30 AM', 'Remarks': 'Joined at 8:45' }
+          { 'Roll No': '22CS001', 'Student Name': 'AARAV SHARMA', 'Date': todayStr, 'Status': 'Present', 'Slot': '9:30 AM', 'Remarks': 'Attended' },
+          { 'Roll No': '22CS002', 'Student Name': 'ANANYA IYER', 'Date': todayStr, 'Status': 'Present', 'Slot': '9:30 AM', 'Remarks': 'Attended' },
+          { 'Roll No': '22CS003', 'Student Name': 'BHAVESH PATEL', 'Date': todayStr, 'Status': 'Absent', 'Slot': '9:30 AM', 'Remarks': 'Medical Leave' },
+          { 'Roll No': '22CS004', 'Student Name': 'DIVYA NAIR', 'Date': todayStr, 'Status': 'Late', 'Slot': '9:30 AM', 'Remarks': 'Joined at 9:45' }
         ];
       }
 

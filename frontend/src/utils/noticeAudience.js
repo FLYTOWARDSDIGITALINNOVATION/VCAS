@@ -17,6 +17,9 @@ export function isNoticeVisible(notice, user) {
   const role = (user.role || '').trim();
   const designation = (user.designation || '').trim().toLowerCase();
   const department = (user.department || '').trim().toLowerCase();
+  const userStaffId = String(user.staffId || user.id || user._id || '').trim().toLowerCase();
+  const userName = String(user.name || user.fullName || '').trim().toLowerCase();
+  const userEmail = String(user.email || '').trim().toLowerCase();
 
   // Super Admin / Admin / Principal can view all notices
   const isSuperAdmin = role === 'Super Admin' || role === 'SuperAdmin' || user.isSuperAdmin === true;
@@ -24,35 +27,37 @@ export function isNoticeVisible(notice, user) {
   if (isAdmin) return true;
 
   // Author can always see their own notice
-  if (user.staffId && (notice.postedByStaffId === user.staffId)) return true;
-  if (user.name && (notice.postedBy === user.name || notice.author === user.name)) return true;
+  if (userStaffId && notice.postedByStaffId && String(notice.postedByStaffId).trim().toLowerCase() === userStaffId) return true;
+  if (userName && (
+    String(notice.postedBy || '').trim().toLowerCase().includes(userName) ||
+    String(notice.author || '').trim().toLowerCase().includes(userName)
+  )) return true;
 
   // If notice is assigned to a specific person:
   // ONLY that assigned person (and Admins/Author checked above) can view it.
-  // Other staff or anyone else should NOT be able to view it.
-  const assignedStaffId = (notice.assignedToStaffId || notice.assignedTo?.staffId || '').trim();
-  const assignedStaffName = (notice.assignedToStaffName || notice.assignedTo?.name || '').trim().toLowerCase();
+  // Other staff or anyone else MUST NOT be able to view it.
+  const assignedStaffId = String(notice.assignedToStaffId || notice.assignedTo?.staffId || notice.assignedTo?._id || '').trim().toLowerCase();
+  const assignedStaffName = String(notice.assignedToStaffName || notice.assignedTo?.name || '').trim().toLowerCase();
   const isAssignedToSpecificPerson = Boolean(assignedStaffId || assignedStaffName);
 
   if (isAssignedToSpecificPerson) {
     const isAssignedUser = (
-      (assignedStaffId && user.staffId && user.staffId === assignedStaffId) ||
-      (assignedStaffName && user.name && user.name.trim().toLowerCase() === assignedStaffName)
+      (assignedStaffId && (
+        userStaffId === assignedStaffId ||
+        String(user.staffId || '').trim().toLowerCase() === assignedStaffId ||
+        String(user.id || '').trim().toLowerCase() === assignedStaffId ||
+        String(user._id || '').trim().toLowerCase() === assignedStaffId
+      )) ||
+      (assignedStaffName && (
+        userName === assignedStaffName ||
+        userName.includes(assignedStaffName) ||
+        assignedStaffName.includes(userName)
+      ))
     );
     return Boolean(isAssignedUser);
   }
 
   const rawAudience = (notice.targetAudience || 'All').trim().toLowerCase();
-
-  // "All" or "Everyone" is visible to everyone
-  if (
-    rawAudience === 'all' ||
-    rawAudience === 'everyone' ||
-    rawAudience.includes('everyone') ||
-    rawAudience === 'all staff & students'
-  ) {
-    return true;
-  }
 
   const isStudent = role === 'Student';
   const isHod = Boolean(user.isHod || role === 'HOD' || designation.includes('hod') || designation.includes('head of department'));
@@ -63,6 +68,28 @@ export function isNoticeVisible(notice, user) {
     designation === 'office staff' ||
     department.includes('account') ||
     department.includes('office');
+
+  // Notice targeted specifically to Accountant / Finance / Accounts
+  if (
+    rawAudience === 'accountant' ||
+    rawAudience === 'accountants' ||
+    rawAudience.includes('accountant') ||
+    rawAudience.includes('accounts') ||
+    rawAudience === 'finance'
+  ) {
+    // ONLY Accountant / Office staff can view it. Regular staff and students MUST NOT see it!
+    return Boolean(isAccountantOrOffice);
+  }
+
+  // "All" or "Everyone" is visible to everyone
+  if (
+    rawAudience === 'all' ||
+    rawAudience === 'everyone' ||
+    rawAudience.includes('everyone') ||
+    rawAudience === 'all staff & students'
+  ) {
+    return true;
+  }
 
   if (isStudent) {
     return rawAudience === 'students' || rawAudience === 'all students';

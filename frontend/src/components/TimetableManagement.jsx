@@ -358,7 +358,7 @@ export default function TimetableManagement({ user }) {
           const hallNames = parsed.map(h => typeof h === 'string' ? h : h.name || h.hallName || h.room).filter(Boolean);
           roomList = [...roomList, ...hallNames];
         }
-      } catch (e) {}
+      } catch (e) { }
       const combinedRooms = Array.from(new Set(roomList));
       setAvailableRooms(combinedRooms);
 
@@ -518,7 +518,7 @@ export default function TimetableManagement({ user }) {
           if (v && typeof v === 'string' && v.trim()) set.add(v.trim());
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const result = Array.from(set);
     return result;
@@ -545,7 +545,7 @@ export default function TimetableManagement({ user }) {
   // Get active schedule for Class View: aggregates live assigned slots across faculty + class overrides
   const activeClassSchedule = useMemo(() => {
     const userDeptSchedule = schedules[selectedDept]?.[selectedYear] || {};
-    
+
     // Aggregate live faculty slots from allTimetables
     const aggregated = {};
     DAYS.forEach(day => {
@@ -564,7 +564,7 @@ export default function TimetableManagement({ user }) {
       const staffMember = staffList.find(s => s.staffId === t.staffId);
       const staffLabel = staffMember?.name ? `${staffMember.name} (${t.staffId})` : (t.staffId || 'Faculty');
       const sched = t.schedule instanceof Map ? Object.fromEntries(t.schedule) : (t.schedule || {});
-      
+
       Object.entries(sched).forEach(([day, daySlots]) => {
         if (daySlots && typeof daySlots === 'object') {
           Object.entries(daySlots).forEach(([periodNum, slot]) => {
@@ -608,6 +608,7 @@ export default function TimetableManagement({ user }) {
       day,
       period: periodNum,
       year: initialYear,
+      department: currentSlot?.department || '',
       code: currentSlot?.code || '',
       name: currentSlot?.name || '',
       faculty: currentSlot?.faculty || defaultFaculty || '',
@@ -629,8 +630,8 @@ export default function TimetableManagement({ user }) {
     const targetDay = slotForm.day;
     const targetRoom = (slotForm.room || '').trim().toLowerCase();
     const targetFaculty = (slotForm.faculty || '').trim();
-    const targetStaffId = viewMode === 'faculty' 
-      ? selectedStaffId 
+    const targetStaffId = viewMode === 'faculty'
+      ? selectedStaffId
       : (staffList.find(s => `${s.name} (${s.staffId})` === slotForm.faculty)?.staffId || slotForm.faculty);
 
     let periodClash = null;
@@ -729,8 +730,8 @@ export default function TimetableManagement({ user }) {
       return;
     }
 
-    const targetStaffId = viewMode === 'faculty' 
-      ? selectedStaffId 
+    const targetStaffId = viewMode === 'faculty'
+      ? selectedStaffId
       : (staffList.find(s => `${s.name} (${s.staffId})` === slotForm.faculty)?.staffId || slotForm.faculty);
 
     // ── 1. CHECK IF PERIOD IS ALREADY ASSIGNED IN THIS CLASS (Class View) ──
@@ -869,17 +870,21 @@ export default function TimetableManagement({ user }) {
     if (viewMode === 'faculty') {
       if (!selectedStaffId) return;
 
-      const selectedDepartment = currentStaff?.department || currentStaff?.dept
-        || currentStaff?.departmentName || selectedFacultyDepartment;
+      const selectedDepartment = slotForm.department || currentStaff?.department || currentStaff?.dept
+        || currentStaff?.departmentName || (selectedFacultyDepartment !== 'All' ? selectedFacultyDepartment : '');
       const targetYear = Number(slotForm.year || (selectedFacultyYear !== 'All' ? selectedFacultyYear : 1));
 
       try {
         setIsSavingSlot(true);
-        const params = new URLSearchParams({
-          department: selectedDepartment,
-          year: targetYear
-        });
-        const res = await fetch(`${API_BASE}/timetable/staff/${encodeURIComponent(selectedStaffId)}/slot/${slotForm.day}/${slotForm.period}?${params.toString()}`, {
+        const params = new URLSearchParams();
+        if (selectedDepartment && selectedDepartment !== 'All') {
+          params.set('department', selectedDepartment);
+        }
+        if (targetYear) {
+          params.set('year', targetYear);
+        }
+        const query = params.toString();
+        const res = await fetch(`${API_BASE}/timetable/staff/${encodeURIComponent(selectedStaffId)}/slot/${slotForm.day}/${slotForm.period}${query ? `?${query}` : ''}`, {
           method: 'DELETE'
         });
 
@@ -887,6 +892,7 @@ export default function TimetableManagement({ user }) {
         if (res.ok) {
           const sched = data.schedule instanceof Map ? Object.fromEntries(data.schedule) : data.schedule;
           setFacultySchedule(sched || {});
+          fetchSelectedStaffTimetable(selectedStaffId);
           fetchStaffAndTimetables();
           setIsEditSlotOpen(false);
           showToast(`✓ Cleared Period ${slotForm.period} on ${slotForm.day}`);
@@ -932,7 +938,7 @@ export default function TimetableManagement({ user }) {
           `"${day}"`,
           ...facultyPeriods.map(p => {
             const slot = d[p.slot];
-            return slot ? `"${slot.code}: ${slot.name} (${slot.room})"` : `"--"` ;
+            return slot ? `"${slot.code}: ${slot.name} (${slot.room})"` : `"--"`;
           })
         ];
       });
@@ -1051,13 +1057,13 @@ export default function TimetableManagement({ user }) {
 
           {isSuperAdmin && (
             <button
-            onClick={handleExportCSV}
-            title="Download CSV Timetable"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-slate-600" />
-            <span>Export CSV</span>
-          </button>
+              onClick={handleExportCSV}
+              title="Download CSV Timetable"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 shadow-xs cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-slate-600" />
+              <span>Export CSV</span>
+            </button>
           )}
 
           <button
@@ -1074,28 +1080,25 @@ export default function TimetableManagement({ user }) {
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
         <button
           onClick={() => setViewMode('faculty')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-            viewMode === 'faculty'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${viewMode === 'faculty'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
+            }`}
         >
           <UserCheck className="w-4 h-4" />
           <span>Faculty Assigned Timetables</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-            viewMode === 'faculty' ? 'bg-indigo-500 text-white' : 'bg-indigo-100 text-indigo-700'
-          }`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${viewMode === 'faculty' ? 'bg-indigo-500 text-white' : 'bg-indigo-100 text-indigo-700'
+            }`}>
             {allTimetables.length} Assigned
           </span>
         </button>
 
         <button
           onClick={() => setViewMode('class')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-            viewMode === 'class'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${viewMode === 'class'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
+            }`}
         >
           <Building2 className="w-4 h-4" />
           <span>Class / Department Timetable</span>
@@ -1142,7 +1145,7 @@ export default function TimetableManagement({ user }) {
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-indigo-600" />
+                  <Users className="w-3.5 h-3.5 text-indigo-600" />
                   <span>Select Staff ({filteredStaffList.length} Available)</span>
                 </label>
                 <select
@@ -1195,16 +1198,14 @@ export default function TimetableManagement({ user }) {
                     <button
                       key={staff.staffId}
                       onClick={() => setSelectedStaffId(staff.staffId)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                        isSelected
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all ${isSelected
                           ? 'bg-indigo-600 text-white shadow-xs'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
+                        }`}
                     >
                       <span>{staff.name || staff.staffId}</span>
-                      <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-                        isSelected ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-600'
-                      }`}>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${isSelected ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
                         {count} slots
                       </span>
                     </button>
@@ -1402,11 +1403,10 @@ export default function TimetableManagement({ user }) {
 
                         {/* Daily Hours Taken */}
                         <td className="p-2 border-l border-slate-200 bg-slate-50/50 text-center align-middle">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black ${
-                            dayHours > 0
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black ${dayHours > 0
                               ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                               : 'text-slate-400 font-medium'
-                          }`}>
+                            }`}>
                             {dayHours} {dayHours === 1 ? 'hr' : 'hrs'}
                           </span>
                         </td>
@@ -1555,7 +1555,7 @@ export default function TimetableManagement({ user }) {
                             saved.push(trimmed);
                             localStorage.setItem('vcas_custom_venues', JSON.stringify(saved));
                           }
-                        } catch (err) {}
+                        } catch (err) { }
                         setAvailableRooms(prev => Array.from(new Set([...prev, trimmed])));
                         setSelectedVenue(trimmed);
                         showToast(`✓ Venue "${trimmed}" added!`);
@@ -2497,33 +2497,30 @@ export default function TimetableManagement({ user }) {
               <button
                 type="button"
                 onClick={() => setActiveTimingTab('faculty')}
-                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  activeTimingTab === 'faculty'
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTimingTab === 'faculty'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:bg-slate-100'
-                }`}
+                  }`}
               >
                 Faculty Periods (P1 – P6)
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTimingTab('class')}
-                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  activeTimingTab === 'class'
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTimingTab === 'class'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:bg-slate-100'
-                }`}
+                  }`}
               >
                 Class Periods (P1 – P6)
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTimingTab('breaks')}
-                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  activeTimingTab === 'breaks'
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTimingTab === 'breaks'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:bg-slate-100'
-                }`}
+                  }`}
               >
                 Break & Recess Timings
               </button>

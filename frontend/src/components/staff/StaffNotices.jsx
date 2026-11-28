@@ -58,7 +58,8 @@ export default function StaffNotices({ staffUser = {} }) {
     { id: 'Students', label: '🎓 All Students' },
     { id: 'Staff', label: '👨‍🏫 All Faculty & Staff' },
     { id: 'HODs', label: '🏛️ Heads of Department (HODs)' },
-    { id: 'Administration', label: '🏢 Administration & Office' }
+    { id: 'Administration', label: '🏢 Administration & Office' },
+    { id: 'Accountant', label: '💰 Accountant / Accounts Office' }
   ];
 
   // Fetch notices from backend
@@ -85,10 +86,20 @@ export default function StaffNotices({ staffUser = {} }) {
     fetchNotices();
   }, [selectedTag]);
 
+  const activeStaffUser = useMemo(() => {
+    if (staffUser && (staffUser.staffId || staffUser.id || staffUser.role)) return staffUser;
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('vcas_user') || '{}');
+      return { ...stored, ...(staffUser || {}) };
+    } catch {
+      return staffUser || {};
+    }
+  }, [staffUser]);
+
   // Notices visible to this staff user based on targetAudience
   const visibleNotices = useMemo(() => {
-    return notices.filter(n => isNoticeVisible(n, staffUser));
-  }, [notices, staffUser]);
+    return notices.filter(n => isNoticeVisible(n, activeStaffUser));
+  }, [notices, activeStaffUser]);
 
   // Filtered notices based on tag & search
   const filteredNotices = useMemo(() => {

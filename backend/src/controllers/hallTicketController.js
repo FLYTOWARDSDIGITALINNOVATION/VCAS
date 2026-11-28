@@ -837,7 +837,7 @@ exports.getStudentHallTicket = async (req, res) => {
         { rollNo: { $regex: new RegExp(`^${identifier}$`, 'i') } },
         { regNo: { $regex: new RegExp(`^${identifier}$`, 'i') } },
         { studentId: { $regex: new RegExp(`^${identifier}$`, 'i') } },
-        { loginId: { $regex: new RegExp(`^${identifier}$`, 'i') } }
+        { admNo: { $regex: new RegExp(`^${identifier}$`, 'i') } }
       ]
     });
 

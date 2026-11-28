@@ -82,6 +82,10 @@ exports.getAllStudents = async (req, res) => {
 
       enrichedStudents = students.map(s => {
         const obj = s.toObject ? s.toObject() : { ...s };
+        // Ensure students with 0 paid fee are not marked 'Paid'
+        if ((Number(obj.paidFee) || 0) === 0 && obj.feeStatus === 'Paid') {
+          obj.feeStatus = 'Pending';
+        }
         const roll = (obj.rollNo || '').trim().toUpperCase();
         if (attMap.has(roll)) {
           const { total, attended } = attMap.get(roll);
@@ -303,7 +307,9 @@ exports.updateStudent = async (req, res) => {
           { admNo: trimmedId },
           { admNo: trimmedId.toUpperCase() },
           { rollNo: trimmedId },
-          { rollNo: trimmedId.toUpperCase() }
+          { rollNo: trimmedId.toUpperCase() },
+          { name: trimmedId },
+          { name: new RegExp(`^${trimmedId}$`, 'i') }
         ]
       });
     }
@@ -415,13 +421,29 @@ exports.updateStudent = async (req, res) => {
     if (updates.totalFee !== undefined) student.totalFee = Number(updates.totalFee) || 0;
     if (updates.paidFee !== undefined) student.paidFee = Number(updates.paidFee) || 0;
     if (updates.pendingFee !== undefined) student.pendingFee = Number(updates.pendingFee) || 0;
-    if (updates.feeBreakdown !== undefined) student.feeBreakdown = updates.feeBreakdown;
+    if (updates.feeBreakdown !== undefined) {
+      student.feeBreakdown = updates.feeBreakdown;
+      student.markModified('feeBreakdown');
+    }
+    if (updates.allMiscItems !== undefined) {
+      student.allMiscItems = updates.allMiscItems;
+      student.markModified('allMiscItems');
+    }
     if (updates.lastPaymentDate !== undefined) student.lastPaymentDate = updates.lastPaymentDate || '';
     if (updates.paymentMode !== undefined) student.paymentMode = updates.paymentMode || '';
     if (updates.referenceNo !== undefined) student.referenceNo = updates.referenceNo || '';
+    if (updates.receiptNo !== undefined) student.receiptNo = updates.receiptNo || '';
+    if (updates.feeType !== undefined) student.feeType = updates.feeType || '';
+    if (updates.baseAmount !== undefined) student.baseAmount = Number(updates.baseAmount) || 0;
+    if (updates.uniformFee !== undefined) student.uniformFee = Number(updates.uniformFee) || 0;
+    if (updates.bookFee !== undefined) student.bookFee = Number(updates.bookFee) || 0;
+    if (updates.fine !== undefined) student.fine = Number(updates.fine) || 0;
 
     // Statuses
     if (updates.feeStatus) student.feeStatus = updates.feeStatus;
+    if ((Number(student.paidFee) || 0) === 0 && student.feeStatus === 'Paid') {
+      student.feeStatus = 'Pending';
+    }
     if (updates.status) student.status = updates.status;
 
     // Personal & Parent details
@@ -528,7 +550,7 @@ exports.bulkDeleteStudents = async (req, res) => {
       if (strId.match(/^[0-9a-fA-F]{24}$/)) {
         try {
           objectIds.push(new mongoose.Types.ObjectId(strId));
-        } catch (_) {}
+        } catch (_) { }
       }
       stringKeys.push(strId);
       stringKeys.push(strId.toUpperCase());
@@ -836,7 +858,7 @@ function normalizeStudentRow(rawRow) {
   const bloodGroup = String(getVal('bloodgroup', 'blood', 'bg') || 'O+').trim();
   const phone = String(getVal('mobilenumber', 'phone', 'mobile', 'mobileno', 'phonenumber', 'contact', 'contactno', 'cell', 'studentmobile', 'parentphone', 'fathermobile', 'tel', 'whatsapp')).trim();
   const email = String(getVal('emailid', 'email', 'mail')).trim().toLowerCase();
-  
+
   const fatherName = String(getVal('fathername', 'fathersname', 'father')).trim();
   const motherName = String(getVal('mothersname', 'mothername', 'mother')).trim();
   const fatherOccupation = String(getVal('fathersoccupationsector', 'fatheroccupation', 'parentoccupation')).trim();
@@ -1026,7 +1048,7 @@ async function extractStudentsWithImages(workbookBuffer) {
 
   const firstSheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[firstSheetName];
-  
+
   const rawMatrix = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
   if (!rawMatrix || rawMatrix.length === 0) return [];
 
@@ -1045,8 +1067,8 @@ async function extractStudentsWithImages(workbookBuffer) {
     }
   }
 
-  const headerColumns = Array.isArray(rawMatrix[headerRowIndex]) 
-    ? rawMatrix[headerRowIndex].map(c => String(c || '').trim()) 
+  const headerColumns = Array.isArray(rawMatrix[headerRowIndex])
+    ? rawMatrix[headerRowIndex].map(c => String(c || '').trim())
     : [];
 
   const rows = xlsx.utils.sheet_to_json(worksheet, {
@@ -1067,7 +1089,7 @@ async function extractStudentsWithImages(workbookBuffer) {
   try {
     const zip = new AdmZip(workbookBuffer);
     const zipEntries = zip.getEntries();
-    
+
     const mediaMap = {};
     for (const entry of zipEntries) {
       if (entry.entryName.startsWith('xl/media/')) {
@@ -1160,7 +1182,7 @@ async function extractStudentsWithImages(workbookBuffer) {
 
   // Map column index to student document field name
   const colDocFieldMap = {};
-  
+
   // Pass 1: Prioritize explicit image columns
   headerColumns.forEach((colName, cIdx) => {
     if (!colName) return;
@@ -1265,7 +1287,7 @@ async function processStudentsBatch(rawRows) {
 
   // Preload existing students once for lightning-fast in-memory matching
   const existingDocs = await Student.find({}, 'regNo studentId admNo emisNumber umisNumber aadhaar rollNo department name batch password').lean();
-  
+
   const regMap = new Map();
   const emisMap = new Map();
   const umisMap = new Map();
@@ -1393,7 +1415,7 @@ async function processStudentsBatch(rawRows) {
       });
 
       const saved = await newStudent.save();
-      
+
       // Update memory index so subsequent duplicate rows in the same sheet don't collide
       regMap.set(finalRegNo.toUpperCase(), saved._id);
       if (normalized.emisNumber) emisMap.set(normalized.emisNumber, saved._id);
@@ -1521,12 +1543,12 @@ exports.migrateBatchFields = async (req, res) => {
     for (const s of students) {
       const batch = (s.batch || '').replace('–', '-').trim();
       let startYear = null;
-      let duration  = 3;
+      let duration = 3;
 
       if (batch.includes('-')) {
         const parts = batch.split('-');
         const start = parseInt(parts[0], 10);
-        const end   = parseInt(parts[1], 10);
+        const end = parseInt(parts[1], 10);
         if (!isNaN(start) && start >= 2000 && start <= 2100) startYear = start;
         if (!isNaN(start) && !isNaN(end) && end - start > 0 && end - start <= 6) duration = end - start;
       }
@@ -1653,12 +1675,12 @@ exports.getSemesterInfo = async (req, res) => {
     res.json({
       success: true,
       data: {
-        name:         student.name,
-        batch:        student.batch,
+        name: student.name,
+        batch: student.batch,
         academicYear: student.academicYear,
-        year:         student.year,
-        sem:          student.sem,
-        status:       student.status
+        year: student.year,
+        sem: student.sem,
+        status: student.status
       }
     });
   } catch (err) {

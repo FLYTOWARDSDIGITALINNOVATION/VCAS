@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const topicEntrySchema = new mongoose.Schema({
   sNo:            { type: Number, default: 1 },
   plannedDate:    { type: String, default: '' },
-  noOfHours:      { type: Number, default: 1 },
+  noOfHours:      { type: Number, default: 0 },
   topic:          { type: String, default: '' },
   executionDate:  { type: String, default: '' },
   executionHours: { type: Number, default: 0 },

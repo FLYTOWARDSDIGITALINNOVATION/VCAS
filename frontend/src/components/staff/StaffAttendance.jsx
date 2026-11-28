@@ -50,7 +50,7 @@ export default function StaffAttendance({ staffUser }) {
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [selectedClassCode, setSelectedClassCode] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [sessionSlot, setSessionSlot] = useState('8:30 AM');
+  const [sessionSlot, setSessionSlot] = useState('9:30 AM');
   const [searchQuery, setSearchQuery] = useState('');
   const [savedSuccessMsg, setSavedSuccessMsg] = useState('');
   const [submitError, setSubmitError] = useState('');

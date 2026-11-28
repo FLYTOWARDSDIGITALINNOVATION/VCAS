@@ -95,7 +95,15 @@ function getMergedScopedSchedule(timetable, { department, year, academicYear } =
         if (year && String(studyYear) !== String(year)) return;
         const plainSchedule = toPlainSchedule(schedule);
         Object.keys(result).forEach(day => {
-          result[day] = { ...result[day], ...(plainSchedule[day] || {}) };
+          const daySlots = plainSchedule[day] || {};
+          Object.entries(daySlots).forEach(([slotKey, slotVal]) => {
+            if (!slotVal) return;
+            result[day][slotKey] = {
+              ...slotVal,
+              department: slotVal.department || dept,
+              year: slotVal.year || Number(studyYear)
+            };
+          });
         });
       });
     });
@@ -175,13 +183,17 @@ exports.saveStaffTimetable = async (req, res) => {
 
     const staff = await Staff.findOne({ staffId: staffId.trim() });
 
+    const nextSchedule = schedule || getDefaultSchedule();
     const filter = { staffId: staffId.trim() };
     const update = {
       staffName: staff ? staff.name : '',
       department: staff ? staff.department : '',
       academicYear: academicYear || '2025-2026',
-      schedule: schedule || getDefaultSchedule()
+      schedule: nextSchedule
     };
+    if (!hasScheduleSlots(nextSchedule)) {
+      update.yearSchedules = {};
+    }
     const options = { upsert: true, new: true, setDefaultsOnInsert: true };
 
     const timetable = await Timetable.findOneAndUpdate(filter, update, options);
@@ -310,7 +322,7 @@ exports.updateSlot = async (req, res) => {
             }
             if (roomConflictWarning) break;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
     } else {
       // Clear slot
@@ -376,37 +388,69 @@ exports.clearSlot = async (req, res) => {
       return res.status(200).json({ success: true, message: 'Slot is already empty.' });
     }
 
-    const targetYear = year ? Number(year) : null;
-    const targetDept = (department || timetable.department || '').trim();
-    const scopedAssignment = Boolean(targetDept && targetYear);
-    const session = academicYear || '2025-2026';
-    const currentSchedule = scopedAssignment
-      ? toPlainSchedule(getScopedSchedule(timetable, session, targetDept, targetYear))
-      : toPlainSchedule(timetable.schedule);
+    const slotKey = String(slot);
+    const targetYear = year && year !== 'All' ? Number(year) : null;
+    const targetDept = department && department !== 'All' ? department.trim() : '';
 
-    if (currentSchedule[day] && currentSchedule[day][String(slot)]) {
-      delete currentSchedule[day][String(slot)];
-      if (scopedAssignment) {
-        setScopedSchedule(timetable, session, targetDept, targetYear, currentSchedule);
-        if (timetable.schedule && timetable.schedule[day]) {
-          const legacy = toPlainSchedule(timetable.schedule);
-          if (legacy[day]) {
-            delete legacy[day][String(slot)];
-            timetable.schedule = legacy;
-            timetable.markModified('schedule');
-          }
-        }
-      } else {
-        timetable.schedule = currentSchedule;
-        timetable.markModified('schedule');
-      }
+    const yearSchedules = timetable.yearSchedules
+      ? JSON.parse(JSON.stringify(timetable.yearSchedules))
+      : {};
+
+    const removeFromBuckets = (filterDept, filterYear) => {
+      let removed = false;
+      Object.entries(yearSchedules).forEach(([session, departments]) => {
+        if (academicYear && session !== academicYear) return;
+        Object.entries(departments || {}).forEach(([deptKey, years]) => {
+          if (filterDept && !departmentsMatch(deptKey, filterDept)) return;
+          Object.entries(years || {}).forEach(([yearKey, sched]) => {
+            if (filterYear && Number(yearKey) !== filterYear) return;
+            if (sched && sched[day] && sched[day][slotKey]) {
+              delete sched[day][slotKey];
+              removed = true;
+            }
+          });
+        });
+      });
+      return removed;
+    };
+
+    // Try with provided filters first, then relax department/year if no matching slot was found
+    let modifiedScoped = removeFromBuckets(targetDept, targetYear);
+    if (!modifiedScoped && targetDept) {
+      modifiedScoped = removeFromBuckets('', targetYear);
+    }
+    if (!modifiedScoped && targetYear) {
+      modifiedScoped = removeFromBuckets('', null);
+    }
+
+    if (modifiedScoped) {
+      timetable.yearSchedules = yearSchedules;
+      timetable.markModified('yearSchedules');
+    }
+
+    let modifiedLegacy = false;
+    const legacy = toPlainSchedule(timetable.schedule);
+    if (legacy[day] && legacy[day][slotKey]) {
+      delete legacy[day][slotKey];
+      timetable.schedule = legacy;
+      timetable.markModified('schedule');
+      modifiedLegacy = true;
+    }
+
+    if (modifiedScoped || modifiedLegacy) {
       await timetable.save();
     }
+
+    const updatedSchedule = getMergedScopedSchedule(timetable, {
+      department: targetDept || undefined,
+      year: targetYear || undefined,
+      academicYear: academicYear || undefined
+    });
 
     res.status(200).json({
       success: true,
       message: `Slot ${slot} on ${day} cleared.`,
-      schedule: currentSchedule
+      schedule: updatedSchedule
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -422,7 +466,8 @@ exports.getStudentTimetable = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Student identifier required.' });
     }
     const idClean = identifier.trim();
-    const idRegex = new RegExp('^' + idClean + '$', 'i');
+    const escapeRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const idRegex = new RegExp(`^${escapeRegex(idClean)}$`, 'i');
 
     const Student = require('../models/Student');
     const Class = require('../models/Class');
@@ -432,7 +477,6 @@ exports.getStudentTimetable = async (req, res) => {
         { rollNo: idRegex },
         { regNo: idRegex },
         { studentId: idRegex },
-        { loginId: idRegex },
         { admNo: idRegex }
       ]
     });
@@ -442,25 +486,94 @@ exports.getStudentTimetable = async (req, res) => {
     const dept = student ? (student.department || student.course || '') : '';
     const semester = student ? (student.sem || student.semester || '1st Sem') : '1st Sem';
     const course = student ? (student.course || dept) : dept;
+    const studentIds = new Set(
+      [rollNo, regNo, student?.studentId, student?.admNo, idClean]
+        .map(value => String(value || '').toUpperCase().trim())
+        .filter(Boolean)
+    );
 
     // 1. Find classes student is strictly enrolled in
     const enrolledClasses = await Class.find({
       $or: [
-        { 'students.rollNo': new RegExp('^' + rollNo + '$', 'i') },
-        { 'students.rollNo': new RegExp('^' + regNo + '$', 'i') },
-        { 'students.studentId': new RegExp('^' + rollNo + '$', 'i') },
-        { 'students.studentId': new RegExp('^' + regNo + '$', 'i') }
+        ...[rollNo, regNo, student?.studentId, student?.admNo, idClean]
+          .filter(Boolean)
+          .map(value => new RegExp(`^${escapeRegex(value)}$`, 'i'))
+          .flatMap(regex => [
+            { 'students.rollNo': regex },
+            { 'students.studentId': regex },
+            { 'students.regNo': regex }
+          ])
       ]
     });
 
     const enrolledClassMap = {};
+    const normalizeCode = code => String(code || '').toUpperCase().replace(/\s+/g, '').trim();
     enrolledClasses.forEach(c => {
-      if (c.code) enrolledClassMap[c.code.toUpperCase().trim()] = c;
+      const isAssigned = (c.students || []).some(rosterStudent =>
+        [rosterStudent.rollNo, rosterStudent.studentId, rosterStudent.regNo]
+          .some(rosterId => studentIds.has(String(rosterId || '').toUpperCase().trim()))
+      );
+      if (!isAssigned) return;
+      const code = normalizeCode(c.code);
+      if (code) enrolledClassMap[code] = c;
     });
 
-    // 2. Fetch all staff timetables
-    const timetableEntries = (await Timetable.find({}))
-      .flatMap(getTimetableEntries)
+    const legacyStaffRecords = await Staff.find({}).select('classes department');
+    legacyStaffRecords.forEach(staffRecord => {
+      (staffRecord.classes || []).forEach(classItem => {
+        const code = normalizeCode(classItem.code || classItem.classCode);
+        if (!code || enrolledClassMap[code]) return;
+
+        const roster = classItem.enrolledStudents || classItem.students || [];
+        const isAssigned = roster.some(rosterStudent =>
+          [rosterStudent.rollNo, rosterStudent.studentId, rosterStudent.regNo]
+            .some(identifier => studentIds.has(String(identifier || '').toUpperCase().trim()))
+        );
+        if (isAssigned) {
+          const legacyClass = classItem.toObject ? classItem.toObject() : classItem;
+          enrolledClassMap[code] = {
+            ...legacyClass,
+            code: classItem.code || classItem.classCode,
+            name: classItem.name || classItem.className,
+            dept: classItem.dept || staffRecord.department
+          };
+        }
+      });
+    });
+
+    // Scoped schedules replace their legacy mirror; use legacy schedules only for older records.
+    const timetableRecords = await Timetable.find({});
+    const timetableEntries = timetableRecords.flatMap(timetable => {
+      const entries = getTimetableEntries(timetable);
+      const scopedEntries = entries.filter(entry => !entry.isLegacy);
+      if (scopedEntries.length === 0) return entries;
+
+      const legacyEntry = entries.find(entry => entry.isLegacy);
+      if (!legacyEntry) return scopedEntries;
+
+      const mirroredSlots = new Set();
+      scopedEntries.forEach(entry => {
+        Object.entries(toPlainSchedule(entry.schedule)).forEach(([day, periods]) => {
+          Object.entries(periods || {}).forEach(([period, slot]) => {
+            mirroredSlots.add(`${day}|${period}|${normalizeCode(slot?.code)}`);
+          });
+        });
+      });
+
+      const unmirroredLegacySchedule = getDefaultSchedule();
+      Object.entries(toPlainSchedule(legacyEntry.schedule)).forEach(([day, periods]) => {
+        Object.entries(periods || {}).forEach(([period, slot]) => {
+          const mirrorKey = `${day}|${period}|${normalizeCode(slot?.code)}`;
+          if (!mirroredSlots.has(mirrorKey)) {
+            unmirroredLegacySchedule[day][period] = slot;
+          }
+        });
+      });
+
+      return hasScheduleSlots(unmirroredLegacySchedule)
+        ? [...scopedEntries, { ...legacyEntry, schedule: unmirroredLegacySchedule }]
+        : scopedEntries;
+    })
       .sort((a, b) => Number(a.isLegacy) - Number(b.isLegacy));
 
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -487,31 +600,46 @@ exports.getStudentTimetable = async (req, res) => {
         const slotKey = String(s);
         let foundSlot = null;
 
+        // Collect all matching enrolled slots for this day & period, then prefer the one
+        // whose staffId / department / year best matches the enrolled class and student.
+        const matchingCandidates = [];
+
         for (const tt of timetableEntries) {
           const sched = toPlainSchedule(tt.schedule);
           const daySched = sched[day] || {};
           const slotItem = daySched[slotKey];
 
           if (slotItem && (slotItem.code || slotItem.name)) {
-            const itemCode = (slotItem.code || '').toUpperCase().trim();
+            const itemCode = normalizeCode(slotItem.code);
             const matchedClass = enrolledClassMap[itemCode];
             const isEnrolled = Boolean(matchedClass);
 
-            // Only display timetable slot if student is explicitly enrolled in this subject
             if (isEnrolled) {
-              foundSlot = {
-                slot: s,
-                time: slotTimes[s] || `Period ${s}`,
-                code: matchedClass ? matchedClass.code : (slotItem.code || itemCode),
-                subject: (matchedClass && matchedClass.name) ? matchedClass.name : (slotItem.name || slotItem.code || 'Core Course'),
-                faculty: (matchedClass && matchedClass.staffName) ? matchedClass.staffName : (tt.staffName || 'Faculty'),
-                room: (matchedClass && matchedClass.room && matchedClass.room.trim()) ? matchedClass.room : (slotItem.room || 'LH-101'),
-                type: (slotItem.type || 'theory').toLowerCase(),
-                color: (slotItem.color || 'blue').toLowerCase()
-              };
-              break;
+              const staffMatches = matchedClass.staffId && tt.staffId &&
+                String(matchedClass.staffId).trim().toUpperCase() === String(tt.staffId).trim().toUpperCase();
+              const deptMatches = !dept || !tt.department || departmentsMatch(dept, tt.department);
+              const score = (staffMatches ? 4 : 0) + (deptMatches ? 2 : 0) + (tt.isLegacy ? 0 : 1);
+
+              matchingCandidates.push({
+                score,
+                slot: {
+                  slot: s,
+                  time: slotTimes[s] || `Period ${s}`,
+                  code: matchedClass.code,
+                  subject: matchedClass.name || slotItem.name || slotItem.code || 'Core Course',
+                  faculty: matchedClass.staffName || tt.staffName || 'Faculty',
+                  room: (matchedClass.room && matchedClass.room.trim()) ? matchedClass.room : (slotItem.room || 'LH-101'),
+                  type: (slotItem.type || 'theory').toLowerCase(),
+                  color: (slotItem.color || 'blue').toLowerCase()
+                }
+              });
             }
           }
+        }
+
+        if (matchingCandidates.length > 0) {
+          matchingCandidates.sort((a, b) => b.score - a.score);
+          foundSlot = matchingCandidates[0].slot;
         }
 
         if (foundSlot) {
@@ -577,7 +705,7 @@ exports.autoGenerateTimetableSchedule = async ({
         targetStaffId = staffDoc.staffId;
       }
     }
-    
+
     if (!staffDoc && staffName) {
       staffDoc = await Staff.findOne({ name: new RegExp('^' + staffName.trim() + '$', 'i') });
       if (staffDoc) {

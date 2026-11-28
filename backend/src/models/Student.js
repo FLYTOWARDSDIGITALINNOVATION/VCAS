@@ -130,6 +130,34 @@ const studentSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  receiptNo: {
+    type: String,
+    default: ''
+  },
+  feeType: {
+    type: String,
+    default: ''
+  },
+  baseAmount: {
+    type: Number,
+    default: 0
+  },
+  uniformFee: {
+    type: Number,
+    default: 0
+  },
+  bookFee: {
+    type: Number,
+    default: 0
+  },
+  fine: {
+    type: Number,
+    default: 0
+  },
+  allMiscItems: {
+    type: Array,
+    default: []
+  },
   status: {
     type: String,
     default: 'Active',

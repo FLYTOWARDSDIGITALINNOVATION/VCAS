@@ -55,6 +55,41 @@ import {
   Tag
 } from 'lucide-react';
 
+const ATTENDANCE_SLOT_LABELS = {
+  '8:30 AM': 'Period 1 (09:30 AM - 10:30 AM)',
+  '9:30 AM': 'Period 1 (09:30 AM - 10:30 AM)',
+  '10:30 AM': 'Period 2 (10:30 AM - 11:20 AM)',
+  '11:20 AM': 'Break (11:20 AM - 11:30 AM)',
+  '11:30 AM': 'Period 3 (11:30 AM - 12:20 PM)',
+  '12:20 PM': 'Period 4 (12:20 PM - 01:00 PM)',
+  '1:00 PM': 'Lunch (01:00 PM - 01:30 PM)',
+  '1:30 PM': 'Period 5 (01:30 PM - 02:15 PM)',
+  '2:15 PM': 'Period 6 (02:15 PM - 03:00 PM)'
+};
+
+function formatAttendanceSlot(slot) {
+  const rawSlot = String(slot || '').trim();
+  if (!rawSlot) return '—';
+  const normalizedSlot = rawSlot.replace(/\s+/g, ' ').replace(/\b0([1-9]):/g, '$1:').toUpperCase();
+  const matchedSlot = Object.entries(ATTENDANCE_SLOT_LABELS).find(
+    ([startTime]) => startTime.toUpperCase() === normalizedSlot
+  );
+  return matchedSlot ? matchedSlot[1] : rawSlot;
+}
+
+function getMarksProgressLabel(marksheet) {
+  const status = String(marksheet?.approvalStatus || '').trim().toLowerCase();
+  if (!status || status === 'not started') return 'Not entered yet';
+  if (status === 'draft') return 'Awaiting faculty submission';
+  if (status.startsWith('pending ')) {
+    const stage = status.slice('pending '.length);
+    return `Awaiting ${stage.charAt(0).toUpperCase()}${stage.slice(1)} approval`;
+  }
+  if (status === 'rejected') return 'Changes requested';
+  if (status === 'approved' || String(marksheet?.currentApprovalStage || '').toLowerCase() === 'completed') return 'Approved';
+  return 'In progress';
+}
+
 const NAV_SECTIONS = [
   {
     title: 'MAIN',
@@ -222,6 +257,8 @@ export default function StudentDashboard({ student, onLogout }) {
 
   // Fetch all student details live from staff side: Attendance, Marks, Timetable, Assignments
   const fetchAllStudentData = () => {
+    setLiveTimetable({});
+    setMarksData([]);
     setLoading(true);
     const idToFetch = (rollNo && rollNo !== '—') ? rollNo : regNo;
 
@@ -277,16 +314,8 @@ export default function StudentDashboard({ student, onLogout }) {
           : Array.isArray(marksRes)
             ? marksRes
             : [];
-      const approvedMarksList = marksList.filter((item) => {
-        const status = (item?.approvalStatus || item?.status || '').toString().trim();
-        const stage = (item?.currentApprovalStage || '').toString().trim();
-        return status.toLowerCase() === 'approved' || stage.toLowerCase() === 'completed';
-      });
-
-      if (marksRes && marksRes.success && approvedMarksList.length > 0) {
-        setMarksData(approvedMarksList);
-      } else if (marksRes && marksRes.success) {
-        setMarksData([]);
+      if (marksRes && marksRes.success) {
+        setMarksData(marksList);
       }
 
       // 3. Process Assignments
@@ -297,6 +326,8 @@ export default function StudentDashboard({ student, onLogout }) {
       // 4. Process Timetable
       if (ttRes && ttRes.success && ttRes.schedule) {
         setLiveTimetable(ttRes.schedule);
+      } else {
+        setLiveTimetable({});
       }
 
       // 5. Process Real Hall Ticket Data from Staff
@@ -1917,7 +1948,7 @@ CONTACT:
                           attendanceData.map((att, i) => (
                             <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                               <td className="py-3 px-4 font-mono font-bold text-slate-800">{att.date}</td>
-                              <td className="py-3 px-4 text-slate-600 font-medium">{att.slot || 'Period 1'}</td>
+                              <td className="py-3 px-4 text-slate-600 font-medium">{formatAttendanceSlot(att.slot)}</td>
                               <td className="py-3 px-4">
                                 <span className="font-mono font-bold text-blue-700">{att.classCode}</span>
                                 {att.className && <span className="text-slate-500 ml-1.5 font-medium">· {att.className}</span>}
@@ -2001,7 +2032,24 @@ CONTACT:
                             const maxCons = ms.maxMarks?.consolidated || 25;
                             const passCons = ms.passMarks?.consolidated || 10;
                             const hasCons = m.consolidated !== null && m.consolidated !== undefined && m.consolidated !== '';
+                            const enteredParts = [
+                              { label: 'ST1', val: m.st1 },
+                              { label: 'ST2', val: m.st2 },
+                              { label: 'ST3', val: m.st3 },
+                              { label: 'ST4', val: m.st4 },
+                              { label: 'IT1', val: m.it1 ?? m.cia1 },
+                              { label: 'IT2', val: m.it2 ?? m.cia2 },
+                              { label: 'Model', val: m.model },
+                              { label: 'Sem', val: m.semester },
+                              { label: 'Seminar', val: m.seminar },
+                              { label: 'Project', val: m.project },
+                              { label: 'A1', val: m.assignment1 },
+                              { label: 'A2', val: m.assignment2 },
+                              { label: 'A3', val: m.assignment3 },
+                              { label: 'A4', val: m.assignment4 },
+                            ].filter(p => p.val !== null && p.val !== undefined && p.val !== '');
                             const isPass = hasCons ? Number(m.consolidated) >= passCons : null;
+                            const progressLabel = getMarksProgressLabel(ms);
 
                             return (
                               <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
@@ -2024,7 +2072,14 @@ CONTACT:
                                 </td>
                                 <td className="py-3.5 px-4 text-center font-mono font-bold text-blue-700 text-sm">
                                   {hasCons ? m.consolidated : (
-                                    <span className="text-slate-400 font-sans text-xs font-medium">In Progress</span>
+                                    enteredParts.length > 0 ? (
+                                      <span className="text-blue-700 font-sans text-xs font-semibold">
+                                        {enteredParts.slice(0, 3).map(p => `${p.label}: ${p.val}`).join(' · ')}
+                                        {enteredParts.length > 3 ? ` (+${enteredParts.length - 3})` : ''}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400 font-sans text-xs font-medium">{progressLabel}</span>
+                                    )
                                   )}
                                 </td>
                                 <td className="py-3.5 px-4 text-right">
@@ -2038,6 +2093,10 @@ CONTACT:
                                         Fail
                                       </span>
                                     )
+                                  ) : enteredParts.length > 0 ? (
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                      Marks Entered
+                                    </span>
                                   ) : (
                                     <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                       Pending
@@ -2061,6 +2120,7 @@ CONTACT:
                           const m = ms.marks || {};
                           const max = ms.maxMarks || {};
                           const pass = ms.passMarks || {};
+                          const progressLabel = getMarksProgressLabel(ms);
 
                           const scoreList = [
                             { name: 'ST 1', val: m.st1, max: max.st1 || 20, pass: pass.st1 || 8 },
@@ -2096,13 +2156,20 @@ CONTACT:
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                    progressLabel === 'Approved'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}>
+                                    {progressLabel}
+                                  </span>
                                   {ms.isLocked && (
                                     <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
                                       <Lock className="w-3 h-3" /> Locked & Verified
                                     </span>
                                   )}
                                   <span className="text-xs font-black bg-purple-100 text-purple-800 px-3 py-1 rounded-xl">
-                                    Consolidated: {m.consolidated !== null && m.consolidated !== undefined ? `${m.consolidated}/${max.consolidated || 25}` : 'In Progress'}
+                                    Consolidated: {m.consolidated !== null && m.consolidated !== undefined ? `${m.consolidated}/${max.consolidated || 25}` : progressLabel}
                                   </span>
                                 </div>
                               </div>

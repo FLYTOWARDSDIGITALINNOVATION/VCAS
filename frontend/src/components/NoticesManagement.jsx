@@ -148,7 +148,7 @@ const INITIAL_NOTICES = [
 
 const CATEGORIES = ['All', 'Examinations', 'Academic', 'Placements', 'Holidays', 'Administrative', 'Events'];
 const PRIORITIES = ['All', 'Urgent', 'High', 'Normal', 'Low'];
-const AUDIENCES = ['All', 'All Students', 'Students', 'Staff', 'HODs', 'Administration'];
+const AUDIENCES = ['All', 'All Students', 'Students', 'Staff', 'HODs', 'Administration', 'Accountant'];
 
 export default function NoticesManagement({ user }) {
   const activeUser = user || (() => {
@@ -988,6 +988,7 @@ export default function NoticesManagement({ user }) {
                       <option value="Staff">👨‍🏫 All Faculty & Staff</option>
                       <option value="HODs">🏛️ Heads of Department (HODs)</option>
                       <option value="Administration">🏢 Administration & Office</option>
+                      <option value="Accountant">💰 Accountant / Accounts Office</option>
                     </select>
                   </div>
 
@@ -1028,16 +1029,17 @@ export default function NoticesManagement({ user }) {
                             assignedTo: null
                           });
                         } else {
-                          const staffObj = staffMembers.find(s => s.staffId === sId);
+                          const staffObj = staffMembers.find(s => (s.staffId && s.staffId === sId) || (s._id && s._id === sId));
+                          const resolvedId = staffObj?.staffId || staffObj?._id || sId;
                           setFormData({
                             ...formData,
-                            assignedToStaffId: sId,
+                            assignedToStaffId: resolvedId,
                             assignedToStaffName: staffObj?.name || '',
                             assignedTo: staffObj ? {
-                              staffId: staffObj.staffId,
+                              staffId: resolvedId,
                               name: staffObj.name,
                               department: staffObj.department || '',
-                              designation: staffObj.designation || 'Staff'
+                              designation: staffObj.designation || staffObj.role || 'Staff'
                             } : null
                           });
                         }
@@ -1045,11 +1047,14 @@ export default function NoticesManagement({ user }) {
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-2xs"
                     >
                       <option value="">-- None (Broadcast to general audience) --</option>
-                      {staffMembers.map((staff) => (
-                        <option key={staff.staffId || staff._id} value={staff.staffId}>
-                          {staff.name} ({staff.staffId} • {staff.department || staff.role || 'Staff'})
-                        </option>
-                      ))}
+                      {staffMembers.map((staff) => {
+                        const val = staff.staffId || staff._id;
+                        return (
+                          <option key={val} value={val}>
+                            {staff.name} ({staff.staffId || 'ID'} • {staff.designation || staff.department || staff.role || 'Staff'})
+                          </option>
+                        );
+                      })}
                     </select>
                     <p className="text-[10px] text-slate-400 mt-1">
                       If assigned to a staff member, other staff will not view it, and only the assigned person has edit access.

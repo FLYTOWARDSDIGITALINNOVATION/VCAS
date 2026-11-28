@@ -597,7 +597,6 @@ const getStudentAssignments = async (req, res) => {
         { rollNo: idRegex },
         { regNo: idRegex },
         { studentId: idRegex },
-        { loginId: idRegex },
         { admNo: idRegex }
       ]
     });

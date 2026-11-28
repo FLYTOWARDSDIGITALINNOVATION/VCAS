@@ -467,36 +467,44 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
       // Sort activities descending by date
       activities.sort((a, b) => b.rawDate - a.rawDate);
 
-      // Compute real pending fees and monthly collections
+      // Compute real pending fees and monthly collections from database students
       const savedFeeRecords = JSON.parse(localStorage.getItem('vcas_real_fee_records') || '[]');
       let pendingFeesSum = 0;
-      if (savedFeeRecords.length > 0) {
-        pendingFeesSum = savedFeeRecords.reduce((acc, curr) => acc + (Number(curr.pendingFee) || 0), 0);
-      } else {
+      const monthsList = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
+      const monthSums = { 'Aug': 0, 'Sep': 0, 'Oct': 0, 'Nov': 0, 'Dec': 0, 'Jan': 0 };
+      const mNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      if (rawStudentsList && rawStudentsList.length > 0) {
         rawStudentsList.forEach(s => {
           pendingFeesSum += Number(s.pendingFee || 0);
+          const d = s.lastPaymentDate || s.dueDate;
+          if (d && (Number(s.paidFee) || 0) > 0) {
+            const mIdx = new Date(d).getMonth();
+            const mName = mNames[mIdx];
+            if (monthSums[mName] !== undefined) {
+              monthSums[mName] += (Number(s.paidFee) || 0);
+            }
+          }
+        });
+      } else if (savedFeeRecords.length > 0) {
+        pendingFeesSum = savedFeeRecords.reduce((acc, curr) => acc + (Number(curr.pendingFee) || 0), 0);
+        savedFeeRecords.forEach(rec => {
+          const d = rec.lastPaymentDate || rec.dueDate;
+          if (d && (Number(rec.paidFee) || 0) > 0) {
+            const mIdx = new Date(d).getMonth();
+            const mName = mNames[mIdx];
+            if (monthSums[mName] !== undefined) {
+              monthSums[mName] += (Number(rec.paidFee) || 0);
+            }
+          }
         });
       }
+
       const pendingFeesDisplay = pendingFeesSum >= 100000
         ? `₹${(pendingFeesSum / 100000).toFixed(1)}L`
         : pendingFeesSum >= 1000
           ? `₹${(pendingFeesSum / 1000).toFixed(0)}K`
           : `₹${pendingFeesSum}`;
-
-      // Live Monthly Fee Collections
-      const monthsList = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
-      const monthSums = { 'Aug': 0, 'Sep': 0, 'Oct': 0, 'Nov': 0, 'Dec': 0, 'Jan': 0 };
-      savedFeeRecords.forEach(rec => {
-        const d = rec.lastPaymentDate || rec.dueDate;
-        if (d) {
-          const mNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          const mIdx = new Date(d).getMonth();
-          const mName = mNames[mIdx];
-          if (monthSums[mName] !== undefined) {
-            monthSums[mName] += (Number(rec.paidFee) || 0);
-          }
-        }
-      });
       // If records have payments, compute heights; otherwise baseline
       const totalCollected = Object.values(monthSums).reduce((a, b) => a + b, 0);
       const maxFeeSum = Math.max(...Object.values(monthSums), 1);
@@ -672,9 +680,13 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
     const handleSync = () => fetchDashboardRealData();
     window.addEventListener('vcas_students_updated', handleSync);
     window.addEventListener('storage', handleSync);
+    window.addEventListener('focus', handleSync);
+    const interval = setInterval(handleSync, 10000);
     return () => {
       window.removeEventListener('vcas_students_updated', handleSync);
       window.removeEventListener('storage', handleSync);
+      window.removeEventListener('focus', handleSync);
+      clearInterval(interval);
     };
   }, [activeNav]);
 
@@ -1031,8 +1043,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                             }
                           }}
                           className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${isActive
-                              ? 'bg-blue-50 text-blue-700 font-extrabold shadow-xs border border-blue-200/80'
-                              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 border border-transparent'
+                            ? 'bg-blue-50 text-blue-700 font-extrabold shadow-xs border border-blue-200/80'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 border border-transparent'
                             }`}
                           aria-label={item.name}
                         >
@@ -1052,8 +1064,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                             setFeesDropdownOpen(!feesDropdownOpen);
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${isActive
-                              ? 'bg-blue-50 text-blue-700 font-extrabold'
-                              : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
+                            ? 'bg-blue-50 text-blue-700 font-extrabold'
+                            : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
                             }`}
                         >
                           <div className="flex items-center gap-3">
@@ -1077,8 +1089,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                                     setMobileMenuOpen(false);
                                   }}
                                   className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 cursor-pointer ${isSubActive
-                                      ? 'bg-blue-100 text-blue-800 font-extrabold'
-                                      : 'text-slate-800 hover:bg-slate-100 hover:text-slate-950'
+                                    ? 'bg-blue-100 text-blue-800 font-extrabold'
+                                    : 'text-slate-800 hover:bg-slate-100 hover:text-slate-950'
                                     }`}
                                 >
                                   <span className={`w-1.5 h-1.5 rounded-full ${isSubActive ? 'bg-blue-700' : 'bg-slate-600'}`}></span>
@@ -1097,8 +1109,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                       key={item.name}
                       onClick={() => handleNavClick(item.name)}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${isActive
-                          ? 'bg-blue-50 text-blue-700 font-extrabold'
-                          : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
+                        ? 'bg-blue-50 text-blue-700 font-extrabold'
+                        : 'text-slate-900 hover:bg-slate-100 hover:text-slate-950'
                         }`}
                     >
                       <Icon className={`w-4 h-4 ${isActive ? 'text-blue-700' : 'text-slate-700'}`} />
@@ -1273,12 +1285,12 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
             {/* User Avatar & Role Badge (Pill Container matching Image 2) */}
             <div className="flex items-center gap-2.5 bg-slate-50/90 border border-slate-200/80 rounded-2xl p-1 sm:p-1.5 sm:pr-3.5">
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-xs ${user?.role === 'Super Admin'
-                  ? 'bg-purple-100 text-purple-700'
-                  : user?.role === 'Accountant'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : user?.role === 'Office Staff'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-blue-100 text-blue-700'
+                ? 'bg-purple-100 text-purple-700'
+                : user?.role === 'Accountant'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : user?.role === 'Office Staff'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-blue-100 text-blue-700'
                 }`}>
                 {user?.role === 'Super Admin' ? 'SA' : user?.role === 'Accountant' ? 'ACC' : user?.role === 'Office Staff' ? 'OS' : 'P'}
               </div>
@@ -1732,8 +1744,8 @@ export default function Dashboard({ user, onLogout, onSwitchPortal }) {
                         {/* Vertical Bar */}
                         <div
                           className={`w-full rounded-t-lg transition-all duration-300 shadow-xs ${s.pct === 0
-                              ? 'bg-slate-200 border-t-2 border-slate-400'
-                              : 'bg-gradient-to-t from-purple-700 to-purple-500 group-hover:from-purple-800 group-hover:to-purple-400'
+                            ? 'bg-slate-200 border-t-2 border-slate-400'
+                            : 'bg-gradient-to-t from-purple-700 to-purple-500 group-hover:from-purple-800 group-hover:to-purple-400'
                             }`}
                           style={{ height: s.pct === 0 ? '6px' : s.height }}
                           title={`${s.code} • ${s.name}: ${s.pct}% Presence`}

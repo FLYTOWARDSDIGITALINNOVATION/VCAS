@@ -58,7 +58,7 @@ exports.createPlan = async (req, res) => {
       ? topics.map((t, idx) => ({
           sNo: Number(t.sNo) || (idx + 1),
           plannedDate: String(t.plannedDate || ''),
-          noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 1 : Math.max(1, Number(t.noOfHours) || 1),
+          noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 0 : Math.max(0, Number(t.noOfHours) || 0),
           topic: String(t.topic || ''),
           executionDate: String(t.executionDate || ''),
           executionHours: (t.executionHours === '' || t.executionHours === null || t.executionHours === undefined) ? 0 : Math.max(0, Number(t.executionHours) || 0),
@@ -94,7 +94,7 @@ exports.updatePlan = async (req, res) => {
       updateData.topics = updateData.topics.map((t, idx) => ({
         sNo: Number(t.sNo) || (idx + 1),
         plannedDate: String(t.plannedDate || ''),
-        noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 1 : Math.max(1, Number(t.noOfHours) || 1),
+        noOfHours: (t.noOfHours === '' || t.noOfHours === null || t.noOfHours === undefined) ? 0 : Math.max(0, Number(t.noOfHours) || 0),
         topic: String(t.topic || ''),
         executionDate: String(t.executionDate || ''),
         executionHours: (t.executionHours === '' || t.executionHours === null || t.executionHours === undefined) ? 0 : Math.max(0, Number(t.executionHours) || 0),

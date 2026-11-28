@@ -49,11 +49,19 @@ export const normalizeMiscFeeItems = (items, feeStructure = []) => {
 
 export const sumMiscFeeItems = (items = []) => {
   const total = items.reduce(
-    (sum, item) => sum + Number(item?.amount ?? item?.total ?? item?.paid ?? 0),
+    (sum, item) => sum + Number(item?.amount ?? item?.total ?? 0),
     0
   );
   const paid = items.reduce(
-    (sum, item) => sum + Number(item?.paid ?? item?.amount ?? 0),
+    (sum, item) => {
+      if (item?.paid !== undefined && item?.paid !== null && item?.paid !== '') {
+        return sum + Number(item.paid || 0);
+      }
+      if (item?.status === 'Paid') {
+        return sum + Number(item.amount ?? item.total ?? 0);
+      }
+      return sum;
+    },
     0
   );
 
